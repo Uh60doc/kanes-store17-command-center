@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { OfficeTargets } from '../config/targets.ts';
 import { payrollPeriod, storeOperatingPeriod } from '../config/periods.ts';
 import { currentSnapshots } from '../import/snapshotStore.ts';
 import {
@@ -101,9 +102,9 @@ function EmptyChart({ title, metric, detail }: { title: string; metric: string; 
   );
 }
 
-function DashboardBody({ model }: { model: StoreDashboardModel }) {
-  const goals = storeOperatingPeriod.managementGoals;
-  const stretch = storeOperatingPeriod.corporateStretch;
+function DashboardBody({ model, targets }: { model: StoreDashboardModel; targets: OfficeTargets }) {
+  const goals = targets.managementGoals;
+  const stretch = targets.corporateStretch;
 
   return (
     <>
@@ -278,12 +279,20 @@ function DashboardBody({ model }: { model: StoreDashboardModel }) {
   );
 }
 
-export function StoreDashboard() {
+export function StoreDashboard({
+  signedInName,
+  targets,
+  onSignOut,
+}: {
+  signedInName: string;
+  targets: OfficeTargets;
+  onSignOut: () => void;
+}) {
   const checkedAt = useOfficeClock();
-  const model = buildStoreDashboard(currentSnapshots());
+  const model = buildStoreDashboard(currentSnapshots(), targets);
 
   return (
-    <div className="screen">
+    <div className="screen" data-screen="october-dashboard">
       <header className="topbar">
         <div>
           <p className="eyebrow">Kane&apos;s Furniture · Store 17</p>
@@ -298,6 +307,10 @@ export function StoreDashboard() {
           <p className="refresh-note">
             {model.lastImportAt === null ? 'No report snapshot imported.' : 'Latest report snapshot.'}
           </p>
+          <p className="signed-in">Signed in as {signedInName}</p>
+          <button type="button" className="sign-out" onClick={onSignOut}>
+            Sign out
+          </button>
         </div>
       </header>
 
@@ -319,7 +332,7 @@ export function StoreDashboard() {
         <p className="period-rule">
           Store-period sales and payroll-period sales are tracked apart. One does not stand in for the other.
         </p>
-        <DashboardBody model={model} />
+        <DashboardBody model={model} targets={targets} />
       </main>
     </div>
   );
