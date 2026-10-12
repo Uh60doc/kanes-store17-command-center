@@ -1,4 +1,5 @@
-import { remainingOperatingDays, storeOperatingPeriod } from '../config/periods.ts';
+import { remainingOperatingDays } from '../config/periods.ts';
+import type { OfficeTargets } from '../config/targets.ts';
 import type { ReportSnapshot } from '../import/types.ts';
 
 export type MissingLabel = 'Awaiting Report' | 'Not Available';
@@ -133,7 +134,10 @@ function collectDaily(snapshots: readonly ReportSnapshot[]): DatedAmountView[] {
   );
 }
 
-export function buildStoreDashboard(snapshots: readonly ReportSnapshot[]): StoreDashboardModel {
+export function buildStoreDashboard(
+  snapshots: readonly ReportSnapshot[],
+  targets: OfficeTargets,
+): StoreDashboardModel {
   const snapWrittenSnapshot = currentOf(snapshots, 'SNAP Written');
   const nwdsrWrittenSnapshot = currentOf(snapshots, 'NWDSR Written');
   const nwdsrDeliveredSnapshot = currentOf(snapshots, 'NWDSR Delivered');
@@ -173,24 +177,24 @@ export function buildStoreDashboard(snapshots: readonly ReportSnapshot[]): Store
     beddingPercentage: bedding === null ? missing('Awaiting Report') : percentFigure(bedding),
     storeAttachment: ratio(attachmentHits, attachmentOpportunities, 'Awaiting Report'),
     closingRatio: ratio(closedCustomers, perqOpportunities, 'Not Available'),
-    writtenProgress: progress(snapWritten, storeOperatingPeriod.managementGoals.writtenSales),
-    writtenRemaining: remaining(snapWritten, storeOperatingPeriod.managementGoals.writtenSales),
+    writtenProgress: progress(snapWritten, targets.managementGoals.writtenSales),
+    writtenRemaining: remaining(snapWritten, targets.managementGoals.writtenSales),
     writtenRequiredDailyAverage: requiredDaily(
       snapWritten,
-      storeOperatingPeriod.managementGoals.writtenSales,
+      targets.managementGoals.writtenSales,
       remainingOperatingDays,
     ),
-    deliveredProgress: progress(nwdsrDelivered, storeOperatingPeriod.managementGoals.deliveredSales),
-    deliveredRemaining: remaining(nwdsrDelivered, storeOperatingPeriod.managementGoals.deliveredSales),
+    deliveredProgress: progress(nwdsrDelivered, targets.managementGoals.deliveredSales),
+    deliveredRemaining: remaining(nwdsrDelivered, targets.managementGoals.deliveredSales),
     deliveredRequiredDailyAverage: requiredDaily(
       nwdsrDelivered,
-      storeOperatingPeriod.managementGoals.deliveredSales,
+      targets.managementGoals.deliveredSales,
       remainingOperatingDays,
     ),
-    stretchWrittenProgress: progress(snapWritten, storeOperatingPeriod.corporateStretch.writtenSales),
-    stretchWrittenRemaining: remaining(snapWritten, storeOperatingPeriod.corporateStretch.writtenSales),
-    stretchDeliveredProgress: progress(nwdsrDelivered, storeOperatingPeriod.corporateStretch.deliveredSales),
-    stretchDeliveredRemaining: remaining(nwdsrDelivered, storeOperatingPeriod.corporateStretch.deliveredSales),
+    stretchWrittenProgress: progress(snapWritten, targets.corporateStretch.writtenSales),
+    stretchWrittenRemaining: remaining(snapWritten, targets.corporateStretch.writtenSales),
+    stretchDeliveredProgress: progress(nwdsrDelivered, targets.corporateStretch.deliveredSales),
+    stretchDeliveredRemaining: remaining(nwdsrDelivered, targets.corporateStretch.deliveredSales),
     dailySales,
     monthToDate: dailySales.length === 0 ? [] : dailySales,
     lastImportAt: importedAt.length === 0 ? null : importedAt[importedAt.length - 1],
