@@ -15,7 +15,7 @@ export const REPORT_TYPES = [
 
 export type ReportType = (typeof REPORT_TYPES)[number];
 
-export const IMPORT_SOURCE_IDS = ['manual-upload', 'company-mailbox'] as const;
+export const IMPORT_SOURCE_IDS = ['manual-upload', 'company-mailbox', 'sheet'] as const;
 
 export type ImportSourceId = (typeof IMPORT_SOURCE_IDS)[number];
 
@@ -61,6 +61,6 @@ export interface IncomingReportFile {
 export interface ImportSourceDescriptor {
   id: ImportSourceId;
   label: string;
-  connected: false;
+  connected: boolean;
   handsOffTo: 'acceptIncomingReport';
 }

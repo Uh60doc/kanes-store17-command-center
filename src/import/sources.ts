@@ -1,10 +1,10 @@
 import type { ImportSourceDescriptor } from './types.ts';
 
 /**
- * The only two sources that may hand a report file to the import boundary.
- * Both stay disconnected in this slice. A later manual upload and a later
- * approved company mailbox call the same function with the same file shape.
- * There is no mailbox client here.
+ * Manual upload and the company mailbox still hand files to the import
+ * boundary, and both stay disconnected. The command-center sheet is read
+ * by the server after sign-in. A newer sheet for the same metric and date
+ * range replaces the current snapshot. Snapshots are not added together.
  */
 export const importSources: readonly ImportSourceDescriptor[] = [
   {
@@ -17,6 +17,12 @@ export const importSources: readonly ImportSourceDescriptor[] = [
     id: 'company-mailbox',
     label: 'Company mailbox',
     connected: false,
+    handsOffTo: 'acceptIncomingReport',
+  },
+  {
+    id: 'sheet',
+    label: 'Command center sheet',
+    connected: true,
     handsOffTo: 'acceptIncomingReport',
   },
 ];

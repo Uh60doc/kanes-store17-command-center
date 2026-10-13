@@ -1,15 +1,23 @@
 import { useEffect, useState } from 'react';
 import { payrollPeriod, storeOperatingPeriod } from '../config/periods.ts';
-import { currentSnapshots } from '../import/snapshotStore.ts';
+import {
+  loadCommandSheet,
+  standingManagement,
+  standingScorecards,
+  type ManagementView,
+  type OtherActivity,
+  type ScorecardView,
+} from '../import/commandSheet.ts';
 import {
   buildStoreDashboard,
-  formatFigure,
   formatMoney,
   formatOfficeTimestamp,
   formatPercent,
   type Figure,
   type StoreDashboardModel,
 } from './model.ts';
+import { FigureValue } from './FigureValue.tsx';
+import { Scoreboard } from './Scoreboard.tsx';
 
 function useOfficeClock(): Date {
   const [now, setNow] = useState(() => new Date());
@@ -18,14 +26,6 @@ function useOfficeClock(): Date {
     return () => window.clearInterval(id);
   }, []);
   return now;
-}
-
-function FigureValue({ figure }: { figure: Figure }) {
-  const text = formatFigure(figure);
-  if (figure.kind === 'missing') {
-    return <span className="status">{text}</span>;
-  }
-  return <span className="amount">{text}</span>;
 }
 
 function TotalCard({
@@ -42,7 +42,12 @@ function TotalCard({
   marker?: string;
 }) {
   return (
-    <article className="card" data-metric={metric} data-state={figure.kind}>
+    <article
+      className="card"
+      data-metric={metric}
+      data-state={figure.kind}
+      data-value={figure.kind === 'value' ? String(figure.value) : undefined}
+    >
       <h3>{title}</h3>
       <p className="hero">
         <FigureValue figure={figure} />
@@ -101,16 +106,35 @@ function EmptyChart({ title, metric, detail }: { title: string; metric: string; 
   );
 }
 
-function DashboardBody({ model }: { model: StoreDashboardModel }) {
-  const goals = storeOperatingPeriod.managementGoals;
-  const stretch = storeOperatingPeriod.corporateStretch;
+function DashboardBody({
+  model,
+  periodLabel,
+  provisional,
+  scorecards,
+  management,
+  otherActivity,
+}: {
+  model: StoreDashboardModel;
+  periodLabel: string | null;
+  provisional: boolean;
+  scorecards: readonly ScorecardView[];
+  management: readonly ManagementView[];
+  otherActivity: readonly OtherActivity[];
+}) {
+  const goals = model.goals;
+  const stretch = model.stretch;
+  const periodMarker = periodLabel ? `${periodLabel}${provisional ? ' · Provisional' : ''}` : undefined;
 
   return (
     <>
       <section className="totals" aria-labelledby="store-totals">
         <div className="section-heading">
           <h2 id="store-totals">Store totals</h2>
-          <p>October operating month. Actuals come only from an imported report.</p>
+          <p>
+            {periodLabel
+              ? `Loaded period ${periodLabel}${provisional ? ', provisional' : ''}. A newer snapshot for these dates replaces this one.`
+              : 'Actuals come only from an imported report.'}
+          </p>
         </div>
         <div className="total-grid">
           <TotalCard
@@ -118,18 +142,14 @@ function DashboardBody({ model }: { model: StoreDashboardModel }) {
             metric="snap-written"
             figure={model.snapWritten}
             detail="Written sales production."
-          />
-          <TotalCard
-            title="NWDSR Written"
-            metric="nwdsr-written"
-            figure={model.nwdsrWritten}
-            detail="Official written report, including air tickets."
+            marker={periodMarker}
           />
           <TotalCard
             title="NWDSR Delivered"
             metric="nwdsr-delivered"
             figure={model.nwdsrDelivered}
             detail="Delivered store revenue."
+            marker={periodMarker}
           />
           <TotalCard
             title="SNAP Written vs last year"
@@ -138,10 +158,24 @@ function DashboardBody({ model }: { model: StoreDashboardModel }) {
             detail={`Versus ${storeOperatingPeriod.priorYearSnap.rangeDisplay}, by operating-day number.`}
           />
           <TotalCard
+            title="Projected month-end written"
+            metric="projected-written"
+            figure={model.projectedWritten}
+            detail="Needs the store operating-day calendar. Commission projections are not used."
+          />
+          <TotalCard
+            title="NWDSR Written"
+            metric="nwdsr-written"
+            figure={model.nwdsrWritten}
+            detail="Official written report, including air tickets."
+            marker={periodMarker}
+          />
+          <TotalCard
             title="Bedding"
             metric="bedding"
             figure={model.beddingPercentage}
             detail="Cumulative bedding. Daily rates are not averaged."
+            marker={periodMarker}
           />
           <TotalCard
             title="Store attachment"
@@ -239,7 +273,7 @@ function DashboardBody({ model }: { model: StoreDashboardModel }) {
           <EmptyChart
             title="Daily sales"
             metric="daily-sales"
-            detail="No dated snapshots are imported. This chart stays empty."
+            detail="No single-day amounts are in the current snapshot. This chart stays empty."
           />
         ) : (
           <section className="card" data-metric="daily-sales" data-state="values">
@@ -258,7 +292,7 @@ function DashboardBody({ model }: { model: StoreDashboardModel }) {
           <EmptyChart
             title="Month-to-date trend"
             metric="month-to-date"
-            detail="No dated snapshots are imported. This chart stays empty."
+            detail="No single-day amounts are in the current snapshot. This chart stays empty."
           />
         ) : (
           <section className="card" data-metric="month-to-date" data-state="values">
@@ -274,16 +308,78 @@ function DashboardBody({ model }: { model: StoreDashboardModel }) {
           </section>
         )}
       </section>
+
+      <Scoreboard
+        periodLabel={periodLabel}
+        scorecards={scorecards}
+        management={management}
+        otherActivity={otherActivity}
+      />
     </>
   );
 }
 
-export function StoreDashboard() {
+function formatImport(value: string | null): string {
+  if (value === null) return 'Not Available';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return formatOfficeTimestamp(date);
+}
+
+export function StoreDashboard({ onSignOut }: { onSignOut: () => void }) {
   const checkedAt = useOfficeClock();
-  const model = buildStoreDashboard(currentSnapshots());
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [model, setModel] = useState<StoreDashboardModel>(() => buildStoreDashboard([]));
+  const [periodLabel, setPeriodLabel] = useState<string | null>(null);
+  const [provisional, setProvisional] = useState(false);
+  const [scorecards, setScorecards] = useState<ScorecardView[]>(() => standingScorecards());
+  const [management, setManagement] = useState<ManagementView[]>(() => standingManagement());
+  const [otherActivity, setOtherActivity] = useState<OtherActivity[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const response = await fetch('/api/sheet', { credentials: 'same-origin' });
+        if (response.status === 401) {
+          if (!cancelled) onSignOut();
+          return;
+        }
+        if (!response.ok) throw new Error('unavailable');
+        const body: unknown = await response.json();
+        if (typeof body !== 'object' || body === null || !('csv' in body) || typeof body.csv !== 'string') {
+          throw new Error('unavailable');
+        }
+        if (cancelled) return;
+        const loaded = loadCommandSheet(body.csv, new Date().toISOString());
+        if (!loaded.ok) throw new Error(loaded.reason);
+        if (cancelled) return;
+        setModel(loaded.view.model);
+        setPeriodLabel(loaded.view.periodLabel);
+        setProvisional(loaded.view.provisional);
+        setScorecards(loaded.view.scorecards);
+        setManagement(loaded.view.management);
+        setOtherActivity(loaded.view.otherActivity);
+        setStatus('ready');
+      } catch {
+        if (cancelled) return;
+        setModel(buildStoreDashboard([]));
+        setPeriodLabel(null);
+        setProvisional(false);
+        setScorecards(standingScorecards());
+        setManagement(standingManagement());
+        setOtherActivity([]);
+        setStatus('error');
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [onSignOut]);
 
   return (
-    <div className="screen">
+    <div className="screen" data-sheet={status}>
       <header className="topbar">
         <div>
           <p className="eyebrow">Kane&apos;s Furniture · Store 17</p>
@@ -292,12 +388,19 @@ export function StoreDashboard() {
         </div>
         <div className="refresh" data-metric="data-refresh" data-state={model.lastImportAt === null ? 'missing' : 'value'}>
           <p className="refresh-kicker">Data refresh</p>
-          <p className="refresh-state">{model.lastImportAt === null ? 'Not Available' : model.lastImportAt}</p>
+          <p className="refresh-state">{formatImport(model.lastImportAt)}</p>
           <p className="checked-label">Checked</p>
           <time dateTime={checkedAt.toISOString()}>{formatOfficeTimestamp(checkedAt)}</time>
           <p className="refresh-note">
-            {model.lastImportAt === null ? 'No report snapshot imported.' : 'Latest report snapshot.'}
+            {status === 'loading'
+              ? 'Reading the sheet…'
+              : status === 'error'
+                ? 'The sheet could not be read. Missing figures stay blank.'
+                : 'Current sheet snapshot. A later file for the same dates replaces it.'}
           </p>
+          <button className="sign-out" type="button" onClick={onSignOut}>
+            Sign out
+          </button>
         </div>
       </header>
 
@@ -319,7 +422,20 @@ export function StoreDashboard() {
         <p className="period-rule">
           Store-period sales and payroll-period sales are tracked apart. One does not stand in for the other.
         </p>
-        <DashboardBody model={model} />
+        {status === 'loading' ? <p className="reading">Reading the sheet…</p> : null}
+        {status === 'error' ? (
+          <p className="gate-error">The sheet could not be read. Figures stay Awaiting Report or Not Available.</p>
+        ) : null}
+        {status === 'loading' ? null : (
+          <DashboardBody
+            model={model}
+            periodLabel={periodLabel}
+            provisional={provisional}
+            scorecards={scorecards}
+            management={management}
+            otherActivity={otherActivity}
+          />
+        )}
       </main>
     </div>
   );
