@@ -13,7 +13,7 @@ Two later sources hand the same files to that function:
 - Manual upload
 - Company mailbox
 
-The local API can sign in to the existing Store 17 Google account and read the existing spreadsheet. Report parsing still waits for an accepted file. The boundary does not invent metrics, and it does not store a missing figure as zero.
+The local API can sign in to the existing Store 17 Google account, read the existing spreadsheet, and write only the `CC_Connection_Test` tab. A PDF handed to `acceptIncomingReport` is parsed and checked for a duplicate file hash. Mailbox download and scheduled import stay off, and validated rows are not written into the sales tabs. The boundary does not invent metrics, and it does not store a missing figure as zero.
 
 ## Google connection
 
