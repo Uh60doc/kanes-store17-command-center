@@ -137,7 +137,7 @@ export function buildStoreDashboard(snapshots: readonly ReportSnapshot[]): Store
   const snapWrittenSnapshot = currentOf(snapshots, 'SNAP Written');
   const nwdsrWrittenSnapshot = currentOf(snapshots, 'NWDSR Written');
   const nwdsrDeliveredSnapshot = currentOf(snapshots, 'NWDSR Delivered');
-  const beddingSnapshot = currentOf(snapshots, 'BSSA');
+  const beddingSnapshot = currentOf(snapshots, 'BSSA Written');
   const perqSnapshot = currentOf(snapshots, 'PERQ');
 
   const priorYearSnap = snapshots.find(

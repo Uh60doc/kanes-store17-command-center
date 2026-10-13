@@ -329,3 +329,140 @@ main {
   border-top: 1px solid var(--line);
   font-variant-numeric: tabular-nums;
 }
+
+.app-nav {
+  display: flex;
+  gap: 8px;
+  padding: 10px 24px;
+  background: #172026;
+}
+
+.app-nav button {
+  border: 1px solid #3d4c54;
+  background: transparent;
+  color: #f6f3ec;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.app-nav button[aria-current='page'] {
+  background: #f6f3ec;
+  color: var(--navy);
+}
+
+.google-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 24px 28px;
+}
+
+.google-setup h1 {
+  margin-top: 4px;
+  font-size: 1.8rem;
+}
+
+.google-setup h2 {
+  font-size: 1.05rem;
+}
+
+.facts {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.facts div {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+}
+
+.facts dt {
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.scope-list,
+.mail-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.scope-list li,
+.mail-list li {
+  margin: 6px 0;
+}
+
+.mail-list li {
+  display: grid;
+  gap: 2px;
+}
+
+.sheet-form,
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sheet-form input {
+  flex: 1 1 320px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+}
+
+button,
+.button {
+  border: 0;
+  border-radius: 8px;
+  background: var(--navy);
+  color: #f6f3ec;
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.banner {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.banner.warn {
+  background: #f8e7cf;
+}
+
+.banner.ok {
+  background: #e5f0e4;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+
+.google-setup table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.google-setup td {
+  border-top: 1px solid var(--line);
+  padding: 4px 8px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
