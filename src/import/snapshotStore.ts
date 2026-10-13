@@ -2,6 +2,10 @@ import type { ReportSnapshot } from './types.ts';
 
 const snapshots: ReportSnapshot[] = [];
 
+export function resetSnapshots(): void {
+  snapshots.length = 0;
+}
+
 export function snapshotIdentity(
   snapshot: Pick<
     ReportSnapshot,
