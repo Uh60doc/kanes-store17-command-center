@@ -36,6 +36,19 @@
     table { width: 100%; border-collapse: collapse; }
     td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid #1d5c66; }
     .hidden { display: none; }
+    .section-title { margin: 22px 0 10px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #14c4d4; }
+    .kpi-wrap { overflow-x: auto; }
+    table.kpi { min-width: 680px; }
+    table.kpi td, table.kpi th { white-space: nowrap; }
+    .pending { color: #9eb0c9; }
+    button.sort { background: #10161c; border: 1px solid #1d5c66; color: #f3f6f8; }
+    button.sort.active { background: #14c4d4; color: #041014; }
+    button.linkish { background: transparent; border: 0; color: #7ee7f0; min-height: 0; padding: 0; font-weight: 700; cursor: pointer; }
+    @media (max-width: 720px) {
+      h1 { font-size: 24px; }
+      .figure { font-size: 32px; }
+      .brand { align-items: flex-start; }
+    }
     @media print {
       body { background: white; color: black; }
       .nav, .noprint, .login { display: none !important; }
@@ -132,25 +145,70 @@
     function card(title, figure, note, tone) {
       return '<article class="card"><h2>' + title + '</h2><p class="figure ' + (tone || '') + '">' + figure + '</p><p class="sub">' + (note || '') + '</p></article>';
     }
+    function toneFor(actual, goal) {
+      if (actual === null || actual === undefined || goal === null || goal === undefined || goal === '') return 'pending';
+      var value = Number(actual);
+      var target = Number(goal);
+      if (value >= target) return 'good';
+      if (value >= target * 0.9) return 'warn';
+      return 'bad';
+    }
+    function kpiText(value, unit) {
+      if (value === null || value === undefined || value === '') return 'Data Pending';
+      if (unit === 'percent') return percent(value);
+      if (unit === 'dollars') return money(value);
+      return String(value);
+    }
+    function goalText(value, unit) {
+      if (value === null || value === undefined || value === '') return 'Not configured';
+      return kpiText(value, unit);
+    }
+    function statusText(actual, goal) {
+      if (actual === null || actual === undefined || actual === '') return 'Data Pending';
+      if (goal === null || goal === undefined || goal === '') return 'No goal';
+      return Number(actual) >= Number(goal) ? 'Above' : (Number(actual) >= Number(goal) * 0.9 ? 'Approaching' : 'Below');
+    }
     function renderHome(data) {
-      var beddingTone = data.bedding.value === null ? 'muted' : data.bedding.value >= data.bedding.goal ? 'good' : 'bad';
-      var yesterdayNote = data.yesterday.missing ? 'Report missing. Last verified day is ' + (data.latest || 'not on file') + '.' : 'Verified store day';
-      document.getElementById('header-note').textContent = 'Store ' + data.period + ' · Salespeople ' + data.individualPeriod + ' · Updated ' + data.updated;
+      var board = data.scoreboard || {};
+      var written = board.written || {};
+      var delivered = board.delivered || {};
       var paceNote = data.todayGoal.goalOnFile === false
-        ? 'No official budget is on file for this store month. The daily goal is not estimated, and no budget was invented.'
-        : data.todayGoal.daysLeft + ' selling days left, including today. A day counts unless it is marked closed. The monthly budget is unchanged.';
+        ? 'No official budget is on file for this store month.'
+        : (data.todayGoal.daysLeft + ' operating days left, including today.');
+      document.getElementById('header-note').textContent = 'Store ' + data.period + ' · Updated ' + data.updated;
+      var projectionNote = data.projection ? data.projection.note : '';
+      var kpis = (data.kpis || []).map(function (row) {
+        var writtenTone = toneFor(row.written, row.goal);
+        var deliveredTone = row.name === 'Closing Ratio' || row.name === 'Customer Opportunities' ? 'pending' : toneFor(row.delivered, row.goal);
+        var deliveredCell = row.name === 'Closing Ratio' || row.name === 'Customer Opportunities' ? 'N/A' : kpiText(row.delivered, row.unit);
+        var warning = row.written === null || row.written === undefined ? '' : (row.note ? '<div class="sub">' + esc(row.note) + '</div>' : '');
+        if ((row.written === null || row.written === undefined) && row.note) warning = '<div class="sub">' + esc(row.note) + '</div>';
+        return '<tr><td>' + esc(row.name) + warning + '</td><td class="' + writtenTone + '">' + kpiText(row.written, row.unit) + '</td><td class="' + deliveredTone + '">' + deliveredCell + '</td><td>' + goalText(row.goal, row.unit) + '</td><td class="' + writtenTone + '">' + statusText(row.written, row.goal) + '</td></tr>';
+      }).join('');
       document.getElementById('screen').innerHTML =
+        '<h2 class="section-title">Sales and delivery</h2>' +
         '<div class="grid">' +
-        card('Yesterday ' + data.yesterday.date, data.yesterday.missing ? 'Report missing' : money(data.yesterday.written), yesterdayNote + ' · Delivered ' + money(data.yesterday.delivered), data.yesterday.missing ? 'warn' : '') +
-        card('Written month to date', money(data.month.written), money(data.month.writtenLeft) + ' left of ' + money(data.month.writtenGoal)) +
-        card("Today's written goal", money(data.todayGoal.written), paceNote) +
-        card('Delivered month to date', money(data.month.delivered), money(data.month.deliveredLeft) + ' left of ' + money(data.month.deliveredGoal)) +
+        card('Yesterday written', data.yesterday.missing ? 'Report missing' : money(written.yesterday), data.yesterday.date + (data.yesterday.missing ? ' · incomplete, not zero' : ''), data.yesterday.missing ? 'warn' : '') +
+        card('Yesterday delivered', delivered.yesterday === null || delivered.yesterday === undefined ? 'Report missing' : money(delivered.yesterday), data.yesterday.date, delivered.yesterday === null ? 'warn' : '') +
+        card('Written month to date', money(written.month), percent(written.achieved) + ' of ' + money(written.goal)) +
+        card('Delivered month to date', money(delivered.month), percent(delivered.achieved) + ' of ' + money(delivered.goal)) +
+        card("Today's written goal", money(written.today), paceNote + ' Budget ' + money(written.goal) + ' stays unchanged.') +
+        card("Today's delivered goal", money(delivered.today), paceNote) +
+        card('Written projection', money(data.projection && data.projection.written), projectionNote, data.projection && data.projection.provisional ? 'warn' : '') +
+        card('Delivered projection', money(data.projection && data.projection.delivered), projectionNote, data.projection && data.projection.provisional ? 'warn' : '') +
+        card('Remaining written', money(written.remaining), 'Needed to reach ' + money(written.goal)) +
+        card('Remaining delivered', money(delivered.remaining), 'Needed to reach ' + money(delivered.goal)) +
         '</div>' +
-        '<div class="grid" style="margin-top:12px">' +
-        card('Bedding', percent(data.bedding.value), (data.bedding.note || 'Goal 20%') , beddingTone) +
-        card('Written projection', money(data.projection && data.projection.written), data.projection ? data.projection.note : '') +
-        card('Closing ratio', 'Not Available', 'Goal ' + percent(data.closing.goal) + '. Store month only. The matching counts are not on file.') +
-        card('Needs attention', data.attention.length + ' items', '<ul class="list">' + data.attention.map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ul>') +
+        '<h2 class="section-title">Store KPI performance</h2>' +
+        '<article class="card kpi-wrap"><table class="kpi"><tr><th>KPI</th><th>Written</th><th>Delivered</th><th>Goal</th><th>Status</th></tr>' + kpis + '</table><p class="sub">Store month only. A pending figure was not calculated as zero. Green is at or above goal, amber is approaching, and red is below a confirmed figure.</p></article>' +
+        '<h2 class="section-title">Store operations</h2>' +
+        '<div class="grid">' +
+        card('Customer opportunities', 'Data Pending', 'The full store month is not on file.') +
+        card('Closed sales', 'Data Pending', 'Closed-customer count for the store month is not on file.') +
+        card('Closing ratio', 'Data Pending', 'Goal ' + percent(data.closing.goal) + '. Needs matching opportunity and closed-customer counts.') +
+        card('Average written ticket', 'Data Pending', 'Goal ' + money(data.goals && data.goals.averageTicket) + '.') +
+        card('Last year written', 'Data Pending', 'Sequential store-period comparison is not on file.') +
+        card('Last year delivered', 'Data Pending', 'Sequential store-period comparison is not on file.') +
         '</div>';
     }
     function renderDaily(data) {
@@ -160,12 +218,81 @@
       }).join('');
       document.getElementById('screen').innerHTML = '<article class="card"><h2>Daily performance</h2><table><tr><th>Date</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR delivered</th></tr>' + rows + '</table><p class="sub">Store month, the 2nd through the 1st. A missing report is incomplete, not zero.</p></article>';
     }
+    var peopleSort = 'nwdsrWritten';
+    var peopleCache = [];
+    function peopleValue(person, key) {
+      if (key === 'snapWritten') return person.snapWritten;
+      if (key === 'nwdsrWritten') return person.nwdsrWritten;
+      if (key === 'nwdsrDelivered') return person.nwdsrDelivered;
+      if (key === 'pct') return person.monthlyGoal ? person.snapWritten / person.monthlyGoal : null;
+      return null;
+    }
+    function sortedPeople() {
+      var nwdsrReady = peopleCache.some(function (person) { return person.nwdsrWritten !== null && person.nwdsrWritten !== undefined; });
+      var key = peopleSort === 'nwdsrWritten' && !nwdsrReady ? 'snapWritten' : peopleSort;
+      return peopleCache.slice().sort(function (left, right) {
+        var a = peopleValue(left, key);
+        var b = peopleValue(right, key);
+        if (a === null || a === undefined) return 1;
+        if (b === null || b === undefined) return -1;
+        return Number(b) - Number(a);
+      });
+    }
     function renderPeople(data) {
+      peopleCache = data.people || [];
+      if (!peopleSort) peopleSort = 'nwdsrWritten';
       document.getElementById('header-note').textContent = 'Salesperson month ' + (data.period || '') + ' · Updated ' + data.updated;
-      var rows = data.people.map(function (person) {
-        return '<tr><td>' + esc(person.name) + '</td><td>' + money(person.written) + '</td></tr>';
+      drawPeopleTable();
+    }
+    function drawPeopleTable() {
+      var nwdsrReady = peopleCache.some(function (person) { return person.nwdsrWritten !== null && person.nwdsrWritten !== undefined; });
+      var rows = sortedPeople().map(function (person) {
+        return '<tr><td><button class="linkish" type="button" data-person="' + esc(person.name) + '">' + esc(person.name) + '</button></td><td>' + money(person.snapWritten) + '</td><td class="pending">' + money(person.nwdsrWritten) + '</td><td class="pending">' + money(person.nwdsrDelivered) + '</td><td class="pending">' + (person.monthlyGoal === null || person.monthlyGoal === undefined ? 'Not configured' : money(person.monthlyGoal)) + '</td><td class="pending">Data Pending</td></tr>';
       }).join('');
-      document.getElementById('screen').innerHTML = '<article class="card"><h2>Salesperson written sales</h2><table><tr><th>Name</th><th>SNAP written</th></tr>' + rows + '</table><p class="sub">Salesperson month is the 1st through the last calendar day. It is separate from the store month. Managers are not listed. A missing figure stays Not Available.</p></article>';
+      var compare = ['Bedding', 'Mattress Protectors', 'Fabric Maintenance', 'Leather Maintenance', 'Power Maintenance', 'Wood Maintenance', 'Rugs', 'Average Ticket', 'Closing Ratio'].map(function (name) {
+        var cells = sortedPeople().map(function (person) {
+          var kpi = (person.kpis || []).filter(function (row) { return row.name === name; })[0];
+          return '<td class="pending">' + (kpi ? kpiText(kpi.written, kpi.unit) : 'Data Pending') + '</td>';
+        }).join('');
+        return '<tr><td>' + esc(name) + '</td>' + cells + '</tr>';
+      }).join('');
+      var heads = sortedPeople().map(function (person) { return '<th>' + esc(person.name) + '</th>'; }).join('');
+      document.getElementById('screen').innerHTML =
+        '<h2 class="section-title">Salesperson sales leaderboard</h2>' +
+        '<div class="nav noprint"><button class="sort" type="button" data-sort="nwdsrWritten">NWDSR written</button><button class="sort" type="button" data-sort="nwdsrDelivered">Delivered</button><button class="sort" type="button" data-sort="snapWritten">SNAP written</button></div>' +
+        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Salesperson</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR delivered</th><th>Monthly goal</th><th>% to goal</th></tr>' + rows + '</table><p class="sub">Salesperson month, the 1st through the last day. SNAP and NWDSR stay separate. ' + (nwdsrReady ? '' : 'Person-level NWDSR is not on file, so the list is ordered by SNAP Written until those lines arrive.') + ' Managers and former associates are not listed as active.</p></article>' +
+        '<h2 class="section-title">KPI comparison</h2>' +
+        '<article class="card kpi-wrap"><table class="kpi"><tr><th>KPI</th>' + heads + '</tr>' + compare + '</table><p class="sub">Written result for each person. Delivered results open on the individual scorecard. Pending means the source report is not on file.</p></article>';
+      document.querySelectorAll('[data-sort]').forEach(function (button) {
+        var effectiveSort = peopleSort === 'nwdsrWritten' && !nwdsrReady ? 'snapWritten' : peopleSort;
+        if (button.getAttribute('data-sort') === effectiveSort) button.className = 'sort active';
+        button.addEventListener('click', function () { peopleSort = button.getAttribute('data-sort'); drawPeopleTable(); });
+      });
+      document.querySelectorAll('[data-person]').forEach(function (button) {
+        button.addEventListener('click', function () { renderPerson(button.getAttribute('data-person')); });
+      });
+    }
+    function renderPerson(name) {
+      var person = peopleCache.filter(function (item) { return item.name === name; })[0];
+      if (!person) return;
+      var rows = (person.kpis || []).map(function (row) {
+        var deliveredCell = row.name === 'Closing Ratio' ? 'N/A' : kpiText(row.delivered, row.unit);
+        return '<tr><td>' + esc(row.name) + '</td><td class="' + toneFor(row.written, row.goal) + '">' + kpiText(row.written, row.unit) + '</td><td class="' + toneFor(row.delivered, row.goal) + '">' + deliveredCell + '</td><td>' + goalText(row.goal, row.unit) + '</td></tr>';
+      }).join('');
+      var trend = (person.days || []).map(function (day) { return '<li>' + esc(day.date) + ' · SNAP ' + money(day.snapWritten) + '</li>'; }).join('');
+      document.getElementById('screen').innerHTML =
+        '<p class="noprint"><button class="linkish" id="back-people" type="button">All salespeople</button></p>' +
+        '<h2 class="section-title">' + esc(person.name) + '</h2>' +
+        '<div class="grid">' +
+        card('SNAP written', money(person.snapWritten), 'Salesperson month') +
+        card('NWDSR written', money(person.nwdsrWritten), 'Not the same measure as SNAP') +
+        card('NWDSR delivered', money(person.nwdsrDelivered), 'Person-level delivered lines are not on file.') +
+        card('Monthly goal', person.monthlyGoal === null || person.monthlyGoal === undefined ? 'Not configured' : money(person.monthlyGoal), 'Percent of goal stays Data Pending until a goal is configured.') +
+        '</div>' +
+        '<article class="card kpi-wrap" style="margin-top:12px"><h2>Individual KPIs</h2><table class="kpi"><tr><th>KPI</th><th>Written</th><th>Delivered</th><th>Goal</th></tr>' + rows + '</table><p class="sub">No confirmed individual KPI percentage is on file, so strongest and weakest are not ranked. Previous month comparison is Data Pending.</p></article>' +
+        '<article class="card" style="margin-top:12px"><h2>SNAP written days</h2>' + (trend ? '<ul class="list">' + trend + '</ul>' : '<p class="sub">No verified SNAP day is on file for this salesperson month.</p>') + '<p class="noprint"><button id="print-person" type="button">Print scorecard</button></p></article>';
+      document.getElementById('back-people').addEventListener('click', function () { drawPeopleTable(); });
+      document.getElementById('print-person').addEventListener('click', function () { window.print(); });
     }
     function renderMorning(data) {
       document.getElementById('header-note').textContent = 'Morning meeting · ' + data.date + ' · ' + data.period + ' · Updated ' + data.updated;
@@ -178,17 +305,17 @@
         card('Yesterday delivered', money(data.yesterday.delivered), data.yesterday.date) +
         card('Month written', money(data.month.written), money(data.month.writtenLeft) + ' left') +
         card("Today's goal", money(data.todayGoal.written), 'The monthly goal is unchanged.') +
-        card('Bedding', percent(data.bedding.value), data.bedding.note || '') +
-        card('Closing ratio', 'Not Available', 'Goal ' + percent(data.closing.goal)) +
+        card('Written bedding', percent(data.bedding.value), (data.bedding.note || 'Stored written bedding only.') + ' Delivered bedding is not copied from this figure.') +
+        card('Closing ratio', 'Data Pending', 'Goal ' + percent(data.closing.goal)) +
         '</div><h2 style="margin-top:16px">Highlights</h2><ul class="list">' + people + '</ul>' +
-        '<h2>Priorities</h2><ul class="list">' + data.attention.map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ul>' +
         '<p class="noprint"><button id="print" type="button">Print morning report</button></p></article>';
       document.getElementById('print').addEventListener('click', function () { window.print(); });
     }
     function renderHealth(data) {
       var rows = data.rows.map(function (row) { return '<tr><td>' + esc(row.key) + '</td><td>' + esc(row.value) + '</td></tr>'; }).join('');
       var imports = data.imports.map(function (row) { return '<li>' + esc(row.status) + ' · ' + esc(row.file) + ' · ' + esc(row.note) + '</li>'; }).join('');
-      document.getElementById('screen').innerHTML = '<article class="card"><h2>System health · version ' + data.version + '</h2><table>' + rows + '</table><ul class="list">' + imports + '</ul></article>';
+      var exceptions = (data.exceptions || []).map(function (row) { return '<li>' + esc(row.severity) + ' · ' + esc(row.message) + '</li>'; }).join('');
+      document.getElementById('screen').innerHTML = '<article class="card"><h2>System health · version ' + data.version + '</h2><table>' + rows + '</table><h2>Exceptions</h2>' + (exceptions ? '<ul class="list">' + exceptions + '</ul>' : '<p class="sub">No open technical exceptions.</p>') + '<p class="sub">A negative written day is an order cancellation. It stays in the sales total and is not emailed as an error.</p><h2>Imports</h2><ul class="list">' + imports + '</ul></article>';
     }
     function renderAdmin() {
       document.getElementById('screen').innerHTML =

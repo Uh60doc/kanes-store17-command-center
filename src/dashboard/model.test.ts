@@ -291,8 +291,8 @@ test('closing ratio uses the full store month only when both inputs share it', (
   );
   assert.equal(model.closingRatio.kind, 'value');
   if (model.closingRatio.kind === 'value') assert.equal(model.closingRatio.value, 0.4);
-  assert.equal(storeOperatingPeriod.managementGoals.closingRatioTarget, 0.5);
+  assert.equal(storeOperatingPeriod.managementGoals.closingRatioTarget, 0.4);
   if (model.closingRatio.kind === 'value') {
-    assert.equal(model.closingRatio.value < storeOperatingPeriod.managementGoals.closingRatioTarget, true);
+    assert.equal(model.closingRatio.value, storeOperatingPeriod.managementGoals.closingRatioTarget);
   }
 });

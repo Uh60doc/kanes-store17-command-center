@@ -62,11 +62,13 @@ function importAttachment_(messageId, attachment) {
   } catch (error) {
     recordImport_(sha, attachment.getName(), 'needs-review', 'The file could not be read. No figure was changed.');
     appendException_('Update Failed', attachment.getName() + ' could not be read.');
+    notifyOnce_(attachment.getName() + ' could not be read. No figure was changed.');
     return;
   }
   var parsed = parseCloudReport_(text);
   if (!parsed) {
     recordImport_(sha, attachment.getName(), 'needs-review', 'The report type or store total was not identified. No figure was changed.');
+    notifyOnce_(attachment.getName() + ' could not be identified. No figure was changed.');
     return;
   }
   if (!parsed.singleDay) {
@@ -149,7 +151,9 @@ function writeDailyAmount_(parsed) {
   }
   var current = numberOrNull_(tab.getRange(target, field + 1).getValue());
   if (current !== null && current !== parsed.storeTotal) {
-    appendException_('Update Failed', parsed.reportType + ' ' + parsed.start + ' conflicts with the figure already on file. The existing figure was kept.');
+    var conflict = parsed.reportType + ' ' + parsed.start + ' conflicts with the figure already on file. The existing figure was kept.';
+    appendException_('Update Failed', conflict);
+    notifyOnce_(conflict);
     return 'conflict';
   }
   tab.getRange(target, field + 1).setValue(parsed.storeTotal);

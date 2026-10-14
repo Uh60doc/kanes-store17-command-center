@@ -175,11 +175,109 @@ function pace_(goal, actual, daysLeft) {
   return { remaining: remaining, pace: Math.round((remaining / daysLeft) * 100) / 100 };
 }
 
+function goalOr_(config, key, fallback) {
+  if (!Object.prototype.hasOwnProperty.call(config, key) || config[key] === '' || config[key] === null || config[key] === undefined) return fallback;
+  return numberOrNull_(config[key]);
+}
+
+function closingGoal_(config) {
+  var value = numberOrNull_(config.closing_goal);
+  if (value === null) return 0.4;
+  if (value === 0.5 && PropertiesService.getScriptProperties().getProperty('closing_goal_set_40') !== 'yes') return 0.4;
+  return value;
+}
+
+function ensureClosingGoal_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('closing_goal_set_40') === 'yes') return;
+  var tab = SpreadsheetApp.openById(SPREADSHEET_ID_).getSheetByName('CC_Config');
+  if (!tab) return;
+  var values = tab.getDataRange().getValues();
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    if (String(values[r][0]) === 'closing_goal' && Number(values[r][1]) === 0.5) tab.getRange(r + 1, 2).setValue(0.4);
+  }
+  props.setProperty('closing_goal_set_40', 'yes');
+}
+
+function approvedGoals_(config) {
+  return {
+    bedding: goalOr_(config, 'bedding_minimum', 0.2),
+    mattress: goalOr_(config, 'mattress_protector_goal', 1),
+    fabric: goalOr_(config, 'fabric_maintenance_goal', null),
+    leather: goalOr_(config, 'leather_maintenance_goal', null),
+    power: goalOr_(config, 'power_maintenance_goal', null),
+    wood: goalOr_(config, 'wood_maintenance_goal', null),
+    maintenance: goalOr_(config, 'overall_maintenance_goal', null),
+    rugs: goalOr_(config, 'rugs_goal', null),
+    averageTicket: goalOr_(config, 'average_ticket_goal', 2500),
+    closing: closingGoal_(config),
+    opportunities: goalOr_(config, 'opportunities_goal', null),
+  };
+}
+
+function ratio_(actual, goal) {
+  if (actual === null || goal === null || Number(goal) === 0) return null;
+  return Math.round((actual / Number(goal)) * 1000) / 1000;
+}
+
+function scoreboard_(config, snap, delivered, writtenGoal, deliveredGoal, writtenPace, deliveredPace, daysLeft, yesterdayRow, yesterday, missing) {
+  return {
+    daysLeft: daysLeft,
+    provisional: missing.length > 0,
+    missingDays: missing.length,
+    written: {
+      yesterday: yesterdayRow ? yesterdayRow.snapWritten : null,
+      month: snap,
+      goal: writtenGoal,
+      achieved: ratio_(snap, writtenGoal),
+      today: writtenPace.pace,
+      remaining: writtenPace.remaining,
+    },
+    delivered: {
+      yesterday: yesterdayRow ? yesterdayRow.nwdsrDelivered : null,
+      month: delivered,
+      goal: deliveredGoal,
+      achieved: ratio_(delivered, deliveredGoal),
+      today: deliveredPace.pace,
+      remaining: deliveredPace.remaining,
+    },
+  };
+}
+
+function kpiRow_(name, written, delivered, goal, unit, note) {
+  return { name: name, written: written, delivered: delivered, goal: goal, unit: unit, note: note || '' };
+}
+
+function storeKpis_(config, metrics, bedding) {
+  var goals = approvedGoals_(config);
+  var beddingNote = metrics.bedding_percent ? String(metrics.bedding_percent.note || '') : '';
+  return [
+    kpiRow_('Bedding', bedding, null, goals.bedding, 'percent', beddingNote),
+    kpiRow_('Mattress Protectors', null, null, goals.mattress, 'percent', 'Eligible-opportunity attachment is not on file.'),
+    kpiRow_('Fabric Maintenance', null, null, goals.fabric, 'percent', ''),
+    kpiRow_('Leather Maintenance', null, null, goals.leather, 'percent', ''),
+    kpiRow_('Power Maintenance', null, null, goals.power, 'percent', ''),
+    kpiRow_('Wood Maintenance', null, null, goals.wood, 'percent', ''),
+    kpiRow_('Overall Maintenance', null, null, goals.maintenance, 'percent', ''),
+    kpiRow_('Rugs', null, null, goals.rugs, 'count', ''),
+    kpiRow_('Average Ticket', null, null, goals.averageTicket, 'dollars', 'Written goal. Delivered average ticket is not on file.'),
+    kpiRow_('Closing Ratio', null, null, goals.closing, 'percent', 'Needs closed customers and customer opportunities for the same store month.'),
+    kpiRow_('Customer Opportunities', null, null, goals.opportunities, 'count', 'A full store-month opportunity count is not on file.'),
+  ];
+}
+
+function activePerson_(row) {
+  var role = String(row.role || 'associate');
+  return role !== 'management' && role !== 'former' && role !== 'unknown';
+}
+
 function peopleRows_(individualStart, individualEnd) {
   var totals = {};
   var seenAny = {};
+  var days = {};
   sheet_('CC_AssociateDays').forEach(function (row) {
-    if (String(row.role) === 'management' || String(row.role) === 'unknown') return;
+    if (String(row.role) === 'management' || String(row.role) === 'unknown' || String(row.role) === 'former') return;
     var name = String(row.display_name || '');
     if (!name) return;
     seenAny[name] = true;
@@ -187,18 +285,46 @@ function peopleRows_(individualStart, individualEnd) {
     if (!date || date < individualStart || date > individualEnd) return;
     if (row.amount === '' || row.amount === null) return;
     totals[name] = (totals[name] || 0) + Number(row.amount);
+    if (!days[name]) days[name] = [];
+    days[name].push({ date: date, snapWritten: Math.round(Number(row.amount) * 100) / 100 });
   });
-  var roster = sheet_('CC_People').filter(function (row) { return String(row.role) !== 'management'; });
+  var goals = approvedGoals_(config_());
+  var roster = sheet_('CC_People').filter(activePerson_);
   var rows = roster.length ? roster.map(function (row) {
     var name = String(row.name);
     var written = Object.prototype.hasOwnProperty.call(totals, name)
       ? Math.round(totals[name] * 100) / 100
       : (seenAny[name] ? null : numberOrNull_(row.written));
-    return { name: name, written: written, role: String(row.role || 'associate') };
+    return personRecord_(name, written, String(row.role || 'associate'), days[name] || [], goals);
   }) : Object.keys(totals).map(function (name) {
-    return { name: name, written: Math.round(totals[name] * 100) / 100, role: 'associate' };
+    return personRecord_(name, Math.round(totals[name] * 100) / 100, 'associate', days[name] || [], goals);
   });
-  return rows.sort(function (left, right) { return (right.written || -999999) - (left.written || -999999); });
+  return rows;
+}
+
+function personRecord_(name, snapWritten, role, days, goals) {
+  return {
+    name: name,
+    role: role,
+    written: snapWritten,
+    snapWritten: snapWritten,
+    nwdsrWritten: null,
+    nwdsrDelivered: null,
+    monthlyGoal: null,
+    days: days.sort(function (left, right) { return left.date < right.date ? -1 : 1; }),
+    kpis: [
+      kpiRow_('Bedding', null, null, goals.bedding, 'percent', ''),
+      kpiRow_('Mattress Protectors', null, null, goals.mattress, 'percent', ''),
+      kpiRow_('Fabric Maintenance', null, null, goals.fabric, 'percent', ''),
+      kpiRow_('Leather Maintenance', null, null, goals.leather, 'percent', ''),
+      kpiRow_('Power Maintenance', null, null, goals.power, 'percent', ''),
+      kpiRow_('Wood Maintenance', null, null, goals.wood, 'percent', ''),
+      kpiRow_('Overall Maintenance', null, null, goals.maintenance, 'percent', ''),
+      kpiRow_('Rugs', null, null, goals.rugs, 'count', ''),
+      kpiRow_('Average Ticket', null, null, goals.averageTicket, 'dollars', ''),
+      kpiRow_('Closing Ratio', null, null, goals.closing, 'percent', ''),
+    ],
+  };
 }
 
 function attention_(facts, config, role) {
@@ -207,11 +333,6 @@ function attention_(facts, config, role) {
   var written = facts.filter(function (row) { return row.date === yesterday; })[0];
   if (!written || written.snapWritten === null) items.push('SNAP Written for ' + yesterday + ' has not arrived. Last verified figures stay in place.');
   if (!written || written.nwdsrDelivered === null) items.push('NWDSR Delivered for ' + yesterday + ' has not arrived.');
-  facts.forEach(function (row) {
-    if (row.snapWritten !== null && row.snapWritten < 0) {
-      items.push(row.date + ' SNAP Written is ' + moneyText_(row.snapWritten) + ' and is flagged for review.');
-    }
-  });
   sheet_('CC_Exceptions').slice(-8).forEach(function (row) {
     if (role === 'sales' && /management|password|credential/i.test(String(row.message))) return;
     items.push(String(row.message));
@@ -245,6 +366,7 @@ function verifiedRunRate_(days, field, closed) {
 }
 
 function home_(payload) {
+  try { ensureClosingGoal_(); } catch (error) { appendException_('Update Failed', 'The closing-ratio goal could not be updated.'); }
   var config = config_();
   var facts = dailyFacts_();
   var today = todayNy_();
@@ -307,14 +429,20 @@ function home_(payload) {
     projection: {
       written: verifiedRunRate_(days, 'snapWritten', closed),
       delivered: verifiedRunRate_(days, 'nwdsrDelivered', closed),
-      note: 'From verified store days only. Missing days are not zero. The official monthly budget is unchanged.',
+      provisional: missing.length > 0,
+      note: missing.length
+        ? 'Provisional. Built only from days that have a verified figure. ' + missing.length + ' store days are incomplete and were not counted as zero.'
+        : 'From verified store days only. The official monthly budget is unchanged.',
     },
     bedding: {
       value: bedding,
       note: metrics.bedding_percent ? String(metrics.bedding_percent.note || '') : '',
       goal: Number(config.bedding_minimum || 0.2),
     },
-    closing: { value: null, goal: Number(config.closing_goal || 0.5) },
+    closing: { value: null, goal: closingGoal_(config) },
+    goals: approvedGoals_(config),
+    scoreboard: scoreboard_(config, snap, delivered, writtenGoal, deliveredGoal, writtenPace, deliveredPace, daysLeft, yesterdayRow, yesterday, missing),
+    kpis: storeKpis_(config, metrics, bedding),
     attachment: { value: null, goal: Number(config.attachment_goal || 0.9) },
     attention: attention.slice(0, 8),
     people: peopleRows_(individual.start, individual.end).slice(0, 8),
@@ -363,15 +491,28 @@ function morning_(payload) {
 }
 
 function health_(payload) {
-  var rows = sheet_('CC_Health').map(function (row) {
-    return { key: String(row.key), value: String(row.value) };
+  var facts = dailyFacts_();
+  var yesterday = shiftDate_(todayNy_(), -1);
+  var row = facts.filter(function (item) { return item.date === yesterday; })[0];
+  var current = row && row.snapWritten !== null && row.nwdsrDelivered !== null;
+  var rows = sheet_('CC_Health').map(function (item) {
+    var key = String(item.key);
+    var value = key === 'status' ? (current ? 'Current' : 'Report Missing') : String(item.value);
+    return { key: key, value: value };
+  });
+  if (!rows.some(function (item) { return item.key === 'status'; })) rows.unshift({ key: 'status', value: current ? 'Current' : 'Report Missing' });
+  var exceptions = sheet_('CC_Exceptions').filter(function (item) {
+    return !/flagged for review/i.test(String(item.message || ''));
+  }).slice(-12).map(function (item) {
+    return { at: String(item.at || ''), severity: String(item.severity || ''), message: String(item.message || '') };
   });
   return {
     role: payload.session.role,
     version: APP_VERSION_,
     rows: rows,
-    imports: sheet_('CC_Imports').slice(-12).map(function (row) {
-      return { file: String(row.file_name || row.sha256 || ''), status: String(row.status || ''), note: String(row.note || '') };
+    exceptions: exceptions,
+    imports: sheet_('CC_Imports').slice(-12).map(function (item) {
+      return { file: String(item.file_name || item.sha256 || ''), status: String(item.status || ''), note: String(item.note || '') };
     }),
   };
 }
