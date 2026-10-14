@@ -230,6 +230,7 @@ function approvedGoals_(config) {
     powerBase: goalOr_(config, 'power_base_goal', 0.35),
     finance: goalOr_(config, 'finance_goal', 0.5),
     warranty: goalOr_(config, 'warranty_sales_goal', 0.055),
+    individualVolume: goalOr_(config, 'individual_volume_goal', 65000),
   };
 }
 
@@ -331,7 +332,7 @@ function personRecord_(name, snapWritten, role, days, goals, closing) {
     snapWritten: snapWritten,
     nwdsrWritten: null,
     nwdsrDelivered: null,
-    monthlyGoal: null,
+    monthlyGoal: goals.individualVolume,
     purchasingCustomers: closing.customers,
     opportunities: closing.opportunities,
     closingRatio: closing.ratio,

@@ -356,7 +356,7 @@
     function drawPeopleTable() {
       var nwdsrReady = peopleCache.some(function (person) { return person.nwdsrWritten !== null && person.nwdsrWritten !== undefined; });
       var rows = sortedPeople().map(function (person) {
-        return '<tr><td><button class="linkish" type="button" data-person="' + esc(person.name) + '">' + esc(person.name) + '</button></td><td>' + money(person.snapWritten) + '</td><td class="pending">' + money(person.nwdsrWritten) + '</td><td class="pending">' + money(person.nwdsrDelivered) + '</td><td class="pending">' + (person.monthlyGoal === null || person.monthlyGoal === undefined ? 'Not configured' : money(person.monthlyGoal)) + '</td><td class="pending">Data Pending</td><td>' + count(person.opportunities) + '</td><td>' + count(person.purchasingCustomers) + '</td><td class="' + (person.closingReconcile ? 'warn' : 'pending') + '">' + percent(person.closingRatio) + '</td><td>' + (person.closingVersus || 'Not Available') + '</td></tr>';
+        return '<tr><td><button class="linkish" type="button" data-person="' + esc(person.name) + '">' + esc(person.name) + '</button></td><td>' + money(person.snapWritten) + '</td><td class="pending">' + money(person.nwdsrWritten) + '</td><td class="pending">' + money(person.nwdsrDelivered) + '</td><td>' + (person.monthlyGoal === null || person.monthlyGoal === undefined ? 'Data Pending' : money(person.monthlyGoal)) + '</td><td class="pending">' + (person.monthlyGoal && person.snapWritten !== null && person.snapWritten !== undefined ? percent(person.snapWritten / person.monthlyGoal) : 'Data Pending') + '</td><td>' + count(person.opportunities) + '</td><td>' + count(person.purchasingCustomers) + '</td><td class="' + (person.closingReconcile ? 'warn' : 'pending') + '">' + percent(person.closingRatio) + '</td><td>' + (person.closingVersus || 'Not Available') + '</td></tr>';
       }).join('');
       var compare = ['Bedding', 'Mattress Protectors', 'Fabric Maintenance', 'Leather Maintenance', 'Power Maintenance', 'Wood Maintenance', 'Rugs', 'Average Ticket', 'Closing Ratio'].map(function (name) {
         var cells = sortedPeople().map(function (person) {
@@ -397,7 +397,7 @@
         card('SNAP written', money(person.snapWritten), 'Salesperson month') +
         card('NWDSR written', money(person.nwdsrWritten), 'Not the same measure as SNAP') +
         card('NWDSR delivered', money(person.nwdsrDelivered), 'Person-level delivered lines are not on file.') +
-        card('Monthly goal', person.monthlyGoal === null || person.monthlyGoal === undefined ? 'Not configured' : money(person.monthlyGoal), 'Percent of goal stays Data Pending until a goal is configured.') +
+        card('Monthly goal', person.monthlyGoal === null || person.monthlyGoal === undefined ? 'Data Pending' : money(person.monthlyGoal), 'Individual sales volume for the salesperson month. Store budgets are separate.') +
         card('Opportunities', count(person.opportunities), esc(person.closingNote || 'PERQ Ups + Be Backs for this salesperson month.')) +
         card('Purchasing customers', count(person.purchasingCustomers), 'This associate\'s Net Written # OF CUST. The store total is not used.') +
         card('Closing ratio', percent(person.closingRatio), 'Goal ' + percent(person.closing && person.closing.goal) + '. ' + versusText(person.closing || { versusGoal: person.closingVersus }), person.closingReconcile ? 'warn' : '') +
