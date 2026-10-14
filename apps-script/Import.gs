@@ -27,17 +27,25 @@ function scheduledImport_() {
   }
 }
 
+function ensureDailyTrigger_() {
+  var found = false;
+  ScriptApp.getProjectTriggers().forEach(function (trigger) {
+    if (trigger.getHandlerFunction() === 'scheduledImport_') found = true;
+  });
+  if (!found) ScriptApp.newTrigger('scheduledImport_').timeBased().everyMinutes(30).create();
+}
+
 function importMailbox_() {
-  var threads = GmailApp.search('has:attachment filename:pdf newer_than:21d', 0, 10);
-  var processed = 0;
+  var threads = GmailApp.search('has:attachment filename:pdf newer_than:45d', 0, 40);
+  var accepted = 0;
   threads.forEach(function (thread) {
+    if (accepted >= 40) return;
     thread.getMessages().forEach(function (message) {
-      if (processed >= 8) return;
+      if (accepted >= 40) return;
       message.getAttachments().forEach(function (attachment) {
-        if (processed >= 8) return;
+        if (accepted >= 40) return;
         if (!/\.pdf$/i.test(attachment.getName())) return;
-        processed += 1;
-        importAttachment_(message.getId(), attachment);
+        if (importAttachment_(message.getId(), attachment)) accepted += 1;
       });
     });
   });
@@ -52,10 +60,7 @@ function importAttachment_(messageId, attachment) {
     var value = (part + 256) % 256;
     return (value < 16 ? '0' : '') + value.toString(16);
   }).join('');
-  if (knownSha_(sha)) {
-    recordImport_(sha, attachment.getName(), 'duplicate', 'Already imported. Sales were not added again.');
-    return;
-  }
+  if (knownSha_(sha)) return false;
   var text = '';
   try {
     text = pdfText_(attachment.copyBlob().setName(attachment.getName()));
@@ -63,26 +68,35 @@ function importAttachment_(messageId, attachment) {
     recordImport_(sha, attachment.getName(), 'needs-review', 'The file could not be read. No figure was changed.');
     appendException_('Update Failed', attachment.getName() + ' could not be read.');
     notifyOnce_(attachment.getName() + ' could not be read. No figure was changed.');
-    return;
+    return true;
+  }
+  if (/SNAP\s*-\s*DELIVERED/i.test(text)) {
+    recordImport_(sha, attachment.getName(), 'not-used', 'SNAP Delivered is not the delivered standard. No figure was changed.');
+    return true;
   }
   var parsed = parseCloudReport_(text);
   if (!parsed) {
-    recordImport_(sha, attachment.getName(), 'needs-review', 'The report type or store total was not identified. No figure was changed.');
-    notifyOnce_(attachment.getName() + ' could not be identified. No figure was changed.');
-    return;
+    if (/SNAP\s*-\s*WRITTEN|NET WRITTEN STORE SALES|DELIVERED STORE SALES/i.test(text)) {
+      recordImport_(sha, attachment.getName(), 'needs-review', 'The store total was not identified. No figure was changed.');
+      notifyOnce_(attachment.getName() + ' could not be identified. No figure was changed.');
+    } else {
+      recordImport_(sha, attachment.getName(), 'logged-not-daily', 'The file is on record. SNAP written, NWDSR written, and NWDSR delivered were not changed.');
+    }
+    return true;
   }
   if (!parsed.singleDay) {
     recordImport_(sha, attachment.getName(), 'cumulative-not-added', parsed.reportType + ' ' + parsed.start + ' through ' + parsed.end + ' was recorded and was not added to the daily table.');
     if (parsed.reportType === 'NWDSR Written' && parsed.purchasingCustomers !== null) {
       upsertClosing_({ date: '', scope: 'store', code: '', name: '', customers: parsed.purchasingCustomers, opportunities: '', start: parsed.start, end: parsed.end, source: 'NWDSR Net Written # OF CUST', final: 'yes', note: 'Cumulative Net Written purchasing customers for the printed period. Dollars were not added again.' });
     }
-    return;
+    return true;
   }
   var decision = writeDailyAmount_(parsed);
   if (decision !== 'conflict' && parsed.reportType === 'NWDSR Written' && parsed.purchasingCustomers !== null) {
     upsertClosing_({ date: parsed.start, scope: 'store', code: '', name: '', customers: parsed.purchasingCustomers, opportunities: '', start: parsed.start, end: parsed.end, source: 'NWDSR Net Written # OF CUST', final: 'yes', note: 'Net Written # OF CUST for the report date.' });
   }
   recordImport_(sha, attachment.getName(), decision, parsed.reportType + ' ' + parsed.start);
+  return true;
 }
 
 function pdfText_(blob) {
@@ -96,6 +110,8 @@ function pdfText_(blob) {
 
 function parseCloudReport_(text) {
   var reportType = '';
+  // SNAP Delivered is ignored. Delivered sales use NWDSR Delivered.
+  // SNAP Written is the actual written total. NWDSR Written may be unpaid or cancelled.
   if (/SNAP\s*-\s*WRITTEN/i.test(text)) reportType = 'SNAP Written';
   else if (/NET WRITTEN STORE SALES/i.test(text)) reportType = 'NWDSR Written';
   else if (/DELIVERED STORE SALES/i.test(text)) reportType = 'NWDSR Delivered';
@@ -170,6 +186,9 @@ function writeDailyAmount_(parsed) {
     return 'conflict';
   }
   tab.getRange(target, field + 1).setValue(parsed.storeTotal);
+  var ledgerView = parsed.reportType === 'SNAP Written' ? 'SNAP_STORE' : parsed.reportType === 'NWDSR Written' ? 'NWDSR_WRITTEN_STORE' : 'NWDSR_DELIVERED_STORE';
+  var ledgerSide = parsed.reportType === 'NWDSR Delivered' ? 'delivered' : 'written';
+  upsertLedgerDaily_(ledgerView, ledgerSide, parsed.start, parsed.storeTotal, parsed.reportType);
   return 'imported';
 }
 
@@ -192,10 +211,15 @@ function markMissingReports_() {
   var yesterday = shiftDate_(todayNy_(), -1);
   var facts = dailyFacts_();
   var row = facts.filter(function (item) { return item.date === yesterday; })[0];
-  if (!row || row.snapWritten === null || row.nwdsrDelivered === null) {
+  var missing = [];
+  if (!row || row.snapWritten === null) missing.push('SNAP Written');
+  if (!row || row.nwdsrWritten === null) missing.push('NWDSR Written');
+  if (!row || row.nwdsrDelivered === null) missing.push('NWDSR Delivered');
+  if (missing.length) {
     noteHealth_('status', 'Report Missing');
-    appendException_('Report Missing', 'A report for ' + yesterday + ' is not on file. Older verified totals were not replaced.');
-    notifyOnce_('Command Center is missing a report for ' + yesterday + '. The last verified totals are still on the board.');
+    var message = yesterday + ' is missing ' + missing.join(', ') + '. Older verified totals were not replaced.';
+    appendException_('Report Missing', message);
+    notifyOnce_('Command Center is missing ' + missing.join(', ') + ' for ' + yesterday + '. The last verified totals are still on the board.');
     return;
   }
   noteHealth_('status', 'Current');

@@ -34,6 +34,7 @@ function moneyToken(token: string): number | null {
   return Math.round(Number(cleaned) * 100) / 100;
 }
 
+/** SNAP Delivered is not a required report. Delivered sales are NWDSR Delivered. SNAP Written is the actual written total. NWDSR Written may be unpaid or cancelled. */
 export function detectCloudReportType(text: string): CloudReportType | null {
   if (/SNAP\s*-\s*WRITTEN/i.test(text)) return 'SNAP Written';
   if (/NET WRITTEN STORE SALES/i.test(text)) return 'NWDSR Written';

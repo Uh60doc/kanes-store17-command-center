@@ -134,6 +134,7 @@
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
       });
     }
+    var salesStandard = 'SNAP written is the actual written sales. NWDSR delivered is the delivered standard. NWDSR written is what was written and may be unpaid or cancelled. SNAP delivered is not used.';
     function money(value) {
       if (value === null || value === undefined || value === '') return 'Not Available';
       var number = Number(value);
@@ -228,7 +229,7 @@
       if (goal === null || goal === undefined || goal === '') return 'No goal';
       return Number(actual) >= Number(goal) ? 'Above' : (Number(actual) >= Number(goal) * 0.9 ? 'Approaching' : 'Below');
     }
-    function renderHome(data) {
+    function renderHome(data, focus) {
       var board = data.board || {};
       var yesterdayBoard = board.yesterday || {};
       var todayBoard = board.today || {};
@@ -290,7 +291,8 @@
       function forecast(value, provisional) {
         return (provisional ? 'Provisional forecast ' : 'Forecast ') + boardMoney(value);
       }
-      document.getElementById('header-note').textContent = 'Store ' + data.period + ' · Updated ' + data.updated;
+      var focusNote = focus === 'written' ? 'Written page uses SNAP.' : focus === 'delivered' ? 'Delivered page uses NWDSR.' : '';
+      document.getElementById('header-note').textContent = 'Store ' + data.period + (focusNote ? ' · ' + focusNote : '') + ' · Updated ' + data.updated;
       var kpis = (board.kpis || []).map(function (row) {
         var hasWritten = !(row.written === null || row.written === undefined || row.written === '');
         var hasDelivered = !(row.delivered === null || row.delivered === undefined || row.delivered === '');
@@ -305,8 +307,8 @@
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Yesterday\'s results</h2>' +
         '<div class="score-row">' +
-        boardCard('Yesterday written', data.yesterday && data.yesterday.missing ? 'Data Pending' : boardMoney(data.yesterday.written), esc(data.yesterday.date), data.yesterday && data.yesterday.missing ? 'pending' : '') +
-        boardCard('Yesterday delivered', data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'Data Pending' : boardMoney(data.yesterday.delivered), esc(data.yesterday.date), data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'pending' : '') +
+        boardCard('Yesterday written', data.yesterday && data.yesterday.missing ? 'Data Pending' : boardMoney(data.yesterday.written), 'SNAP written. Actual written sales. ' + esc(data.yesterday.date), data.yesterday && data.yesterday.missing ? 'pending' : '') +
+        boardCard('Yesterday delivered', data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'Data Pending' : boardMoney(data.yesterday.delivered), 'NWDSR delivered. ' + esc(data.yesterday.date), data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'pending' : '') +
         performanceCard('Written goal performance', data.yesterday ? data.yesterday.written : null, yesterdayBoard.written) +
         performanceCard('Delivered goal performance', data.yesterday ? data.yesterday.delivered : null, yesterdayBoard.delivered) +
         '</div>' +
@@ -319,14 +321,14 @@
         '</div>' +
         '<h2 class="section-title">Month-to-date store performance</h2>' +
         '<div class="score-row">' +
-        boardCard('Written month to date', boardMoney(monthBoard.written), percent(monthBoard.writtenAchieved) + ' of ' + boardMoney(monthBoard.writtenGoal), '') +
-        boardCard('Delivered month to date', boardMoney(monthBoard.delivered), percent(monthBoard.deliveredAchieved) + ' of ' + boardMoney(monthBoard.deliveredGoal), '') +
+        boardCard('Written month to date', boardMoney(monthBoard.written), percent(monthBoard.writtenAchieved) + ' of ' + boardMoney(monthBoard.writtenGoal) + '. SNAP written.', '') +
+        boardCard('Delivered month to date', boardMoney(monthBoard.delivered), percent(monthBoard.deliveredAchieved) + ' of ' + boardMoney(monthBoard.deliveredGoal) + '. NWDSR delivered.', '') +
         boardCard('Remaining written', boardMoney(monthBoard.writtenLeft), forecast(monthBoard.writtenForecast, monthBoard.provisional), '') +
         boardCard('Remaining delivered', boardMoney(monthBoard.deliveredLeft), forecast(monthBoard.deliveredForecast, monthBoard.provisional), '') +
         '</div>' +
         '<div class="kpi-head"><h2 class="section-title">Month-to-date store KPIs</h2><div class="kpi-nav"><button type="button" id="kpi-prev">Previous</button><button type="button" id="kpi-next">Next</button></div></div>' +
         '<div class="kpi-strip" id="kpi-strip" tabindex="0">' + kpis + '</div>' +
-        '<p class="sub">Store month only. Written is the large figure. Delivered is shown when that report exists. Slide sideways for every KPI.</p>';
+        '<p class="sub">Store month only. ' + salesStandard + ' Slide sideways for every KPI.</p>';
       var strip = document.getElementById('kpi-strip');
       function moveKpis(direction) { strip.scrollBy({ left: direction * 230, behavior: 'smooth' }); }
       document.getElementById('kpi-prev').addEventListener('click', function () { moveKpis(-1); });
@@ -344,9 +346,9 @@
         var ratioTone = day.closingReconcile ? 'warn' : '';
         return '<tr><td>' + esc(day.date) + '</td><td>' + money(day.snapWritten) + '</td><td>' + money(day.nwdsrWritten) + '</td><td>' + money(day.nwdsrDelivered) + '</td><td>' + count(day.purchasingCustomers) + '</td><td>' + count(day.opportunities) + '</td><td class="' + ratioTone + '">' + percent(day.closingRatio) + '</td><td class="' + ratioTone + '">' + (day.closingVersus || 'Not Available') + '</td></tr>';
       }).join('');
-      document.getElementById('screen').innerHTML = '<article class="card"><h2>Daily performance</h2><p class="sub">Month to date purchasing customers ' + count(mtd.customers) + ' · opportunities ' + count(mtd.opportunities) + ' · closing ratio ' + percent(mtd.ratio) + ' · ' + versusText(mtd) + '. Goal ' + percent(data.goal) + '.</p><table><tr><th>Date</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR delivered</th><th>Purchasing customers</th><th>Opportunities</th><th>Closing ratio</th><th>Versus goal</th></tr>' + rows + '</table><p class="sub">Store month, the 2nd through the 1st. Closing ratio uses Net Written # OF CUST and PERQ Ups + Be Backs for the same day. Month to date adds the counts, then divides. A missing count is Not Available, not zero. ' + esc(mtd.note || '') + '</p></article>';
+      document.getElementById('screen').innerHTML = '<article class="card"><h2>Daily performance</h2><p class="sub">' + salesStandard + ' Month to date purchasing customers ' + count(mtd.customers) + ' · opportunities ' + count(mtd.opportunities) + ' · closing ratio ' + percent(mtd.ratio) + ' · ' + versusText(mtd) + '. Goal ' + percent(data.goal) + '.</p><table><tr><th>Date</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR delivered</th><th>Purchasing customers</th><th>Opportunities</th><th>Closing ratio</th><th>Versus goal</th></tr>' + rows + '</table><p class="sub">Store month, the 2nd through the 1st. Closing ratio uses Net Written # OF CUST and PERQ Ups + Be Backs for the same day. Month to date adds the counts, then divides. A missing count is Not Available, not zero. ' + esc(mtd.note || '') + '</p></article>';
     }
-    var peopleSort = 'nwdsrWritten';
+    var peopleSort = 'snapWritten';
     var peopleCache = [];
     function peopleValue(person, key) {
       if (key === 'snapWritten') return person.snapWritten;
@@ -368,7 +370,7 @@
     }
     function renderPeople(data) {
       peopleCache = data.people || [];
-      if (!peopleSort) peopleSort = 'nwdsrWritten';
+      if (!peopleSort) peopleSort = 'snapWritten';
       document.getElementById('header-note').textContent = 'Salesperson month ' + (data.period || '') + ' · Updated ' + data.updated;
       drawPeopleTable();
     }
@@ -388,8 +390,8 @@
       var heads = sortedPeople().map(function (person) { return '<th>' + esc(person.name) + '</th>'; }).join('');
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Salesperson sales leaderboard</h2>' +
-        '<div class="nav noprint"><button class="sort" type="button" data-sort="nwdsrWritten">NWDSR written</button><button class="sort" type="button" data-sort="nwdsrDelivered">Delivered</button><button class="sort" type="button" data-sort="snapWritten">SNAP written</button></div>' +
-        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Salesperson</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR delivered</th><th>Monthly goal</th><th>% to goal</th><th>Opportunities</th><th>Purchasing customers</th><th>Closing ratio</th><th>Versus goal</th></tr>' + rows + '</table><p class="sub">Salesperson month, the 1st through the last day. Opportunities are that associate\'s PERQ Ups + Be Backs. An interim snapshot is shown and is not used as the closing denominator. Purchasing customers come from that associate\'s Net Written report. The store customer count is not assigned to a person. ' + (nwdsrReady ? '' : 'Person-level NWDSR dollars are not on file, so the list is ordered by SNAP Written until those lines arrive.') + ' Managers and former associates are not listed as active.</p></article>' +
+        '<div class="nav noprint"><button class="sort" type="button" data-sort="snapWritten">SNAP written</button><button class="sort" type="button" data-sort="nwdsrDelivered">NWDSR delivered</button><button class="sort" type="button" data-sort="nwdsrWritten">NWDSR written</button></div>' +
+        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Salesperson</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR delivered</th><th>Monthly goal</th><th>% to goal</th><th>Opportunities</th><th>Purchasing customers</th><th>Closing ratio</th><th>Versus goal</th></tr>' + rows + '</table><p class="sub">Salesperson month, the 1st through the last day. ' + salesStandard + ' The monthly goal uses SNAP written. Opportunities are that associate\'s PERQ Ups + Be Backs. An interim snapshot is shown and is not used as the closing denominator. Purchasing customers come from that associate\'s Net Written report. The store customer count is not assigned to a person. ' + (nwdsrReady ? '' : 'Person-level NWDSR dollar lines are not on file.') + ' Managers and former associates are not listed as active.</p></article>' +
         '<h2 class="section-title">KPI comparison</h2>' +
         '<article class="card kpi-wrap"><table class="kpi"><tr><th>KPI</th>' + heads + '</tr>' + compare + '</table><p class="sub">Written result for each person. Delivered results open on the individual scorecard. Pending means the source report is not on file.</p></article>';
       document.querySelectorAll('[data-sort]').forEach(function (button) {
@@ -413,9 +415,9 @@
         '<p class="noprint"><button class="linkish" id="back-people" type="button">All salespeople</button></p>' +
         '<h2 class="section-title">' + esc(person.name) + '</h2>' +
         '<div class="grid">' +
-        card('SNAP written', money(person.snapWritten), 'Salesperson month') +
-        card('NWDSR written', money(person.nwdsrWritten), 'Not the same measure as SNAP') +
-        card('NWDSR delivered', money(person.nwdsrDelivered), 'Person-level delivered lines are not on file.') +
+        card('SNAP written', money(person.snapWritten), 'Actual written sales for the salesperson month.') +
+        card('NWDSR written', money(person.nwdsrWritten), 'Written, not necessarily paid. May include cancellations.') +
+        card('NWDSR delivered', money(person.nwdsrDelivered), 'Delivered standard. Person-level delivered lines are not on file.') +
         card('Monthly goal', person.monthlyGoal === null || person.monthlyGoal === undefined ? 'Data Pending' : money(person.monthlyGoal), 'Individual sales volume for the salesperson month. Store budgets are separate.') +
         card('Opportunities', count(person.opportunities), esc(person.closingNote || 'PERQ Ups + Be Backs for this salesperson month.')) +
         card('Purchasing customers', count(person.purchasingCustomers), 'This associate\'s Net Written # OF CUST. The store total is not used.') +
@@ -457,12 +459,12 @@
         if (Math.abs(pct) < 0.0005) return 'even with the goal';
         return Math.abs(pct * 100).toFixed(1) + '% ' + (pct > 0 ? 'above' : 'below') + ' the goal · ' + signed(perf.delta);
       }
-      function resultCard(title, perf) {
-        if (!perf || pending(perf.actual)) return huddleCard(title, 'Pending Report', 'Goal ' + huddleMoney(perf && perf.goal) + '. The daily report is not in.', 'pending');
-        if (pending(perf.goal) || !perf.result) return huddleCard(title, huddleMoney(perf.actual), 'Yesterday\'s saved goal is not on file.', 'pending');
+      function resultCard(title, perf, source) {
+        if (!perf || pending(perf.actual)) return huddleCard(title, 'Pending Report', source + ' Goal ' + huddleMoney(perf && perf.goal) + '. The daily report is not in.', 'pending');
+        if (pending(perf.goal) || !perf.result) return huddleCard(title, huddleMoney(perf.actual), source + ' Yesterday\'s saved goal is not on file.', 'pending');
         var tone = perf.result === 'HIT' ? 'good' : 'bad';
         var gap = gapText(perf);
-        return huddleCard(title, huddleMoney(perf.actual), perf.result + ' · Goal ' + huddleMoney(perf.goal) + (gap ? ' · ' + gap : ''), tone);
+        return huddleCard(title, huddleMoney(perf.actual), source + ' ' + perf.result + ' · Goal ' + huddleMoney(perf.goal) + (gap ? ' · ' + gap : ''), tone);
       }
       function beddingCard(title, actual, goal) {
         if (pending(actual)) return huddleCard(title, 'Pending Report', 'Goal ' + percent(goal) + '. The daily bedding report is not in.', 'pending');
@@ -537,7 +539,7 @@
       document.getElementById('screen').innerHTML =
         '<div class="morning">' +
         '<h2 class="section-title">Yesterday\'s results · ' + esc(yesterday.date || '') + '</h2><div class="morning-grid">' +
-        resultCard('Written sales', yesterday.written) + resultCard('Delivered sales', yesterday.delivered) + closingCard +
+        resultCard('Written sales', yesterday.written, 'SNAP written. Actual written sales.') + resultCard('Delivered sales', yesterday.delivered, 'NWDSR delivered.') + closingCard +
         beddingCard('Bedding written', yesterday.beddingWritten, yesterday.beddingGoal) +
         beddingCard('Bedding delivered', yesterday.beddingDelivered, yesterday.beddingGoal) +
         '</div>' +
@@ -736,7 +738,7 @@
       }).join('');
       document.getElementById('header-note').textContent = 'Data coverage · store days October 2 through October 13';
       document.getElementById('screen').innerHTML =
-        '<article class="card kpi-wrap"><h2>Historical report coverage</h2><p class="sub">A cumulative snapshot is not counted as a daily result. October 14 is still open, so it is not listed as missing.</p><table class="kpi"><tr><th>Report</th><th>Earliest</th><th>Latest</th><th>Daily records</th><th>Missing daily dates</th><th>In Google Sheets</th></tr>' + rows + '</table></article>';
+        '<article class="card kpi-wrap"><h2>Historical report coverage</h2><p class="sub">' + salesStandard + ' A cumulative snapshot is not counted as a daily result. October 14 is still open, so it is not listed as missing.</p><table class="kpi"><tr><th>Report</th><th>Earliest</th><th>Latest</th><th>Daily records</th><th>Missing daily dates</th><th>In Google Sheets</th></tr>' + rows + '</table></article>';
     }
     function openScreen(name) {
       screen = name;
@@ -744,7 +746,7 @@
       var request = name === 'written' || name === 'delivered' || name === 'orders' ? 'home' : name;
       if (name === 'admin') { renderAdmin(); return; }
       api(request).then(function (data) {
-        if (name === 'home' || name === 'written' || name === 'delivered') renderHome(data);
+        if (name === 'home' || name === 'written' || name === 'delivered') renderHome(data, name);
         else if (name === 'bedding') renderBedding(data);
         else if (name === 'orders') {
           document.getElementById('header-note').textContent = data.period + ' · Updated ' + data.updated;

@@ -914,6 +914,7 @@ function ensureSavedDailyGoals_(period, today, closed, facts, writtenBudget, del
 }
 
 function home_(payload) {
+  try { ensureDailyTrigger_(); } catch (error) { appendException_('Update Failed', 'The daily import check could not be started.'); }
   try { ensureClosingGoal_(); } catch (error) { appendException_('Update Failed', 'The closing-ratio goal could not be updated.'); }
   try { ensureOfficialGoals_(); } catch (error) { appendException_('Update Failed', 'Official KPI goals could not be saved.'); }
   var config = config_();
@@ -944,8 +945,11 @@ function home_(payload) {
   var closingGoal = closingGoal_(config);
   var monthClosing = storeMonthClosing_(closingFacts, store, today, closed, closingGoal);
   var yesterdayClosing = dayClosing_(closingFacts, yesterday, closingGoal);
+  // Written actuals are SNAP. Delivered actuals are NWDSR Delivered.
+  // NWDSR Written stays on the daily row and is not the written total: it may be unpaid or cancelled.
+  // SNAP Delivered is not a required report.
   var missing = days.filter(function (day) {
-    return day.date < today && !closed[day.date] && (day.snapWritten === null || day.nwdsrDelivered === null);
+    return day.date < today && !closed[day.date] && (day.snapWritten === null || day.nwdsrWritten === null || day.nwdsrDelivered === null);
   });
   var attention = attention_(facts, config, payload.session.role);
   if (missing.length) {

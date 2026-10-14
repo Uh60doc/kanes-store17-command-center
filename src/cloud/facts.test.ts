@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { applyDailyAmount, projectedMonthEnd, requiredPace, sellingDaysRemaining, sumColumn, type DailyFact } from './facts.ts';
 import { parseReportText } from './reportText.ts';
@@ -88,4 +89,12 @@ KANE FURNITURE #17 Totals: 93,740 10`);
   assert.equal(cumulative?.singleDay, false);
   assert.equal(cumulative?.storeTotal, 93740);
   assert.equal(cumulative?.purchasingCustomers, null);
+  assert.equal(parseReportText(`SNAP - DELIVERED SALES RANKING REPORT
+FROM 12-OCT-2026 TO 12-OCT-2026
+17 - ORLANDO Totals: 1,370`), null);
+  const importer = readFileSync(new URL('../../apps-script/Import.gs', import.meta.url), 'utf8');
+  assert.match(importer, /SNAP Delivered is not the delivered standard/);
+  assert.match(importer, /upsertLedgerDaily_\('SNAP_STORE'|upsertLedgerDaily_\(ledgerView/);
+  assert.match(importer, /NWDSR_WRITTEN_STORE/);
+  assert.match(importer, /NWDSR_DELIVERED_STORE/);
 });
