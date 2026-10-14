@@ -175,9 +175,21 @@ function pace_(goal, actual, daysLeft) {
   return { remaining: remaining, pace: Math.round((remaining / daysLeft) * 100) / 100 };
 }
 
+function fineNumber_(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  var number = Number(value);
+  return isFinite(number) ? Math.round(number * 10000) / 10000 : null;
+}
+
 function goalOr_(config, key, fallback) {
   if (!Object.prototype.hasOwnProperty.call(config, key) || config[key] === '' || config[key] === null || config[key] === undefined) return fallback;
-  return numberOrNull_(config[key]);
+  return fineNumber_(config[key]);
+}
+
+function protectorGoal_(config) {
+  var value = goalOr_(config, 'mattress_protector_goal', 0.8);
+  if (value === 1) return 0.8;
+  return value;
 }
 
 function closingGoal_(config) {
@@ -203,16 +215,21 @@ function ensureClosingGoal_() {
 function approvedGoals_(config) {
   return {
     bedding: goalOr_(config, 'bedding_minimum', 0.2),
-    mattress: goalOr_(config, 'mattress_protector_goal', 1),
-    fabric: goalOr_(config, 'fabric_maintenance_goal', null),
-    leather: goalOr_(config, 'leather_maintenance_goal', null),
-    power: goalOr_(config, 'power_maintenance_goal', null),
-    wood: goalOr_(config, 'wood_maintenance_goal', null),
+    mattress: protectorGoal_(config),
+    fabric: goalOr_(config, 'fabric_maintenance_goal', 0.8),
+    leather: goalOr_(config, 'leather_maintenance_goal', 0.8),
+    power: goalOr_(config, 'power_maintenance_goal', 0.8),
+    wood: goalOr_(config, 'wood_maintenance_goal', 0.5),
     maintenance: goalOr_(config, 'overall_maintenance_goal', null),
-    rugs: goalOr_(config, 'rugs_goal', null),
+    rugs: goalOr_(config, 'rugs_goal', 12),
     averageTicket: goalOr_(config, 'average_ticket_goal', 2500),
     closing: closingGoal_(config),
     opportunities: goalOr_(config, 'opportunities_goal', null),
+    adjustableBase: goalOr_(config, 'adjustable_base_goal', 0.35),
+    pillow: goalOr_(config, 'pillow_goal', 0.65),
+    powerBase: goalOr_(config, 'power_base_goal', 0.35),
+    finance: goalOr_(config, 'finance_goal', 0.5),
+    warranty: goalOr_(config, 'warranty_sales_goal', 0.055),
   };
 }
 
@@ -679,8 +696,225 @@ function withDayClosing_(days, facts, goal) {
   });
 }
 
+function savedPace_(budget, actualBefore, daysLeft) {
+  if (budget === null || actualBefore === null || daysLeft === null || daysLeft <= 0) return null;
+  return Math.round(((Number(budget) - actualBefore) / daysLeft) * 100) / 100;
+}
+
+function evenPace_(budget, totalDays) {
+  if (budget === null || !totalDays) return null;
+  return Math.round((Number(budget) / totalDays) * 100) / 100;
+}
+
+function goalPerformance_(actual, goal) {
+  if (actual === null || goal === null) return { actual: actual, goal: goal, achieved: null, delta: null, result: null };
+  return {
+    actual: actual,
+    goal: goal,
+    achieved: Number(goal) === 0 ? null : Math.round((actual / Number(goal)) * 1000) / 1000,
+    delta: Math.round((actual - goal) * 100) / 100,
+    result: actual >= goal ? 'HIT' : 'MISSED',
+  };
+}
+
+function operatingDayCount_(period, closed) {
+  var count = 0;
+  eachDate_(period.start, period.end).forEach(function (date) {
+    if (!closed[date]) count += 1;
+  });
+  return count;
+}
+
+function sumBefore_(facts, field, start, date) {
+  var prior = shiftDate_(date, -1);
+  if (prior < start) return 0;
+  return sumField_(facts, field, start, prior);
+}
+
+function configBlank_(config, key) {
+  return !Object.prototype.hasOwnProperty.call(config, key) || config[key] === '' || config[key] === null || config[key] === undefined;
+}
+
+function putConfig_(key, value) {
+  var tab = SpreadsheetApp.openById(SPREADSHEET_ID_).getSheetByName('CC_Config');
+  if (!tab) return;
+  var values = tab.getDataRange().getValues();
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    if (String(values[r][0]) === key) {
+      tab.getRange(r + 1, 2).setValue(value);
+      return;
+    }
+  }
+  tab.appendRow([key, value]);
+}
+
+function ensureOfficialGoals_() {
+  var config = config_();
+  function fill(key, value) {
+    if (configBlank_(config, key)) putConfig_(key, value);
+  }
+  fill('bedding_minimum', 0.2);
+  fill('average_ticket_goal', 2500);
+  fill('pillow_goal', 0.65);
+  fill('pillow_goal_unit', 'percent');
+  fill('adjustable_base_goal', 0.35);
+  fill('adjustable_base_goal_unit', 'percent');
+  fill('warranty_sales_goal', 0.055);
+  fill('fabric_maintenance_goal', 0.8);
+  fill('leather_maintenance_goal', 0.8);
+  fill('power_maintenance_goal', 0.8);
+  fill('power_base_goal', 0.35);
+  fill('wood_maintenance_goal', 0.5);
+  fill('finance_goal', 0.5);
+  fill('rugs_goal', 12);
+  fill('individual_volume_goal', 65000);
+  if (configBlank_(config, 'mattress_protector_goal') || Number(config.mattress_protector_goal) === 1) putConfig_('mattress_protector_goal', 0.8);
+  if (configBlank_(config, 'written_goal')) putConfig_('written_goal', 400000);
+  if (configBlank_(config, 'delivered_goal')) putConfig_('delivered_goal', 320000);
+  if (configBlank_(config, 'closing_goal')) putConfig_('closing_goal', 0.4);
+}
+
+function kpiActuals_() {
+  return [
+    ['Bedding', 0.206, 0.137, ''],
+    ['Adjustable Base Attachment', 0.273, 0.25, ''],
+    ['Pillows', null, null, 'Pillow Sold Qty is blank.'],
+    ['Mattress Protectors', 0.3, 1, 'Source column is Mattress Pads.'],
+    ['Overall Warranty % of Sales', null, null, 'No warranty percent of sales column.'],
+    ['Fabric Maintenance', 0.587, 0.941, ''],
+    ['Leather Maintenance', 0.6, 0.765, ''],
+    ['Power Upholstery', 0.75, 0.857, ''],
+    ['Power Adjustable Base', null, null, 'ADJ PWR percent is blank.'],
+    ['Wood Kits', null, null, 'No UVWL wood kits column.'],
+    ['Finance', 0.233, 0.443, ''],
+    ['Average Ticket', 2040.52, 1257.71, ''],
+    ['Rugs', 7, 3, ''],
+  ];
+}
+
+function kpiSheet_() {
+  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var tab = spreadsheet.getSheetByName('CC_Kpi');
+  if (tab) return tab;
+  tab = spreadsheet.insertSheet('CC_Kpi');
+  tab.getRange(1, 1, 1, 6).setValues([['metric', 'written', 'delivered', 'note', 'period_start', 'period_end']]);
+  return tab;
+}
+
+function ensureKpiActuals_() {
+  var tab = kpiSheet_();
+  var values = tab.getDataRange().getValues();
+  var present = {};
+  var r;
+  for (r = 1; r < values.length; r += 1) present[String(values[r][0])] = true;
+  kpiActuals_().forEach(function (row) {
+    if (present[row[0]]) return;
+    tab.appendRow([row[0], row[1] === null ? '' : row[1], row[2] === null ? '' : row[2], row[3], '2026-10-02', '2026-11-01']);
+  });
+}
+
+function readKpiActuals_() {
+  var map = {};
+  sheet_('CC_Kpi').forEach(function (row) {
+    var start = isoDate_(row.period_start);
+    var end = isoDate_(row.period_end);
+    if (start && start !== '2026-10-02') return;
+    if (end && end !== '2026-11-01') return;
+    if (!row.metric) return;
+    map[String(row.metric)] = { written: fineNumber_(row.written), delivered: fineNumber_(row.delivered), note: String(row.note || '') };
+  });
+  if (!Object.keys(map).length) {
+    kpiActuals_().forEach(function (row) {
+      map[row[0]] = { written: row[1], delivered: row[2], note: row[3] };
+    });
+  }
+  return map;
+}
+
+function homeKpiStrip_(goals, actuals, closing) {
+  var specs = [
+    ['Bedding', 'percent', goals.bedding],
+    ['Adjustable Base Attachment', 'percent', goals.adjustableBase],
+    ['Pillows', 'percent', goals.pillow],
+    ['Mattress Protectors', 'percent', goals.mattress],
+    ['Overall Warranty % of Sales', 'percent', goals.warranty],
+    ['Fabric Maintenance', 'percent', goals.fabric],
+    ['Leather Maintenance', 'percent', goals.leather],
+    ['Power Upholstery', 'percent', goals.power],
+    ['Power Adjustable Base', 'percent', goals.powerBase],
+    ['Wood Kits', 'percent', goals.wood],
+    ['Finance', 'percent', goals.finance],
+    ['Closing Ratio', 'percent', goals.closing],
+    ['Average Ticket', 'dollars', goals.averageTicket],
+    ['Rugs', 'count', goals.rugs],
+  ];
+  return specs.map(function (spec) {
+    if (spec[0] === 'Closing Ratio') {
+      return {
+        name: spec[0],
+        unit: spec[1],
+        goal: spec[2],
+        written: closing.ratio,
+        delivered: null,
+        note: closing.ratio === null ? 'Needs Net Written customers and PERQ for the same dates.' : '',
+        reconcile: !!closing.reconcile,
+      };
+    }
+    var row = actuals[spec[0]] || { written: null, delivered: null, note: '' };
+    return { name: spec[0], unit: spec[1], goal: spec[2], written: row.written, delivered: row.delivered, note: row.note || '', reconcile: false };
+  });
+}
+
+function dailyGoalSheet_() {
+  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var tab = spreadsheet.getSheetByName('CC_DailyGoals');
+  if (tab) return tab;
+  tab = spreadsheet.insertSheet('CC_DailyGoals');
+  tab.getRange(1, 1, 1, 4).setValues([['date', 'written_goal', 'delivered_goal', 'days_left']]);
+  return tab;
+}
+
+function readSavedDailyGoals_() {
+  var map = {};
+  sheet_('CC_DailyGoals').forEach(function (row) {
+    var date = isoDate_(row.date);
+    if (!date) return;
+    map[date] = { written: fineNumber_(row.written_goal), delivered: fineNumber_(row.delivered_goal) };
+  });
+  return map;
+}
+
+function upsertDailyGoal_(date, written, delivered, daysLeft) {
+  if (written === null && delivered === null) return;
+  var tab = dailyGoalSheet_();
+  var values = tab.getDataRange().getValues();
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    if (isoDate_(values[r][0]) !== date) continue;
+    if ((values[r][1] === '' || values[r][1] === null) && written !== null) tab.getRange(r + 1, 2).setValue(written);
+    if ((values[r][2] === '' || values[r][2] === null) && delivered !== null) tab.getRange(r + 1, 3).setValue(delivered);
+    return;
+  }
+  tab.appendRow([date, written === null ? '' : written, delivered === null ? '' : delivered, daysLeft]);
+}
+
+function ensureSavedDailyGoals_(period, today, closed, facts, writtenBudget, deliveredBudget) {
+  eachDate_(period.start, period.end).forEach(function (date) {
+    if (date >= today || closed[date]) return;
+    var daysLeft = operatingDaysRemaining_(period, date, closed);
+    upsertDailyGoal_(
+      date,
+      savedPace_(writtenBudget, sumBefore_(facts, 'snapWritten', period.start, date), daysLeft),
+      savedPace_(deliveredBudget, sumBefore_(facts, 'nwdsrDelivered', period.start, date), daysLeft),
+      daysLeft
+    );
+  });
+}
+
 function home_(payload) {
   try { ensureClosingGoal_(); } catch (error) { appendException_('Update Failed', 'The closing-ratio goal could not be updated.'); }
+  try { ensureOfficialGoals_(); } catch (error) { appendException_('Update Failed', 'Official KPI goals could not be saved.'); }
   var config = config_();
   var facts = dailyFacts_();
   var today = todayNy_();
@@ -695,6 +929,8 @@ function home_(payload) {
   var delivered = sumField_(facts, 'nwdsrDelivered', start, end);
   var writtenGoal = goalForMonth_(config, store, 'written_goal');
   var deliveredGoal = goalForMonth_(config, store, 'delivered_goal');
+  if (writtenGoal === null && start === '2026-10-02' && end === '2026-11-01') writtenGoal = 400000;
+  if (deliveredGoal === null && start === '2026-10-02' && end === '2026-11-01') deliveredGoal = 320000;
   var daysLeft = operatingDaysRemaining_(store, today, closed);
   var writtenPace = pace_(writtenGoal, snap, daysLeft);
   var deliveredPace = pace_(deliveredGoal, delivered, daysLeft);
@@ -716,6 +952,56 @@ function home_(payload) {
       ? 'Store reports are incomplete for ' + missing.map(function (day) { return day.date; }).join(', ') + '. Blank is not zero.'
       : missing.length + ' store days are missing a verified report. Blank is not zero.');
   }
+  var savedGoals = {};
+  try {
+    ensureSavedDailyGoals_(store, today, closed, facts, writtenGoal, deliveredGoal);
+    savedGoals = readSavedDailyGoals_();
+  } catch (error) {
+    try { appendException_('Update Failed', 'Yesterday\'s goal could not be saved.'); } catch (ignore) {}
+  }
+  var yesterdaySaved = savedGoals[yesterday] || {};
+  var yesterdayDays = operatingDaysRemaining_(store, yesterday, closed);
+  var yesterdayWrittenGoal = yesterdaySaved.written !== undefined && yesterdaySaved.written !== null ? yesterdaySaved.written : savedPace_(writtenGoal, sumBefore_(facts, 'snapWritten', start, yesterday), yesterdayDays);
+  var yesterdayDeliveredGoal = yesterdaySaved.delivered !== undefined && yesterdaySaved.delivered !== null ? yesterdaySaved.delivered : savedPace_(deliveredGoal, sumBefore_(facts, 'nwdsrDelivered', start, yesterday), yesterdayDays);
+  var kpiActuals = {};
+  try {
+    ensureKpiActuals_();
+    kpiActuals = readKpiActuals_();
+  } catch (error) {
+    kpiActuals_().forEach(function (row) { kpiActuals[row[0]] = { written: row[1], delivered: row[2], note: row[3] }; });
+    try { appendException_('Update Failed', 'KPI workbook figures could not be saved.'); } catch (ignore) {}
+  }
+  var totalDays = operatingDayCount_(store, closed);
+  var goals = approvedGoals_(config);
+  var evenWritten = evenPace_(writtenGoal, totalDays);
+  var evenDelivered = evenPace_(deliveredGoal, totalDays);
+  var board = {
+    yesterday: {
+      written: goalPerformance_(yesterdayRow ? yesterdayRow.snapWritten : null, yesterdayWrittenGoal),
+      delivered: goalPerformance_(yesterdayRow ? yesterdayRow.nwdsrDelivered : null, yesterdayDeliveredGoal),
+    },
+    today: {
+      written: writtenPace.pace,
+      delivered: deliveredPace.pace,
+      daysLeft: daysLeft,
+      writtenAdjustment: writtenPace.pace === null || evenWritten === null ? null : Math.round((writtenPace.pace - evenWritten) * 100) / 100,
+      deliveredAdjustment: deliveredPace.pace === null || evenDelivered === null ? null : Math.round((deliveredPace.pace - evenDelivered) * 100) / 100,
+    },
+    month: {
+      written: snap,
+      delivered: delivered,
+      writtenGoal: writtenGoal,
+      deliveredGoal: deliveredGoal,
+      writtenAchieved: ratio_(snap, writtenGoal),
+      deliveredAchieved: ratio_(delivered, deliveredGoal),
+      writtenLeft: writtenPace.remaining,
+      deliveredLeft: deliveredPace.remaining,
+      writtenForecast: verifiedRunRate_(days, 'snapWritten', closed),
+      deliveredForecast: verifiedRunRate_(days, 'nwdsrDelivered', closed),
+      provisional: missing.length > 0,
+    },
+    kpis: homeKpiStrip_(goals, kpiActuals, monthClosing),
+  };
   return {
     role: payload.session.role,
     version: APP_VERSION_,
@@ -763,7 +1049,8 @@ function home_(payload) {
       goal: Number(config.bedding_minimum || 0.2),
     },
     closing: { goal: closingGoal, mtd: monthClosing, yesterday: yesterdayClosing },
-    goals: approvedGoals_(config),
+    goals: goals,
+    board: board,
     scoreboard: scoreboard_(config, snap, delivered, writtenGoal, deliveredGoal, writtenPace, deliveredPace, daysLeft, yesterdayRow, yesterday, missing),
     kpis: storeKpis_(config, metrics, bedding, monthClosing),
     attachment: { value: null, goal: Number(config.attachment_goal || 0.9) },
@@ -794,6 +1081,7 @@ function metricCovers_(note, start, end) {
 }
 
 function bedding_(payload) {
+  try { ensureOfficialGoals_(); } catch (error) { appendException_('Update Failed', 'Official KPI goals could not be saved.'); }
   var config = config_();
   var today = todayNy_();
   var store = storePeriodContaining_(today);
@@ -830,10 +1118,10 @@ function bedding_(payload) {
     writtenPercentNote: covers ? beddingNote : (beddingValue !== null ? 'A written bedding figure is on file for ' + beddingNote + '. It does not cover this store month, so it is not shown as the store bedding percentage.' : 'No bedding report covers this store month.'),
     deliveredPercent: null,
     beddingGoal: goalOr_(config, 'bedding_minimum', 0.2),
-    protectorGoal: goalOr_(config, 'mattress_protector_goal', 1),
-    pillowGoal: goalOr_(config, 'pillow_goal', null),
+    protectorGoal: protectorGoal_(config),
+    pillowGoal: goalOr_(config, 'pillow_goal', 0.65),
     pillowUnit: String(config.pillow_goal_unit || 'percent'),
-    baseGoal: goalOr_(config, 'adjustable_base_goal', null),
+    baseGoal: goalOr_(config, 'adjustable_base_goal', 0.35),
     baseUnit: String(config.adjustable_base_goal_unit || 'percent'),
     people: people,
   };

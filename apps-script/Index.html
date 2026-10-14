@@ -8,7 +8,7 @@
     * { box-sizing: border-box; }
     body { margin: 0; font-family: "Segoe UI", Helvetica, Arial, sans-serif; background: #05080c; color: #f3f6f8; }
     button, input { font: inherit; }
-    .wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 48px; }
+    .wrap { max-width: 1440px; margin: 0 auto; padding: 20px 16px 48px; }
     h1 { margin: 0; font-size: 30px; color: #f4f7f8; letter-spacing: 0.01em; }
     h2 { margin: 0 0 8px; font-size: 15px; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0c9; }
     .sub { color: #9eb0c9; margin: 4px 0 0; }
@@ -44,6 +44,26 @@
     table.kpi { min-width: 680px; }
     table.kpi td, table.kpi th { white-space: nowrap; }
     .pending { color: #9eb0c9; }
+    .score-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: stretch; }
+    .score-row .card { min-height: 132px; display: flex; flex-direction: column; }
+    .score-row .card h2 { min-height: 2.4em; }
+    .score-row .figure { font-size: 32px; margin: 6px 0; }
+    .score-row .sub { font-size: 14px; }
+    .kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .kpi-head .section-title { margin: 0; }
+    .kpi-nav { display: flex; gap: 8px; }
+    .kpi-nav button { min-height: 40px; }
+    .kpi-strip { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 2px 2px 12px; }
+    .kpi-card { flex: 0 0 220px; scroll-snap-align: start; border: 1px solid #1d5c66; border-radius: 14px; background: #10161c; padding: 12px 14px; min-height: 158px; }
+    .kpi-card h3 { margin: 0; min-height: 2.6em; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; color: #9eb0c9; }
+    .kpi-card .figure { font-size: 30px; font-weight: 750; line-height: 1; margin: 8px 0; }
+    @media (max-width: 980px) {
+      .score-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 560px) {
+      .score-row { grid-template-columns: 1fr; }
+      .kpi-head { align-items: flex-start; flex-direction: column; }
+    }
     button.sort { background: #10161c; border: 1px solid #1d5c66; color: #f3f6f8; }
     button.sort.active { background: #14c4d4; color: #041014; }
     button.linkish { background: transparent; border: 0; color: #7ee7f0; min-height: 0; padding: 0; font-weight: 700; cursor: pointer; }
@@ -190,52 +210,114 @@
       return Number(actual) >= Number(goal) ? 'Above' : (Number(actual) >= Number(goal) * 0.9 ? 'Approaching' : 'Below');
     }
     function renderHome(data) {
-      var board = data.scoreboard || {};
-      var written = board.written || {};
-      var delivered = board.delivered || {};
-      var paceNote = data.todayGoal.goalOnFile === false
-        ? 'No official budget is on file for this store month.'
-        : (data.todayGoal.daysLeft + ' operating days left, including today.');
+      var board = data.board || {};
+      var yesterdayBoard = board.yesterday || {};
+      var todayBoard = board.today || {};
+      var monthBoard = board.month || {};
+      function boardMoney(value) {
+        if (value === null || value === undefined || value === '') return 'Data Pending';
+        return money(value);
+      }
+      function signedMoney(value) {
+        if (value === null || value === undefined || value === '') return 'Data Pending';
+        var number = Number(value);
+        if (number > 0) return '+' + money(number);
+        return money(number);
+      }
+      function boardCard(title, figure, note, tone) {
+        return '<article class="card"><h2>' + esc(title) + '</h2><p class="figure ' + (tone || '') + '">' + figure + '</p><p class="sub">' + note + '</p></article>';
+      }
+      function kpiTone(actual, goal, reconcile) {
+        if (actual === null || actual === undefined || actual === '') return 'pending';
+        if (reconcile) return 'warn';
+        if (goal === null || goal === undefined || goal === '') return '';
+        var value = Number(actual);
+        var target = Number(goal);
+        if (value >= target) return 'good';
+        if (value >= target * 0.9) return 'warn';
+        return 'bad';
+      }
+      function kpiValue(value, unit) {
+        if (value === null || value === undefined || value === '') return 'Data Pending';
+        if (unit === 'percent') return percent(value);
+        if (unit === 'dollars') return money(value);
+        return String(Math.round(Number(value)));
+      }
+      function boardGoal(value, unit) {
+        if (value === null || value === undefined || value === '') return 'Data Pending';
+        return kpiValue(value, unit);
+      }
+      function pointGap(actual, goal) {
+        var delta = (Number(actual) - Number(goal)) * 100;
+        return (delta >= 0 ? '+' : '') + delta.toFixed(1) + ' pts';
+      }
+      function countGap(actual, goal) {
+        var delta = Number(goal) - Number(actual);
+        if (delta > 0) return Math.round(delta) + ' left';
+        if (delta < 0) return Math.round(Math.abs(delta)) + ' above';
+        return 'At goal';
+      }
+      function sideGap(row, actual) {
+        if (actual === null || actual === undefined || row.goal === null || row.goal === undefined) return 'Data Pending';
+        if (row.unit === 'percent') return pointGap(actual, row.goal);
+        if (row.unit === 'dollars') return signedMoney(Number(actual) - Number(row.goal));
+        return countGap(actual, row.goal);
+      }
+      function performanceCard(title, actual, perf) {
+        if (actual === null || actual === undefined) return boardCard(title, 'Data Pending', 'Report missing. Not counted as zero.', 'pending');
+        if (!perf || perf.result === null || perf.result === undefined) return boardCard(title, 'Data Pending', 'Saved goal is not on file.', 'pending');
+        return boardCard(title, perf.result, boardMoney(actual) + ' vs goal ' + boardMoney(perf.goal) + ' · ' + percent(perf.achieved) + ' · ' + signedMoney(perf.delta), perf.result === 'HIT' ? 'good' : 'bad');
+      }
+      function forecast(value, provisional) {
+        return (provisional ? 'Provisional forecast ' : 'Forecast ') + boardMoney(value);
+      }
       document.getElementById('header-note').textContent = 'Store ' + data.period + ' · Updated ' + data.updated;
-      var projectionNote = data.projection ? data.projection.note : '';
-      var closingNames = { 'Closing Ratio': true, 'Customer Opportunities': true, 'Purchasing Customers': true };
-      var kpis = (data.kpis || []).map(function (row) {
-        var closingRow = !!closingNames[row.name];
-        var writtenTone = row.reconcile ? 'warn' : (closingRow && (row.written === null || row.written === undefined) ? 'pending' : toneFor(row.written, row.goal));
-        var deliveredTone = closingRow ? 'pending' : toneFor(row.delivered, row.goal);
-        var deliveredCell = closingRow ? 'N/A' : kpiText(row.delivered, row.unit);
-        var writtenCell = closingRow ? (row.written === null || row.written === undefined || row.written === '' ? 'Not Available' : kpiText(row.written, row.unit)) : kpiText(row.written, row.unit);
-        var statusCell = row.reconcile ? 'Reconcile' : (closingRow && (row.written === null || row.written === undefined || row.written === '') ? 'Not Available' : statusText(row.written, row.goal));
-        var warning = row.note ? '<div class="sub">' + esc(row.note) + '</div>' : '';
-        return '<tr><td>' + esc(row.name) + warning + '</td><td class="' + writtenTone + '">' + writtenCell + '</td><td class="' + deliveredTone + '">' + deliveredCell + '</td><td>' + goalText(row.goal, row.unit) + '</td><td class="' + writtenTone + '">' + statusCell + '</td></tr>';
+      var kpis = (board.kpis || []).map(function (row) {
+        var hasWritten = !(row.written === null || row.written === undefined || row.written === '');
+        var hasDelivered = !(row.delivered === null || row.delivered === undefined || row.delivered === '');
+        var mainTone = hasWritten ? kpiTone(row.written, row.goal, row.reconcile) : (hasDelivered ? kpiTone(row.delivered, row.goal, false) : 'pending');
+        var main = hasWritten ? kpiValue(row.written, row.unit) : (hasDelivered ? kpiValue(row.delivered, row.unit) : 'Data Pending');
+        var extra = '';
+        if (hasWritten && hasDelivered) extra = '<p class="sub">Delivered <span class="' + kpiTone(row.delivered, row.goal, false) + '">' + kpiValue(row.delivered, row.unit) + '</span></p>';
+        else if (!hasWritten && !hasDelivered && row.note) extra = '<p class="sub">' + esc(row.note) + '</p>';
+        var gap = hasWritten && hasDelivered ? 'W ' + sideGap(row, row.written) + ' · D ' + sideGap(row, row.delivered) : sideGap(row, hasWritten ? row.written : (hasDelivered ? row.delivered : null));
+        return '<article class="kpi-card"><h3>' + esc(row.name) + '</h3><p class="figure ' + mainTone + '">' + main + '</p>' + extra + '<p class="sub">Goal ' + boardGoal(row.goal, row.unit) + ' · ' + gap + '</p></article>';
       }).join('');
       document.getElementById('screen').innerHTML =
-        '<h2 class="section-title">Sales and delivery</h2>' +
-        '<div class="grid">' +
-        card('Yesterday written', data.yesterday.missing ? 'Report missing' : money(written.yesterday), data.yesterday.date + (data.yesterday.missing ? ' · incomplete, not zero' : ''), data.yesterday.missing ? 'warn' : '') +
-        card('Yesterday delivered', delivered.yesterday === null || delivered.yesterday === undefined ? 'Report missing' : money(delivered.yesterday), data.yesterday.date, delivered.yesterday === null ? 'warn' : '') +
-        card('Written month to date', money(written.month), percent(written.achieved) + ' of ' + money(written.goal)) +
-        card('Delivered month to date', money(delivered.month), percent(delivered.achieved) + ' of ' + money(delivered.goal)) +
-        card("Today's written goal", money(written.today), paceNote + ' Budget ' + money(written.goal) + ' stays unchanged.') +
-        card("Today's delivered goal", money(delivered.today), paceNote) +
-        card('Written projection', money(data.projection && data.projection.written), projectionNote, data.projection && data.projection.provisional ? 'warn' : '') +
-        card('Delivered projection', money(data.projection && data.projection.delivered), projectionNote, data.projection && data.projection.provisional ? 'warn' : '') +
-        card('Remaining written', money(written.remaining), 'Needed to reach ' + money(written.goal)) +
-        card('Remaining delivered', money(delivered.remaining), 'Needed to reach ' + money(delivered.goal)) +
+        '<h2 class="section-title">Yesterday\'s results</h2>' +
+        '<div class="score-row">' +
+        boardCard('Yesterday written', data.yesterday && data.yesterday.missing ? 'Data Pending' : boardMoney(data.yesterday.written), esc(data.yesterday.date), data.yesterday && data.yesterday.missing ? 'pending' : '') +
+        boardCard('Yesterday delivered', data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'Data Pending' : boardMoney(data.yesterday.delivered), esc(data.yesterday.date), data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'pending' : '') +
+        performanceCard('Written goal performance', data.yesterday ? data.yesterday.written : null, yesterdayBoard.written) +
+        performanceCard('Delivered goal performance', data.yesterday ? data.yesterday.delivered : null, yesterdayBoard.delivered) +
         '</div>' +
-        '<h2 class="section-title">Store KPI performance</h2>' +
-        '<article class="card kpi-wrap"><table class="kpi"><tr><th>KPI</th><th>Written</th><th>Delivered</th><th>Goal</th><th>Status</th></tr>' + kpis + '</table><p class="sub">Store month only. A pending figure was not calculated as zero. Green is at or above goal, amber is approaching, and red is below a confirmed figure.</p></article>' +
-        '<h2 class="section-title">Store operations</h2>' +
-        '<div class="grid">' +
-        card('Customer opportunities', count(closingBlock(data).opportunities), 'Month to date. Location Ups + Be Backs for the store month.') +
-        card('Purchasing customers', count(closingBlock(data).customers), esc(closingBlock(data).note || 'Net Written # OF CUST.')) +
-        card('Closing ratio', percent(closingBlock(data).ratio), 'Goal ' + percent(data.closing.goal) + '. Net Written customers divided by opportunities for the same dates.', closingTone(closingBlock(data), data.closing.goal)) +
-        card('Versus goal', versusText(closingBlock(data)), 'Goal ' + percent(data.closing.goal) + '. A ratio above 100% is flagged for reconciliation.') +
-        card('Average written ticket', 'Data Pending', 'Goal ' + money(data.goals && data.goals.averageTicket) + '.') +
-        card('Last year written', 'Data Pending', 'Sequential store-period comparison is not on file.') +
-        card('Last year delivered', 'Data Pending', 'Sequential store-period comparison is not on file.') +
-        '</div>';
+        '<h2 class="section-title">Today\'s goals</h2>' +
+        '<div class="score-row">' +
+        boardCard('Today\'s written goal', boardMoney(todayBoard.written), 'Remaining budget divided by days left.', '') +
+        boardCard('Today\'s delivered goal', boardMoney(todayBoard.delivered), 'Remaining budget divided by days left.', '') +
+        boardCard('Remaining operating days', todayBoard.daysLeft === null || todayBoard.daysLeft === undefined ? 'Data Pending' : String(todayBoard.daysLeft), 'Including today.', '') +
+        boardCard('Goal adjustment', signedMoney(todayBoard.writtenAdjustment), 'Delivered ' + signedMoney(todayBoard.deliveredAdjustment) + ' from the even daily share.', '') +
+        '</div>' +
+        '<h2 class="section-title">Month-to-date store performance</h2>' +
+        '<div class="score-row">' +
+        boardCard('Written month to date', boardMoney(monthBoard.written), percent(monthBoard.writtenAchieved) + ' of ' + boardMoney(monthBoard.writtenGoal), '') +
+        boardCard('Delivered month to date', boardMoney(monthBoard.delivered), percent(monthBoard.deliveredAchieved) + ' of ' + boardMoney(monthBoard.deliveredGoal), '') +
+        boardCard('Remaining written', boardMoney(monthBoard.writtenLeft), forecast(monthBoard.writtenForecast, monthBoard.provisional), '') +
+        boardCard('Remaining delivered', boardMoney(monthBoard.deliveredLeft), forecast(monthBoard.deliveredForecast, monthBoard.provisional), '') +
+        '</div>' +
+        '<div class="kpi-head"><h2 class="section-title">Month-to-date store KPIs</h2><div class="kpi-nav"><button type="button" id="kpi-prev">Previous</button><button type="button" id="kpi-next">Next</button></div></div>' +
+        '<div class="kpi-strip" id="kpi-strip" tabindex="0">' + kpis + '</div>' +
+        '<p class="sub">Store month only. Written is the large figure. Delivered is shown when that report exists. Slide sideways for every KPI.</p>';
+      var strip = document.getElementById('kpi-strip');
+      function moveKpis(direction) { strip.scrollBy({ left: direction * 230, behavior: 'smooth' }); }
+      document.getElementById('kpi-prev').addEventListener('click', function () { moveKpis(-1); });
+      document.getElementById('kpi-next').addEventListener('click', function () { moveKpis(1); });
+      strip.addEventListener('keydown', function (event) {
+        if (event.key === 'ArrowRight') moveKpis(1);
+        if (event.key === 'ArrowLeft') moveKpis(-1);
+      });
     }
+
     function renderDaily(data) {
       document.getElementById('header-note').textContent = data.period + ' · Updated ' + data.updated;
       var mtd = data.closing || {};
@@ -404,7 +486,7 @@
         return '<tr><td><button class="linkish" type="button" data-bed="' + esc(person.name) + '">' + esc(person.name) + '</button></td><td>' + money(person.mattressWritten) + '</td><td>' + money(person.mattressDelivered) + '</td><td>' + percent(person.writtenPercent) + '</td><td>' + percent(person.deliveredPercent) + '</td><td>' + na(person.units) + '</td><td>' + percent(person.protectorPercent) + '</td><td>' + na(person.protectorUnits) + '</td><td>' + na(person.pillowUnits) + '</td><td>' + money(person.pillowDollars) + '</td><td>' + na(person.baseUnits) + '</td><td>' + money(person.baseDollars) + '</td><td>' + percent(person.basePercent) + '</td></tr>';
       }).join('');
       var admin = data.role === 'admin'
-        ? '<article class="card noprint" style="margin-top:12px"><h2>Pillow and adjustable-base goals</h2><p class="sub">These two goals are not set until an admin enters them. A percent is entered as 20 for 20%. Blank clears the goal. Bedding stays 20% and protectors stay 100%.</p><label>Pillow goal</label><input id="pillow-goal" value="" /><label>Pillow unit</label><input id="pillow-unit" value="' + esc(data.pillowUnit || 'percent') + '" /><label>Adjustable base goal</label><input id="base-goal" value="" /><label>Adjustable base unit</label><input id="base-unit" value="' + esc(data.baseUnit || 'percent') + '" /><p id="bed-goal-note" class="error"></p><button id="save-bed-goals" type="button">Save goals</button></article>'
+        ? '<article class="card noprint" style="margin-top:12px"><h2>Pillow and adjustable-base goals</h2><p class="sub">Official goals are pillows 65% and adjustable bases 35%. An admin can replace them. Enter a percent as 65 for 65%. Bedding stays 20% and protectors stay 80%.</p><label>Pillow goal</label><input id="pillow-goal" value="" /><label>Pillow unit</label><input id="pillow-unit" value="' + esc(data.pillowUnit || 'percent') + '" /><label>Adjustable base goal</label><input id="base-goal" value="" /><label>Adjustable base unit</label><input id="base-unit" value="' + esc(data.baseUnit || 'percent') + '" /><p id="bed-goal-note" class="error"></p><button id="save-bed-goals" type="button">Save goals</button></article>'
         : '';
       document.getElementById('screen').innerHTML =
         '<div class="bedding-page" id="bedding-dashboard">' +
@@ -482,7 +564,7 @@
         card('Mattress delivered $', money(person.mattressDelivered), 'Not copied from written.') +
         card('Bedding written %', percent(person.writtenPercent), 'Goal 20%.') +
         card('Bedding delivered %', percent(person.deliveredPercent), 'Goal 20%.') +
-        card('Protector attachment', percent(person.protectorPercent), 'Goal 100% of eligible mattress opportunities.') +
+        card('Protector attachment', percent(person.protectorPercent), 'Goal ' + percent(beddingCache.protectorGoal) + ' of eligible mattress opportunities.') +
         card('Protector units', na(person.protectorUnits), '') +
         card('Pillow units', na(person.pillowUnits), '') +
         card('Pillow sales', money(person.pillowDollars), 'Not part of the bedding percentage.') +
