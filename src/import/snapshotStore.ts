@@ -27,38 +27,79 @@ function cleanMetrics(metrics: ReportSnapshot['metrics']): ReportSnapshot['metri
   return clean;
 }
 
-/**
- * Newest valid snapshot for the same report type, store, calendar, and
- * date range replaces the current one. Older rows are kept and marked
- * superseded. Snapshots are not added together. Omitted metrics stay omitted.
- */
-export function commitSnapshot(snapshot: ReportSnapshot): ReportSnapshot {
+export type Placement =
+  | { action: 'duplicate'; snapshotId: string }
+  | { action: 'kept-current'; snapshotId: string; reason: 'older' | 'same-time-different-file' | 'missing-generated-time' }
+  | { action: 'committed'; snapshot: ReportSnapshot };
+
+function copySnapshot(snapshot: ReportSnapshot): ReportSnapshot {
+  return {
+    ...snapshot,
+    metrics: { ...snapshot.metrics },
+    daily: [...snapshot.daily],
+    associates: [...snapshot.associates],
+    projections: [...snapshot.projections],
+    issues: [...snapshot.issues],
+  };
+}
+
+function remember(snapshot: ReportSnapshot, status: ReportSnapshot['status'], supersedes: string | null): ReportSnapshot {
   const stored: ReportSnapshot = {
     ...snapshot,
     metrics: cleanMetrics(snapshot.metrics),
     daily: snapshot.daily.filter((point) => Number.isFinite(point.amount) && point.date !== ''),
+    associates: [...snapshot.associates],
+    projections: [...snapshot.projections],
     issues: [...snapshot.issues],
-    status: 'current',
+    status,
+    supersedes,
   };
-
-  for (const existing of snapshots) {
-    if (existing.status === 'current' && snapshotIdentity(existing) === snapshotIdentity(stored)) {
-      existing.status = 'superseded';
-      stored.supersedes = existing.id;
-    }
-  }
-
   snapshots.push(stored);
-  return { ...stored, metrics: { ...stored.metrics }, daily: [...stored.daily], issues: [...stored.issues] };
+  return copySnapshot(stored);
+}
+
+/**
+ * Same file hash adds no dollars. A later generation time replaces the current
+ * row. A missing time, an older time, or the same time with a different file
+ * leaves the current row in place.
+ */
+export function placeSnapshot(snapshot: ReportSnapshot): Placement {
+  const sameFile = snapshots.find((item) => item.sha256 !== '' && item.sha256 === snapshot.sha256);
+  if (sameFile) return { action: 'duplicate', snapshotId: sameFile.id };
+
+  const current = snapshots.find(
+    (item) => item.status === 'current' && snapshotIdentity(item) === snapshotIdentity(snapshot),
+  );
+  if (!current) return { action: 'committed', snapshot: remember(snapshot, 'current', null) };
+
+  if (!snapshot.generatedAt || !current.generatedAt) {
+    remember(snapshot, 'flagged', null);
+    return { action: 'kept-current', snapshotId: current.id, reason: 'missing-generated-time' };
+  }
+  if (snapshot.generatedAt === current.generatedAt) {
+    current.status = 'flagged';
+    remember(snapshot, 'flagged', null);
+    return { action: 'kept-current', snapshotId: current.id, reason: 'same-time-different-file' };
+  }
+  if (snapshot.generatedAt < current.generatedAt) {
+    remember(snapshot, 'superseded', null);
+    return { action: 'kept-current', snapshotId: current.id, reason: 'older' };
+  }
+  current.status = 'superseded';
+  return { action: 'committed', snapshot: remember(snapshot, 'current', current.id) };
+}
+
+export function commitSnapshot(snapshot: ReportSnapshot): ReportSnapshot {
+  const placed = placeSnapshot(snapshot);
+  if (placed.action === 'committed') return placed.snapshot;
+  const current = snapshots.find((item) => item.id === placed.snapshotId);
+  return current ? copySnapshot(current) : copySnapshot(snapshot);
+}
+
+export function resetSnapshots(): void {
+  snapshots.length = 0;
 }
 
 export function currentSnapshots(): ReportSnapshot[] {
-  return snapshots
-    .filter((item) => item.status === 'current')
-    .map((item) => ({
-      ...item,
-      metrics: { ...item.metrics },
-      daily: [...item.daily],
-      issues: [...item.issues],
-    }));
+  return snapshots.filter((item) => item.status === 'current').map((item) => copySnapshot(item));
 }

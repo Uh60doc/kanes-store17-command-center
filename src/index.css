@@ -1,3 +1,5 @@
+html { font-size: 18px; }
+
 :root {
   color-scheme: light;
   --ink: #1c1915;
@@ -34,10 +36,22 @@ h1, h2, h3, p { margin: 0; }
   display: flex;
   justify-content: space-between;
   gap: 32px;
-  align-items: flex-end;
+  align-items: center;
   padding: 14px 28px 12px;
   background: var(--navy);
   color: #f6f3ec;
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.brand-mark {
+  height: 84px;
+  width: 84px;
+  object-fit: contain;
 }
 
 .eyebrow {
@@ -321,7 +335,9 @@ main {
   padding: 0;
 }
 
-.series li {
+.series li,
+.series-head,
+.perq-lines li {
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -329,3 +345,487 @@ main {
   border-top: 1px solid var(--line);
   font-variant-numeric: tabular-nums;
 }
+
+.series.calendar li,
+.series-head {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+}
+
+.series.calendar li span:not(:first-child),
+.series-head span:not(:first-child) {
+  text-align: right;
+}
+
+.series-head {
+  margin-top: 10px;
+  border-top: 0;
+  padding-bottom: 2px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.perq {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.perq-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.perq-lines {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.flag-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.flag-list li + li {
+  margin-top: 6px;
+}
+
+.page {
+  padding: 16px 28px 28px;
+}
+
+.day-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+}
+
+.day-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+.page a,
+.day-list a {
+  color: var(--navy);
+  font-weight: 700;
+}
+
+.app-nav {
+  display: flex;
+  gap: 8px;
+  padding: 10px 24px;
+  background: #172026;
+}
+
+.app-nav a,
+.app-nav button {
+  border: 1px solid #3d4c54;
+  background: transparent;
+  color: #f6f3ec;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.app-nav a[aria-current='page'],
+.app-nav button[aria-current='page'] {
+  background: #f6f3ec;
+  color: var(--navy);
+}
+
+.google-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 24px 28px;
+}
+
+.google-setup h1 {
+  margin-top: 4px;
+  font-size: 1.8rem;
+}
+
+.google-setup h2 {
+  font-size: 1.05rem;
+}
+
+.facts {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.facts div {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+}
+
+.facts dt {
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.scope-list,
+.mail-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.scope-list li,
+.mail-list li {
+  margin: 6px 0;
+}
+
+.mail-list li {
+  display: grid;
+  gap: 2px;
+}
+
+.sheet-form,
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sheet-form input {
+  flex: 1 1 320px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+}
+
+button,
+.button {
+  border: 0;
+  border-radius: 8px;
+  background: var(--navy);
+  color: #f6f3ec;
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.banner {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.banner.warn {
+  background: #f8e7cf;
+}
+
+.banner.ok {
+  background: #e5f0e4;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+
+.google-setup table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.google-setup td {
+  border-top: 1px solid var(--line);
+  padding: 4px 8px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 48-inch office TV: the number is the card. Captions stay off this screen. */
+.topbar {
+  padding: 0.35rem 1rem 0.4rem;
+}
+
+.topbar h1 { font-size: 1.7rem; }
+
+.refresh-note,
+.checked-label,
+.calendars,
+.period .detail,
+.period .eyebrow,
+.period h2,
+.period-rule,
+.section-heading p,
+.calendar-note,
+.stretch-note,
+.total-grid .detail,
+.charts .detail {
+  display: none;
+}
+
+.calendars { gap: 0.4rem; }
+
+.period { padding: 0.35rem 0.8rem; }
+
+.period-range { font-size: 1.45rem; margin-top: 0; }
+
+.total-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.total-grid .card { padding: 0.45rem 0.7rem 0.55rem; }
+
+.total-grid h3 { font-size: 0.95rem; color: var(--ink); }
+
+.total-grid .hero { margin-top: 0.1rem; }
+
+.total-grid .hero .amount,
+.total-grid .hero .status {
+  font-size: 1.65rem;
+  line-height: 1.05;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+}
+
+.goals { gap: 0.45rem; }
+
+.goal-amount { font-size: 2.15rem; }
+
+.goal-label { font-size: 0.85rem; margin-top: 0.2rem; }
+
+.pace-row dt { font-size: 1rem; color: var(--ink); }
+
+.pace-row .amount,
+.pace-row .status {
+  font-size: 1.45rem;
+  background: transparent;
+  color: var(--ink);
+  padding: 0;
+}
+
+.section-heading h2,
+.stretch > h2,
+.charts h2,
+.perq h3 {
+  font-size: 1rem;
+}
+
+.perq-grid .hero .amount {
+  font-size: 2.4rem;
+  line-height: 1;
+}
+
+.perq-lines li,
+.series li,
+.day-list li {
+  font-size: 1.15rem;
+  padding: 0.28rem 0;
+}
+
+.app-nav { padding: 0.35rem 1rem; }
+
+.app-nav a,
+.app-nav button {
+  font-size: 1rem;
+  padding: 0.28rem 0.8rem;
+}
+
+.tv-lead,
+.tv-second,
+.tv-team {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.tv-lead { grid-template-columns: 1.35fr 1.35fr 0.9fr 0.9fr; }
+.tv-second { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.tv-team { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+
+.tv-hero,
+.tv-person,
+.tv-second .card { padding: 0.4rem 0.65rem 0.5rem; }
+
+.tv-hero h2,
+.tv-person h2,
+.tv-second h3,
+.tv-stretch h2 {
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.scoreboard {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.pace h2,
+.kpi-grid h2,
+.thermo h2 {
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pace-through {
+  margin: 0.2rem 0 0.5rem;
+  font-weight: 700;
+}
+
+.pace-grid,
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.kpi-grid { margin-top: 0.6rem; }
+
+.bar {
+  height: 0.7rem;
+  margin: 0.35rem 0;
+  background: #e4dccd;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.bar > span {
+  display: block;
+  height: 100%;
+  background: #8d7044;
+}
+
+.bar.good > span { background: #2f6f4e; }
+.bar.short > span { background: #9a4d32; }
+.bar.sales > span { background: #1f4e79; }
+
+.stretch-row { margin-top: 0.6rem; }
+
+.board-notes {
+  margin: 0.6rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.scorecard {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.thermo-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+}
+
+.thermo-top p {
+  font-size: 1.45rem;
+  font-weight: 700;
+}
+
+.tv-number,
+.tv-number .amount {
+  font-size: 36px;
+  line-height: 1.05;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  background: transparent;
+  color: var(--ink);
+  padding: 0;
+}
+
+.tv-number .status {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.kpi-grid .tv-number,
+.kpi-grid .tv-number .amount,
+.tv-person .tv-number {
+  font-size: 32px;
+}
+
+.pace .tv-number,
+.pace .tv-number .amount {
+  font-size: 28px;
+}
+
+.pace .tv-number .status {
+  font-size: 22px;
+}
+
+.tv-hero h2,
+.tv-person h2,
+.kpi-grid h2,
+.review h2 {
+  font-size: 13px;
+}
+
+.tv-number.kpi-good,
+.tv-number.kpi-good .amount { color: #157a3a; }
+.tv-number.kpi-bad,
+.tv-number.kpi-bad .amount { color: #b42318; }
+.tv-number.kpi-neutral,
+.tv-number.kpi-neutral .amount,
+.tv-number.kpi-neutral .status { color: #1c1915; }
+.tv-number.kpi-review,
+.tv-number.kpi-review .amount { color: #8a5a00; }
+
+.review-lines {
+  list-style: none;
+  margin: 0.4rem 0;
+  padding: 0;
+}
+
+.review-lines li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.tv-foot {
+  margin-top: 0.2rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.tv-person {
+  color: inherit;
+  text-decoration: none;
+  display: block;
+}
+
+.location { font-size: 1.15rem; }
