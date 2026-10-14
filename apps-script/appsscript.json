@@ -22,5 +22,8 @@
         "serviceId": "drive"
       }
     ]
+  },
+  "executionApi": {
+    "access": "MYSELF"
   }
 }

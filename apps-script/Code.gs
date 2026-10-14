@@ -13,10 +13,12 @@ var ROUTES_ = {
 };
 
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index')
+  var page = HtmlService.createHtmlOutputFromFile('Index')
     .setTitle("Kane's Management Command Center")
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DENY);
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  var frameMode = HtmlService.XFrameOptionsMode && HtmlService.XFrameOptionsMode.DENY;
+  if (frameMode) page.setXFrameOptionsMode(frameMode);
+  return page;
 }
 
 function dispatch(name, payload) {
