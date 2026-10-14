@@ -6,7 +6,8 @@ var ROUTES_ = {
   home: ['sales', 'manager', 'admin'],
   daily: ['sales', 'manager', 'admin'],
   people: ['sales', 'manager', 'admin'],
-  morning: ['manager', 'admin'],
+  morning: ['sales', 'manager', 'admin'],
+  savePromotion: ['admin'],
   health: ['manager', 'admin'],
   bedding: ['manager', 'admin'],
   saveBeddingGoals: ['admin'],
@@ -35,6 +36,7 @@ function dispatch(name, payload) {
   if (name === 'daily') return daily_(payload);
   if (name === 'people') return people_(payload);
   if (name === 'morning') return morning_(payload);
+  if (name === 'savePromotion') return savePromotion_(payload);
   if (name === 'health') return health_(payload);
   if (name === 'bedding') return bedding_(payload);
   if (name === 'saveBeddingGoals') return saveBeddingGoals_(payload);

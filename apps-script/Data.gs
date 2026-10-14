@@ -1173,23 +1173,297 @@ function people_(payload) {
   };
 }
 
+function anniversaryPromotion_() {
+  return {
+    name: '78th Anniversary Sale',
+    start: '2026-10-13',
+    end: '2026-10-19',
+    approved: 'yes',
+    highlights: ['Featured floor samples are 50% off.', 'Davey Euro Top mattresses are 50% off.', '78-month 0% financing runs through October 26.'],
+    featured: [
+      { name: 'Palm Gate 5-piece King Bedroom', was: 3999.99, now: 1999.99, save: 2000, off: '50% OFF' },
+      { name: 'Oakley White/Grey 4-piece Sectional', was: 2999.99, now: 1499.99, save: 1500, off: '50% OFF' },
+      { name: 'Dallas Saddle 6-piece Manual Reclining Sectional', was: 2799.99, now: 1399.99, save: 1400, off: '50% OFF' },
+    ],
+    floorNote: 'Additional sale merchandise is marked on the showroom floor. A complete list will be provided.',
+    mattressName: 'Davey Euro Top',
+    mattressOff: '50% OFF',
+    mattressLines: ['Queen: $599.50', 'King: $899.50'],
+    mattressNote: 'Mattresses are not automatically eligible for additional discounts. Only an explicitly approved special applies.',
+    exclusions: ['Special orders', 'Tempur-Pedic', 'Beautyrest Black'],
+    beddingFinance: 'Size-based qualifying amounts are not in the approved promotion.',
+    financing: [
+      { months: 6, summary: 'No minimum, no down payment. Discounts allowed.', end: '2026-10-19', zeroInterest: false, highlight: false },
+      { months: 12, summary: 'No minimum, no down payment. Discounts allowed.', end: '2026-10-19', zeroInterest: false, highlight: false },
+      { months: 18, summary: 'No minimum, no down payment. Yellow Tag only. NO ADDITIONAL DISCOUNT.', end: '2026-10-19', zeroInterest: false, highlight: false },
+      { months: 24, summary: '$1,999 minimum, plus tax and delivery. Yellow Tag only. NO ADDITIONAL DISCOUNT.', end: '2026-10-19', zeroInterest: false, highlight: false },
+      { months: 48, summary: '$2,999 minimum, plus tax and delivery. Yellow Tag only. NO ADDITIONAL DISCOUNT.', end: '2026-10-19', zeroInterest: false, highlight: false },
+      { months: 60, summary: '$5,999 minimum, 20% down, plus tax and delivery. Yellow Tag only. NO ADDITIONAL DISCOUNT.', end: '2026-10-19', zeroInterest: false, highlight: false },
+      { months: 78, summary: 'SPECIAL 0% FINANCING. $5,999.99 minimum, 25% deposit using another payment method. Yellow Tag only. NO ADDITIONAL DISCOUNT.', end: '2026-10-26', zeroInterest: true, highlight: true },
+    ],
+  };
+}
+
+function promoSheet_() {
+  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var tab = spreadsheet.getSheetByName('CC_Promotions');
+  if (tab) return tab;
+  tab = spreadsheet.insertSheet('CC_Promotions');
+  tab.getRange(1, 1, 1, 2).setValues([['id', 'body']]);
+  return tab;
+}
+
+function ensureMorningPromotion_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('morning_promo_v1') === 'yes') return;
+  var tab = promoSheet_();
+  if (tab.getLastRow() < 2) tab.appendRow(['current', JSON.stringify(anniversaryPromotion_())]);
+  props.setProperty('morning_promo_v1', 'yes');
+}
+
+function readPromotion_() {
+  var rows = sheet_('CC_Promotions');
+  var chosen = null;
+  rows.forEach(function (row) {
+    if (String(row.id || '') !== 'current' || !row.body) return;
+    try { chosen = JSON.parse(String(row.body)); } catch (error) { chosen = null; }
+  });
+  return chosen;
+}
+
+function saleOnDate_(promotion, today) {
+  if (!promotion || String(promotion.approved) !== 'yes') return null;
+  if (today < promotion.start || today > promotion.end) return null;
+  return promotion;
+}
+
+function financeOnDate_(promotion, today) {
+  var terms = promotion && promotion.financing ? promotion.financing : [];
+  return terms.filter(function (term) {
+    return term && term.end >= today && !term.bedding;
+  }).sort(function (left, right) { return Number(left.months) - Number(right.months); });
+}
+
+function dailyBedding_(date) {
+  var written = null;
+  var delivered = null;
+  sheet_('CC_Kpi').forEach(function (row) {
+    if (String(row.metric) !== 'Daily Bedding') return;
+    if (isoDate_(row.period_start) !== date || isoDate_(row.period_end) !== date) return;
+    written = fineNumber_(row.written);
+    delivered = fineNumber_(row.delivered);
+  });
+  return { written: written, delivered: delivered };
+}
+
+function managementName_(name) {
+  var key = String(name || '').toLowerCase().replace(/[^a-z, ]/g, ' ').replace(/\s+/g, ' ').trim();
+  var flipped = key;
+  var comma = key.split(',');
+  if (comma.length === 2) flipped = (comma[1] + ' ' + comma[0]).replace(/\s+/g, ' ').trim();
+  var blocked = {
+    'kelly meyers': true,
+    'james meyers': true,
+    'meyers james': true,
+    'cordell primous': true,
+    'primous cordell': true,
+    'elizabeth perez': true,
+    'perez elizabeth': true,
+  };
+  return !!blocked[key] || !!blocked[flipped];
+}
+
+function staffRole_(value) {
+  var role = String(value || '').trim().toLowerCase();
+  if (role === 'associate' || role === 'salesperson' || role === 'sales') return 'associate';
+  if (role === 'manager' || role === 'management') return 'management';
+  if (role === 'former') return 'former';
+  if (!role) return '';
+  return 'unknown';
+}
+
+function readStaffing_(date) {
+  return sheet_('CC_Staffing').filter(function (row) { return isoDate_(row.date) === date; }).map(function (row) {
+    var worked = String(row.worked || '').trim().toLowerCase();
+    return {
+      name: String(row.display_name || row.name || ''),
+      role: staffRole_(row.role),
+      worked: worked === 'yes' ? true : (worked === 'no' ? false : null),
+      onLeave: /^(yes|y|leave)$/i.test(String(row.on_leave || '')),
+      nwdsrWritten: fineNumber_(row.nwdsr_written),
+    };
+  });
+}
+
+function eligibleAssociate_(line) {
+  return line.worked === true && line.role === 'associate' && !line.onLeave && !managementName_(line.name);
+}
+
+function morningWinners_(lines, goal) {
+  if (!lines.length) return { status: 'pending', reason: 'Yesterday\'s working roster is not on file.', share: null, people: [] };
+  if (goal === null) return { status: 'pending', reason: 'Yesterday\'s saved written goal is not on file.', share: null, people: [] };
+  if (lines.some(function (line) { return line.worked === null; })) {
+    return { status: 'pending', reason: 'Yesterday\'s working roster is incomplete.', share: null, people: [] };
+  }
+  if (lines.some(function (line) { return line.worked === true && (line.role === '' || line.role === 'unknown'); })) {
+    return { status: 'pending', reason: 'Yesterday\'s staffing roles are incomplete.', share: null, people: [] };
+  }
+  var eligible = lines.filter(eligibleAssociate_);
+  if (!eligible.length) return { status: 'pending', reason: 'No eligible salesperson is marked as worked.', share: null, people: [] };
+  if (eligible.some(function (line) { return line.nwdsrWritten === null; })) {
+    return { status: 'pending', reason: 'NWDSR Written by salesperson is not on file.', share: null, people: [] };
+  }
+  var share = Math.round((goal / eligible.length) * 100) / 100;
+  var people = [];
+  eligible.forEach(function (line) {
+    if (line.nwdsrWritten <= share) return;
+    people.push({
+      name: line.name,
+      written: line.nwdsrWritten,
+      share: share,
+      above: Math.round((line.nwdsrWritten - share) * 100) / 100,
+    });
+  });
+  return { status: 'ready', reason: '', share: share, people: people };
+}
+
+function workedCount_(lines) {
+  if (!lines.length || lines.some(function (line) { return line.worked === null; })) return null;
+  var count = 0;
+  lines.forEach(function (line) {
+    if (eligibleAssociate_(line)) count += 1;
+  });
+  return count > 0 ? count : null;
+}
+
 function morning_(payload) {
   var home = home_(payload);
+  try { ensureMorningPromotion_(); } catch (error) { appendException_('Update Failed', 'The morning promotion could not be saved.'); }
+  var promotion = null;
+  try { promotion = readPromotion_(); } catch (error) { promotion = null; }
+  if (!promotion) promotion = anniversaryPromotion_();
+  var yesterday = home.yesterday.date;
+  var bedding = { written: null, delivered: null };
+  try { bedding = dailyBedding_(yesterday); } catch (error) { bedding = { written: null, delivered: null }; }
+  var staffing = [];
+  var todayStaffing = [];
+  try {
+    staffing = readStaffing_(yesterday);
+    todayStaffing = readStaffing_(home.today);
+  } catch (error) {
+    staffing = [];
+    todayStaffing = [];
+  }
+  var writtenPerf = home.board.yesterday.written;
+  var winners = morningWinners_(staffing, writtenPerf.goal);
+  var workedToday = workedCount_(todayStaffing);
+  var personalShare = workedToday === null || home.board.today.written === null ? null : Math.round((home.board.today.written / workedToday) * 100) / 100;
+  var gaps = [];
+  if (home.yesterday.written === null) gaps.push('SNAP written');
+  if (home.yesterday.delivered === null) gaps.push('NWDSR delivered');
+  if (home.yesterday.closingRatio === null) gaps.push('yesterday\'s closing ratio');
+  if (bedding.written === null) gaps.push('yesterday\'s written bedding percent');
+  if (bedding.delivered === null) gaps.push('yesterday\'s delivered bedding percent');
+  if (winners.status === 'pending') gaps.push(winners.reason);
+  if (personalShare === null) gaps.push('today\'s working roster');
+  if (gaps.length) {
+    try { notifyOnce_('Morning meeting for ' + yesterday + ' is waiting on: ' + gaps.join('; ') + '.'); } catch (ignore) {}
+  }
   return {
     role: payload.session.role,
     title: 'Morning meeting',
     date: home.today,
-    period: home.period,
-    individualPeriod: home.individualPeriod,
     updated: home.updated,
-    yesterday: home.yesterday,
-    month: home.month,
-    todayGoal: home.todayGoal,
-    bedding: home.bedding,
-    closing: home.closing,
-    people: home.people.slice(0, 4),
-    attention: home.attention,
+    yesterday: {
+      date: yesterday,
+      written: writtenPerf,
+      delivered: home.board.yesterday.delivered,
+      closingRatio: home.yesterday.closingRatio,
+      closingGoal: home.closing.goal,
+      beddingWritten: bedding.written,
+      beddingDelivered: bedding.delivered,
+      beddingGoal: 0.2,
+    },
+    today: {
+      written: home.board.today.written,
+      delivered: home.board.today.delivered,
+      beddingGoal: 0.2,
+      closingGoal: home.closing.goal,
+      personalShare: personalShare,
+    },
+    winners: winners,
+    promotion: saleOnDate_(promotion, home.today),
+    financing: financeOnDate_(promotion, home.today),
+    beddingFinance: promotion.beddingFinance || 'Size-based qualifying amounts are not in the approved promotion.',
+    reminders: [
+      'NO ONE WALKS.',
+      'Present maintenance plans.',
+      'Review the customer\'s financing and delivery requirements.',
+      'Complete the sales order checklist.',
+      'Obtain required manager reviews.',
+    ],
+    editor: payload.session.role === 'admin' ? promotion : null,
   };
+}
+
+function promoLines_(value) {
+  return String(value || '').split(/\n/).map(function (line) { return line.trim(); }).filter(function (line) { return line; });
+}
+
+function savePromotion_(payload) {
+  var featured = promoLines_(payload.featured).map(function (line) {
+    var parts = line.split('|');
+    if (parts.length < 5) throw new Error('Each featured item needs name, was, now, save, and off, separated by |.');
+    return {
+      name: parts[0].trim(),
+      was: Number(parts[1]),
+      now: Number(parts[2]),
+      save: Number(parts[3]),
+      off: parts.slice(4).join('|').trim(),
+    };
+  });
+  var financing = promoLines_(payload.financing).map(function (line) {
+    var parts = line.split('|');
+    if (parts.length < 4) throw new Error('Each financing line needs months, end date, 0% yes or no, and the summary.');
+    var months = Number(parts[0]);
+    var end = String(parts[1] || '').trim();
+    var zero = /^y/i.test(parts[2].trim());
+    var summary = parts.slice(3).join('|').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) throw new Error('Financing end dates use YYYY-MM-DD.');
+    if ((/(^|[^0-9.])0\s*%/.test(summary)) !== zero) throw new Error('Mark 0% only when the approved source says so.');
+    if (months === 72 || months === 36 || months === 50) throw new Error('That term is not on the approved sheet.');
+    return { months: months, end: end, zeroInterest: zero, highlight: months === 78, summary: summary };
+  }).sort(function (left, right) { return left.months - right.months; });
+  var promotion = {
+    name: String(payload.name || '').trim(),
+    start: String(payload.start || '').trim(),
+    end: String(payload.end || '').trim(),
+    approved: payload.approved ? 'yes' : 'no',
+    highlights: promoLines_(payload.highlights),
+    featured: featured,
+    floorNote: String(payload.floorNote || '').trim(),
+    mattressName: String(payload.mattressName || '').trim(),
+    mattressOff: String(payload.mattressOff || '').trim(),
+    mattressLines: promoLines_(payload.mattressLines),
+    mattressNote: String(payload.mattressNote || '').trim(),
+    exclusions: promoLines_(payload.exclusions),
+    beddingFinance: String(payload.beddingFinance || '').trim(),
+    financing: financing,
+  };
+  if (!promotion.name || !/^\d{4}-\d{2}-\d{2}$/.test(promotion.start) || !/^\d{4}-\d{2}-\d{2}$/.test(promotion.end)) {
+    throw new Error('The promotion needs a name and YYYY-MM-DD dates.');
+  }
+  var tab = promoSheet_();
+  var values = tab.getDataRange().getValues();
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    if (String(values[r][0]) === 'current') {
+      tab.getRange(r + 1, 2).setValue(JSON.stringify(promotion));
+      return morning_(payload);
+    }
+  }
+  tab.appendRow(['current', JSON.stringify(promotion)]);
+  return morning_(payload);
 }
 
 function health_(payload) {

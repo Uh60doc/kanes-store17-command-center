@@ -72,11 +72,30 @@
       .figure { font-size: 32px; }
       .brand { align-items: flex-start; }
     }
+    button, input, textarea { font: inherit; }
+    textarea { width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid #1d5c66; background: #070b10; color: white; }
+    .morning .figure { font-size: 36px; }
+    .morning-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .promo-hero { border-color: #f3d48a; }
+    .promo-hero .figure { color: #f3d48a; }
+    @media (max-width: 720px) {
+      .morning-grid { grid-template-columns: 1fr; }
+    }
     @media print {
       body { background: white; color: black; }
       .nav, .noprint, .login { display: none !important; }
       .card { break-inside: avoid; border-color: #ccc; background: white; }
-      h1, h2, .figure, .sub { color: black; }
+      h1, h2, .sub { color: black; }
+      .good { color: #0b6b3a; }
+      .bad { color: #9b1c33; }
+      .pending, .warn { color: #444; }
+      .promo-hero { border-color: #111; }
+      .promo-hero .figure { color: black; }
+      .morning .card { padding: 8px 10px; }
+      .morning .section-title { margin: 10px 0 6px; }
+      .morning .figure { font-size: 22px; }
+      .morning .sub, .morning .list { font-size: 12px; }
+      .morning-finance { break-before: page; }
     }
   </style>
 </head>
@@ -161,8 +180,8 @@
       document.getElementById('login-error').textContent = message || '';
     }
     function navItems() {
-      var items = [['home', 'Home'], ['daily', 'Daily'], ['written', 'Written'], ['delivered', 'Delivered'], ['people', 'Salespeople']];
-      if (role !== 'sales') items.push(['bedding', 'Bedding'], ['orders', 'Open orders'], ['morning', 'Morning meeting'], ['health', 'System health']);
+      var items = [['home', 'Home'], ['daily', 'Daily'], ['written', 'Written'], ['delivered', 'Delivered'], ['people', 'Salespeople'], ['morning', 'Morning meeting']];
+      if (role !== 'sales') items.push(['bedding', 'Bedding'], ['orders', 'Open orders'], ['health', 'System health']);
       if (role === 'admin') items.push(['admin', 'Admin']);
       return items;
     }
@@ -408,25 +427,161 @@
       document.getElementById('print-person').addEventListener('click', function () { window.print(); });
     }
     function renderMorning(data) {
-      document.getElementById('header-note').textContent = 'Morning meeting · ' + data.date + ' · ' + data.period + ' · Updated ' + data.updated;
-      var people = data.people.map(function (person) { return '<li>' + esc(person.name) + ' · ' + money(person.written) + '</li>'; }).join('');
+      document.getElementById('header-note').textContent = 'Morning meeting · ' + data.date;
+      function pending(value) {
+        return value === null || value === undefined || value === '';
+      }
+      function huddleMoney(value) {
+        if (pending(value)) return 'Pending Report';
+        return money(value);
+      }
+      function cents(value) {
+        var number = Number(value);
+        var sign = number < 0 ? '-' : '';
+        var abs = Math.abs(number);
+        var text = Math.round(abs * 100) % 100 === 0 ? abs.toFixed(0) : abs.toFixed(2);
+        var parts = text.split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        return sign + '$' + parts.join('.');
+      }
+      function signed(value) {
+        if (pending(value)) return 'Pending Report';
+        return (Number(value) > 0 ? '+' : '') + money(value);
+      }
+      function huddleCard(title, figure, note, tone) {
+        return '<article class="card"><h2>' + esc(title) + '</h2><p class="figure ' + (tone || '') + '">' + figure + '</p><p class="sub">' + note + '</p></article>';
+      }
+      function gapText(perf) {
+        if (!perf || pending(perf.goal) || Number(perf.goal) === 0 || pending(perf.delta)) return '';
+        var pct = (Number(perf.actual) - Number(perf.goal)) / Number(perf.goal);
+        if (Math.abs(pct) < 0.0005) return 'even with the goal';
+        return Math.abs(pct * 100).toFixed(1) + '% ' + (pct > 0 ? 'above' : 'below') + ' the goal · ' + signed(perf.delta);
+      }
+      function resultCard(title, perf) {
+        if (!perf || pending(perf.actual)) return huddleCard(title, 'Pending Report', 'Goal ' + huddleMoney(perf && perf.goal) + '. The daily report is not in.', 'pending');
+        if (pending(perf.goal) || !perf.result) return huddleCard(title, huddleMoney(perf.actual), 'Yesterday\'s saved goal is not on file.', 'pending');
+        var tone = perf.result === 'HIT' ? 'good' : 'bad';
+        var gap = gapText(perf);
+        return huddleCard(title, huddleMoney(perf.actual), perf.result + ' · Goal ' + huddleMoney(perf.goal) + (gap ? ' · ' + gap : ''), tone);
+      }
+      function beddingCard(title, actual, goal) {
+        if (pending(actual)) return huddleCard(title, 'Pending Report', 'Goal ' + percent(goal) + '. The daily bedding report is not in.', 'pending');
+        var tone = Number(actual) >= Number(goal) ? 'good' : 'bad';
+        var points = (Number(actual) - Number(goal)) * 100;
+        return huddleCard(title, percent(actual), 'Goal ' + percent(goal) + ' · ' + (points >= 0 ? '+' : '') + points.toFixed(1) + ' pts', tone);
+      }
+      var yesterday = data.yesterday || {};
+      var today = data.today || {};
+      var closingNote = 'Goal ' + percent(yesterday.closingGoal) + '. Net Written customers divided by PERQ opportunities.';
+      var closingCard = pending(yesterday.closingRatio)
+        ? huddleCard('Closing ratio', 'Pending Report', closingNote, 'pending')
+        : huddleCard('Closing ratio', percent(yesterday.closingRatio), closingNote + ' · ' + ((Number(yesterday.closingRatio) - Number(yesterday.closingGoal)) * 100 >= 0 ? '+' : '') + ((Number(yesterday.closingRatio) - Number(yesterday.closingGoal)) * 100).toFixed(1) + ' pts', Number(yesterday.closingRatio) >= Number(yesterday.closingGoal) ? 'good' : 'bad');
+      var winners = data.winners || { status: 'pending', people: [] };
+      var winnerHtml = '';
+      if (winners.status !== 'ready') winnerHtml = huddleCard('Winners', 'Pending Report', esc(winners.reason || 'Staffing or NWDSR lines are not on file.'), 'pending');
+      else if (!winners.people.length) winnerHtml = '<p class="sub">Nobody beat yesterday\'s individual share of ' + huddleMoney(winners.share) + '.</p>';
+      else winnerHtml = winners.people.map(function (person) {
+        return huddleCard(person.name, huddleMoney(person.written), 'Individual goal ' + huddleMoney(person.share) + ' · EXCEEDED DAILY GOAL BY ' + huddleMoney(person.above), 'good');
+      }).join('');
+      var promo = data.promotion;
+      var promoHtml = '<p class="sub">No approved promotion is on the calendar.</p>';
+      if (promo) {
+        var featured = (promo.featured || []).map(function (item) {
+          return huddleCard(item.name, cents(item.now), cents(item.was) + ' to ' + cents(item.now) + ' · Save ' + cents(item.save) + ' · ' + esc(item.off), 'good');
+        }).join('');
+        promoHtml = '<h2>' + esc(promo.name) + '</h2><p class="sub">' + esc(promo.start) + ' through ' + esc(promo.end) + '</p><ul class="list">' + (promo.highlights || []).map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('') + '</ul>' +
+          '<div class="morning-grid">' + featured + '</div>' +
+          '<p class="sub">' + esc(promo.floorNote || '') + '</p>' +
+          huddleCard(promo.mattressName || 'Mattress special', esc(promo.mattressOff || ''), (promo.mattressLines || []).map(esc).join(' · ') + ' ' + esc(promo.mattressNote || ''), '') +
+          '<p class="sub">Exclusions: ' + esc((promo.exclusions || []).join(', ')) + '. Other company exclusions stay in the written policy.</p>';
+      }
+      var finance = (data.financing || []).map(function (term) {
+        if (term.highlight) {
+          return '<article class="card promo-hero"><h2>Special 0% financing · through ' + esc(term.end) + '</h2><p class="figure">78 months</p><p class="sub">' + esc(term.summary) + '</p></article>';
+        }
+        return '<article class="card"><h2>' + esc(String(term.months)) + ' months</h2><p class="sub">' + esc(term.summary) + '</p></article>';
+      }).join('');
+      if (!finance) finance = '<p class="sub">No approved financing offer is on the calendar.</p>';
+      var beddingFinance = data.beddingFinance || 'Size-based qualifying amounts are not in the approved promotion.';
+      var beddingFinanceCard = /not in the approved/i.test(beddingFinance)
+        ? huddleCard('Bedding 48-month financing', 'Pending Report', esc(beddingFinance), 'pending')
+        : '<article class="card"><h2>Bedding 48-month financing</h2><p class="sub">' + esc(beddingFinance) + '</p></article>';
+      var reminders = (data.reminders || []).map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('');
+      var editor = '';
+      if (data.editor) {
+        var promoSource = data.editor;
+        function lines(list) { return (list || []).join('\n'); }
+        function featuredLines(list) {
+          return (list || []).map(function (item) { return item.name + ' | ' + item.was + ' | ' + item.now + ' | ' + item.save + ' | ' + item.off; }).join('\n');
+        }
+        function financeLines(list) {
+          return (list || []).map(function (term) { return term.months + ' | ' + term.end + ' | ' + (term.zeroInterest ? 'yes' : 'no') + ' | ' + term.summary; }).join('\n');
+        }
+        editor = '<article class="card noprint" style="margin-top:12px"><h2>Approve the promotion</h2><p class="sub">The team sees this only after it is approved, and only between the start and end dates.</p>' +
+          '<label>Event name</label><input id="promo-name" value="' + esc(promoSource.name || '') + '" />' +
+          '<label>Start</label><input id="promo-start" value="' + esc(promoSource.start || '') + '" />' +
+          '<label>End</label><input id="promo-end" value="' + esc(promoSource.end || '') + '" />' +
+          '<label>Highlights</label><textarea id="promo-highlights" rows="3">' + esc(lines(promoSource.highlights)) + '</textarea>' +
+          '<label>Featured furniture</label><textarea id="promo-featured" rows="4">' + esc(featuredLines(promoSource.featured)) + '</textarea>' +
+          '<label>Floor note</label><input id="promo-floor" value="' + esc(promoSource.floorNote || '') + '" />' +
+          '<label>Mattress name</label><input id="promo-mattress" value="' + esc(promoSource.mattressName || '') + '" />' +
+          '<label>Mattress offer</label><input id="promo-mattress-off" value="' + esc(promoSource.mattressOff || '') + '" />' +
+          '<label>Mattress prices</label><textarea id="promo-mattress-lines" rows="2">' + esc(lines(promoSource.mattressLines)) + '</textarea>' +
+          '<label>Mattress note</label><input id="promo-mattress-note" value="' + esc(promoSource.mattressNote || '') + '" />' +
+          '<label>Exclusions</label><textarea id="promo-exclusions" rows="2">' + esc(lines(promoSource.exclusions)) + '</textarea>' +
+          '<label>Financing</label><textarea id="promo-financing" rows="8">' + esc(financeLines(promoSource.financing)) + '</textarea>' +
+          '<label>Bedding financing</label><input id="promo-bedding-finance" value="' + esc(promoSource.beddingFinance || '') + '" />' +
+          '<label><input id="promo-approved" type="checkbox" ' + (promoSource.approved === 'yes' ? 'checked' : '') + ' /> Approved for the team</label>' +
+          '<p id="promo-error" class="error"></p><button id="promo-save" type="button">Save promotion</button></article>';
+      }
       document.getElementById('screen').innerHTML =
-        '<article class="card"><h2>Morning meeting ' + data.date + '</h2>' +
-        '<p>Store month ' + data.period + '. Salesperson month ' + (data.individualPeriod || '') + '. Last update ' + data.updated + '.</p>' +
-        '<div class="grid">' +
-        card('Yesterday written', data.yesterday.missing ? 'Report missing' : money(data.yesterday.written), data.yesterday.date) +
-        card('Yesterday delivered', money(data.yesterday.delivered), data.yesterday.date) +
-        card('Month written', money(data.month.written), money(data.month.writtenLeft) + ' left') +
-        card("Today's goal", money(data.todayGoal.written), 'The monthly goal is unchanged.') +
-        card('Written bedding', percent(data.bedding.value), (data.bedding.note || 'Stored written bedding only.') + ' Delivered bedding is not copied from this figure.') +
-        card('Closing ratio', percent(closingBlock(data).ratio), 'Goal ' + percent(data.closing.goal) + '. ' + esc(closingBlock(data).note || ''), closingTone(closingBlock(data), data.closing.goal)) +
-        card('Purchasing customers', count(closingBlock(data).customers), 'Month to date. Net Written # OF CUST.') +
-        card('Customer opportunities', count(closingBlock(data).opportunities), 'Month to date. Same dates as the purchasing customers.') +
-        card('Versus goal', versusText(closingBlock(data)), 'Yesterday ' + percent(data.yesterday.closingRatio) + '. ' + esc(data.yesterday.closingNote || '')) +
-        '</div><h2 style="margin-top:16px">Highlights</h2><ul class="list">' + people + '</ul>' +
-        '<p class="noprint"><button id="print" type="button">Print morning report</button></p></article>';
-      document.getElementById('print').addEventListener('click', function () { window.print(); });
+        '<div class="morning">' +
+        '<h2 class="section-title">Yesterday\'s results · ' + esc(yesterday.date || '') + '</h2><div class="morning-grid">' +
+        resultCard('Written sales', yesterday.written) + resultCard('Delivered sales', yesterday.delivered) + closingCard +
+        beddingCard('Bedding written', yesterday.beddingWritten, yesterday.beddingGoal) +
+        beddingCard('Bedding delivered', yesterday.beddingDelivered, yesterday.beddingGoal) +
+        '</div>' +
+        '<h2 class="section-title">Today\'s goals</h2><div class="morning-grid">' +
+        huddleCard('Written sales goal', huddleMoney(today.written), 'Remaining budget divided by days left.', '') +
+        huddleCard('Delivered sales goal', huddleMoney(today.delivered), 'Remaining budget divided by days left.', '') +
+        huddleCard('Bedding target', percent(today.beddingGoal), 'Written and delivered.', '') +
+        huddleCard('Closing target', percent(today.closingGoal), 'Net Written customers divided by PERQ.', '') +
+        huddleCard('Per salesperson', huddleMoney(today.personalShare), pending(today.personalShare) ? 'Today\'s working roster is not on file.' : 'Today\'s written goal divided by associates working today.', pending(today.personalShare) ? 'pending' : '') +
+        '</div>' +
+        '<h2 class="section-title">Yesterday\'s sales winners</h2><div class="morning-grid">' + winnerHtml + '</div>' +
+        '<h2 class="section-title">Today\'s promotion</h2>' + promoHtml +
+        '<h2 class="section-title">Sales reminders</h2><ul class="list">' + reminders + '</ul>' +
+        '<div class="morning-finance"><h2 class="section-title">Financing options</h2><div class="morning-grid">' + finance + '</div>' +
+        beddingFinanceCard +
+        '</div>' +
+        '<p class="noprint"><button id="print-morning" type="button">Print morning briefing</button></p>' +
+        editor +
+        '</div>';
+      document.getElementById('print-morning').addEventListener('click', function () { window.print(); });
+      var save = document.getElementById('promo-save');
+      if (save) save.addEventListener('click', function () {
+        api('savePromotion', {
+          name: document.getElementById('promo-name').value,
+          start: document.getElementById('promo-start').value,
+          end: document.getElementById('promo-end').value,
+          highlights: document.getElementById('promo-highlights').value,
+          featured: document.getElementById('promo-featured').value,
+          floorNote: document.getElementById('promo-floor').value,
+          mattressName: document.getElementById('promo-mattress').value,
+          mattressOff: document.getElementById('promo-mattress-off').value,
+          mattressLines: document.getElementById('promo-mattress-lines').value,
+          mattressNote: document.getElementById('promo-mattress-note').value,
+          exclusions: document.getElementById('promo-exclusions').value,
+          financing: document.getElementById('promo-financing').value,
+          beddingFinance: document.getElementById('promo-bedding-finance').value,
+          approved: document.getElementById('promo-approved').checked,
+        }).then(renderMorning).catch(function (error) {
+          if (/sign in/i.test(error.message)) showLogin(error.message);
+          else document.getElementById('promo-error').textContent = error.message;
+        });
+      });
     }
+
     function renderHealth(data) {
       var rows = data.rows.map(function (row) { return '<tr><td>' + esc(row.key) + '</td><td>' + esc(row.value) + '</td></tr>'; }).join('');
       var imports = data.imports.map(function (row) { return '<li>' + esc(row.status) + ' · ' + esc(row.file) + ' · ' + esc(row.note) + '</li>'; }).join('');
