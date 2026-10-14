@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Kane's Management Command Center</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", Helvetica, Arial, sans-serif; background: #07111f; color: #e7f0fb; }
+    button, input { font: inherit; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 48px; }
+    h1 { margin: 0; font-size: 32px; color: #8fd4ff; }
+    h2 { margin: 0 0 8px; font-size: 15px; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0c9; }
+    .sub { color: #9eb0c9; margin: 4px 0 0; }
+    .login { max-width: 440px; margin: 8vh auto; padding: 28px; border: 1px solid #1d3e63; border-radius: 16px; background: #0d2038; }
+    label { display: block; margin: 14px 0 6px; color: #9eb0c9; }
+    input { width: 100%; min-height: 48px; padding: 8px 12px; border-radius: 10px; border: 1px solid #23486d; background: #07111f; color: white; }
+    button { min-height: 46px; padding: 0 16px; border: 0; border-radius: 10px; background: #1493d8; color: white; font-weight: 700; cursor: pointer; }
+    .nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+    .nav button { background: #0c1c33; border: 1px solid #23486d; }
+    .nav button.active { background: #1493d8; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .card { border: 1px solid #1d3e63; border-radius: 14px; padding: 14px 16px; background: #0d2038; }
+    .figure { font-size: 40px; font-weight: 750; line-height: 1; margin: 8px 0; }
+    .good { color: #3dde8a; }
+    .bad { color: #ff8ea3; }
+    .warn { color: #f3d48a; }
+    .muted { color: #d5e4f5; font-size: 28px; }
+    .error { color: #ffb4c0; min-height: 1.2em; }
+    .list { margin: 8px 0 0; padding-left: 18px; }
+    table { width: 100%; border-collapse: collapse; }
+    td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid #1d3e63; }
+    .hidden { display: none; }
+    @media print {
+      body { background: white; color: black; }
+      .nav, .noprint, .login { display: none !important; }
+      .card { break-inside: avoid; border-color: #ccc; background: white; }
+      h1, h2, .figure, .sub { color: black; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section id="login" class="login">
+      <h1>Kane's Management Command Center</h1>
+      <p class="sub">Store 17 · South Orlando · Private management sign-in</p>
+      <label for="username">Username</label>
+      <input id="username" autocomplete="username" />
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" />
+      <p id="login-error" class="error"></p>
+      <button id="signin" type="button">Sign in</button>
+    </section>
+    <section id="app" class="hidden">
+      <header>
+        <h1>Kane's Management Command Center</h1>
+        <p class="sub" id="header-note"></p>
+      </header>
+      <nav class="nav noprint" id="nav"></nav>
+      <div id="screen"></div>
+    </section>
+  </main>
+  <script>
+    var token = '';
+    var role = '';
+    var screen = 'home';
+
+    function esc(value) {
+      return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+      });
+    }
+    function money(value) {
+      if (value === null || value === undefined || value === '') return 'Not Available';
+      var number = Number(value);
+      var sign = number < 0 ? '-' : '';
+      return sign + '$' + Math.abs(Math.round(number)).toLocaleString('en-US');
+    }
+    function percent(value) {
+      if (value === null || value === undefined || value === '') return 'Not Available';
+      return (Number(value) * 100).toFixed(1) + '%';
+    }
+    function api(name, extra) {
+      var payload = Object.assign({ token: token }, extra || {});
+      return new Promise(function (resolve, reject) {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(function (error) {
+          reject(new Error(error && error.message ? error.message : 'The request failed.'));
+        }).dispatch(name, payload);
+      });
+    }
+    function showLogin(message) {
+      token = '';
+      role = '';
+      sessionStorage.removeItem('cc-token');
+      sessionStorage.removeItem('cc-role');
+      document.getElementById('app').classList.add('hidden');
+      document.getElementById('login').classList.remove('hidden');
+      document.getElementById('login-error').textContent = message || '';
+    }
+    function navItems() {
+      var items = [['home', 'Home'], ['daily', 'Daily'], ['written', 'Written'], ['delivered', 'Delivered'], ['people', 'Salespeople']];
+      if (role !== 'sales') items.push(['bedding', 'Bedding'], ['orders', 'Open orders'], ['morning', 'Morning meeting'], ['health', 'System health']);
+      if (role === 'admin') items.push(['admin', 'Admin']);
+      return items;
+    }
+    function drawNav() {
+      var nav = document.getElementById('nav');
+      nav.innerHTML = '';
+      navItems().forEach(function (item) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = item[1];
+        if (item[0] === screen) button.className = 'active';
+        button.addEventListener('click', function () { openScreen(item[0]); });
+        nav.appendChild(button);
+      });
+      var out = document.createElement('button');
+      out.type = 'button';
+      out.textContent = 'Log out';
+      out.addEventListener('click', function () { showLogin(''); });
+      nav.appendChild(out);
+    }
+    function card(title, figure, note, tone) {
+      return '<article class="card"><h2>' + title + '</h2><p class="figure ' + (tone || '') + '">' + figure + '</p><p class="sub">' + (note || '') + '</p></article>';
+    }
+    function renderHome(data) {
+      var beddingTone = data.bedding.value === null ? 'muted' : data.bedding.value >= data.bedding.goal ? 'good' : 'bad';
+      var yesterdayNote = data.yesterday.missing ? 'Report missing. Last verified day is ' + (data.latest || 'not on file') + '.' : 'Verified store day';
+      document.getElementById('header-note').textContent = data.period + ' · Updated ' + data.updated;
+      document.getElementById('screen').innerHTML =
+        '<div class="grid">' +
+        card('Yesterday ' + data.yesterday.date, data.yesterday.missing ? 'Report missing' : money(data.yesterday.written), yesterdayNote + ' · Delivered ' + money(data.yesterday.delivered), data.yesterday.missing ? 'warn' : '') +
+        card('Written month to date', money(data.month.written), money(data.month.writtenLeft) + ' left of ' + money(data.month.writtenGoal)) +
+        card("Today's written goal", money(data.todayGoal.written), data.todayGoal.daysLeft === null ? 'Selling-day calendar is not marked, so no pace is shown.' : data.todayGoal.daysLeft + ' selling days left, including today.') +
+        card('Delivered month to date', money(data.month.delivered), money(data.month.deliveredLeft) + ' left of ' + money(data.month.deliveredGoal)) +
+        '</div>' +
+        '<div class="grid" style="margin-top:12px">' +
+        card('Bedding', percent(data.bedding.value), (data.bedding.note || 'Goal 20%') , beddingTone) +
+        card('Closing ratio', 'Not Available', 'Goal ' + percent(data.closing.goal) + '. The matching counts are not on file.') +
+        card('Needs attention', data.attention.length + ' items', '<ul class="list">' + data.attention.map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ul>') +
+        '</div>';
+    }
+    function renderDaily(data) {
+      document.getElementById('header-note').textContent = data.period + ' · Updated ' + data.updated;
+      var rows = data.days.map(function (day) {
+        return '<tr><td>' + esc(day.date) + '</td><td>' + money(day.snapWritten) + '</td><td>' + money(day.nwdsrWritten) + '</td><td>' + money(day.nwdsrDelivered) + '</td></tr>';
+      }).join('');
+      document.getElementById('screen').innerHTML = '<article class="card"><h2>Daily performance</h2><table><tr><th>Date</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR delivered</th></tr>' + rows + '</table><p class="sub">A blank day is not zero.</p></article>';
+    }
+    function renderPeople(data) {
+      document.getElementById('header-note').textContent = 'Updated ' + data.updated;
+      var rows = data.people.map(function (person) {
+        return '<tr><td>' + esc(person.name) + '</td><td>' + money(person.written) + '</td></tr>';
+      }).join('');
+      document.getElementById('screen').innerHTML = '<article class="card"><h2>Salesperson written sales</h2><table><tr><th>Name</th><th>SNAP written</th></tr>' + rows + '</table><p class="sub">Managers are not listed. Bedding, closing ratio, and attachment stay Not Available until those reports are on file.</p></article>';
+    }
+    function renderMorning(data) {
+      document.getElementById('header-note').textContent = 'Morning meeting · ' + data.date + ' · ' + data.period + ' · Updated ' + data.updated;
+      var people = data.people.map(function (person) { return '<li>' + esc(person.name) + ' · ' + money(person.written) + '</li>'; }).join('');
+      document.getElementById('screen').innerHTML =
+        '<article class="card"><h2>Morning meeting ' + data.date + '</h2>' +
+        '<p>Reporting period ' + data.period + '. Last update ' + data.updated + '.</p>' +
+        '<div class="grid">' +
+        card('Yesterday written', data.yesterday.missing ? 'Report missing' : money(data.yesterday.written), data.yesterday.date) +
+        card('Yesterday delivered', money(data.yesterday.delivered), data.yesterday.date) +
+        card('Month written', money(data.month.written), money(data.month.writtenLeft) + ' left') +
+        card("Today's goal", money(data.todayGoal.written), 'The monthly goal is unchanged.') +
+        card('Bedding', percent(data.bedding.value), data.bedding.note || '') +
+        card('Closing ratio', 'Not Available', 'Goal ' + percent(data.closing.goal)) +
+        '</div><h2 style="margin-top:16px">Highlights</h2><ul class="list">' + people + '</ul>' +
+        '<h2>Priorities</h2><ul class="list">' + data.attention.map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ul>' +
+        '<p class="noprint"><button id="print" type="button">Print morning report</button></p></article>';
+      document.getElementById('print').addEventListener('click', function () { window.print(); });
+    }
+    function renderHealth(data) {
+      var rows = data.rows.map(function (row) { return '<tr><td>' + esc(row.key) + '</td><td>' + esc(row.value) + '</td></tr>'; }).join('');
+      var imports = data.imports.map(function (row) { return '<li>' + esc(row.status) + ' · ' + esc(row.file) + ' · ' + esc(row.note) + '</li>'; }).join('');
+      document.getElementById('screen').innerHTML = '<article class="card"><h2>System health · version ' + data.version + '</h2><table>' + rows + '</table><ul class="list">' + imports + '</ul></article>';
+    }
+    function renderAdmin() {
+      document.getElementById('screen').innerHTML =
+        '<article class="card"><h2>Shared passwords</h2><p class="sub">Changing a password signs that role out everywhere.</p>' +
+        '<label>Role</label><input id="pw-role" value="manager" />' +
+        '<label>New password</label><input id="pw-value" type="password" />' +
+        '<p id="pw-error" class="error"></p><p class="noprint"><button id="pw-save" type="button">Save password</button> <button id="retry" type="button">Retry imports</button></p></article>';
+      document.getElementById('pw-save').addEventListener('click', function () {
+        api('changePassword', { role: document.getElementById('pw-role').value, password: document.getElementById('pw-value').value }).then(function (result) {
+          if (result.token) { token = result.token; sessionStorage.setItem('cc-token', token); }
+          document.getElementById('pw-error').textContent = 'Password saved.';
+        }).catch(function (error) {
+          if (/sign in/i.test(error.message)) showLogin(error.message);
+          else document.getElementById('pw-error').textContent = error.message;
+        });
+      });
+      document.getElementById('retry').addEventListener('click', function () {
+        api('retry').then(function () { openScreen('health'); }).catch(function (error) { document.getElementById('pw-error').textContent = error.message; });
+      });
+    }
+    function openScreen(name) {
+      screen = name;
+      drawNav();
+      var request = name === 'written' || name === 'delivered' || name === 'bedding' || name === 'orders' ? 'home' : name;
+      if (name === 'admin') { renderAdmin(); return; }
+      api(request).then(function (data) {
+        if (name === 'home' || name === 'written' || name === 'delivered' || name === 'bedding') renderHome(data);
+        else if (name === 'orders') {
+          document.getElementById('header-note').textContent = data.period + ' · Updated ' + data.updated;
+          document.getElementById('screen').innerHTML = card('Open orders and backorders', 'Not Available', 'No open-order report is on file. Nothing is shown as zero.');
+        } else if (name === 'daily') renderDaily(data);
+        else if (name === 'people') renderPeople(data);
+        else if (name === 'morning') renderMorning(data);
+        else if (name === 'health') renderHealth(data);
+      }).catch(function (error) {
+        if (/sign in/i.test(error.message)) showLogin(error.message);
+        else document.getElementById('screen').innerHTML = '<p class="error">' + error.message + '</p>';
+      });
+    }
+    document.getElementById('signin').addEventListener('click', function () {
+      document.getElementById('login-error').textContent = '';
+      api('login', { username: document.getElementById('username').value, password: document.getElementById('password').value }).then(function (result) {
+        token = result.token;
+        role = result.role;
+        sessionStorage.setItem('cc-token', token);
+        sessionStorage.setItem('cc-role', role);
+        document.getElementById('login').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+        openScreen('home');
+      }).catch(function (error) { document.getElementById('login-error').textContent = error.message; });
+    });
+    token = sessionStorage.getItem('cc-token') || '';
+    role = sessionStorage.getItem('cc-role') || '';
+    if (token && role) {
+      document.getElementById('login').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      openScreen('home');
+    }
+  </script>
+</body>
+</html>

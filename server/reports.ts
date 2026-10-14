@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildStoreDashboard, type StoreDashboardModel } from '../src/dashboard/model.ts';
 import { acceptIncomingReport } from '../src/import/boundary.ts';
+import type { ReportSnapshot } from '../src/import/types.ts';
 import { currentSnapshots, resetSnapshots } from '../src/import/snapshotStore.ts';
 import { assertTokenPathOutsideRepo } from './access.ts';
 import { loadVerifiedPerq } from './perqReference.ts';
@@ -79,6 +80,12 @@ export function snapWrittenPdf(date: string): string | null {
     return full;
   }
   return null;
+}
+
+export async function loadVerifiedSnapshots(): Promise<{ model: StoreDashboardModel; snapshots: ReportSnapshot[] }> {
+  cached = null;
+  const model = await importReports();
+  return { model, snapshots: currentSnapshots() };
 }
 
 export function loadStoreDashboard(): Promise<StoreDashboardModel> {

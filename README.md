@@ -2,6 +2,8 @@
 
 Management dashboard for Kane's Furniture Store 17, South Orlando, on Orange Blossom Trail.
 
+The production app is the Google Apps Script project in `apps-script/`. It uses the existing Store 17 spreadsheet and the `store17commandcenter@gmail.com` mailbox. Setup and the remaining owner steps are in `apps-script/README.md`. The Vite page and `server/` folder are the local archive described in `legacy/LOCAL-RUNTIME.md`. The Ticket Tracker is a separate system and is not part of this repository.
+
 Phase 1 is the store dashboard for a desktop office monitor. October 2026 management goals and corporate stretch goals are configured targets. Sales, bedding, attachment, closing ratio, year-over-year, pace, and graphs stay empty until a report snapshot is imported. Missing figures read **Awaiting Report** or **Not Available**.
 
 ## Reporting calendars
@@ -19,7 +21,7 @@ Two later sources hand the same files to that function:
 - Manual upload
 - Company mailbox
 
-The local API can sign in to the existing Store 17 Google account, read the existing spreadsheet, and write only the `CC_Connection_Test` tab. A PDF handed to `acceptIncomingReport` is parsed and checked for a duplicate file hash. Mailbox download and scheduled import stay off, and validated rows are not written into the sales tabs. The boundary does not invent metrics, and it does not store a missing figure as zero.
+The local API can sign in to the existing Store 17 Google account, read the existing spreadsheet, and write only the `CC_Connection_Test` tab. A PDF handed to `acceptIncomingReport` is parsed and checked for a duplicate file hash. The local API does not download mail or write sales tabs. The cloud seed and the Apps Script app write the separate `CC_` tabs. Sheet1 and `CC_Connection_Test` stay as they were. The boundary does not invent metrics, and it does not store a missing figure as zero.
 
 ## Google connection
 
