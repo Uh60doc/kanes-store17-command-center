@@ -1,5 +1,7 @@
 /** Cloud table rules. Blank figures stay blank. The monthly goal is never rewritten. */
 
+import { operatingDaysRemaining } from '../domain/reportingCalendar.ts';
+
 export interface DailyFact {
   date: string;
   snapWritten: number | null;
@@ -33,24 +35,46 @@ export function sumColumn(rows: readonly DailyFact[], field: DailyField, start: 
 
 /**
  * Remaining dollars and the pace for the selling days still on the calendar.
- * A missing actual or an unconfigured calendar leaves the pace blank.
- * The monthly goal is not returned and is not changed.
+ * A missing actual leaves the pace blank. The monthly goal is not returned and is not changed.
  */
 export function requiredPace(
-  goal: number,
+  goal: number | null,
   actual: number | null,
   sellingDaysRemaining: number | null,
 ): { remaining: number | null; pace: number | null } {
-  if (actual === null) return { remaining: null, pace: null };
+  if (actual === null || goal === null) return { remaining: null, pace: null };
   const remaining = money(goal - actual);
   if (sellingDaysRemaining === null || sellingDaysRemaining <= 0) return { remaining, pace: null };
   return { remaining, pace: money(remaining / sellingDaysRemaining) };
 }
 
-/** Selling days on or after today, through the period end. An empty calendar is not zero days. */
-export function sellingDaysRemaining(days: readonly SellingDay[], today: string, periodEnd: string): number | null {
-  if (days.length === 0) return null;
-  return days.filter((day) => day.selling && day.date >= today && day.date <= periodEnd).length;
+/**
+ * Selling days from today through the period end.
+ * A listed day with selling false is closed. Every other date in the span is open,
+ * including when the closure list is empty.
+ */
+export function sellingDaysRemaining(
+  days: readonly SellingDay[],
+  today: string,
+  periodStart: string,
+  periodEnd: string,
+): number {
+  const closed = days.filter((day) => !day.selling).map((day) => day.date);
+  return operatingDaysRemaining({ start: periodStart, end: periodEnd }, today, closed);
+}
+
+/**
+ * Month-end run rate from days that actually have a figure.
+ * Missing days are left out of both the total and the count. They are not zeroes.
+ * The official monthly goal is not an input and is not changed.
+ */
+export function projectedMonthEnd(
+  verifiedTotal: number | null,
+  verifiedDayCount: number,
+  operatingDayCount: number,
+): number | null {
+  if (verifiedTotal === null || verifiedDayCount <= 0 || operatingDayCount <= 0) return null;
+  return money((verifiedTotal / verifiedDayCount) * operatingDayCount);
 }
 
 export type ImportDecision = 'imported' | 'duplicate' | 'conflict';

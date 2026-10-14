@@ -43,7 +43,22 @@ export const payrollPeriod = {
 } as const;
 
 /**
- * Remaining store operating days are not defined until an operating calendar
- * is supplied. Pace stays unavailable. Do not substitute calendar dates.
+ * Official budgets for the configured store month only.
+ * Another month does not inherit these dollars. Daily pace never writes them back.
  */
-export const remainingOperatingDays: number | null = null;
+export function goalsForStorePeriod(period: { start: string; end: string }): {
+  written: number | null;
+  delivered: number | null;
+  stretchWritten: number | null;
+  stretchDelivered: number | null;
+} {
+  if (period.start === storeOperatingPeriod.start && period.end === storeOperatingPeriod.end) {
+    return {
+      written: storeOperatingPeriod.managementGoals.writtenSales,
+      delivered: storeOperatingPeriod.managementGoals.deliveredSales,
+      stretchWritten: storeOperatingPeriod.corporateStretch.writtenSales,
+      stretchDelivered: storeOperatingPeriod.corporateStretch.deliveredSales,
+    };
+  }
+  return { written: null, delivered: null, stretchWritten: null, stretchDelivered: null };
+}

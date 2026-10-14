@@ -1,4 +1,4 @@
-import { payrollPeriod, storeOperatingPeriod } from '../config/periods.ts';
+import { storeOperatingPeriod } from '../config/periods.ts';
 import { formatMoney, formatPercent } from './model.ts';
 import { useDashboardModel } from './useDashboardModel.ts';
 
@@ -18,7 +18,7 @@ export function SalesTeam() {
   const model = useDashboardModel();
   const id = decodeURIComponent(window.location.pathname.split('/')[2] ?? '');
   const member = (model.salesTeam ?? []).find((item) => item.id === id);
-  if (id) return <PersonPage member={member} id={id} />;
+  if (id) return <PersonPage member={member} id={id} periodLabel={model.individualPeriodLabel} />;
 
   return (
     <div className="screen">
@@ -26,7 +26,7 @@ export function SalesTeam() {
         <div>
           <p className="eyebrow">Individual calendar month</p>
           <h1>Sales team</h1>
-          <p className="location">{payrollPeriod.rangeDisplay}</p>
+          <p className="location">{model.individualPeriodLabel}</p>
         </div>
       </header>
       <main className="page">
@@ -46,9 +46,11 @@ export function SalesTeam() {
 function PersonPage({
   id,
   member,
+  periodLabel,
 }: {
   id: string;
   member: ReturnType<typeof useDashboardModel>['salesTeam'][number] | undefined;
+  periodLabel: string;
 }) {
   return (
     <div className="screen">
@@ -56,7 +58,7 @@ function PersonPage({
         <div>
           <p className="eyebrow">Individual calendar month</p>
           <h1>{member?.displayName ?? id}</h1>
-          <p className="location">{payrollPeriod.rangeDisplay}</p>
+          <p className="location">{periodLabel}</p>
         </div>
       </header>
       <main className="page scorecard">
@@ -86,7 +88,7 @@ function PersonPage({
             <p>Not Available</p>
           </div>
           <p className="detail">
-            Goal {formatPercent(storeOperatingPeriod.managementGoals.closingRatioTarget)}. Needs this associate&apos;s closed customers and opportunities for {payrollPeriod.rangeDisplay}. A missing count stays Not Available.
+            Goal {formatPercent(storeOperatingPeriod.managementGoals.closingRatioTarget)}. Needs this associate&apos;s closed customers and opportunities for {periodLabel}. A missing count stays Not Available.
           </p>
         </article>
       </main>

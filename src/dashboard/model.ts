@@ -1,7 +1,15 @@
-import { payrollPeriod, remainingOperatingDays, reportingMonth, storeOperatingPeriod } from '../config/periods.ts';
+import { goalsForStorePeriod } from '../config/periods.ts';
 import { cardAssociates } from '../config/roster.ts';
 import { addUtcDays, eachDate } from '../domain/calendar.ts';
-import { filterByCategory } from '../domain/reportingCalendar.ts';
+import {
+  datesInPeriod,
+  filterByCategory,
+  individualPeriodContaining,
+  operatingDaysRemaining,
+  rangeLabel,
+  storePeriodContaining,
+} from '../domain/reportingCalendar.ts';
+import { projectedMonthEnd } from '../cloud/facts.ts';
 import type { ReportSnapshot } from '../import/types.ts';
 import {
   buildPerqPanel,
@@ -98,6 +106,12 @@ export interface StoreDashboardModel {
   projectedWritten: Figure;
   projectedDelivered: Figure;
   snapYearOverYearDollars: Figure;
+  storePeriodLabel: string;
+  individualPeriodLabel: string;
+  officialWrittenGoal: number | null;
+  officialDeliveredGoal: number | null;
+  stretchWrittenGoal: number | null;
+  stretchDeliveredGoal: number | null;
 }
 
 const money = new Intl.NumberFormat('en-US', {
@@ -132,6 +146,16 @@ export function formatPercent(value: number): string {
 
 export function formatOfficeTimestamp(date: Date): string {
   return officeTime.format(date);
+}
+
+/** Calendar date in the store office, America/New_York. */
+export function officeIsoDate(date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
 }
 
 export function formatFigure(figure: Figure): string {
@@ -182,21 +206,25 @@ function yearOverYear(current: number | null, prior: number | null): Figure {
   return percentFigure((current - prior) / prior);
 }
 
-function progress(actual: number | null, goal: number): Figure {
-  if (actual === null || goal === 0) return missing('Not Available');
+function progress(actual: number | null, goal: number | null): Figure {
+  if (actual === null || goal === null || goal === 0) return missing('Not Available');
   return percentFigure(actual / goal);
 }
 
-function remaining(actual: number | null, goal: number): Figure {
-  if (actual === null) return missing('Not Available');
+function remaining(actual: number | null, goal: number | null): Figure {
+  if (actual === null || goal === null) return missing('Not Available');
   return dollars(goal - actual);
 }
 
-function requiredDaily(actual: number | null, goal: number, daysRemaining: number | null): Figure {
-  if (actual === null || daysRemaining === null || daysRemaining <= 0) {
+function requiredDaily(actual: number | null, goal: number | null, daysRemaining: number | null): Figure {
+  if (actual === null || goal === null || daysRemaining === null || daysRemaining <= 0) {
     return missing('Not Available');
   }
   return dollars((goal - actual) / daysRemaining);
+}
+
+function dollarOrMissing(value: number | null): Figure {
+  return value === null ? missing('Not Available') : dollars(value);
 }
 
 function collectDaily(snapshots: readonly ReportSnapshot[]): DatedAmountView[] {
@@ -350,11 +378,13 @@ function personId(code: string | null, displayName: string): string {
 }
 
 const PACE_NOTE =
-  'Today’s target, this week’s target, days left, and the month-end projection wait on the store operating-day calendar and the week definition. A flat split of the remaining dollars is not being shown as the company budget.';
+  'Every store day is a selling day unless it is marked closed. Today is included. The official monthly budget is not changed. A week target is not calculated because no week definition is on file.';
 
-function salespersonBoard(snapshots: readonly ReportSnapshot[]): { cards: SalespersonBoardCard[]; notes: string[] } {
-  const start = payrollPeriod.start;
-  const end = payrollPeriod.end;
+function salespersonBoard(
+  snapshots: readonly ReportSnapshot[],
+  start: string,
+  end: string,
+): { cards: SalespersonBoardCard[]; notes: string[] } {
   const days = snapshots.filter(
     (snapshot) =>
       snapshot.status === 'current' &&
@@ -383,7 +413,7 @@ function salespersonBoard(snapshots: readonly ReportSnapshot[]): { cards: Salesp
   const last = dates[dates.length - 1];
   const coverage =
     first && last
-      ? `SNAP Written ${first} through ${last}. October 1 is not on file, so this is not the finished ${start} through ${end} total.`
+      ? `SNAP Written ${first} through ${last}. This is the salesperson month ${start} through ${end}.`
       : `No reconciled SNAP Written day is on file for ${start} through ${end}.`;
   const cards = cardAssociates.map((employee) => {
     const written = totals.get(employee.displayName);
@@ -408,8 +438,8 @@ function salespersonBoard(snapshots: readonly ReportSnapshot[]): { cards: Salesp
       `${label} ${names.length === 1 ? 'is' : 'are'} printed on SNAP Written and not on the sales team. No scorecard was added. Those dollars stay in the store total.`,
     );
   }
-  if (first === '2026-10-02') {
-    notes.push('October 1 SNAP Written is not on file. Salesperson totals are not the finished calendar month.');
+  if (first && first > start) {
+    notes.push(`${start} SNAP Written is not on file. Salesperson totals are not the finished calendar month.`);
   }
   return { cards, notes };
 }
@@ -440,11 +470,22 @@ function negativeWrittenDays(snapshots: readonly ReportSnapshot[], start: string
     }));
 }
 
+export interface DashboardClock {
+  asOf?: string;
+  closedDates?: readonly string[];
+}
+
 export function buildStoreDashboard(
   snapshots: readonly ReportSnapshot[],
   reference: PerqEvidence | null = null,
   referenceIssues: readonly string[] = [],
+  clock: DashboardClock = {},
 ): StoreDashboardModel {
+  const asOf = clock.asOf ?? officeIsoDate();
+  const storePeriod = storePeriodContaining(asOf);
+  const individualPeriod = individualPeriodContaining(asOf);
+  const goals = goalsForStorePeriod(storePeriod);
+  const closedDates = clock.closedDates ?? [];
   const snapWrittenSnapshot = currentOf(snapshots, 'SNAP Written');
   const nwdsrDeliveredSnapshot = currentOf(snapshots, 'NWDSR Delivered');
   const beddingSnapshot = currentOf(snapshots, 'BSSA Written');
@@ -458,8 +499,10 @@ export function buildStoreDashboard(
       item.periodEnd === '2025-10-31',
   );
 
-  const storeStart = storeOperatingPeriod.start;
-  const storeEnd = storeOperatingPeriod.end;
+  const storeStart = storePeriod.start;
+  const storeEnd = storePeriod.end;
+  const daysLeft = operatingDaysRemaining(storePeriod, asOf, closedDates);
+  const closed = new Set(closedDates);
   const snapHeadline = headlineFor(snapshots, 'SNAP Written', storeStart, storeEnd);
   const writtenHeadline = headlineFor(snapshots, 'NWDSR Written', storeStart, storeEnd);
   const deliveredHeadline = headlineFor(snapshots, 'NWDSR Delivered', storeStart, storeEnd);
@@ -479,7 +522,7 @@ export function buildStoreDashboard(
     reference,
     referenceIssues,
     { start: storeStart, end: storeEnd },
-    { start: payrollPeriod.start, end: payrollPeriod.end },
+    { start: individualPeriod.start, end: individualPeriod.end },
     nwdsrDeliveredSnapshot
       ? { periodStart: nwdsrDeliveredSnapshot.periodStart, periodEnd: nwdsrDeliveredSnapshot.periodEnd }
       : null,
@@ -491,9 +534,14 @@ export function buildStoreDashboard(
     .sort();
 
   const dailySales = collectDaily(snapshots);
-  const { year, month } = reportingMonth;
-  const storePoints = filterByCategory(dailySales, 'store', year, month, (point) => point.date);
-  const individualPoints = filterByCategory(dailySales, 'individual', year, month, (point) => point.date);
+  const storePoints = filterByCategory(dailySales, 'store', storePeriod.year, storePeriod.month, (point) => point.date);
+  const individualPoints = filterByCategory(
+    dailySales,
+    'individual',
+    individualPeriod.year,
+    individualPeriod.month,
+    (point) => point.date,
+  );
   const storeDaily = calendarDays(storePoints);
   const individualDaily = calendarDays(individualPoints);
   const snapDays = singleDayAmounts(snapshots, 'SNAP Written', storeStart, storeEnd);
@@ -512,7 +560,12 @@ export function buildStoreDashboard(
       provisional: Boolean(snapDay?.provisional || writtenDay?.provisional || deliveredDay?.provisional),
     };
   });
-  const team = salespersonBoard(snapshots);
+  const openDates = datesInPeriod(storePeriod).filter((date) => !closed.has(date));
+  const verifiedWrittenDays = openDates.filter((date) => snapDays.has(date));
+  const verifiedDeliveredDays = openDates.filter((date) => deliveredDays.has(date));
+  const verifiedWrittenTotal = verifiedWrittenDays.reduce((total, date) => total + (snapDays.get(date)?.amount ?? 0), 0);
+  const verifiedDeliveredTotal = verifiedDeliveredDays.reduce((total, date) => total + (deliveredDays.get(date)?.amount ?? 0), 0);
+  const team = salespersonBoard(snapshots, individualPeriod.start, individualPeriod.end);
   const monthToDate = runningTotal(storePoints);
   const outside = dailySales.filter(
     (point) => !storePoints.some((row) => row.date === point.date) && !individualPoints.some((row) => row.date === point.date),
@@ -520,11 +573,19 @@ export function buildStoreDashboard(
   const flags = [...perqPanel.flags];
   if (outside.length > 0) {
     flags.push(
-      `Daily records dated ${outside.map((point) => point.date).join(', ')} stay on their original dates and sit outside both October calendars.`,
+      `Daily records dated ${outside.map((point) => point.date).join(', ')} stay on their original dates and sit outside both the store month and the salesperson month.`,
+    );
+  }
+  const missingWritten = openDates.filter((date) => date < asOf && !snapDays.has(date));
+  if (missingWritten.length > 0) {
+    flags.push(
+      missingWritten.length <= 4
+        ? `SNAP Written is incomplete for ${missingWritten.join(', ')}. Those days are not zero.`
+        : `SNAP Written is incomplete for ${missingWritten.length} store days. Those days are not zero.`,
     );
   }
   const closingRatioNote =
-    'Closing ratio needs NWDSR closed customers and location opportunities for the same store month, October 2–November 1. That pair is not on file.';
+    `Closing ratio needs NWDSR closed customers and location opportunities for the same store month, ${rangeLabel(storePeriod)}. That pair is not on file.`;
   const boardNotes = [...team.notes];
   if (snapHeadline.provisionalDates.length > 0) {
     boardNotes.push(`Generated the same day, so not a next-day close: ${snapHeadline.provisionalDates.join(', ')}.`);
@@ -544,24 +605,16 @@ export function buildStoreDashboard(
     beddingPercentage: bedding === null ? missing('Not Available') : percentFigure(bedding),
     storeAttachment: ratio(attachmentHits, attachmentOpportunities, 'Not Available'),
     closingRatio: ratio(closedCustomers, perqOpportunities, 'Not Available'),
-    writtenProgress: progress(snapWritten, storeOperatingPeriod.managementGoals.writtenSales),
-    writtenRemaining: remaining(snapWritten, storeOperatingPeriod.managementGoals.writtenSales),
-    writtenRequiredDailyAverage: requiredDaily(
-      snapWritten,
-      storeOperatingPeriod.managementGoals.writtenSales,
-      remainingOperatingDays,
-    ),
-    deliveredProgress: progress(nwdsrDelivered, storeOperatingPeriod.managementGoals.deliveredSales),
-    deliveredRemaining: remaining(nwdsrDelivered, storeOperatingPeriod.managementGoals.deliveredSales),
-    deliveredRequiredDailyAverage: requiredDaily(
-      nwdsrDelivered,
-      storeOperatingPeriod.managementGoals.deliveredSales,
-      remainingOperatingDays,
-    ),
-    stretchWrittenProgress: progress(snapWritten, storeOperatingPeriod.corporateStretch.writtenSales),
-    stretchWrittenRemaining: remaining(snapWritten, storeOperatingPeriod.corporateStretch.writtenSales),
-    stretchDeliveredProgress: progress(nwdsrDelivered, storeOperatingPeriod.corporateStretch.deliveredSales),
-    stretchDeliveredRemaining: remaining(nwdsrDelivered, storeOperatingPeriod.corporateStretch.deliveredSales),
+    writtenProgress: progress(snapWritten, goals.written),
+    writtenRemaining: remaining(snapWritten, goals.written),
+    writtenRequiredDailyAverage: requiredDaily(snapWritten, goals.written, daysLeft),
+    deliveredProgress: progress(nwdsrDelivered, goals.delivered),
+    deliveredRemaining: remaining(nwdsrDelivered, goals.delivered),
+    deliveredRequiredDailyAverage: requiredDaily(nwdsrDelivered, goals.delivered, daysLeft),
+    stretchWrittenProgress: progress(snapWritten, goals.stretchWritten),
+    stretchWrittenRemaining: remaining(snapWritten, goals.stretchWritten),
+    stretchDeliveredProgress: progress(nwdsrDelivered, goals.stretchDelivered),
+    stretchDeliveredRemaining: remaining(nwdsrDelivered, goals.stretchDelivered),
     dailySales,
     monthToDate,
     storeDaily,
@@ -578,15 +631,18 @@ export function buildStoreDashboard(
     paceNote: PACE_NOTE,
     salesTeam: team.cards,
     negativeWrittenDays: negativeWrittenDays(snapshots, storeStart, storeEnd),
-    daysRemaining:
-      remainingOperatingDays === null
-        ? missing('Not Available')
-        : { kind: 'value', value: remainingOperatingDays, unit: 'count' },
-    todayWrittenTarget: requiredDaily(snapWritten, storeOperatingPeriod.managementGoals.writtenSales, remainingOperatingDays),
-    todayDeliveredTarget: requiredDaily(nwdsrDelivered, storeOperatingPeriod.managementGoals.deliveredSales, remainingOperatingDays),
+    daysRemaining: { kind: 'value', value: daysLeft, unit: 'count' },
+    todayWrittenTarget: requiredDaily(snapWritten, goals.written, daysLeft),
+    todayDeliveredTarget: requiredDaily(nwdsrDelivered, goals.delivered, daysLeft),
     weekWrittenTarget: missing('Not Available'),
     weekDeliveredTarget: missing('Not Available'),
-    projectedWritten: missing('Not Available'),
-    projectedDelivered: missing('Not Available'),
+    projectedWritten: dollarOrMissing(projectedMonthEnd(verifiedWrittenDays.length > 0 ? verifiedWrittenTotal : null, verifiedWrittenDays.length, openDates.length)),
+    projectedDelivered: dollarOrMissing(projectedMonthEnd(verifiedDeliveredDays.length > 0 ? verifiedDeliveredTotal : null, verifiedDeliveredDays.length, openDates.length)),
+    storePeriodLabel: rangeLabel(storePeriod),
+    individualPeriodLabel: rangeLabel(individualPeriod),
+    officialWrittenGoal: goals.written,
+    officialDeliveredGoal: goals.delivered,
+    stretchWrittenGoal: goals.stretchWritten,
+    stretchDeliveredGoal: goals.stretchDelivered,
   };
 }

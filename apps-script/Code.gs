@@ -14,7 +14,7 @@ var ROUTES_ = {
 
 function doGet() {
   var page = HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle("Kane's Management Command Center")
+    .setTitle("Kane's Store 17 Command Center")
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   var frameMode = HtmlService.XFrameOptionsMode && HtmlService.XFrameOptionsMode.DENY;
   if (frameMode) page.setXFrameOptionsMode(frameMode);

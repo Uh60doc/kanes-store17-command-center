@@ -24,8 +24,8 @@ function moneyText(figure: Figure): string {
   return formatFigure(figure);
 }
 
-function percentOfGoal(figure: Figure, goal: number): string {
-  if (figure.kind !== 'value') return 'Not Available';
+function percentOfGoal(figure: Figure, goal: number | null): string {
+  if (figure.kind !== 'value' || goal === null) return 'Not Available';
   return `${(figure.value * 100).toFixed(1)}% of ${formatMoney(goal)} goal`;
 }
 
@@ -97,11 +97,14 @@ function TrendChart({ model }: { model: StoreDashboardModel }) {
 
 function DashboardBody({ model }: { model: StoreDashboardModel }) {
   const now = useOfficeClock();
-  const goals = storeOperatingPeriod.managementGoals;
-  const stretch = storeOperatingPeriod.corporateStretch;
-  const beddingTone = tone(model.beddingPercentage, goals.beddingMinimum);
-  const closingTone = tone(model.closingRatio, goals.closingRatioTarget);
-  const attachmentTone = tone(model.storeAttachment, goals.storeAttachmentTarget);
+  const writtenGoal = model.officialWrittenGoal;
+  const deliveredGoal = model.officialDeliveredGoal;
+  const beddingGoal = storeOperatingPeriod.managementGoals.beddingMinimum;
+  const closingGoal = storeOperatingPeriod.managementGoals.closingRatioTarget;
+  const attachmentGoal = storeOperatingPeriod.managementGoals.storeAttachmentTarget;
+  const beddingTone = tone(model.beddingPercentage, beddingGoal);
+  const closingTone = tone(model.closingRatio, closingGoal);
+  const attachmentTone = tone(model.storeAttachment, attachmentGoal);
   const rankedTeam = [...model.salesTeam].sort(
     (left, right) => (right.writtenSales ?? Number.NEGATIVE_INFINITY) - (left.writtenSales ?? Number.NEGATIVE_INFINITY),
   );
@@ -129,35 +132,35 @@ function DashboardBody({ model }: { model: StoreDashboardModel }) {
           <h2><i className="cc-ico money" /> SNAP Written</h2>
           <p className="cc-value">{moneyText(model.snapWritten)}</p>
           <div className="cc-bar"><span style={{ width: model.writtenProgress.kind === 'value' ? `${model.writtenProgress.value * 100}%` : '0%' }} /></div>
-          <p>{percentOfGoal(model.writtenProgress, goals.writtenSales)}</p>
+          <p>{percentOfGoal(model.writtenProgress, writtenGoal)}</p>
           <p className="cc-need">{moneyText(model.writtenRemaining)} still needed</p>
         </article>
         <article className="cc-card" data-metric="nwdsr-delivered">
           <h2><i className="cc-ico truck" /> NWDSR Delivered</h2>
           <p className="cc-value">{moneyText(model.nwdsrDelivered)}</p>
           <div className="cc-bar delivered"><span style={{ width: model.deliveredProgress.kind === 'value' ? `${model.deliveredProgress.value * 100}%` : '0%' }} /></div>
-          <p>{percentOfGoal(model.deliveredProgress, goals.deliveredSales)}</p>
+          <p>{percentOfGoal(model.deliveredProgress, deliveredGoal)}</p>
           <p className="cc-need">{moneyText(model.deliveredRemaining)} still needed</p>
         </article>
         <article className="cc-card" data-metric="bedding-percentage">
           <h2><i className="cc-ico bed" /> Bedding</h2>
           <p className={`cc-value ${beddingTone}`}>{formatFigure(model.beddingPercentage)}</p>
           {beddingTone === 'good' ? <span className="cc-badge good">On track</span> : beddingTone === 'muted' ? <span className="cc-badge">N/A</span> : null}
-          <p>Goal {formatPercent(goals.beddingMinimum)}</p>
+          <p>Goal {formatPercent(beddingGoal)}</p>
           <p className="cc-note">{model.beddingPeriod ?? 'Bedding report not on file'}</p>
         </article>
         <article className="cc-card" data-metric="closing-ratio">
           <h2><i className="cc-ico target" /> Closing ratio</h2>
           <p className={`cc-value ${closingTone}`}>{formatFigure(model.closingRatio)}</p>
           {closingTone === 'muted' ? <span className="cc-badge">N/A</span> : closingTone === 'good' ? <span className="cc-badge good">On track</span> : null}
-          <p>Goal {formatPercent(goals.closingRatioTarget)}</p>
+          <p>Goal {formatPercent(closingGoal)}</p>
           <p className="cc-note">Needs NWDSR closed customers and location opportunities for the same store month.</p>
         </article>
         <article className="cc-card" data-metric="store-attachment">
           <h2><i className="cc-ico link" /> Store attachment</h2>
           <p className={`cc-value ${attachmentTone}`}>{formatFigure(model.storeAttachment)}</p>
           {attachmentTone === 'muted' ? <span className="cc-badge">N/A</span> : attachmentTone === 'good' ? <span className="cc-badge good">On track</span> : null}
-          <p>Goal {formatPercent(goals.storeAttachmentTarget)}</p>
+          <p>Goal {formatPercent(attachmentGoal)}</p>
         </article>
       </section>
 
@@ -171,19 +174,20 @@ function DashboardBody({ model }: { model: StoreDashboardModel }) {
       <section className="cc-mid">
         <article className="cc-card">
           <h2>Still needed this month</h2>
-          <p className="cc-note">Imported through {model.importedThrough ?? 'Not Available'} · {storeOperatingPeriod.rangeDisplay}</p>
+          <p className="cc-note">Imported through {model.importedThrough ?? 'Not Available'} · Store {model.storePeriodLabel}</p>
           <div className="cc-split">
             <div>
               <span>Written still needed</span>
               <strong>{moneyText(model.writtenRemaining)}</strong>
-              <small>of {formatMoney(goals.writtenSales)}</small>
+              <small>{writtenGoal === null ? 'No official budget on file' : `of ${formatMoney(writtenGoal)}`}</small>
             </div>
             <div>
               <span>Delivered still needed</span>
               <strong>{moneyText(model.deliveredRemaining)}</strong>
-              <small>of {formatMoney(goals.deliveredSales)}</small>
+              <small>{deliveredGoal === null ? 'No official budget on file' : `of ${formatMoney(deliveredGoal)}`}</small>
             </div>
           </div>
+          <p className="cc-note">Month-end written projection {formatFigure(model.projectedWritten)}. Delivered projection {formatFigure(model.projectedDelivered)}. {model.paceNote}</p>
         </article>
         <article className="cc-card">
           <h2>Today and this week</h2>
@@ -196,9 +200,9 @@ function DashboardBody({ model }: { model: StoreDashboardModel }) {
         </article>
         <article className="cc-card stretch" data-metric="corporate-stretch">
           <h2>Corporate stretch</h2>
-          <p><span>Written</span> <strong>{formatMoney(stretch.writtenSales)}</strong></p>
+          <p><span>Written</span> <strong>{model.stretchWrittenGoal === null ? 'Not Available' : formatMoney(model.stretchWrittenGoal)}</strong></p>
           <p className="cc-note">{formatFigure(model.stretchWrittenProgress)} of stretch · {formatFigure(model.stretchWrittenRemaining)} left</p>
-          <p><span>Delivered</span> <strong>{formatMoney(stretch.deliveredSales)}</strong></p>
+          <p><span>Delivered</span> <strong>{model.stretchDeliveredGoal === null ? 'Not Available' : formatMoney(model.stretchDeliveredGoal)}</strong></p>
           <p className="cc-note">{formatFigure(model.stretchDeliveredProgress)} of stretch · {formatFigure(model.stretchDeliveredRemaining)} left</p>
         </article>
       </section>

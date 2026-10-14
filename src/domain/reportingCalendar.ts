@@ -78,6 +78,67 @@ export function inPeriod(isoDate: string, period: Pick<ReportingPeriod, 'start' 
   return isoDate >= period.start && isoDate <= period.end;
 }
 
+function addDays(isoDate: string, days: number): string {
+  const { year, month, day } = parts(isoDate);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/** Every calendar date from the period start through the period end, inclusive. */
+export function datesInPeriod(period: Pick<ReportingPeriod, 'start' | 'end'>): string[] {
+  const dates: string[] = [];
+  let cursor = period.start;
+  while (cursor <= period.end) {
+    dates.push(cursor);
+    cursor = addDays(cursor, 1);
+  }
+  return dates;
+}
+
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const;
+
+/** Readable range. Same-month periods stay in one month name. Cross-year periods keep both years. */
+export function rangeLabel(period: Pick<ReportingPeriod, 'start' | 'end'>): string {
+  const start = parts(period.start);
+  const end = parts(period.end);
+  const startMonth = MONTH_NAMES[(start.month || 1) - 1] ?? '';
+  const endMonth = MONTH_NAMES[(end.month || 1) - 1] ?? '';
+  if (start.year === end.year && start.month === end.month) {
+    return `${startMonth} ${start.day}–${end.day}, ${start.year}`;
+  }
+  if (start.year === end.year) return `${startMonth} ${start.day}–${endMonth} ${end.day}, ${start.year}`;
+  return `${startMonth} ${start.day}, ${start.year}–${endMonth} ${end.day}, ${end.year}`;
+}
+
+/**
+ * Selling days still left in a store period.
+ * Every date counts, including today when today falls in the period,
+ * unless that date was explicitly marked closed.
+ * An empty closure list means the whole span is open. It does not mean zero days.
+ */
+export function operatingDaysRemaining(
+  period: Pick<ReportingPeriod, 'start' | 'end'>,
+  today: string,
+  closedDates: readonly string[] = [],
+): number {
+  const closed = new Set(closedDates);
+  return datesInPeriod(period).filter((date) => date >= today && date <= period.end && !closed.has(date)).length;
+}
+
 /** Copies the rows whose own dates fall in the category period. The input list is left unchanged. */
 export function filterByCategory<T>(
   rows: readonly T[],

@@ -214,7 +214,7 @@ await writeTab(token, spreadsheetId, 'CC_AssociateDays', [associateHeader, ...as
 await writeTab(token, spreadsheetId, 'CC_People', people);
 await writeTab(token, spreadsheetId, 'CC_Metrics', metrics);
 await writeTab(token, spreadsheetId, 'CC_Imports', [importHeader, ...importMap.values()]);
-await writeTab(token, spreadsheetId, 'CC_SellingDays', [['date', 'selling'], ['', 'Mark YES on each remaining selling day. An empty calendar does not mean zero days.']]);
+await writeTab(token, spreadsheetId, 'CC_SellingDays', [['date', 'selling'], ['', 'Every store day is open unless this tab marks the date NO or closed. Do not list the open days. This tab does not store the monthly budget.']]);
 await writeTab(token, spreadsheetId, 'CC_Health', [
   ['key', 'value'],
   ['status', status],
@@ -231,8 +231,8 @@ await writeTab(token, spreadsheetId, 'CC_Rollup', [
   ['nwdsr_delivered', delivered ?? '', 'Sum of CC_Daily nwdsr_delivered. Blank cells are skipped.'],
   ['written_remaining', writtenPace.remaining ?? '', 'Written goal minus snap_written. The goal itself is not changed.'],
   ['delivered_remaining', deliveredPace.remaining ?? '', 'Delivered goal minus nwdsr_delivered. The goal itself is not changed.'],
-  ['written_pace', '', 'Blank until CC_SellingDays lists the remaining selling days.'],
-  ['delivered_pace', '', 'Blank until CC_SellingDays lists the remaining selling days.'],
+  ['written_pace', '', 'Calculated at read time from verified written sales and the generated store calendar. The written goal is not changed.'],
+  ['delivered_pace', '', 'Calculated at read time from verified delivered sales and the generated store calendar. The delivered goal is not changed.'],
 ]);
 
 const sheet1 = await readTab(token, spreadsheetId, 'Sheet1');

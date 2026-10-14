@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  datesInPeriod,
   filterByCategory,
   individualPeriodContaining,
   lastCalendarDay,
+  operatingDaysRemaining,
   periodFor,
+  rangeLabel,
   storePeriodContaining,
 } from './reportingCalendar.ts';
 
@@ -116,4 +119,33 @@ test('each calendar filters the same daily records without changing them', () =>
   );
   assert.equal(records.length, 3);
   assert.equal(records[0]?.amount, 4);
+});
+
+test('every future month gets both calendars, and a day is open unless it is marked closed', () => {
+  const novemberStore = periodFor('store', 2026, 11);
+  const novemberIndividual = periodFor('individual', 2026, 11);
+  assert.deepEqual([novemberStore.start, novemberStore.end], ['2026-11-02', '2026-12-01']);
+  assert.deepEqual([novemberIndividual.start, novemberIndividual.end], ['2026-11-01', '2026-11-30']);
+  assert.equal(rangeLabel(novemberStore), 'November 2–December 1, 2026');
+  assert.equal(rangeLabel(novemberIndividual), 'November 1–30, 2026');
+
+  const juneStore = periodFor('store', 2027, 6);
+  const juneIndividual = periodFor('individual', 2027, 6);
+  assert.deepEqual([juneStore.start, juneStore.end], ['2027-06-02', '2027-07-01']);
+  assert.deepEqual([juneIndividual.start, juneIndividual.end], ['2027-06-01', '2027-06-30']);
+  assert.equal(operatingDaysRemaining(juneStore, '2027-06-02'), 30);
+
+  const octoberStore = periodFor('store', 2026, 10);
+  const octoberIndividual = periodFor('individual', 2026, 10);
+  const storeDates = datesInPeriod(octoberStore);
+  const individualDates = datesInPeriod(octoberIndividual);
+  assert.equal(storeDates.includes('2026-10-01'), false);
+  assert.equal(storeDates.includes('2026-11-01'), true);
+  assert.equal(individualDates.includes('2026-10-01'), true);
+  assert.equal(individualDates.includes('2026-11-01'), false);
+  assert.equal(operatingDaysRemaining(octoberStore, '2026-10-14'), 19);
+  assert.equal(operatingDaysRemaining(octoberStore, '2026-11-01'), 1);
+  assert.equal(operatingDaysRemaining(octoberStore, '2026-11-02'), 0);
+  assert.equal(operatingDaysRemaining(octoberStore, '2026-10-14', ['2026-10-15']), 18);
+  assert.equal(operatingDaysRemaining(octoberStore, '2026-10-14', ['2026-10-14', '2026-11-01']), 17);
 });

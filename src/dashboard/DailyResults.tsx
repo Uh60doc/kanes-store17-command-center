@@ -1,4 +1,3 @@
-import { storeOperatingPeriod } from '../config/periods.ts';
 import { individualPeriodContaining, storePeriodContaining } from '../domain/reportingCalendar.ts';
 import { formatMoney } from './model.ts';
 import { useDashboardModel } from './useDashboardModel.ts';
@@ -14,7 +13,7 @@ export function DailyResults() {
         <div>
           <p className="eyebrow">Store operating days</p>
           <h1>Daily results</h1>
-          <p className="location">{storeOperatingPeriod.rangeDisplay}</p>
+          <p className="location">Store {model.storePeriodLabel}</p>
         </div>
       </header>
       <main className="page">

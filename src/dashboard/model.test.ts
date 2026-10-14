@@ -2,10 +2,20 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { storeOperatingPeriod } from '../config/periods.ts';
 import { moneyFromCell } from '../domain/money.ts';
-import { buildStoreDashboard } from './model.ts';
+import { buildStoreDashboard, type DashboardClock } from './model.ts';
 import type { ReportSnapshot } from '../import/types.ts';
 import type { PerqEvidence } from '../reference/perqReference.ts';
 
+const octoberClock: DashboardClock = { asOf: '2026-10-14' };
+
+function octoberDashboard(
+  snapshots: readonly ReportSnapshot[],
+  reference: PerqEvidence | null = null,
+  issues: readonly string[] = [],
+  clock: DashboardClock = octoberClock,
+) {
+  return buildStoreDashboard(snapshots, reference, issues, clock);
+}
 function snap(overrides: Partial<ReportSnapshot>): ReportSnapshot {
   return {
     id: 'id',
@@ -39,7 +49,7 @@ test('a totals label in front of an amount still reads the amount', () => {
 });
 
 test('the store headline uses the cumulative report, and the daily chart uses single days', () => {
-  const model = buildStoreDashboard([
+  const model = octoberDashboard([
     snap({ id: 'day', sha256: 'day', metrics: { writtenSales: 10 }, daily: [{ date: '2026-10-02', amount: 10 }] }),
     snap({
       id: 'month',
@@ -58,7 +68,7 @@ test('the store headline uses the cumulative report, and the daily chart uses si
 });
 
 test('October 1 stays on the individual calendar and November 1 stays on the store calendar', () => {
-  const model = buildStoreDashboard([
+  const model = octoberDashboard([
     snap({ id: 'oct1', sha256: 'oct1', periodStart: '2026-10-01', periodEnd: '2026-10-01', metrics: { writtenSales: 4 }, daily: [{ date: '2026-10-01', amount: 4 }] }),
     snap({ id: 'oct2', sha256: 'oct2', metrics: { writtenSales: 10 }, daily: [{ date: '2026-10-02', amount: 10 }] }),
     snap({ id: 'nov1', sha256: 'nov1', periodStart: '2026-11-01', periodEnd: '2026-11-01', metrics: { writtenSales: 7 }, daily: [{ date: '2026-11-01', amount: 7 }] }),
@@ -104,7 +114,7 @@ function locationSnapshot(start: string, end: string, total: number, finalMonth:
 
 test('a shorter PERQ window is not the store closing denominator', () => {
   const perq = locationSnapshot('2026-10-02', '2026-10-31', 10, false);
-  const model = buildStoreDashboard(
+  const model = octoberDashboard(
     [
       snap({
         id: 'delivered',
@@ -123,7 +133,7 @@ test('a shorter PERQ window is not the store closing denominator', () => {
 });
 
 test('contiguous single days replace an earlier cumulative snapshot', () => {
-  const model = buildStoreDashboard([
+  const model = octoberDashboard([
     snap({ id: 'day2', sha256: 'day2', metrics: { writtenSales: 10 }, daily: [{ date: '2026-10-02', amount: 10 }] }),
     snap({
       id: 'day3',
@@ -146,12 +156,73 @@ test('contiguous single days replace an earlier cumulative snapshot', () => {
   if (model.snapWritten.kind === 'value') assert.equal(model.snapWritten.value, 14);
   assert.equal(model.writtenRemaining.kind, 'value');
   if (model.writtenRemaining.kind === 'value') assert.equal(model.writtenRemaining.value, 400_000 - 14);
-  assert.equal(model.daysRemaining.kind, 'missing');
+  assert.equal(storeOperatingPeriod.managementGoals.writtenSales, 400_000);
+  assert.equal(model.daysRemaining.kind, 'value');
+  if (model.daysRemaining.kind === 'value') assert.equal(model.daysRemaining.value, 19);
+  assert.equal(model.officialWrittenGoal, 400_000);
   assert.equal(model.weekWrittenTarget.kind, 'missing');
+  const closed = octoberDashboard(
+    [
+      snap({ id: 'day2', sha256: 'day2', metrics: { writtenSales: 10 }, daily: [{ date: '2026-10-02', amount: 10 }] }),
+      snap({
+        id: 'day3',
+        sha256: 'day3',
+        periodStart: '2026-10-03',
+        periodEnd: '2026-10-03',
+        metrics: { writtenSales: 4 },
+        daily: [{ date: '2026-10-03', amount: 4 }],
+      }),
+    ],
+    null,
+    [],
+    { asOf: '2026-10-14', closedDates: ['2026-10-15'] },
+  );
+  if (closed.daysRemaining.kind === 'value') assert.equal(closed.daysRemaining.value, 18);
+  assert.equal(closed.officialWrittenGoal, 400_000);
+});
+
+test('a later month does not inherit the October budget', () => {
+  const model = buildStoreDashboard(
+    [snap({ id: 'oct2', sha256: 'oct2', metrics: { writtenSales: 10 }, daily: [{ date: '2026-10-02', amount: 10 }] })],
+    null,
+    [],
+    { asOf: '2026-11-02' },
+  );
+  assert.equal(model.storePeriodLabel, 'November 2–December 1, 2026');
+  assert.equal(model.individualPeriodLabel, 'November 1–30, 2026');
+  assert.equal(model.officialWrittenGoal, null);
+  assert.equal(model.officialDeliveredGoal, null);
+  assert.equal(model.todayWrittenTarget.kind, 'missing');
+  assert.equal(model.snapWritten.kind, 'missing');
+  assert.equal(storeOperatingPeriod.managementGoals.writtenSales, 400_000);
+  if (model.daysRemaining.kind === 'value') assert.equal(model.daysRemaining.value, 30);
+});
+
+test('November 1 stays on the October store calendar and opens the November salesperson calendar', () => {
+  const model = octoberDashboard(
+    [
+      snap({ id: 'oct1', sha256: 'oct1', periodStart: '2026-10-01', periodEnd: '2026-10-01', metrics: { writtenSales: 4 }, daily: [{ date: '2026-10-01', amount: 4 }] }),
+      snap({ id: 'nov1', sha256: 'nov1', periodStart: '2026-11-01', periodEnd: '2026-11-01', metrics: { writtenSales: 7 }, daily: [{ date: '2026-11-01', amount: 7 }] }),
+    ],
+    null,
+    [],
+    { asOf: '2026-11-01' },
+  );
+  assert.equal(model.storePeriodLabel, 'October 2–November 1, 2026');
+  assert.equal(model.individualPeriodLabel, 'November 1–30, 2026');
+  assert.deepEqual(
+    model.storeDaily.map((row) => row.date),
+    ['2026-11-01'],
+  );
+  assert.deepEqual(
+    model.individualDaily.map((row) => row.date),
+    ['2026-11-01'],
+  );
+  assert.equal(model.storeDaily.some((row) => row.date === '2026-10-01'), false);
 });
 
 test('October 2 negative written sales stay negative and keep every printed line', () => {
-  const model = buildStoreDashboard([
+  const model = octoberDashboard([
     snap({
       id: 'oct2',
       sha256: 'oct2',
@@ -182,7 +253,7 @@ test('October 2 negative written sales stay negative and keep every printed line
 });
 
 test('manager and unrecognized written lines stay out of the salesperson cards', () => {
-  const model = buildStoreDashboard([
+  const model = octoberDashboard([
     snap({
       id: 'lines',
       sha256: 'lines',
@@ -204,7 +275,7 @@ test('manager and unrecognized written lines stay out of the salesperson cards',
 
 test('closing ratio uses the full store month only when both inputs share it', () => {
   const perq = locationSnapshot('2026-10-02', '2026-11-01', 50, true);
-  const model = buildStoreDashboard(
+  const model = octoberDashboard(
     [
       snap({
         id: 'delivered',

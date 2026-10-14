@@ -80,33 +80,120 @@ function percentText_(value) {
   return (Number(value) * 100).toFixed(1) + '%';
 }
 
-function sellingLeft_(today, periodEnd) {
-  var days = sheet_('CC_SellingDays').map(function (row) {
-    return { date: isoDate_(row.date), selling: /^y(es)?|true|1$/i.test(String(row.selling || '')) };
-  }).filter(function (row) { return row.date; });
-  if (!days.length) return null;
-  return days.filter(function (day) { return day.selling && day.date >= today && day.date <= periodEnd; }).length;
+function pad2_(value) {
+  return (value < 10 ? '0' : '') + value;
+}
+
+function isoParts_(iso) {
+  var parts = String(iso || '').split('-');
+  return { year: Number(parts[0]), month: Number(parts[1]), day: Number(parts[2]) };
+}
+
+function lastCalendarDay_(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** Store month: the 2nd through the 1st of the next month. Salesperson month: the 1st through the last day. */
+function periodFor_(category, year, month) {
+  if (category === 'individual') {
+    return {
+      category: 'individual',
+      year: year,
+      month: month,
+      start: year + '-' + pad2_(month) + '-01',
+      end: year + '-' + pad2_(month) + '-' + pad2_(lastCalendarDay_(year, month)),
+    };
+  }
+  var nextMonth = month === 12 ? 1 : month + 1;
+  var nextYear = month === 12 ? year + 1 : year;
+  return {
+    category: 'store',
+    year: year,
+    month: month,
+    start: year + '-' + pad2_(month) + '-02',
+    end: nextYear + '-' + pad2_(nextMonth) + '-01',
+  };
+}
+
+function storePeriodContaining_(iso) {
+  var parts = isoParts_(iso);
+  if (parts.day === 1) {
+    var month = parts.month === 1 ? 12 : parts.month - 1;
+    var year = parts.month === 1 ? parts.year - 1 : parts.year;
+    return periodFor_('store', year, month);
+  }
+  return periodFor_('store', parts.year, parts.month);
+}
+
+function individualPeriodContaining_(iso) {
+  var parts = isoParts_(iso);
+  return periodFor_('individual', parts.year, parts.month);
+}
+
+function eachDate_(start, end) {
+  var dates = [];
+  var cursor = start;
+  while (cursor && cursor <= end) {
+    dates.push(cursor);
+    cursor = shiftDate_(cursor, 1);
+  }
+  return dates;
+}
+
+/** A date is closed only when CC_SellingDays says NO, closed, false, or 0. Every other day is open. */
+function closedDates_() {
+  var closed = {};
+  sheet_('CC_SellingDays').forEach(function (row) {
+    var date = isoDate_(row.date);
+    if (!date) return;
+    if (/^(n|no|closed|false|0)$/i.test(String(row.selling || '').trim())) closed[date] = true;
+  });
+  return closed;
+}
+
+function operatingDaysRemaining_(period, today, closed) {
+  var count = 0;
+  eachDate_(period.start, period.end).forEach(function (date) {
+    if (date >= today && date <= period.end && !closed[date]) count += 1;
+  });
+  return count;
+}
+
+function goalForMonth_(config, period, key) {
+  var specific = config[key + '_' + period.year + '-' + pad2_(period.month)];
+  if (specific !== undefined && specific !== '') return numberOrNull_(specific);
+  var configuredStart = isoDate_(config.store_period_start);
+  var configuredEnd = isoDate_(config.store_period_end);
+  if (configuredStart === period.start && configuredEnd === period.end) return numberOrNull_(config[key]);
+  return null;
 }
 
 function pace_(goal, actual, daysLeft) {
-  if (actual === null) return { remaining: null, pace: null };
+  if (actual === null || goal === null || goal === '') return { remaining: null, pace: null };
   var remaining = Math.round((Number(goal) - actual) * 100) / 100;
   if (daysLeft === null || daysLeft <= 0) return { remaining: remaining, pace: null };
   return { remaining: remaining, pace: Math.round((remaining / daysLeft) * 100) / 100 };
 }
 
-function peopleRows_() {
+function peopleRows_(individualStart, individualEnd) {
   var totals = {};
+  var seenAny = {};
   sheet_('CC_AssociateDays').forEach(function (row) {
     if (String(row.role) === 'management' || String(row.role) === 'unknown') return;
     var name = String(row.display_name || '');
-    if (!name || row.amount === '' || row.amount === null) return;
+    if (!name) return;
+    seenAny[name] = true;
+    var date = isoDate_(row.date);
+    if (!date || date < individualStart || date > individualEnd) return;
+    if (row.amount === '' || row.amount === null) return;
     totals[name] = (totals[name] || 0) + Number(row.amount);
   });
   var roster = sheet_('CC_People').filter(function (row) { return String(row.role) !== 'management'; });
   var rows = roster.length ? roster.map(function (row) {
     var name = String(row.name);
-    var written = Object.prototype.hasOwnProperty.call(totals, name) ? Math.round(totals[name] * 100) / 100 : numberOrNull_(row.written);
+    var written = Object.prototype.hasOwnProperty.call(totals, name)
+      ? Math.round(totals[name] * 100) / 100
+      : (seenAny[name] ? null : numberOrNull_(row.written));
     return { name: name, written: written, role: String(row.role || 'associate') };
   }) : Object.keys(totals).map(function (name) {
     return { name: name, written: Math.round(totals[name] * 100) / 100, role: 'associate' };
@@ -133,28 +220,68 @@ function attention_(facts, config, role) {
   return items.slice(0, 8);
 }
 
+function storeCalendar_(facts, period, closed) {
+  var byDate = {};
+  facts.forEach(function (row) {
+    if (row.date >= period.start && row.date <= period.end) byDate[row.date] = row;
+  });
+  return eachDate_(period.start, period.end).map(function (date) {
+    var row = byDate[date];
+    return row || { date: date, snapWritten: null, nwdsrWritten: null, nwdsrDelivered: null, closed: !!closed[date] };
+  });
+}
+
+function verifiedRunRate_(days, field, closed) {
+  var total = 0;
+  var count = 0;
+  days.forEach(function (day) {
+    if (closed[day.date] || day[field] === null) return;
+    total += day[field];
+    count += 1;
+  });
+  if (!count) return null;
+  var openDays = days.filter(function (day) { return !closed[day.date]; }).length;
+  return Math.round(((total / count) * openDays) * 100) / 100;
+}
+
 function home_(payload) {
   var config = config_();
   var facts = dailyFacts_();
-  var start = String(config.store_period_start || '2026-10-02');
-  var end = String(config.store_period_end || '2026-11-01');
   var today = todayNy_();
+  var store = storePeriodContaining_(today);
+  var individual = individualPeriodContaining_(today);
+  var closed = closedDates_();
+  var start = store.start;
+  var end = store.end;
   var yesterday = shiftDate_(today, -1);
+  var days = storeCalendar_(facts, store, closed);
   var snap = sumField_(facts, 'snapWritten', start, end);
   var delivered = sumField_(facts, 'nwdsrDelivered', start, end);
-  var daysLeft = sellingLeft_(today, end);
-  var writtenPace = pace_(config.written_goal, snap, daysLeft);
-  var deliveredPace = pace_(config.delivered_goal, delivered, daysLeft);
+  var writtenGoal = goalForMonth_(config, store, 'written_goal');
+  var deliveredGoal = goalForMonth_(config, store, 'delivered_goal');
+  var daysLeft = operatingDaysRemaining_(store, today, closed);
+  var writtenPace = pace_(writtenGoal, snap, daysLeft);
+  var deliveredPace = pace_(deliveredGoal, delivered, daysLeft);
   var yesterdayRow = facts.filter(function (row) { return row.date === yesterday; })[0] || null;
-  var latest = facts.filter(function (row) { return row.snapWritten !== null; }).map(function (row) { return row.date; }).sort().pop() || '';
+  var latest = facts.filter(function (row) { return row.snapWritten !== null && row.date >= start && row.date <= end; }).map(function (row) { return row.date; }).sort().pop() || '';
   var metrics = {};
   sheet_('CC_Metrics').forEach(function (row) { metrics[String(row.key)] = row; });
   var bedding = metrics.bedding_percent ? numberOrNull_(metrics.bedding_percent.value) : null;
+  var missing = days.filter(function (day) {
+    return day.date < today && !closed[day.date] && (day.snapWritten === null || day.nwdsrDelivered === null);
+  });
+  var attention = attention_(facts, config, payload.session.role);
+  if (missing.length) {
+    attention.unshift(missing.length <= 4
+      ? 'Store reports are incomplete for ' + missing.map(function (day) { return day.date; }).join(', ') + '. Blank is not zero.'
+      : missing.length + ' store days are missing a verified report. Blank is not zero.');
+  }
   return {
     role: payload.session.role,
     version: APP_VERSION_,
     updated: healthValue_('last_calculation') || 'Not Available',
     period: start + ' through ' + end,
+    individualPeriod: individual.start + ' through ' + individual.end,
     today: today,
     yesterday: {
       date: yesterday,
@@ -166,8 +293,8 @@ function home_(payload) {
     month: {
       written: snap,
       delivered: delivered,
-      writtenGoal: Number(config.written_goal),
-      deliveredGoal: Number(config.delivered_goal),
+      writtenGoal: writtenGoal,
+      deliveredGoal: deliveredGoal,
       writtenLeft: writtenPace.remaining,
       deliveredLeft: deliveredPace.remaining,
     },
@@ -175,6 +302,12 @@ function home_(payload) {
       written: writtenPace.pace,
       delivered: deliveredPace.pace,
       daysLeft: daysLeft,
+      goalOnFile: writtenGoal !== null,
+    },
+    projection: {
+      written: verifiedRunRate_(days, 'snapWritten', closed),
+      delivered: verifiedRunRate_(days, 'nwdsrDelivered', closed),
+      note: 'From verified store days only. Missing days are not zero. The official monthly budget is unchanged.',
     },
     bedding: {
       value: bedding,
@@ -183,23 +316,31 @@ function home_(payload) {
     },
     closing: { value: null, goal: Number(config.closing_goal || 0.5) },
     attachment: { value: null, goal: Number(config.attachment_goal || 0.9) },
-    attention: attention_(facts, config, payload.session.role),
-    people: peopleRows_().slice(0, 8),
+    attention: attention.slice(0, 8),
+    people: peopleRows_(individual.start, individual.end).slice(0, 8),
   };
 }
 
 function daily_(payload) {
-  var facts = dailyFacts_();
+  var today = todayNy_();
+  var store = storePeriodContaining_(today);
+  var closed = closedDates_();
   return {
     role: payload.session.role,
-    period: String(config_().store_period_start || '') + ' through ' + String(config_().store_period_end || ''),
+    period: store.start + ' through ' + store.end,
     updated: healthValue_('last_calculation') || 'Not Available',
-    days: facts,
+    days: storeCalendar_(dailyFacts_(), store, closed),
   };
 }
 
 function people_(payload) {
-  return { role: payload.session.role, people: peopleRows_(), updated: healthValue_('last_calculation') || 'Not Available' };
+  var individual = individualPeriodContaining_(todayNy_());
+  return {
+    role: payload.session.role,
+    period: individual.start + ' through ' + individual.end,
+    people: peopleRows_(individual.start, individual.end),
+    updated: healthValue_('last_calculation') || 'Not Available',
+  };
 }
 
 function morning_(payload) {
@@ -209,6 +350,7 @@ function morning_(payload) {
     title: 'Morning meeting',
     date: home.today,
     period: home.period,
+    individualPeriod: home.individualPeriod,
     updated: home.updated,
     yesterday: home.yesterday,
     month: home.month,

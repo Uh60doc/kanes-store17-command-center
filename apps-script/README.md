@@ -1,4 +1,4 @@
-# Kane's Management Command Center
+# Kane's Store 17 Command Center
 
 Google Apps Script web app for Store 17. The spreadsheet `Store 17 Command Center` holds the figures. Gmail on `store17commandcenter@gmail.com` is watched for PDF reports. Managers sign in with a shared password. No paid host is required.
 
@@ -27,7 +27,9 @@ Usernames are `Sales17`, `Store17`, and `Kelly`.
 5. Deploy: `npx @google/clasp deploy --description "v1"` and choose **Execute as: Me** and **Who has access: Anyone**. The custom login, not a hidden URL, protects the figures.
 6. Approve the requested Sheets, Gmail, Drive, and Mail permissions as `store17commandcenter@gmail.com`.
 
-Changing a password in Admin signs that role out. The monthly goals live on `CC_Config` and are not rewritten by the daily pace. Selling days are marked `YES` on `CC_SellingDays`. Until that calendar is filled, today's goal stays Not Available.
+Changing a password in Admin signs that role out. The monthly goals live on `CC_Config` and are not rewritten by the daily pace.
+
+The store month always runs from the 2nd through the 1st of the next month. The salesperson month always runs from the 1st through the last calendar day. Both are generated for whatever month the New York date falls in. October 1 is salesperson-only. November 1 closes the October store month and opens the November salesperson month. Every store day is a selling day unless `CC_SellingDays` marks that date `NO` or `closed`. A blank day is incomplete, not zero.
 
 ## What the owner still has to do
 

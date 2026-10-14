@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { applyDailyAmount, requiredPace, sellingDaysRemaining, sumColumn, type DailyFact } from './facts.ts';
+import { applyDailyAmount, projectedMonthEnd, requiredPace, sellingDaysRemaining, sumColumn, type DailyFact } from './facts.ts';
 import { parseReportText } from './reportText.ts';
 
 const october: DailyFact[] = [
@@ -22,8 +22,8 @@ test('the monthly goal is not replaced when the daily pace changes', () => {
   assert.equal(requiredPace(400_000, 90_594, null).remaining, 309_406);
 });
 
-test('an empty selling calendar is not treated as zero days left', () => {
-  assert.equal(sellingDaysRemaining([], '2026-10-14', '2026-11-01'), null);
+test('an empty closure list counts every remaining store day, including today', () => {
+  assert.equal(sellingDaysRemaining([], '2026-10-14', '2026-10-02', '2026-11-01'), 19);
   assert.equal(
     sellingDaysRemaining(
       [
@@ -32,10 +32,22 @@ test('an empty selling calendar is not treated as zero days left', () => {
         { date: '2026-10-15', selling: false },
       ],
       '2026-10-14',
+      '2026-10-02',
       '2026-11-01',
     ),
-    1,
+    18,
   );
+});
+
+test('a missing day is left out of the projection and the official goal is not an input', () => {
+  const goal = 400_000;
+  assert.equal(projectedMonthEnd(90_000, 10, 31), 279_000);
+  assert.equal(projectedMonthEnd(null, 0, 31), null);
+  assert.equal(goal, 400_000);
+  const pace = requiredPace(goal, 90_000, 19);
+  assert.deepEqual(pace, { remaining: 310_000, pace: 16315.79 });
+  assert.equal(goal, 400_000);
+  assert.deepEqual(requiredPace(null, 90_000, 19), { remaining: null, pace: null });
 });
 
 test('the same file cannot be added twice and a conflicting file does not add onto the day', () => {
