@@ -13,6 +13,8 @@ export interface ParsedReportText {
   end: string;
   singleDay: boolean;
   storeTotal: number;
+  /** Net Written # OF CUST. Delivered reports leave this null. */
+  purchasingCustomers: number | null;
   associates: ParsedAssociateLine[];
 }
 
@@ -49,6 +51,7 @@ export function parseReportText(text: string): ParsedReportText | null {
 
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   let storeTotal: number | null = null;
+  let purchasingCustomers: number | null = null;
   if (reportType === 'SNAP Written') {
     const match = lines
       .map((line) => /17\s*-\s*ORLANDO\s+Totals:\s*(-?\d[\d,]*(?:\.\d+)?)\s+(-?\d[\d,]*(?:\.\d+)?)/i.exec(line))
@@ -56,9 +59,13 @@ export function parseReportText(text: string): ParsedReportText | null {
     storeTotal = match ? moneyToken(match[2] ?? '') : null;
   } else {
     const match = lines
-      .map((line) => /KANE FURNITURE #17\s+Totals:\s*(-?\d[\d,]*(?:\.\d+)?)/i.exec(line))
+      .map((line) => /KANE FURNITURE #17\s+Totals:\s*(-?\d[\d,]*(?:\.\d+)?)(?:\s+(-?\d[\d,]*(?:\.\d+)?))?(?:\s+(-?\d[\d,]*(?:\.\d+)?))?/i.exec(line))
       .find((item) => item !== null);
     storeTotal = match ? moneyToken(match[1] ?? '') : null;
+    if (reportType === 'NWDSR Written' && match?.[3]) {
+      const customers = moneyToken(match[3]);
+      if (customers !== null && customers >= 0 && customers === Math.trunc(customers)) purchasingCustomers = customers;
+    }
   }
   if (storeTotal === null) return null;
 
@@ -74,5 +81,5 @@ export function parseReportText(text: string): ParsedReportText | null {
     }
   }
 
-  return { reportType, start, end, singleDay: start === end, storeTotal, associates };
+  return { reportType, start, end, singleDay: start === end, storeTotal, purchasingCustomers, associates };
 }

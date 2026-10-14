@@ -117,19 +117,42 @@ test('a shorter PERQ window is not the store closing denominator', () => {
   const model = octoberDashboard(
     [
       snap({
-        id: 'delivered',
-        sha256: 'delivered',
-        reportType: 'NWDSR Delivered',
+        id: 'written',
+        sha256: 'written',
+        reportType: 'NWDSR Written',
         periodStart: '2026-10-02',
-        periodEnd: '2026-10-11',
-        metrics: { deliveredSales: 80, closedCustomers: 5 },
+        periodEnd: '2026-11-01',
+        metrics: { writtenSales: 80, writtenCustomers: 20 },
         daily: [],
       }),
     ],
     perq,
   );
   assert.equal(model.closingRatio.kind, 'missing');
+  assert.equal(model.closingCustomers.kind, 'value');
+  if (model.closingCustomers.kind === 'value') assert.equal(model.closingCustomers.value, 20);
+  assert.equal(model.closingOpportunities.kind, 'missing');
   assert.equal(model.perq.windows[0]?.opportunities, 10);
+});
+
+test('delivered customer counts are not the closing numerator', () => {
+  const perq = locationSnapshot('2026-10-02', '2026-11-01', 50, true);
+  const model = octoberDashboard(
+    [
+      snap({
+        id: 'delivered',
+        sha256: 'delivered',
+        reportType: 'NWDSR Delivered',
+        periodStart: '2026-10-02',
+        periodEnd: '2026-11-01',
+        metrics: { deliveredSales: 1, closedCustomers: 20 },
+        daily: [],
+      }),
+    ],
+    perq,
+  );
+  assert.equal(model.closingRatio.kind, 'missing');
+  assert.equal(model.closingCustomers.kind, 'missing');
 });
 
 test('contiguous single days replace an earlier cumulative snapshot', () => {
@@ -273,17 +296,17 @@ test('manager and unrecognized written lines stay out of the salesperson cards',
   assert.equal(model.boardNotes.join(' ').includes('Kelly'), false);
 });
 
-test('closing ratio uses the full store month only when both inputs share it', () => {
+test('closing ratio uses Net Written customers and the full store-month PERQ', () => {
   const perq = locationSnapshot('2026-10-02', '2026-11-01', 50, true);
   const model = octoberDashboard(
     [
       snap({
-        id: 'delivered',
-        sha256: 'delivered',
-        reportType: 'NWDSR Delivered',
+        id: 'written',
+        sha256: 'written',
+        reportType: 'NWDSR Written',
         periodStart: '2026-10-02',
         periodEnd: '2026-11-01',
-        metrics: { deliveredSales: 1, closedCustomers: 20 },
+        metrics: { writtenSales: 1, writtenCustomers: 20 },
         daily: [],
       }),
     ],
@@ -291,6 +314,7 @@ test('closing ratio uses the full store month only when both inputs share it', (
   );
   assert.equal(model.closingRatio.kind, 'value');
   if (model.closingRatio.kind === 'value') assert.equal(model.closingRatio.value, 0.4);
+  assert.equal(model.closingReconciliation, false);
   assert.equal(storeOperatingPeriod.managementGoals.closingRatioTarget, 0.4);
   if (model.closingRatio.kind === 'value') {
     assert.equal(model.closingRatio.value, storeOperatingPeriod.managementGoals.closingRatioTarget);

@@ -88,7 +88,7 @@ function PersonPage({
             <p>Not Available</p>
           </div>
           <p className="detail">
-            Goal {formatPercent(storeOperatingPeriod.managementGoals.closingRatioTarget)}. Needs this associate&apos;s closed customers and opportunities for {periodLabel}. A missing count stays Not Available.
+            Goal {formatPercent(storeOperatingPeriod.managementGoals.closingRatioTarget)}. Needs this associate&apos;s Net Written purchasing customers and PERQ opportunities for {periodLabel}. A missing count stays Not Available.
           </p>
         </article>
       </main>

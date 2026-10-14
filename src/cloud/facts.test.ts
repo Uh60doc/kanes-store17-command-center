@@ -76,9 +76,16 @@ FROM 11-OCT-2026 TO 11-OCT-2026
 KANE FURNITURE #17 Totals: 1,187 99.3 5`);
   assert.equal(delivered?.reportType, 'NWDSR Delivered');
   assert.equal(delivered?.storeTotal, 1187);
+  assert.equal(delivered?.purchasingCustomers, null);
+  const written = parseReportText(`NET WRITTEN STORE SALES RANKING REPORT
+FROM 11-OCT-2026 TO 11-OCT-2026
+KANE FURNITURE #17 Totals: 7,106 88.1 6`);
+  assert.equal(written?.storeTotal, 7106);
+  assert.equal(written?.purchasingCustomers, 6);
   const cumulative = parseReportText(`NET WRITTEN STORE SALES RANKING REPORT
 FROM 02-OCT-2026 TO 11-OCT-2026
 KANE FURNITURE #17 Totals: 93,740 10`);
   assert.equal(cumulative?.singleDay, false);
   assert.equal(cumulative?.storeTotal, 93740);
+  assert.equal(cumulative?.purchasingCustomers, null);
 });

@@ -199,7 +199,7 @@ const configRows: Row[] = [
 const metrics: Row[] = [
   ['key', 'value', 'note'],
   ['bedding_percent', model.beddingPercentage.kind === 'value' ? model.beddingPercentage.value : '', model.beddingPeriod ?? 'Not on file'],
-  ['closing_ratio', '', 'Not Available until closed customers and opportunities share the store month'],
+  ['closing_ratio', '', 'Not Available until Net Written purchasing customers and PERQ opportunities share the same dates'],
   ['store_attachment', '', 'Not Available'],
   ['prior_year_written', '', 'Not Available'],
 ];

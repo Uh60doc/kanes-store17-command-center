@@ -10,6 +10,7 @@ import {
   storePeriodContaining,
 } from '../domain/reportingCalendar.ts';
 import { projectedMonthEnd } from '../cloud/facts.ts';
+import { officialClosing } from '../domain/closingRatio.ts';
 import type { ReportSnapshot } from '../import/types.ts';
 import {
   buildPerqPanel,
@@ -41,6 +42,10 @@ export interface StoreDayView {
   snapWritten: number | null;
   nwdsrWritten: number | null;
   nwdsrDelivered: number | null;
+  purchasingCustomers: number | null;
+  opportunities: number | null;
+  closingRatio: number | null;
+  closingReconciliation: boolean;
   provisional: boolean;
 }
 
@@ -72,6 +77,9 @@ export interface StoreDashboardModel {
   beddingPercentage: Figure;
   storeAttachment: Figure;
   closingRatio: Figure;
+  closingCustomers: Figure;
+  closingOpportunities: Figure;
+  closingReconciliation: boolean;
   writtenProgress: Figure;
   writtenRemaining: Figure;
   writtenRequiredDailyAverage: Figure;
@@ -177,6 +185,10 @@ function percentFigure(value: number): Figure {
   return { kind: 'value', value, unit: 'percent' };
 }
 
+function countFigure(value: number): Figure {
+  return { kind: 'value', value, unit: 'count' };
+}
+
 function readMetric(snapshot: ReportSnapshot | undefined, key: string): number | null {
   if (!snapshot) return null;
   const value = snapshot.metrics[key];
@@ -266,6 +278,25 @@ interface DayAmount {
   amount: number;
   provisional: boolean;
   generatedAt: string;
+}
+
+function singleDayMetric(
+  snapshots: readonly ReportSnapshot[],
+  reportType: ReportSnapshot['reportType'],
+  metric: string,
+  start: string,
+  end: string,
+): Map<string, number> {
+  const days = new Map<string, number>();
+  for (const snapshot of snapshots) {
+    if (snapshot.status !== 'current' || snapshot.reportType !== reportType) continue;
+    if (snapshot.periodStart !== snapshot.periodEnd) continue;
+    if (snapshot.periodStart < start || snapshot.periodStart > end) continue;
+    const value = readMetric(snapshot, metric);
+    if (value === null) continue;
+    days.set(snapshot.periodStart, value);
+  }
+  return days;
 }
 
 function singleDayAmounts(
@@ -487,7 +518,7 @@ export function buildStoreDashboard(
   const goals = goalsForStorePeriod(storePeriod);
   const closedDates = clock.closedDates ?? [];
   const snapWrittenSnapshot = currentOf(snapshots, 'SNAP Written');
-  const nwdsrDeliveredSnapshot = currentOf(snapshots, 'NWDSR Delivered');
+  const nwdsrWrittenSnapshot = currentOf(snapshots, 'NWDSR Written');
   const beddingSnapshot = currentOf(snapshots, 'BSSA Written');
   const perqSnapshot = currentOf(snapshots, 'PERQ');
 
@@ -513,8 +544,6 @@ export function buildStoreDashboard(
   const bedding = readMetric(beddingSnapshot, 'beddingPercentage');
   const attachmentHits = readMetric(snapWrittenSnapshot, 'attachmentHits');
   const attachmentOpportunities = readMetric(snapWrittenSnapshot, 'attachmentOpportunities');
-  const deliveredMatchesStore = periodsMatch(nwdsrDeliveredSnapshot ?? null, storeStart, storeEnd);
-  const closedCustomers = deliveredMatchesStore ? readMetric(nwdsrDeliveredSnapshot, 'closedCustomers') : null;
   const importedPerqMatchesStore = periodsMatch(perqSnapshot ?? null, storeStart, storeEnd);
   const referencePerq = reference ? storeMonthOpportunities(reference, { start: storeStart, end: storeEnd }) : null;
   const perqOpportunities = referencePerq ?? (importedPerqMatchesStore ? readMetric(perqSnapshot, 'opportunities') : null);
@@ -523,10 +552,22 @@ export function buildStoreDashboard(
     referenceIssues,
     { start: storeStart, end: storeEnd },
     { start: individualPeriod.start, end: individualPeriod.end },
-    nwdsrDeliveredSnapshot
-      ? { periodStart: nwdsrDeliveredSnapshot.periodStart, periodEnd: nwdsrDeliveredSnapshot.periodEnd }
+    nwdsrWrittenSnapshot
+      ? { periodStart: nwdsrWrittenSnapshot.periodStart, periodEnd: nwdsrWrittenSnapshot.periodEnd }
       : null,
   );
+  const writtenCustomerDays = singleDayMetric(snapshots, 'NWDSR Written', 'writtenCustomers', storeStart, storeEnd);
+  const elapsedDates = datesInPeriod(storePeriod).filter((date) => date <= asOf && !closed.has(date));
+  const exactWrittenCustomers = periodsMatch(nwdsrWrittenSnapshot ?? null, storeStart, storeEnd)
+    ? readMetric(nwdsrWrittenSnapshot, 'writtenCustomers')
+    : null;
+  const closing = officialClosing({
+    periodCustomers: exactWrittenCustomers,
+    periodOpportunities: perqOpportunities,
+    dates: elapsedDates,
+    customers: writtenCustomerDays,
+    opportunities: new Map<string, number>(),
+  });
 
   const importedAt = snapshots
     .map((item) => item.importedAt)
@@ -551,12 +592,17 @@ export function buildStoreDashboard(
     const snapDay = snapDays.get(date);
     const writtenDay = writtenDays.get(date);
     const deliveredDay = deliveredDays.get(date);
+    const purchasingCustomers = writtenCustomerDays.get(date) ?? null;
     return {
       date,
       amount: snapDay?.amount ?? null,
       snapWritten: snapDay?.amount ?? null,
       nwdsrWritten: writtenDay?.amount ?? null,
       nwdsrDelivered: deliveredDay?.amount ?? null,
+      purchasingCustomers,
+      opportunities: null,
+      closingRatio: null,
+      closingReconciliation: false,
       provisional: Boolean(snapDay?.provisional || writtenDay?.provisional || deliveredDay?.provisional),
     };
   });
@@ -584,8 +630,11 @@ export function buildStoreDashboard(
         : `SNAP Written is incomplete for ${missingWritten.length} store days. Those days are not zero.`,
     );
   }
-  const closingRatioNote =
-    `Closing ratio needs NWDSR closed customers and location opportunities for the same store month, ${rangeLabel(storePeriod)}. That pair is not on file.`;
+  const closingRatioNote = closing.ratio === null
+    ? `Closing ratio is Net Written purchasing customers divided by location Ups + Be Backs for the same dates in ${rangeLabel(storePeriod)}. That pair is not on file, so the ratio is Not Available.`
+    : closing.needsReconciliation
+      ? `Closing ratio is above 100% for ${rangeLabel(storePeriod)} and is flagged for reconciliation.`
+      : `Closing ratio is Net Written purchasing customers divided by location Ups + Be Backs for ${rangeLabel(storePeriod)}.`;
   const boardNotes = [...team.notes];
   if (snapHeadline.provisionalDates.length > 0) {
     boardNotes.push(`Generated the same day, so not a next-day close: ${snapHeadline.provisionalDates.join(', ')}.`);
@@ -604,7 +653,10 @@ export function buildStoreDashboard(
     snapYearOverYearDollars: snapWritten === null || priorSnapWritten === null ? missing('Not Available') : dollars(snapWritten - priorSnapWritten),
     beddingPercentage: bedding === null ? missing('Not Available') : percentFigure(bedding),
     storeAttachment: ratio(attachmentHits, attachmentOpportunities, 'Not Available'),
-    closingRatio: ratio(closedCustomers, perqOpportunities, 'Not Available'),
+    closingRatio: closing.ratio === null ? missing('Not Available') : percentFigure(closing.ratio),
+    closingCustomers: closing.customers === null ? missing('Not Available') : countFigure(closing.customers),
+    closingOpportunities: closing.opportunities === null ? missing('Not Available') : countFigure(closing.opportunities),
+    closingReconciliation: closing.needsReconciliation,
     writtenProgress: progress(snapWritten, goals.written),
     writtenRemaining: remaining(snapWritten, goals.written),
     writtenRequiredDailyAverage: requiredDaily(snapWritten, goals.written, daysLeft),

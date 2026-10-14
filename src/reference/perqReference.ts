@@ -216,7 +216,7 @@ export function buildPerqPanel(
   readIssues: readonly string[],
   store: Pick<ReportingPeriod, 'start' | 'end'>,
   individual: Pick<ReportingPeriod, 'start' | 'end'>,
-  delivered: { periodStart: string; periodEnd: string } | null,
+  written: { periodStart: string; periodEnd: string } | null,
 ): PerqPanel {
   const flags = [...readIssues];
   const team = cardAssociates.map((employee) => ({
@@ -230,7 +230,7 @@ export function buildPerqPanel(
   if (!evidence) {
     flags.unshift('A verified PERQ snapshot for this month is still required.');
     flags.push(
-      `Store closing ratio uses NWDSR closed customers and location Ups + Be Backs for ${displayDay(store.start)} through ${displayDay(store.end)}.`,
+      `Store closing ratio uses Net Written purchasing customers and location Ups + Be Backs for ${displayDay(store.start)} through ${displayDay(store.end)}.`,
     );
     return { loaded: false, windows: [], team, flags };
   }
@@ -354,16 +354,16 @@ export function buildPerqPanel(
     flags.push('These employee snapshots are separate cumulative filters. Their totals are not subtracted into daily opportunities.');
   }
 
-  const deliveredMatches =
-    delivered !== null && delivered.periodStart === store.start && delivered.periodEnd === store.end && fullStore?.is_final_month_end === true;
-  if (!deliveredMatches) {
-    const covered = delivered
-      ? `NWDSR delivered on file covers ${displayDay(delivered.periodStart)} through ${displayDay(delivered.periodEnd)}.`
-      : 'NWDSR delivered closed customers are not on file for the store month.';
-    flags.push(`${covered} Store closing ratio stays Not Available until the closed-customer count and the location PERQ cover ${displayDay(store.start)} through ${displayDay(store.end)}.`);
+  const writtenMatches =
+    written !== null && written.periodStart === store.start && written.periodEnd === store.end && fullStore?.is_final_month_end === true;
+  if (!writtenMatches) {
+    const covered = written
+      ? `Net Written on file covers ${displayDay(written.periodStart)} through ${displayDay(written.periodEnd)}.`
+      : 'Net Written purchasing customers are not on file for the full store month.';
+    flags.push(`${covered} Store closing ratio stays Not Available until that customer count and the location PERQ cover ${displayDay(store.start)} through ${displayDay(store.end)}.`);
   }
   flags.push(
-    `Individual closing ratios use each associate's closed customers for ${displayDay(individual.start)} through ${displayDay(individual.end)}. Those counts are still required.`,
+    `Individual closing ratios use each associate's Net Written purchasing customers for ${displayDay(individual.start)} through ${displayDay(individual.end)}. Those counts are still required.`,
   );
 
   return { loaded: true, windows, team, flags };

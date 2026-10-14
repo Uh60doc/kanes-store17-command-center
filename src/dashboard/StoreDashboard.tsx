@@ -103,7 +103,7 @@ function DashboardBody({ model }: { model: StoreDashboardModel }) {
   const closingGoal = storeOperatingPeriod.managementGoals.closingRatioTarget;
   const attachmentGoal = storeOperatingPeriod.managementGoals.storeAttachmentTarget;
   const beddingTone = tone(model.beddingPercentage, beddingGoal);
-  const closingTone = tone(model.closingRatio, closingGoal);
+  const closingTone = model.closingReconciliation ? 'bad' : tone(model.closingRatio, closingGoal);
   const attachmentTone = tone(model.storeAttachment, attachmentGoal);
   const rankedTeam = [...model.salesTeam].sort(
     (left, right) => (right.writtenSales ?? Number.NEGATIVE_INFINITY) - (left.writtenSales ?? Number.NEGATIVE_INFINITY),
@@ -152,9 +152,10 @@ function DashboardBody({ model }: { model: StoreDashboardModel }) {
         <article className="cc-card" data-metric="closing-ratio">
           <h2><i className="cc-ico target" /> Closing ratio</h2>
           <p className={`cc-value ${closingTone}`}>{formatFigure(model.closingRatio)}</p>
-          {closingTone === 'muted' ? <span className="cc-badge">N/A</span> : closingTone === 'good' ? <span className="cc-badge good">On track</span> : null}
+          {model.closingReconciliation ? <span className="cc-badge">Reconcile</span> : closingTone === 'muted' ? <span className="cc-badge">N/A</span> : closingTone === 'good' ? <span className="cc-badge good">On track</span> : null}
           <p>Goal {formatPercent(closingGoal)}</p>
-          <p className="cc-note">Needs NWDSR closed customers and location opportunities for the same store month.</p>
+          <p>Purchasing customers {formatFigure(model.closingCustomers)} · Opportunities {formatFigure(model.closingOpportunities)}</p>
+          <p className="cc-note">{model.closingRatioNote}</p>
         </article>
         <article className="cc-card" data-metric="store-attachment">
           <h2><i className="cc-ico link" /> Store attachment</h2>

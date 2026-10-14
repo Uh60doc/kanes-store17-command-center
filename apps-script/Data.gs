@@ -245,13 +245,14 @@ function scoreboard_(config, snap, delivered, writtenGoal, deliveredGoal, writte
   };
 }
 
-function kpiRow_(name, written, delivered, goal, unit, note) {
-  return { name: name, written: written, delivered: delivered, goal: goal, unit: unit, note: note || '' };
+function kpiRow_(name, written, delivered, goal, unit, note, reconcile) {
+  return { name: name, written: written, delivered: delivered, goal: goal, unit: unit, note: note || '', reconcile: !!reconcile };
 }
 
-function storeKpis_(config, metrics, bedding) {
+function storeKpis_(config, metrics, bedding, closing) {
   var goals = approvedGoals_(config);
   var beddingNote = metrics.bedding_percent ? String(metrics.bedding_percent.note || '') : '';
+  closing = closing || { customers: null, opportunities: null, ratio: null, reconcile: false, note: '' };
   return [
     kpiRow_('Bedding', bedding, null, goals.bedding, 'percent', beddingNote),
     kpiRow_('Mattress Protectors', null, null, goals.mattress, 'percent', 'Eligible-opportunity attachment is not on file.'),
@@ -262,8 +263,9 @@ function storeKpis_(config, metrics, bedding) {
     kpiRow_('Overall Maintenance', null, null, goals.maintenance, 'percent', ''),
     kpiRow_('Rugs', null, null, goals.rugs, 'count', ''),
     kpiRow_('Average Ticket', null, null, goals.averageTicket, 'dollars', 'Written goal. Delivered average ticket is not on file.'),
-    kpiRow_('Closing Ratio', null, null, goals.closing, 'percent', 'Needs closed customers and customer opportunities for the same store month.'),
-    kpiRow_('Customer Opportunities', null, null, goals.opportunities, 'count', 'A full store-month opportunity count is not on file.'),
+    kpiRow_('Closing Ratio', closing.ratio, null, goals.closing, 'percent', closing.note, closing.reconcile),
+    kpiRow_('Customer Opportunities', closing.opportunities, null, goals.opportunities, 'count', 'Location Ups + Be Backs for the same store dates.'),
+    kpiRow_('Purchasing Customers', closing.customers, null, null, 'count', 'Net Written # OF CUST for the same store dates.'),
   ];
 }
 
@@ -289,20 +291,22 @@ function peopleRows_(individualStart, individualEnd) {
     days[name].push({ date: date, snapWritten: Math.round(Number(row.amount) * 100) / 100 });
   });
   var goals = approvedGoals_(config_());
+  var closingFacts = loadClosing_();
   var roster = sheet_('CC_People').filter(activePerson_);
   var rows = roster.length ? roster.map(function (row) {
     var name = String(row.name);
     var written = Object.prototype.hasOwnProperty.call(totals, name)
       ? Math.round(totals[name] * 100) / 100
       : (seenAny[name] ? null : numberOrNull_(row.written));
-    return personRecord_(name, written, String(row.role || 'associate'), days[name] || [], goals);
+    return personRecord_(name, written, String(row.role || 'associate'), days[name] || [], goals, personClosing_(closingFacts, name, individualStart, individualEnd, goals.closing));
   }) : Object.keys(totals).map(function (name) {
-    return personRecord_(name, Math.round(totals[name] * 100) / 100, 'associate', days[name] || [], goals);
+    return personRecord_(name, Math.round(totals[name] * 100) / 100, 'associate', days[name] || [], goals, personClosing_(closingFacts, name, individualStart, individualEnd, goals.closing));
   });
   return rows;
 }
 
-function personRecord_(name, snapWritten, role, days, goals) {
+function personRecord_(name, snapWritten, role, days, goals, closing) {
+  closing = closing || { customers: null, opportunities: null, ratio: null, reconcile: false, versusGoal: null, note: '', goal: goals.closing };
   return {
     name: name,
     role: role,
@@ -311,6 +315,13 @@ function personRecord_(name, snapWritten, role, days, goals) {
     nwdsrWritten: null,
     nwdsrDelivered: null,
     monthlyGoal: null,
+    purchasingCustomers: closing.customers,
+    opportunities: closing.opportunities,
+    closingRatio: closing.ratio,
+    closingReconcile: closing.reconcile,
+    closingVersus: closing.versusGoal,
+    closingNote: closing.note,
+    closing: closing,
     days: days.sort(function (left, right) { return left.date < right.date ? -1 : 1; }),
     kpis: [
       kpiRow_('Bedding', null, null, goals.bedding, 'percent', ''),
@@ -322,7 +333,7 @@ function personRecord_(name, snapWritten, role, days, goals) {
       kpiRow_('Overall Maintenance', null, null, goals.maintenance, 'percent', ''),
       kpiRow_('Rugs', null, null, goals.rugs, 'count', ''),
       kpiRow_('Average Ticket', null, null, goals.averageTicket, 'dollars', ''),
-      kpiRow_('Closing Ratio', null, null, goals.closing, 'percent', ''),
+      kpiRow_('Closing Ratio', closing.ratio, null, goals.closing, 'percent', closing.note, closing.reconcile),
     ],
   };
 }
@@ -365,6 +376,309 @@ function verifiedRunRate_(days, field, closed) {
   return Math.round(((total / count) * openDays) * 100) / 100;
 }
 
+function closingRatio_(customers, opportunities) {
+  if (customers === null || opportunities === null || Number(opportunities) === 0) return { ratio: null, reconcile: false };
+  var ratio = Math.round((customers / opportunities) * 1000) / 1000;
+  return { ratio: ratio, reconcile: ratio > 1 };
+}
+
+function coverageEnd_(dates, values) {
+  var present = [];
+  var i;
+  for (i = 0; i < dates.length; i += 1) {
+    if (Object.prototype.hasOwnProperty.call(values, dates[i])) present.push(dates[i]);
+  }
+  if (!present.length) return null;
+  var latest = present[present.length - 1];
+  for (i = 0; i < dates.length; i += 1) {
+    if (dates[i] > latest) break;
+    if (!Object.prototype.hasOwnProperty.call(values, dates[i])) return null;
+  }
+  return latest;
+}
+
+function coveredTotal_(dates, values) {
+  var end = coverageEnd_(dates, values);
+  if (end === null) return null;
+  var total = 0;
+  var i;
+  for (i = 0; i < dates.length; i += 1) {
+    if (dates[i] > end) break;
+    total += values[dates[i]];
+  }
+  return total;
+}
+
+function officialClosing_(periodCustomers, periodOpportunities, dates, customers, opportunities) {
+  if (periodCustomers !== null && periodOpportunities !== null) {
+    var periodRatio = closingRatio_(periodCustomers, periodOpportunities);
+    return { customers: periodCustomers, opportunities: periodOpportunities, ratio: periodRatio.ratio, reconcile: periodRatio.reconcile };
+  }
+  var customerEnd = periodCustomers === null ? coverageEnd_(dates, customers) : null;
+  var opportunityEnd = periodOpportunities === null ? coverageEnd_(dates, opportunities) : null;
+  var customerTotal = periodCustomers !== null ? periodCustomers : coveredTotal_(dates, customers);
+  var opportunityTotal = periodOpportunities !== null ? periodOpportunities : coveredTotal_(dates, opportunities);
+  var sameDaily = periodCustomers === null && periodOpportunities === null && customerEnd !== null && customerEnd === opportunityEnd;
+  var computed = sameDaily ? closingRatio_(customerTotal, opportunityTotal) : { ratio: null, reconcile: false };
+  return { customers: customerTotal, opportunities: opportunityTotal, ratio: computed.ratio, reconcile: computed.reconcile };
+}
+
+function versusGoal_(ratio, goal, reconcile) {
+  if (ratio === null || goal === null) return null;
+  if (reconcile || ratio > 1) return 'Reconcile';
+  return ratio >= goal ? 'At or above goal' : 'Below goal';
+}
+
+function closingSheet_() {
+  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var tab = spreadsheet.getSheetByName('CC_Closing');
+  if (tab) return tab;
+  tab = spreadsheet.insertSheet('CC_Closing');
+  tab.getRange(1, 1, 1, 11).setValues([['date', 'scope', 'employee_code', 'display_name', 'customers', 'opportunities', 'period_start', 'period_end', 'source', 'final', 'note']]);
+  return tab;
+}
+
+function upsertClosing_(row) {
+  var tab = closingSheet_();
+  var values = tab.getDataRange().getValues();
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    var same = String(values[r][1]) === row.scope &&
+      String(values[r][2] || '') === String(row.code || '') &&
+      isoDate_(values[r][6]) === row.start &&
+      isoDate_(values[r][7]) === row.end &&
+      String(values[r][8]) === row.source;
+    if (!same) continue;
+    var existingCustomers = numberOrNull_(values[r][4]);
+    var existingOpportunities = numberOrNull_(values[r][5]);
+    if (row.customers !== '' && row.customers !== null && existingCustomers !== null && existingCustomers !== Number(row.customers)) {
+      appendException_('Update Failed', 'Purchasing customers for ' + row.start + ' conflict with the count on file. The existing count was kept.');
+      return 'conflict';
+    }
+    if (row.opportunities !== '' && row.opportunities !== null && existingOpportunities !== null && existingOpportunities !== Number(row.opportunities)) {
+      appendException_('Update Failed', 'Opportunities for ' + (row.code || row.start) + ' conflict with the count on file. The existing count was kept.');
+      return 'conflict';
+    }
+    if (row.customers !== '' && row.customers !== null && existingCustomers === null) tab.getRange(r + 1, 5).setValue(row.customers);
+    if (row.opportunities !== '' && row.opportunities !== null && existingOpportunities === null) tab.getRange(r + 1, 6).setValue(row.opportunities);
+    return 'imported';
+  }
+  tab.appendRow([
+    row.date || '',
+    row.scope,
+    row.code || '',
+    row.name || '',
+    row.customers === null || row.customers === '' ? '' : row.customers,
+    row.opportunities === null || row.opportunities === '' ? '' : row.opportunities,
+    row.start,
+    row.end,
+    row.source,
+    row.final || 'no',
+    row.note || '',
+  ]);
+  return 'imported';
+}
+
+function ensureClosingFacts_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('closing_facts_v1') === 'yes' && sheet_('CC_Closing').length) return;
+  var seeds = [
+    { date: '2026-10-11', scope: 'store', code: '', name: '', customers: 6, opportunities: '', start: '2026-10-11', end: '2026-10-11', source: 'NWDSR Net Written # OF CUST', final: 'yes', note: 'Verified Net Written purchasing customers. The delivered report is not the numerator.' },
+    { date: '2026-10-12', scope: 'store', code: '', name: '', customers: 4, opportunities: '', start: '2026-10-12', end: '2026-10-12', source: 'NWDSR Net Written # OF CUST', final: 'yes', note: 'Verified Net Written purchasing customers.' },
+    { date: '2026-10-13', scope: 'store', code: '', name: '', customers: 4, opportunities: '', start: '2026-10-13', end: '2026-10-13', source: 'NWDSR Net Written # OF CUST', final: 'yes', note: 'Verified Net Written purchasing customers. The delivered report is not the numerator.' },
+    { date: '', scope: 'person', code: 'EMON0904', name: 'Eric Montes Rodriguez', customers: '', opportunities: 32, start: '2026-10-01', end: '2026-10-31', source: 'PERQ Ups + Be Backs', final: 'no', note: 'Interim PERQ for October 1 through October 31. Run time unknown, so this snapshot is not the closing denominator.' },
+    { date: '', scope: 'person', code: 'PGANDH', name: 'Prakash Gandhi', customers: '', opportunities: 31, start: '2026-10-01', end: '2026-10-31', source: 'PERQ Ups + Be Backs', final: 'no', note: 'Interim PERQ for October 1 through October 31. Run time unknown, so this snapshot is not the closing denominator.' },
+    { date: '', scope: 'person', code: 'TNASSI', name: 'Ricky Nassif', customers: '', opportunities: 32, start: '2026-10-01', end: '2026-10-31', source: 'PERQ Ups + Be Backs', final: 'no', note: 'Interim PERQ for Ricky Nassif. Filter October 1 through October 31. Run time unknown, so this snapshot is not the closing denominator.' },
+    { date: '', scope: 'person', code: 'RDELSO', name: 'Renzo Del Solar', customers: '', opportunities: 7, start: '2026-10-01', end: '2026-10-31', source: 'PERQ Ups + Be Backs', final: 'no', note: 'Interim PERQ for October 1 through October 31. Run time unknown, so this snapshot is not the closing denominator.' },
+  ];
+  var i;
+  for (i = 0; i < seeds.length; i += 1) upsertClosing_(seeds[i]);
+  props.setProperty('closing_facts_v1', 'yes');
+}
+
+function readClosing_() {
+  return sheet_('CC_Closing').map(function (row) {
+    return {
+      scope: String(row.scope || ''),
+      code: String(row.employee_code || '').trim(),
+      name: String(row.display_name || '').trim(),
+      customers: numberOrNull_(row.customers),
+      opportunities: numberOrNull_(row.opportunities),
+      start: isoDate_(row.period_start),
+      end: isoDate_(row.period_end),
+      final: String(row.final || '').toLowerCase() === 'yes',
+      note: String(row.note || ''),
+    };
+  }).filter(function (row) { return row.start && row.end; });
+}
+
+function loadClosing_() {
+  try {
+    ensureClosingFacts_();
+    return readClosing_();
+  } catch (error) {
+    try { appendException_('Update Failed', 'Closing counts could not be read. Ratios stay Not Available.'); } catch (ignore) {}
+    return [];
+  }
+}
+
+function personAliases_(name) {
+  var key = String(name || '').toLowerCase();
+  var table = {
+    'eric montes rodriguez': ['emon0904', 'eric montes rodriguez', 'eric montes'],
+    'prakash gandhi': ['pgandh', 'prakash gandhi', 'prakash b gandhi'],
+    'ricky nassif': ['tnassi', 'tnassif', 'ricky nassif', 'tarik nassif', 'ricky (tarik) nassif'],
+    'renzo del solar': ['rdelso', 'renzo del solar', 'renzo delsolar'],
+    'brenda sanchez': ['brenda sanchez'],
+    'caroline amaro': ['caroline amaro'],
+  };
+  return table[key] || [key];
+}
+
+function rowMatchesPerson_(row, name) {
+  var aliases = personAliases_(name);
+  var presented = String(name || '').toLowerCase();
+  if (aliases.indexOf(row.code.toLowerCase()) !== -1 || aliases.indexOf(row.name.toLowerCase()) !== -1) return true;
+  var rowAliases = personAliases_(row.name);
+  return rowAliases.indexOf(presented) !== -1 || (row.code && rowAliases.indexOf(row.code.toLowerCase()) !== -1 && aliases.indexOf(row.code.toLowerCase()) !== -1);
+}
+
+function dailyCountMap_(facts, scope, personName, field) {
+  var map = {};
+  facts.forEach(function (row) {
+    if (row.scope !== scope || row.start !== row.end || row[field] === null) return;
+    if (scope === 'store' && row.code) return;
+    if (scope === 'person' && !rowMatchesPerson_(row, personName)) return;
+    map[row.start] = row[field];
+  });
+  return map;
+}
+
+function periodCount_(facts, scope, personName, start, end, field, finalOnly) {
+  var chosen = null;
+  facts.forEach(function (row) {
+    if (row.scope !== scope || row.start !== start || row.end !== end || row.start === row.end || row[field] === null) return;
+    if (finalOnly && !row.final) return;
+    if (scope === 'store' && row.code) return;
+    if (scope === 'person' && !rowMatchesPerson_(row, personName)) return;
+    if (!chosen || (row.final && !chosen.final)) chosen = row;
+  });
+  return chosen ? chosen[field] : null;
+}
+
+function elapsedDates_(period, today, closed) {
+  var dates = [];
+  eachDate_(period.start, period.end).forEach(function (date) {
+    if (date <= today && !closed[date]) dates.push(date);
+  });
+  return dates;
+}
+
+function storeMonthClosing_(facts, period, today, closed, goal) {
+  var dates = elapsedDates_(period, today, closed);
+  var result = officialClosing_(
+    periodCount_(facts, 'store', '', period.start, period.end, 'customers', false),
+    periodCount_(facts, 'store', '', period.start, period.end, 'opportunities', true),
+    dates,
+    dailyCountMap_(facts, 'store', '', 'customers'),
+    dailyCountMap_(facts, 'store', '', 'opportunities')
+  );
+  var verified = facts.filter(function (row) {
+    return row.scope === 'store' && !row.code && row.start === row.end && row.customers !== null && row.start >= period.start && row.start <= period.end;
+  }).sort(function (left, right) { return left.start < right.start ? -1 : 1; });
+  var note = verified.length
+    ? 'Verified Net Written purchasing customers: ' + verified.map(function (row) { return row.start + ' is ' + row.customers; }).join(', ') + '. A day without a count is Not Available, not zero.'
+    : 'No Net Written purchasing-customer count is on file for this store month.';
+  if (result.opportunities === null) note += ' No location PERQ covers ' + period.start + ' through ' + period.end + '.';
+  if (result.reconcile) note += ' The ratio is above 100% and is flagged for reconciliation.';
+  return {
+    customers: result.customers,
+    opportunities: result.opportunities,
+    ratio: result.ratio,
+    reconcile: result.reconcile,
+    versusGoal: versusGoal_(result.ratio, goal, result.reconcile),
+    note: note,
+  };
+}
+
+function dayClosing_(facts, date, goal) {
+  var customers = null;
+  var opportunities = null;
+  facts.forEach(function (row) {
+    if (row.scope !== 'store' || row.code || row.start !== date || row.end !== date) return;
+    if (row.customers !== null) customers = row.customers;
+    if (row.opportunities !== null) opportunities = row.opportunities;
+  });
+  var computed = closingRatio_(customers, opportunities);
+  var note = '';
+  if (customers === null || opportunities === null) note = 'Purchasing customers and opportunities are not both on file for this day.';
+  if (customers !== null && opportunities === null) note = 'Opportunities for this day are Not Available, so the ratio was not calculated.';
+  if (opportunities !== null && customers === null) note = 'Purchasing customers for this day are Not Available, so the ratio was not calculated.';
+  if (opportunities === 0) note = 'Zero opportunities. The ratio was not divided.';
+  if (computed.reconcile) note = 'Above 100%. Flagged for reconciliation.';
+  return {
+    customers: customers,
+    opportunities: opportunities,
+    ratio: computed.ratio,
+    reconcile: computed.reconcile,
+    versusGoal: versusGoal_(computed.ratio, goal, computed.reconcile),
+    note: note,
+  };
+}
+
+function personClosing_(facts, name, start, end, goal) {
+  var dates = eachDate_(start, end).filter(function (date) { return date <= todayNy_(); });
+  var result = officialClosing_(
+    periodCount_(facts, 'person', name, start, end, 'customers', false),
+    periodCount_(facts, 'person', name, start, end, 'opportunities', true),
+    dates,
+    dailyCountMap_(facts, 'person', name, 'customers'),
+    dailyCountMap_(facts, 'person', name, 'opportunities')
+  );
+  var interim = null;
+  facts.forEach(function (row) {
+    if (row.scope !== 'person' || row.final || row.start !== start || row.end !== end || row.opportunities === null) return;
+    if (!rowMatchesPerson_(row, name)) return;
+    interim = row;
+  });
+  var opportunities = result.opportunities;
+  var note = '';
+  if (opportunities === null && interim) {
+    opportunities = interim.opportunities;
+    note = interim.note;
+  }
+  if (result.customers === null) note += (note ? ' ' : '') + 'Purchasing customers for this associate are not on file. The store customer count is not assigned to this person.';
+  if (opportunities === null) note += (note ? ' ' : '') + 'PERQ opportunities for this associate are not on file. No zero was added.';
+  if (result.reconcile) note += ' Above 100%. Flagged for reconciliation.';
+  return {
+    customers: result.customers,
+    opportunities: opportunities,
+    ratio: result.ratio,
+    reconcile: result.reconcile,
+    versusGoal: versusGoal_(result.ratio, goal, result.reconcile),
+    note: note,
+    goal: goal,
+  };
+}
+
+function withDayClosing_(days, facts, goal) {
+  return days.map(function (day) {
+    var closing = dayClosing_(facts, day.date, goal);
+    return {
+      date: day.date,
+      snapWritten: day.snapWritten,
+      nwdsrWritten: day.nwdsrWritten,
+      nwdsrDelivered: day.nwdsrDelivered,
+      closed: day.closed,
+      purchasingCustomers: closing.customers,
+      opportunities: closing.opportunities,
+      closingRatio: closing.ratio,
+      closingReconcile: closing.reconcile,
+      closingVersus: closing.versusGoal,
+    };
+  });
+}
+
 function home_(payload) {
   try { ensureClosingGoal_(); } catch (error) { appendException_('Update Failed', 'The closing-ratio goal could not be updated.'); }
   var config = config_();
@@ -389,6 +703,10 @@ function home_(payload) {
   var metrics = {};
   sheet_('CC_Metrics').forEach(function (row) { metrics[String(row.key)] = row; });
   var bedding = metrics.bedding_percent ? numberOrNull_(metrics.bedding_percent.value) : null;
+  var closingFacts = loadClosing_();
+  var closingGoal = closingGoal_(config);
+  var monthClosing = storeMonthClosing_(closingFacts, store, today, closed, closingGoal);
+  var yesterdayClosing = dayClosing_(closingFacts, yesterday, closingGoal);
   var missing = days.filter(function (day) {
     return day.date < today && !closed[day.date] && (day.snapWritten === null || day.nwdsrDelivered === null);
   });
@@ -410,6 +728,11 @@ function home_(payload) {
       written: yesterdayRow ? yesterdayRow.snapWritten : null,
       delivered: yesterdayRow ? yesterdayRow.nwdsrDelivered : null,
       missing: !yesterdayRow || yesterdayRow.snapWritten === null,
+      customers: yesterdayClosing.customers,
+      opportunities: yesterdayClosing.opportunities,
+      closingRatio: yesterdayClosing.ratio,
+      closingVersus: yesterdayClosing.versusGoal,
+      closingNote: yesterdayClosing.note,
     },
     latest: latest,
     month: {
@@ -439,10 +762,10 @@ function home_(payload) {
       note: metrics.bedding_percent ? String(metrics.bedding_percent.note || '') : '',
       goal: Number(config.bedding_minimum || 0.2),
     },
-    closing: { value: null, goal: closingGoal_(config) },
+    closing: { goal: closingGoal, mtd: monthClosing, yesterday: yesterdayClosing },
     goals: approvedGoals_(config),
     scoreboard: scoreboard_(config, snap, delivered, writtenGoal, deliveredGoal, writtenPace, deliveredPace, daysLeft, yesterdayRow, yesterday, missing),
-    kpis: storeKpis_(config, metrics, bedding),
+    kpis: storeKpis_(config, metrics, bedding, monthClosing),
     attachment: { value: null, goal: Number(config.attachment_goal || 0.9) },
     attention: attention.slice(0, 8),
     people: peopleRows_(individual.start, individual.end).slice(0, 8),
@@ -453,11 +776,15 @@ function daily_(payload) {
   var today = todayNy_();
   var store = storePeriodContaining_(today);
   var closed = closedDates_();
+  var facts = loadClosing_();
+  var goal = closingGoal_(config_());
   return {
     role: payload.session.role,
     period: store.start + ' through ' + store.end,
     updated: healthValue_('last_calculation') || 'Not Available',
-    days: storeCalendar_(dailyFacts_(), store, closed),
+    goal: goal,
+    closing: storeMonthClosing_(facts, store, today, closed, goal),
+    days: withDayClosing_(storeCalendar_(dailyFacts_(), store, closed), facts, goal),
   };
 }
 

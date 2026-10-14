@@ -87,6 +87,11 @@ function DayDetail({
           <h2>NWDSR Delivered</h2>
           <p className="hero">{moneyOrMissing(day?.nwdsrDelivered)}</p>
         </article>
+        <article className="card" data-metric="daily-closing">
+          <h2>Purchasing customers</h2>
+          <p className="hero">{day?.purchasingCustomers === null || day?.purchasingCustomers === undefined ? 'Not Available' : day.purchasingCustomers}</p>
+          <p className="detail">Net Written # OF CUST. Opportunities and the closing ratio stay Not Available until that same day has a PERQ count.</p>
+        </article>
         {day?.provisional ? <p className="detail">This file was generated on the same date, so it is a same-day snapshot rather than a next-day close.</p> : null}
         <p className="detail">Store month {store.start}–{store.end}. Individual month {individual.start}–{individual.end}. A blank figure was not imported. It is not zero.</p>
       </main>

@@ -73,9 +73,15 @@ function importAttachment_(messageId, attachment) {
   }
   if (!parsed.singleDay) {
     recordImport_(sha, attachment.getName(), 'cumulative-not-added', parsed.reportType + ' ' + parsed.start + ' through ' + parsed.end + ' was recorded and was not added to the daily table.');
+    if (parsed.reportType === 'NWDSR Written' && parsed.purchasingCustomers !== null) {
+      upsertClosing_({ date: '', scope: 'store', code: '', name: '', customers: parsed.purchasingCustomers, opportunities: '', start: parsed.start, end: parsed.end, source: 'NWDSR Net Written # OF CUST', final: 'yes', note: 'Cumulative Net Written purchasing customers for the printed period. Dollars were not added again.' });
+    }
     return;
   }
   var decision = writeDailyAmount_(parsed);
+  if (decision !== 'conflict' && parsed.reportType === 'NWDSR Written' && parsed.purchasingCustomers !== null) {
+    upsertClosing_({ date: parsed.start, scope: 'store', code: '', name: '', customers: parsed.purchasingCustomers, opportunities: '', start: parsed.start, end: parsed.end, source: 'NWDSR Net Written # OF CUST', final: 'yes', note: 'Net Written # OF CUST for the report date.' });
+  }
   recordImport_(sha, attachment.getName(), decision, parsed.reportType + ' ' + parsed.start);
 }
 
@@ -100,6 +106,7 @@ function parseCloudReport_(text) {
   var end = isoFromParts_(period[4], months[period[5].toUpperCase()], period[6]);
   if (!start || !end) return null;
   var total = null;
+  var purchasingCustomers = null;
   var lines = String(text).split(/\r?\n/);
   var i;
   for (i = 0; i < lines.length; i += 1) {
@@ -108,12 +115,18 @@ function parseCloudReport_(text) {
       var snap = /17\s*-\s*ORLANDO\s+Totals:\s*(-?\d[\d,]*(?:\.\d+)?)\s+(-?\d[\d,]*(?:\.\d+)?)/i.exec(line);
       if (snap) total = moneyToken_(snap[2]);
     } else {
-      var nw = /KANE FURNITURE #17\s+Totals:\s*(-?\d[\d,]*(?:\.\d+)?)/i.exec(line);
-      if (nw) total = moneyToken_(nw[1]);
+      var nw = /KANE FURNITURE #17\s+Totals:\s*(-?\d[\d,]*(?:\.\d+)?)(?:\s+(-?\d[\d,]*(?:\.\d+)?))?(?:\s+(-?\d[\d,]*(?:\.\d+)?))?/i.exec(line);
+      if (nw) {
+        total = moneyToken_(nw[1]);
+        if (reportType === 'NWDSR Written' && nw[3]) {
+          var customers = moneyToken_(nw[3]);
+          if (customers !== null && customers >= 0 && customers === Math.round(customers)) purchasingCustomers = customers;
+        }
+      }
     }
   }
   if (total === null) return null;
-  return { reportType: reportType, start: start, end: end, singleDay: start === end, storeTotal: total };
+  return { reportType: reportType, start: start, end: end, singleDay: start === end, storeTotal: total, purchasingCustomers: purchasingCustomers };
 }
 
 function isoFromParts_(day, month, year) {
