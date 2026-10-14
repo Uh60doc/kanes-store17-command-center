@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:web": "vite",
-    "test": "node --experimental-strip-types --test server/*.test.ts src/import/*.test.ts src/dashboard/*.test.ts",
+    "test": "node --experimental-strip-types --test server/*.test.ts src/import/*.test.ts src/dashboard/*.test.ts src/domain/*.test.ts src/reference/*.test.ts",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"

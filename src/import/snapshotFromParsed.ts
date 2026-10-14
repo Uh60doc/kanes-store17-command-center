@@ -24,6 +24,12 @@ export function snapshotFromParsed(
   if (parsed.bedSales && parsed.totalSales && parsed.totalSales.cents !== 0 && parsed.reportType.startsWith('BSSA')) {
     metrics.beddingPercentage = parsed.bedSales.cents / parsed.totalSales.cents;
   }
+  if (parsed.customerCount !== null && parsed.reportType === 'NWDSR Delivered') {
+    metrics.closedCustomers = parsed.customerCount;
+  }
+  if (parsed.customerCount !== null && parsed.reportType === 'NWDSR Written') {
+    metrics.writtenCustomers = parsed.customerCount;
+  }
   const singleDay = periodIsSingleDay(parsed);
   const daily =
     singleDay && parsed.totalSales

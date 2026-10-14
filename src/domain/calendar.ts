@@ -1,9 +1,13 @@
 import type { CalendarKind } from '../import/types.ts';
+import { periodFor } from './reportingCalendar.ts';
 
-export const STORE_PERIOD_START = '2026-10-02';
-export const STORE_PERIOD_END = '2026-11-01';
-export const PAYROLL_PERIOD_START = '2026-10-01';
-export const PAYROLL_PERIOD_END = '2026-10-31';
+const octoberStore = periodFor('store', 2026, 10);
+const octoberIndividual = periodFor('individual', 2026, 10);
+
+export const STORE_PERIOD_START = octoberStore.start;
+export const STORE_PERIOD_END = octoberStore.end;
+export const PAYROLL_PERIOD_START = octoberIndividual.start;
+export const PAYROLL_PERIOD_END = octoberIndividual.end;
 export const PRIOR_YEAR_START = '2025-10-01';
 export const OPERATING_DAY_COUNT = 31;
 

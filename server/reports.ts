@@ -6,6 +6,7 @@ import { buildStoreDashboard, type StoreDashboardModel } from '../src/dashboard/
 import { acceptIncomingReport } from '../src/import/boundary.ts';
 import { currentSnapshots, resetSnapshots } from '../src/import/snapshotStore.ts';
 import { assertTokenPathOutsideRepo } from './access.ts';
+import { loadVerifiedPerq } from './perqReference.ts';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -30,10 +31,11 @@ async function importReports(): Promise<StoreDashboardModel> {
   const directory = reportDirectory();
   assertTokenPathOutsideRepo(directory, repoRoot);
   let files: string[] = [];
+  const perq = loadVerifiedPerq(repoRoot);
   try {
     files = pdfsIn(directory);
   } catch {
-    return buildStoreDashboard([]);
+    return buildStoreDashboard([], perq.reference, perq.issues);
   }
   resetSnapshots();
   const receivedAt = new Date().toISOString();
@@ -46,7 +48,7 @@ async function importReports(): Promise<StoreDashboardModel> {
       receivedAt,
     });
   }
-  const model = buildStoreDashboard(currentSnapshots());
+  const model = buildStoreDashboard(currentSnapshots(), perq.reference, perq.issues);
   if (files.length > 0) cached = model;
   return model;
 }

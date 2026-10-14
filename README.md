@@ -4,6 +4,12 @@ Management dashboard for Kane's Furniture Store 17, South Orlando, on Orange Blo
 
 Phase 1 is the store dashboard for a desktop office monitor. October 2026 management goals and corporate stretch goals are configured targets. Sales, bedding, attachment, closing ratio, year-over-year, pace, and graphs stay empty until a report snapshot is imported. Missing figures read **Awaiting Report** or **Not Available**.
 
+## Reporting calendars
+
+The subject picks the calendar. Store reports, store KPIs, and the store closing ratio use the 2nd of the month through the 1st of the next month. Individual reports, compensation, and individual closing ratios use the 1st through the last calendar day of the month. Daily records keep the date printed on them. Each view filters those dates on its own.
+
+A verified PERQ snapshot is cumulative. The October reference file stays outside Git at `~/.config/store17-command-center/reference/perq-october-2026.json`. The store closing ratio uses that file only when its dates are the full store month and the NWDSR closed-customer count covers those same dates.
+
 ## Import boundary
 
 A report file becomes a snapshot only through `acceptIncomingReport` in `src/import/boundary.ts`.

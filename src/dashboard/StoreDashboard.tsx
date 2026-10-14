@@ -89,6 +89,45 @@ function GoalBlock({
   );
 }
 
+function CalendarChart({
+  title,
+  metric,
+  periodLabel,
+  rows,
+  detail,
+}: {
+  title: string;
+  metric: string;
+  periodLabel: string;
+  rows: StoreDashboardModel['storeDaily'];
+  detail: string;
+}) {
+  if (rows.length === 0) {
+    return <EmptyChart title={title} metric={metric} detail="No dated snapshots fall in this calendar." />;
+  }
+  return (
+    <section className="card" data-metric={metric} data-state="values">
+      <h2>{title}</h2>
+      <p className="detail">{periodLabel}</p>
+      <div className="series-head">
+        <span>Date</span>
+        <span>Day</span>
+        <span>Running</span>
+      </div>
+      <ul className="series calendar">
+        {rows.map((point) => (
+          <li key={point.date}>
+            <span>{point.date}</span>
+            <span>{formatMoney(point.amount)}</span>
+            <span>{formatMoney(point.runningTotal)}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="detail">{detail}</p>
+    </section>
+  );
+}
+
 function EmptyChart({ title, metric, detail }: { title: string; metric: string; detail: string }) {
   return (
     <section className="card chart-empty" data-metric={metric} data-state="empty" aria-label={title}>
@@ -153,7 +192,7 @@ function DashboardBody({ model }: { model: StoreDashboardModel }) {
             title="Closing ratio"
             metric="closing-ratio"
             figure={model.closingRatio}
-            detail="NWDSR closed customers ÷ PERQ opportunities."
+            detail={model.closingRatioNote}
           />
         </div>
       </section>
@@ -234,45 +273,72 @@ function DashboardBody({ model }: { model: StoreDashboardModel }) {
         </div>
       </section>
 
+      <section className="perq" aria-labelledby="verified-perq">
+        <div className="section-heading">
+          <h2 id="verified-perq">Verified PERQ snapshots</h2>
+          <p>Cumulative counts for the printed window. Each calendar is calculated on its own.</p>
+        </div>
+        {model.perq.loaded ? (
+          <div className="perq-grid">
+            {model.perq.windows.map((entry) => (
+              <article key={entry.id} className="card" data-metric={`perq-${entry.id}`}>
+                <h3>{entry.label}</h3>
+                <p className="period-range">
+                  {entry.periodStart} – {entry.periodEnd}
+                </p>
+                <p className="hero">
+                  <span className="amount">{entry.opportunities}</span>
+                </p>
+                <p className="detail">UPS + Be Backs. {entry.status}</p>
+                {entry.lines.length > 0 ? (
+                  <ul className="perq-lines">
+                    {entry.lines.map((line) => (
+                      <li key={line.displayName}>
+                        <span>
+                          {line.displayName}
+                          {line.role === 'management' ? ' · Management' : ''}
+                          {line.note ? ` · ${line.note}` : ''}
+                        </span>
+                        <span>{line.opportunities}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="hero">
+            <span className="status">Awaiting Report</span>
+          </p>
+        )}
+        {model.flags.length > 0 ? (
+          <div className="card flags">
+            <h3>Still required</h3>
+            <ul className="flag-list">
+              {model.flags.map((flag) => (
+                <li key={flag}>{flag}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </section>
+
       <section className="charts" aria-label="Trends">
-        {model.dailySales.length === 0 ? (
-          <EmptyChart
-            title="Daily sales"
-            metric="daily-sales"
-            detail="No dated snapshots are imported. This chart stays empty."
-          />
-        ) : (
-          <section className="card" data-metric="daily-sales" data-state="values">
-            <h2>Daily sales</h2>
-            <ul className="series">
-              {model.dailySales.map((point) => (
-                <li key={point.date}>
-                  <span>{point.date}</span>
-                  <span>{formatMoney(point.amount)}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-        {model.monthToDate.length === 0 ? (
-          <EmptyChart
-            title="Month-to-date trend"
-            metric="month-to-date"
-            detail="No dated snapshots are imported. This chart stays empty."
-          />
-        ) : (
-          <section className="card" data-metric="month-to-date" data-state="values">
-            <h2>Month-to-date trend</h2>
-            <ul className="series">
-              {model.monthToDate.map((point) => (
-                <li key={point.date}>
-                  <span>{point.date}</span>
-                  <span>{formatMoney(point.amount)}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+        <CalendarChart
+          title="Store operating days"
+          metric="store-daily"
+          periodLabel={storeOperatingPeriod.rangeDisplay}
+          rows={model.storeDaily}
+          detail="Day amount and the running total of store-period days. October 1 stays on the individual calendar."
+        />
+        <CalendarChart
+          title="Individual calendar days"
+          metric="individual-daily"
+          periodLabel={payrollPeriod.rangeDisplay}
+          rows={model.individualDaily}
+          detail="Day amount and the running total of calendar-month days. November 1 stays on the store calendar."
+        />
       </section>
     </>
   );
@@ -330,7 +396,8 @@ export function StoreDashboard() {
           </article>
         </section>
         <p className="period-rule">
-          Store-period sales and payroll-period sales are tracked apart. One does not stand in for the other.
+          Store results use the 2nd through the 1st. Individual results use the calendar month. Daily records keep
+          their original dates, and each view is calculated on its own.
         </p>
         <DashboardBody model={model} />
       </main>

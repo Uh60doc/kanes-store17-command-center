@@ -321,13 +321,65 @@ main {
   padding: 0;
 }
 
-.series li {
+.series li,
+.series-head,
+.perq-lines li {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   padding: 6px 0;
   border-top: 1px solid var(--line);
   font-variant-numeric: tabular-nums;
+}
+
+.series.calendar li,
+.series-head {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+}
+
+.series.calendar li span:not(:first-child),
+.series-head span:not(:first-child) {
+  text-align: right;
+}
+
+.series-head {
+  margin-top: 10px;
+  border-top: 0;
+  padding-bottom: 2px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.perq {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.perq-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.perq-lines {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.flag-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.flag-list li + li {
+  margin-top: 6px;
 }
 
 .app-nav {

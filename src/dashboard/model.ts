@@ -1,5 +1,12 @@
-import { remainingOperatingDays, storeOperatingPeriod } from '../config/periods.ts';
+import { payrollPeriod, remainingOperatingDays, reportingMonth, storeOperatingPeriod } from '../config/periods.ts';
+import { filterByCategory } from '../domain/reportingCalendar.ts';
 import type { ReportSnapshot } from '../import/types.ts';
+import {
+  buildPerqPanel,
+  storeMonthOpportunities,
+  type PerqPanel,
+  type VerifiedPerqReference,
+} from '../reference/perqReference.ts';
 
 export type MissingLabel = 'Awaiting Report' | 'Not Available';
 
@@ -10,6 +17,12 @@ export type Figure =
 export interface DatedAmountView {
   date: string;
   amount: number;
+}
+
+export interface CalendarDayView {
+  date: string;
+  amount: number;
+  runningTotal: number;
 }
 
 export interface StoreDashboardModel {
@@ -32,6 +45,11 @@ export interface StoreDashboardModel {
   stretchDeliveredRemaining: Figure;
   dailySales: readonly DatedAmountView[];
   monthToDate: readonly DatedAmountView[];
+  storeDaily: readonly CalendarDayView[];
+  individualDaily: readonly CalendarDayView[];
+  perq: PerqPanel;
+  closingRatioNote: string;
+  flags: readonly string[];
   lastImportAt: string | null;
 }
 
@@ -151,7 +169,23 @@ function runningTotal(points: readonly DatedAmountView[]): DatedAmountView[] {
   });
 }
 
-export function buildStoreDashboard(snapshots: readonly ReportSnapshot[]): StoreDashboardModel {
+function calendarDays(points: readonly DatedAmountView[]): CalendarDayView[] {
+  let total = 0;
+  return points.map((point) => {
+    total += point.amount;
+    return { date: point.date, amount: point.amount, runningTotal: total };
+  });
+}
+
+function periodsMatch(left: { periodStart: string; periodEnd: string } | null, start: string, end: string): boolean {
+  return left !== null && left.periodStart === start && left.periodEnd === end;
+}
+
+export function buildStoreDashboard(
+  snapshots: readonly ReportSnapshot[],
+  reference: VerifiedPerqReference | null = null,
+  referenceIssues: readonly string[] = [],
+): StoreDashboardModel {
   const snapWrittenSnapshot = currentOf(snapshots, 'SNAP Written');
   const nwdsrWrittenSnapshot = currentOf(snapshots, 'NWDSR Written');
   const nwdsrDeliveredSnapshot = currentOf(snapshots, 'NWDSR Delivered');
@@ -173,8 +207,22 @@ export function buildStoreDashboard(snapshots: readonly ReportSnapshot[]): Store
   const bedding = readMetric(beddingSnapshot, 'beddingPercentage');
   const attachmentHits = readMetric(snapWrittenSnapshot, 'attachmentHits');
   const attachmentOpportunities = readMetric(snapWrittenSnapshot, 'attachmentOpportunities');
-  const closedCustomers = readMetric(nwdsrWrittenSnapshot, 'closedCustomers');
-  const perqOpportunities = readMetric(perqSnapshot, 'opportunities');
+  const storeStart = storeOperatingPeriod.start;
+  const storeEnd = storeOperatingPeriod.end;
+  const deliveredMatchesStore = periodsMatch(nwdsrDeliveredSnapshot ?? null, storeStart, storeEnd);
+  const closedCustomers = deliveredMatchesStore ? readMetric(nwdsrDeliveredSnapshot, 'closedCustomers') : null;
+  const importedPerqMatchesStore = periodsMatch(perqSnapshot ?? null, storeStart, storeEnd);
+  const referencePerq = reference ? storeMonthOpportunities(reference, { start: storeStart, end: storeEnd }) : null;
+  const perqOpportunities = referencePerq ?? (importedPerqMatchesStore ? readMetric(perqSnapshot, 'opportunities') : null);
+  const perqPanel = buildPerqPanel(
+    reference,
+    referenceIssues,
+    { start: storeStart, end: storeEnd },
+    { start: payrollPeriod.start, end: payrollPeriod.end },
+    nwdsrDeliveredSnapshot
+      ? { periodStart: nwdsrDeliveredSnapshot.periodStart, periodEnd: nwdsrDeliveredSnapshot.periodEnd }
+      : null,
+  );
 
   const importedAt = snapshots
     .map((item) => item.importedAt)
@@ -182,7 +230,25 @@ export function buildStoreDashboard(snapshots: readonly ReportSnapshot[]): Store
     .sort();
 
   const dailySales = collectDaily(snapshots);
-  const monthToDate = runningTotal(dailySales);
+  const { year, month } = reportingMonth;
+  const storePoints = filterByCategory(dailySales, 'store', year, month, (point) => point.date);
+  const individualPoints = filterByCategory(dailySales, 'individual', year, month, (point) => point.date);
+  const storeDaily = calendarDays(storePoints);
+  const individualDaily = calendarDays(individualPoints);
+  const monthToDate = runningTotal(storePoints);
+  const outside = dailySales.filter(
+    (point) => !storePoints.some((row) => row.date === point.date) && !individualPoints.some((row) => row.date === point.date),
+  );
+  const flags = [...perqPanel.flags];
+  if (outside.length > 0) {
+    flags.push(
+      `Daily records dated ${outside.map((point) => point.date).join(', ')} stay on their original dates and sit outside both October calendars.`,
+    );
+  }
+  const closingFlag = perqPanel.flags.find((flag) => flag.startsWith('NWDSR delivered') || flag.startsWith('A store PERQ'));
+  const closingRatioNote =
+    closingFlag ??
+    'Store closing ratio uses NWDSR closed customers and PERQ opportunities for October 2–November 1.';
 
   return {
     snapWritten: snapWritten === null ? missing('Awaiting Report') : dollars(snapWritten),
@@ -212,6 +278,11 @@ export function buildStoreDashboard(snapshots: readonly ReportSnapshot[]): Store
     stretchDeliveredRemaining: remaining(nwdsrDelivered, storeOperatingPeriod.corporateStretch.deliveredSales),
     dailySales,
     monthToDate,
+    storeDaily,
+    individualDaily,
+    perq: perqPanel,
+    closingRatioNote,
+    flags,
     lastImportAt: importedAt.length === 0 ? null : importedAt[importedAt.length - 1],
   };
 }
