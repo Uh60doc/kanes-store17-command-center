@@ -461,6 +461,92 @@ function daily_(payload) {
   };
 }
 
+function metricCovers_(note, start, end) {
+  var text = String(note || '');
+  return text.indexOf(start) !== -1 && text.indexOf(end) !== -1;
+}
+
+function bedding_(payload) {
+  var config = config_();
+  var today = todayNy_();
+  var store = storePeriodContaining_(today);
+  var individual = individualPeriodContaining_(today);
+  var metrics = {};
+  sheet_('CC_Metrics').forEach(function (row) { metrics[String(row.key)] = row; });
+  var beddingRow = metrics.bedding_percent;
+  var beddingValue = beddingRow ? numberOrNull_(beddingRow.value) : null;
+  var beddingNote = beddingRow ? String(beddingRow.note || '') : '';
+  var covers = beddingValue !== null && metricCovers_(beddingNote, store.start, store.end);
+  var people = peopleRows_(individual.start, individual.end).map(function (person) {
+    return {
+      name: person.name,
+      mattressWritten: null,
+      mattressDelivered: null,
+      writtenPercent: null,
+      deliveredPercent: null,
+      units: null,
+      protectorPercent: null,
+      protectorUnits: null,
+      pillowUnits: null,
+      pillowDollars: null,
+      baseUnits: null,
+      baseDollars: null,
+      basePercent: null,
+    };
+  });
+  return {
+    role: payload.session.role,
+    storePeriod: store.start + ' through ' + store.end,
+    individualPeriod: individual.start + ' through ' + individual.end,
+    updated: healthValue_('last_calculation') || 'Not Available',
+    writtenPercent: covers ? beddingValue : null,
+    writtenPercentNote: covers ? beddingNote : (beddingValue !== null ? 'A written bedding figure is on file for ' + beddingNote + '. It does not cover this store month, so it is not shown as the store bedding percentage.' : 'No bedding report covers this store month.'),
+    deliveredPercent: null,
+    beddingGoal: goalOr_(config, 'bedding_minimum', 0.2),
+    protectorGoal: goalOr_(config, 'mattress_protector_goal', 1),
+    pillowGoal: goalOr_(config, 'pillow_goal', null),
+    pillowUnit: String(config.pillow_goal_unit || 'percent'),
+    baseGoal: goalOr_(config, 'adjustable_base_goal', null),
+    baseUnit: String(config.adjustable_base_goal_unit || 'percent'),
+    people: people,
+  };
+}
+
+function normalizeGoal_(value, unit) {
+  if (value === '' || value === null || value === undefined) return '';
+  var number = Number(value);
+  if (!isFinite(number)) throw new Error('Enter a number or leave the goal blank.');
+  if (unit === 'percent' && number > 1) return Math.round((number / 100) * 10000) / 10000;
+  return number;
+}
+
+function writeConfig_(key, value) {
+  var allowed = { pillow_goal: true, pillow_goal_unit: true, adjustable_base_goal: true, adjustable_base_goal_unit: true };
+  if (!allowed[key]) throw new Error('That setting cannot be changed here.');
+  var tab = SpreadsheetApp.openById(SPREADSHEET_ID_).getSheetByName('CC_Config');
+  if (!tab) throw new Error('CC_Config is missing.');
+  var values = tab.getDataRange().getValues();
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    if (String(values[r][0]) === key) {
+      tab.getRange(r + 1, 2).setValue(value);
+      return;
+    }
+  }
+  tab.appendRow([key, value]);
+}
+
+function saveBeddingGoals_(payload) {
+  var units = { percent: true, count: true, dollars: true };
+  var pillowUnit = units[payload.pillowUnit] ? payload.pillowUnit : 'percent';
+  var baseUnit = units[payload.baseUnit] ? payload.baseUnit : 'percent';
+  writeConfig_('pillow_goal', normalizeGoal_(payload.pillowGoal, pillowUnit));
+  writeConfig_('pillow_goal_unit', pillowUnit);
+  writeConfig_('adjustable_base_goal', normalizeGoal_(payload.baseGoal, baseUnit));
+  writeConfig_('adjustable_base_goal_unit', baseUnit);
+  return bedding_(payload);
+}
+
 function people_(payload) {
   var individual = individualPeriodContaining_(todayNy_());
   return {

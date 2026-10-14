@@ -8,6 +8,8 @@ var ROUTES_ = {
   people: ['sales', 'manager', 'admin'],
   morning: ['manager', 'admin'],
   health: ['manager', 'admin'],
+  bedding: ['manager', 'admin'],
+  saveBeddingGoals: ['admin'],
   changePassword: ['admin'],
   retry: ['admin'],
 };
@@ -34,6 +36,8 @@ function dispatch(name, payload) {
   if (name === 'people') return people_(payload);
   if (name === 'morning') return morning_(payload);
   if (name === 'health') return health_(payload);
+  if (name === 'bedding') return bedding_(payload);
+  if (name === 'saveBeddingGoals') return saveBeddingGoals_(payload);
   if (name === 'changePassword') return changePassword_(payload);
   if (name === 'retry') return retry_(payload);
   throw new Error('That request is not available.');

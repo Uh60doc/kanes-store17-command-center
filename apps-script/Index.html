@@ -37,6 +37,9 @@
     td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid #1d5c66; }
     .hidden { display: none; }
     .section-title { margin: 22px 0 10px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #14c4d4; }
+    .bedding-page { border-top: 3px solid #14c4d4; padding-top: 8px; }
+    .bedding-page .section-title { color: #f3d48a; }
+    .bedding-band article { border-top: 3px solid #1d5c66; }
     .kpi-wrap { overflow-x: auto; }
     table.kpi { min-width: 680px; }
     table.kpi td, table.kpi th { white-space: nowrap; }
@@ -336,13 +339,137 @@
         api('retry').then(function () { openScreen('health'); }).catch(function (error) { document.getElementById('pw-error').textContent = error.message; });
       });
     }
+    function na(value) {
+      return value === null || value === undefined || value === '' ? 'Not Available' : value;
+    }
+    function goalLabel(value, unit) {
+      if (value === null || value === undefined || value === '') return 'Not configured';
+      if (unit === 'percent') return percent(value);
+      if (unit === 'dollars') return money(value);
+      return String(value);
+    }
+    function beddingSortKey(person, key) {
+      var value = person[key];
+      return value === null || value === undefined ? null : Number(value);
+    }
+    var beddingSort = 'name';
+    var beddingCache = null;
+    function renderBedding(data) {
+      beddingCache = data;
+      document.getElementById('header-note').textContent = 'Bedding · Updated ' + data.updated;
+      drawBedding();
+    }
+    function drawBedding() {
+      var data = beddingCache;
+      var people = (data.people || []).slice().sort(function (left, right) {
+        if (beddingSort === 'name') return left.name.localeCompare(right.name);
+        var a = beddingSortKey(left, beddingSort);
+        var b = beddingSortKey(right, beddingSort);
+        if (a === null) return 1;
+        if (b === null) return -1;
+        return b - a;
+      });
+      var rows = people.map(function (person) {
+        return '<tr><td><button class="linkish" type="button" data-bed="' + esc(person.name) + '">' + esc(person.name) + '</button></td><td>' + money(person.mattressWritten) + '</td><td>' + money(person.mattressDelivered) + '</td><td>' + percent(person.writtenPercent) + '</td><td>' + percent(person.deliveredPercent) + '</td><td>' + na(person.units) + '</td><td>' + percent(person.protectorPercent) + '</td><td>' + na(person.protectorUnits) + '</td><td>' + na(person.pillowUnits) + '</td><td>' + money(person.pillowDollars) + '</td><td>' + na(person.baseUnits) + '</td><td>' + money(person.baseDollars) + '</td><td>' + percent(person.basePercent) + '</td></tr>';
+      }).join('');
+      var admin = data.role === 'admin'
+        ? '<article class="card noprint" style="margin-top:12px"><h2>Pillow and adjustable-base goals</h2><p class="sub">These two goals are not set until an admin enters them. A percent is entered as 20 for 20%. Blank clears the goal. Bedding stays 20% and protectors stay 100%.</p><label>Pillow goal</label><input id="pillow-goal" value="" /><label>Pillow unit</label><input id="pillow-unit" value="' + esc(data.pillowUnit || 'percent') + '" /><label>Adjustable base goal</label><input id="base-goal" value="" /><label>Adjustable base unit</label><input id="base-unit" value="' + esc(data.baseUnit || 'percent') + '" /><p id="bed-goal-note" class="error"></p><button id="save-bed-goals" type="button">Save goals</button></article>'
+        : '';
+      document.getElementById('screen').innerHTML =
+        '<div class="bedding-page" id="bedding-dashboard">' +
+        '<h2 class="section-title">Store mattress sales</h2><p class="sub">Store reporting period ' + esc(data.storePeriod) + '</p>' +
+        '<div class="grid bedding-band">' +
+        card('Mattress sales written', 'Not Available', 'Mattress dollars are not on a verified store-month report.') +
+        card('Mattress sales delivered', 'Not Available', 'Delivered mattress dollars are not on file.') +
+        card('Bedding written %', percent(data.writtenPercent), data.writtenPercentNote || 'Goal 20%. Written bedding dollars divided by written sales for this store month.', toneFor(data.writtenPercent, data.beddingGoal)) +
+        card('Bedding delivered %', 'Not Available', 'Delivered bedding is not copied from the written figure. Goal 20%.') +
+        card('Bedding goal', percent(data.beddingGoal), 'Official bedding minimum.') +
+        card('Written mattress units', 'Not Available', 'Unit counts are not on the daily sales reports.') +
+        card('Delivered mattress units', 'Not Available', 'Unit counts are not on the daily sales reports.') +
+        card('Average mattress price', 'Not Available', 'Needs mattress dollars and mattress units for the same side.') +
+        card('Versus last year', 'Not Available', 'A prior-year bedding report for this store period is not on file.') +
+        '</div>' +
+        '<h2 class="section-title">Store bedding attachments</h2>' +
+        '<div class="grid bedding-band">' +
+        card('Protectors written', 'Not Available', 'Units and dollars. Goal ' + percent(data.protectorGoal) + ' attachment. Not divided by store sales.') +
+        card('Protectors delivered', 'Not Available', 'Delivered protector units and dollars are not on file.') +
+        card('Protector attachment', 'Not Available', 'Needs eligible mattress opportunities and actual attachments for the store month.') +
+        card('Pillows written', 'Not Available', 'Units and dollars. Pillows are not included in the bedding percentage. Goal ' + goalLabel(data.pillowGoal, data.pillowUnit) + '.') +
+        card('Pillows delivered', 'Not Available', 'Delivered pillow units and dollars are not on file.') +
+        card('Pillows per mattress', 'Not Available', 'Needs pillow units and mattress sales for the same side.') +
+        card('Adjustable bases written', 'Not Available', 'Units and dollars. Goal ' + goalLabel(data.baseGoal, data.baseUnit) + '.') +
+        card('Adjustable bases delivered', 'Not Available', 'Delivered adjustable-base units and dollars are not on file.') +
+        card('Adjustable base attachment', 'Not Available', 'Needs eligible opportunities. Packaged bases are not counted twice.') +
+        '</div>' +
+        '<article class="card kpi-wrap" style="margin-top:12px"><h2>Store KPI scoreboard</h2><table class="kpi"><tr><th>KPI</th><th>Written</th><th>Delivered</th><th>Goal</th></tr>' +
+        '<tr><td>Bedding sales $</td><td>Not Available</td><td>Not Available</td><td>—</td></tr>' +
+        '<tr><td>Bedding %</td><td class="' + toneFor(data.writtenPercent, data.beddingGoal) + '">' + percent(data.writtenPercent) + '</td><td>Not Available</td><td>' + percent(data.beddingGoal) + '</td></tr>' +
+        '<tr><td>Mattress units</td><td>Not Available</td><td>Not Available</td><td>—</td></tr>' +
+        '<tr><td>Mattress protectors</td><td>Not Available</td><td>Not Available</td><td>' + percent(data.protectorGoal) + ' attachment</td></tr>' +
+        '<tr><td>Pillows</td><td>Not Available</td><td>Not Available</td><td>' + goalLabel(data.pillowGoal, data.pillowUnit) + '</td></tr>' +
+        '<tr><td>Adjustable bases</td><td>Not Available</td><td>Not Available</td><td>' + goalLabel(data.baseGoal, data.baseUnit) + '</td></tr>' +
+        '</table><p class="sub">Green is at or above a confirmed goal. Amber is approaching. Red is below a confirmed figure. A missing source stays Not Available.</p>' +
+        '<p class="noprint"><button id="print-bedding" type="button">Print store bedding report</button></p></article>' +
+        '<h2 class="section-title">Salesperson bedding performance</h2><p class="sub">Salesperson reporting period ' + esc(data.individualPeriod) + '. These dates are not the store month, so the rows are not expected to add up to the store total.</p>' +
+        '<div class="nav noprint"><button class="sort" type="button" data-bed-sort="name">Name</button><button class="sort" type="button" data-bed-sort="mattressWritten">Written $</button><button class="sort" type="button" data-bed-sort="writtenPercent">Written %</button><button class="sort" type="button" data-bed-sort="protectorPercent">Protector %</button></div>' +
+        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Salesperson</th><th>Mattress written $</th><th>Mattress delivered $</th><th>Written %</th><th>Delivered %</th><th>Units</th><th>Protector %</th><th>Protector units</th><th>Pillow units</th><th>Pillow $</th><th>Base units</th><th>Base $</th><th>Base %</th></tr>' + rows + '</table><p class="sub">No daily report on file breaks out mattress dollars, protector attachments, pillows, or adjustable bases by salesperson. Nothing above is shown as zero.</p></article>' +
+        admin +
+        '</div>';
+      var printButton = document.getElementById('print-bedding');
+      if (printButton) printButton.addEventListener('click', function () { window.print(); });
+      document.querySelectorAll('[data-bed-sort]').forEach(function (button) {
+        if (button.getAttribute('data-bed-sort') === beddingSort) button.className = 'sort active';
+        button.addEventListener('click', function () { beddingSort = button.getAttribute('data-bed-sort'); drawBedding(); });
+      });
+      document.querySelectorAll('[data-bed]').forEach(function (button) {
+        button.addEventListener('click', function () { renderBeddingPerson(button.getAttribute('data-bed')); });
+      });
+      var save = document.getElementById('save-bed-goals');
+      if (save) save.addEventListener('click', function () {
+        api('saveBeddingGoals', {
+          pillowGoal: document.getElementById('pillow-goal').value,
+          pillowUnit: document.getElementById('pillow-unit').value,
+          baseGoal: document.getElementById('base-goal').value,
+          baseUnit: document.getElementById('base-unit').value,
+        }).then(function (next) {
+          beddingCache = next;
+          drawBedding();
+        }).catch(function (error) {
+          if (/sign in/i.test(error.message)) showLogin(error.message);
+          else document.getElementById('bed-goal-note').textContent = error.message;
+        });
+      });
+    }
+    function renderBeddingPerson(name) {
+      var person = (beddingCache.people || []).filter(function (item) { return item.name === name; })[0];
+      if (!person) return;
+      document.getElementById('screen').innerHTML =
+        '<div class="bedding-page"><p class="noprint"><button class="linkish" id="back-bedding" type="button">All bedding</button></p>' +
+        '<h2 class="section-title">' + esc(person.name) + '</h2><p class="sub">Salesperson period ' + esc(beddingCache.individualPeriod) + '</p>' +
+        '<div class="grid bedding-band">' +
+        card('Mattress written $', money(person.mattressWritten), 'Not taken from SNAP store written.') +
+        card('Mattress delivered $', money(person.mattressDelivered), 'Not copied from written.') +
+        card('Bedding written %', percent(person.writtenPercent), 'Goal 20%.') +
+        card('Bedding delivered %', percent(person.deliveredPercent), 'Goal 20%.') +
+        card('Protector attachment', percent(person.protectorPercent), 'Goal 100% of eligible mattress opportunities.') +
+        card('Protector units', na(person.protectorUnits), '') +
+        card('Pillow units', na(person.pillowUnits), '') +
+        card('Pillow sales', money(person.pillowDollars), 'Not part of the bedding percentage.') +
+        card('Adjustable base units', na(person.baseUnits), '') +
+        card('Adjustable base sales', money(person.baseDollars), '') +
+        card('Adjustable base attachment', percent(person.basePercent), 'Goal ' + goalLabel(beddingCache.baseGoal, beddingCache.baseUnit) + '.') +
+        '</div><article class="card" style="margin-top:12px"><h2>Strengths and opportunities</h2><p>No verified mattress, protector, pillow, or adjustable-base lines are on file for this salesperson, so strengths are not ranked.</p><p class="noprint"><button id="print-person-bedding" type="button">Print individual bedding report</button></p></article></div>';
+      document.getElementById('back-bedding').addEventListener('click', function () { drawBedding(); });
+      document.getElementById('print-person-bedding').addEventListener('click', function () { window.print(); });
+    }
     function openScreen(name) {
       screen = name;
       drawNav();
-      var request = name === 'written' || name === 'delivered' || name === 'bedding' || name === 'orders' ? 'home' : name;
+      var request = name === 'written' || name === 'delivered' || name === 'orders' ? 'home' : name;
       if (name === 'admin') { renderAdmin(); return; }
       api(request).then(function (data) {
-        if (name === 'home' || name === 'written' || name === 'delivered' || name === 'bedding') renderHome(data);
+        if (name === 'home' || name === 'written' || name === 'delivered') renderHome(data);
+        else if (name === 'bedding') renderBedding(data);
         else if (name === 'orders') {
           document.getElementById('header-note').textContent = data.period + ' · Updated ' + data.updated;
           document.getElementById('screen').innerHTML = card('Open orders and backorders', 'Not Available', 'No open-order report is on file. Nothing is shown as zero.');
