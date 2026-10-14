@@ -86,7 +86,11 @@ export function canonicalField(columnName: string): string {
 }
 
 export function columnsFromHeader(lines: readonly PdfLine[], header: PdfLine): Column[] {
-  const band = lines.filter((line) => line.y >= header.y - 1 && line.y <= header.y + 32);
+  const band = lines.filter((line) => {
+    if (line.y < header.y - 1 || line.y > header.y + 28) return false;
+    const text = lineText(line);
+    return !(/\bFROM\b/i.test(text) || /orlando/i.test(text) || /totals/i.test(text));
+  });
   const tokens = band.flatMap((line) => line.items);
   const sorted = [...tokens].sort((a, b) => a.x - b.x || b.y - a.y);
   const columns: { x: number; right: number; tokens: PdfTextItem[] }[] = [];

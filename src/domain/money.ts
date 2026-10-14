@@ -50,6 +50,15 @@ export function formatMoneyCents(cents: number, precision: ReportedPrecision): s
   return `${sign}$${body}.${String(remainder).padStart(2, '0')}`;
 }
 
+/** Reads a money cell, including a totals label sitting in front of the amount. */
+export function moneyFromCell(raw: string): Money | null {
+  const direct = toCents(raw.trim());
+  if (direct) return direct;
+  const tokens = raw.match(/-?[\d,]+(?:\.\d+)?/g);
+  if (!tokens) return null;
+  return toCents(tokens[tokens.length - 1] ?? '');
+}
+
 export function dominantPrecision(values: readonly Money[]): ReportedPrecision {
   return values.some((value) => value.precision === 'cents') ? 'cents' : 'whole_dollar';
 }

@@ -1,6 +1,6 @@
 import { identifyEmployee } from '../../config/roster.ts';
 import { calendarFor, isProvisional, isSingleDay, parseGeneratedAt, parseReportDay } from '../../domain/calendar.ts';
-import { dominantPrecision, parseDecimal, toCents, type Money, type ReportedPrecision } from '../../domain/money.ts';
+import { dominantPrecision, moneyFromCell, parseDecimal, toCents, type Money, type ReportedPrecision } from '../../domain/money.ts';
 import type { AssociateRow, IssueSeverity, ProjectionLine, ReportIssue, ReportType } from '../types.ts';
 import { columnsFromHeader, findHeaderLine, isFooter, lineText, pageBlob, readRow, type Column, type PdfPage } from './layout.ts';
 
@@ -188,7 +188,7 @@ function readTable(pages: readonly PdfPage[]): TableRead {
 function moneyOf(row: Record<string, string>, field: string): Money | null {
   const raw = row[field];
   if (!raw) return null;
-  return toCents(raw);
+  return moneyFromCell(raw);
 }
 
 function numberOf(row: Record<string, string>, field: string): number | null {

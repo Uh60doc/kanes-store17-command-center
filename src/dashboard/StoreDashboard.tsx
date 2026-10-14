@@ -280,7 +280,20 @@ function DashboardBody({ model }: { model: StoreDashboardModel }) {
 
 export function StoreDashboard() {
   const checkedAt = useOfficeClock();
-  const model = buildStoreDashboard(currentSnapshots());
+  const [model, setModel] = useState<StoreDashboardModel>(() => buildStoreDashboard(currentSnapshots()));
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/dashboard')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: StoreDashboardModel | null) => {
+        if (active && payload) setModel(payload);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="screen">

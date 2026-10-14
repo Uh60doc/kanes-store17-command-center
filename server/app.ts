@@ -43,6 +43,7 @@ import {
   verifyValue,
   type Session,
 } from './session.ts';
+import { loadStoreDashboard } from './reports.ts';
 import { readStored } from './tokenStore.ts';
 
 export interface AppDeps {
@@ -115,6 +116,10 @@ export function createApp(config: ServerConfig, deps: AppDeps = { fetch: globalT
   async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const method = req.method ?? 'GET';
     const pathname = pathOf(req);
+    if (method === 'GET' && pathname === '/api/dashboard') {
+      send(res, 200, await loadStoreDashboard());
+      return;
+    }
     if (method === 'GET' && pathname === '/api/google/setup') {
       send(res, 200, setupPayload(config));
       return;

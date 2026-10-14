@@ -94,7 +94,14 @@ function readMetric(snapshot: ReportSnapshot | undefined, key: string): number |
 }
 
 function currentOf(snapshots: readonly ReportSnapshot[], reportType: ReportSnapshot['reportType']): ReportSnapshot | undefined {
-  return snapshots.find((item) => item.status === 'current' && item.reportType === reportType);
+  const rows = snapshots.filter((item) => item.status === 'current' && item.reportType === reportType);
+  const cumulative = rows.filter((item) => item.periodStart !== item.periodEnd);
+  const pool = cumulative.length > 0 ? cumulative : rows;
+  return [...pool].sort((left, right) => {
+    const period = right.periodEnd.localeCompare(left.periodEnd);
+    if (period !== 0) return period;
+    return (right.generatedAt ?? '').localeCompare(left.generatedAt ?? '');
+  })[0];
 }
 
 function ratio(numerator: number | null, denominator: number | null, whenMissing: MissingLabel): Figure {
@@ -126,11 +133,22 @@ function requiredDaily(actual: number | null, goal: number, daysRemaining: numbe
 }
 
 function collectDaily(snapshots: readonly ReportSnapshot[]): DatedAmountView[] {
-  return snapshots.flatMap((snapshot) =>
-    snapshot.daily
-      .filter((point) => Number.isFinite(point.amount) && point.date !== '')
-      .map((point) => ({ date: point.date, amount: point.amount })),
-  );
+  return snapshots
+    .filter((snapshot) => snapshot.status === 'current' && snapshot.reportType === 'SNAP Written' && snapshot.periodStart === snapshot.periodEnd)
+    .flatMap((snapshot) =>
+      snapshot.daily
+        .filter((point) => Number.isFinite(point.amount) && point.date !== '')
+        .map((point) => ({ date: point.date, amount: point.amount })),
+    )
+    .sort((left, right) => left.date.localeCompare(right.date));
+}
+
+function runningTotal(points: readonly DatedAmountView[]): DatedAmountView[] {
+  let total = 0;
+  return points.map((point) => {
+    total += point.amount;
+    return { date: point.date, amount: total };
+  });
 }
 
 export function buildStoreDashboard(snapshots: readonly ReportSnapshot[]): StoreDashboardModel {
@@ -164,6 +182,7 @@ export function buildStoreDashboard(snapshots: readonly ReportSnapshot[]): Store
     .sort();
 
   const dailySales = collectDaily(snapshots);
+  const monthToDate = runningTotal(dailySales);
 
   return {
     snapWritten: snapWritten === null ? missing('Awaiting Report') : dollars(snapWritten),
@@ -192,7 +211,7 @@ export function buildStoreDashboard(snapshots: readonly ReportSnapshot[]): Store
     stretchDeliveredProgress: progress(nwdsrDelivered, storeOperatingPeriod.corporateStretch.deliveredSales),
     stretchDeliveredRemaining: remaining(nwdsrDelivered, storeOperatingPeriod.corporateStretch.deliveredSales),
     dailySales,
-    monthToDate: dailySales.length === 0 ? [] : dailySales,
+    monthToDate,
     lastImportAt: importedAt.length === 0 ? null : importedAt[importedAt.length - 1],
   };
 }
