@@ -182,7 +182,7 @@
     function navItems() {
       var items = [['home', 'Home'], ['daily', 'Daily'], ['written', 'Written'], ['delivered', 'Delivered'], ['people', 'Salespeople'], ['morning', 'Morning meeting']];
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['orders', 'Open orders'], ['health', 'System health']);
-      if (role === 'admin') items.push(['admin', 'Admin']);
+      if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
     }
     function drawNav() {
@@ -730,6 +730,14 @@
       document.getElementById('back-bedding').addEventListener('click', function () { drawBedding(); });
       document.getElementById('print-person-bedding').addEventListener('click', function () { window.print(); });
     }
+    function renderCoverage(data) {
+      var rows = (data.rows || []).map(function (row) {
+        return '<tr><td>' + esc(row.report) + '</td><td>' + esc(row.earliest || '—') + '</td><td>' + esc(row.latest || '—') + '</td><td>' + esc(row.dailyRecords) + '</td><td>' + esc(row.missing) + '</td><td>' + esc(row.sheets) + '</td></tr>';
+      }).join('');
+      document.getElementById('header-note').textContent = 'Data coverage · store days October 2 through October 13';
+      document.getElementById('screen').innerHTML =
+        '<article class="card kpi-wrap"><h2>Historical report coverage</h2><p class="sub">A cumulative snapshot is not counted as a daily result. October 14 is still open, so it is not listed as missing.</p><table class="kpi"><tr><th>Report</th><th>Earliest</th><th>Latest</th><th>Daily records</th><th>Missing daily dates</th><th>In Google Sheets</th></tr>' + rows + '</table></article>';
+    }
     function openScreen(name) {
       screen = name;
       drawNav();
@@ -745,6 +753,7 @@
         else if (name === 'people') renderPeople(data);
         else if (name === 'morning') renderMorning(data);
         else if (name === 'health') renderHealth(data);
+        else if (name === 'coverage') renderCoverage(data);
       }).catch(function (error) {
         if (/sign in/i.test(error.message)) showLogin(error.message);
         else document.getElementById('screen').innerHTML = '<p class="error">' + error.message + '</p>';

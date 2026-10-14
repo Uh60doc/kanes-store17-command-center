@@ -13,6 +13,7 @@ var ROUTES_ = {
   saveBeddingGoals: ['admin'],
   changePassword: ['admin'],
   retry: ['admin'],
+  coverage: ['admin'],
 };
 
 function doGet() {
@@ -42,5 +43,6 @@ function dispatch(name, payload) {
   if (name === 'saveBeddingGoals') return saveBeddingGoals_(payload);
   if (name === 'changePassword') return changePassword_(payload);
   if (name === 'retry') return retry_(payload);
+  if (name === 'coverage') return coverage_(payload);
   throw new Error('That request is not available.');
 }
