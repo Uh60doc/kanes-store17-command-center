@@ -43,7 +43,8 @@ import {
   verifyValue,
   type Session,
 } from './session.ts';
-import { loadStoreDashboard } from './reports.ts';
+import { createReadStream } from 'node:fs';
+import { loadStoreDashboard, snapWrittenPdf } from './reports.ts';
 import { readStored } from './tokenStore.ts';
 
 export interface AppDeps {
@@ -118,6 +119,20 @@ export function createApp(config: ServerConfig, deps: AppDeps = { fetch: globalT
     const pathname = pathOf(req);
     if (method === 'GET' && pathname === '/api/dashboard') {
       send(res, 200, await loadStoreDashboard());
+      return;
+    }
+    const snapReport = /^\/api\/reports\/snap-written\/(\d{4}-\d{2}-\d{2})$/.exec(pathname);
+    if (method === 'GET' && snapReport) {
+      const file = snapWrittenPdf(snapReport[1] ?? '');
+      if (!file) {
+        send(res, 404, { error: 'That SNAP Written report is not on file.' });
+        return;
+      }
+      res.writeHead(200, {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="SNAP-Written-${snapReport[1]}.pdf"`,
+      });
+      createReadStream(file).pipe(res);
       return;
     }
     if (method === 'GET' && pathname === '/api/google/setup') {

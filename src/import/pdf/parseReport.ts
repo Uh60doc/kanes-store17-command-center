@@ -144,6 +144,7 @@ function readTable(pages: readonly PdfPage[]): TableRead {
   let customerCount: number | null = null;
   let printedSalesVsLyPercent: number | null = null;
   let carriedColumns: Column[] | null = null;
+  let section: number | null = null;
 
   for (const page of pages) {
     const header = findHeaderLine(page.lines);
@@ -151,9 +152,15 @@ function readTable(pages: readonly PdfPage[]): TableRead {
     if (header && columns) carriedColumns = columns;
     if (!columns || columns.length === 0) continue;
     for (const line of page.lines) {
-      if (header && line.y >= header.y - 1) continue;
       if (isFooter(line)) continue;
       const text = lineText(line);
+      const sectionLine = /^(\d+)\s*-\s*ORLANDO$/i.exec(text);
+      if (sectionLine) {
+        section = Number(sectionLine[1]);
+        continue;
+      }
+      if (header && line.y >= header.y - 1) continue;
+      if (section !== null && section !== 17) continue;
       if (!/\d/.test(text)) continue;
       const row = readRow(line, columns);
       if (/totals/i.test(text)) {

@@ -1,25 +1,31 @@
-import { useState } from 'react';
+import { DailyResults } from './dashboard/DailyResults.tsx';
+import { SalesTeam } from './dashboard/SalesTeam.tsx';
 import { StoreDashboard } from './dashboard/StoreDashboard.tsx';
 import { GoogleSetup } from './google/GoogleSetup.tsx';
 
-type Screen = 'store' | 'google';
-
 export default function App() {
-  const [screen, setScreen] = useState<Screen>(() =>
-    new URLSearchParams(window.location.search).has('google') ? 'google' : 'store',
-  );
+  const path = window.location.pathname;
+  const google = new URLSearchParams(window.location.search).has('google');
+  const daily = path === '/daily' || path.startsWith('/daily/');
+  const team = path === '/sales-team' || path.startsWith('/sales-team/');
 
   return (
-    <>
+    <div className="cc-shell">
       <nav className="app-nav" aria-label="Sections">
-        <button type="button" aria-current={screen === 'store' ? 'page' : undefined} onClick={() => setScreen('store')}>
+        <a href="/" aria-current={!daily && !team && !google ? 'page' : undefined}>
           Store
-        </button>
-        <button type="button" aria-current={screen === 'google' ? 'page' : undefined} onClick={() => setScreen('google')}>
+        </a>
+        <a href="/daily" aria-current={daily ? 'page' : undefined}>
+          Daily
+        </a>
+        <a href="/sales-team" aria-current={team ? 'page' : undefined}>
+          Sales team
+        </a>
+        <a href="/?google" aria-current={google ? 'page' : undefined}>
           Google setup
-        </button>
+        </a>
       </nav>
-      {screen === 'store' ? <StoreDashboard /> : <GoogleSetup />}
-    </>
+      {google ? <GoogleSetup /> : daily ? <DailyResults /> : team ? <SalesTeam /> : <StoreDashboard />}
+    </div>
   );
 }

@@ -1,35 +1,43 @@
-import { cardAssociates, identifyEmployee, type EmployeeRole } from '../config/roster.ts';
+import { cardAssociates, employees, identifyEmployee } from '../config/roster.ts';
 import type { ReportingPeriod } from '../domain/reportingCalendar.ts';
 
-export interface VerifiedPerqLine {
-  sourceName: string;
-  opportunities: number;
-}
-
-export interface VerifiedPerqAddition {
-  sourceName: string;
-  date: string;
-  opportunities: number;
-}
-
-/** One cumulative PERQ snapshot. It is not a daily series. */
-export interface VerifiedPerqSnapshot {
+export interface PerqSnapshotMeta {
   id: string;
-  periodStart: string;
-  periodEnd: string;
-  opportunities: number;
-  lines: readonly VerifiedPerqLine[];
-  additions: readonly VerifiedPerqAddition[];
+  filter_start: string;
+  filter_end: string;
+  report_level: 'employee' | 'location';
+  reported_total: number;
+  source: string;
+  source_run_time: string;
+  coverage: string;
+  location: string;
+  measure: string;
+  is_final_month_end: boolean;
 }
 
-export interface VerifiedPerqReference {
-  snapshots: readonly VerifiedPerqSnapshot[];
+export interface PerqEmployeeRow {
+  snapshot_id: string;
+  filter_start: string;
+  filter_end: string;
+  employee_code: string;
+  display_first: string;
+  display_last: string;
+  role_at_snapshot: string;
+  ups_plus_be_backs: number;
+  source_screenshot: string;
+  printed_generated_at: string;
+  is_single_day: boolean;
+}
+
+/** Cumulative PERQ evidence. Snapshots are not added together and are not daily rows. */
+export interface PerqEvidence {
+  snapshotMetadata: readonly PerqSnapshotMeta[];
+  employeeSnapshotRows: readonly PerqEmployeeRow[];
 }
 
 export interface OpportunityLine {
   displayName: string;
-  role: EmployeeRole;
-  onCard: boolean;
+  role: string;
   opportunities: number;
   note: string;
 }
@@ -44,9 +52,18 @@ export interface OpportunityWindow {
   lines: readonly OpportunityLine[];
 }
 
+export interface TeamMemberView {
+  id: string;
+  displayName: string;
+  opportunities: number | null;
+  opportunityLabel: string;
+  boundaryNote: string | null;
+}
+
 export interface PerqPanel {
   loaded: boolean;
   windows: readonly OpportunityWindow[];
+  team: readonly TeamMemberView[];
   flags: readonly string[];
 }
 
@@ -54,82 +71,41 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isLine(value: unknown): value is VerifiedPerqLine {
-  return isRecord(value) && typeof value.sourceName === 'string' && typeof value.opportunities === 'number' && Number.isFinite(value.opportunities);
-}
-
-function isAddition(value: unknown): value is VerifiedPerqAddition {
+function isMeta(value: unknown): value is PerqSnapshotMeta {
   return (
     isRecord(value) &&
-    typeof value.sourceName === 'string' &&
-    typeof value.date === 'string' &&
-    typeof value.opportunities === 'number' &&
-    Number.isFinite(value.opportunities)
+    typeof value.id === 'string' &&
+    typeof value.filter_start === 'string' &&
+    typeof value.filter_end === 'string' &&
+    (value.report_level === 'employee' || value.report_level === 'location') &&
+    typeof value.reported_total === 'number' &&
+    typeof value.source_run_time === 'string' &&
+    typeof value.coverage === 'string' &&
+    typeof value.measure === 'string' &&
+    typeof value.is_final_month_end === 'boolean'
   );
 }
 
-export function isVerifiedPerqReference(value: unknown): value is VerifiedPerqReference {
-  if (!isRecord(value) || !Array.isArray(value.snapshots)) return false;
-  return value.snapshots.every(
-    (snapshot) =>
-      isRecord(snapshot) &&
-      typeof snapshot.id === 'string' &&
-      typeof snapshot.periodStart === 'string' &&
-      typeof snapshot.periodEnd === 'string' &&
-      typeof snapshot.opportunities === 'number' &&
-      Array.isArray(snapshot.lines) &&
-      snapshot.lines.every(isLine) &&
-      Array.isArray(snapshot.additions) &&
-      snapshot.additions.every(isAddition),
+function isRow(value: unknown): value is PerqEmployeeRow {
+  return (
+    isRecord(value) &&
+    typeof value.snapshot_id === 'string' &&
+    typeof value.employee_code === 'string' &&
+    typeof value.display_first === 'string' &&
+    typeof value.display_last === 'string' &&
+    typeof value.ups_plus_be_backs === 'number' &&
+    typeof value.is_single_day === 'boolean'
   );
 }
 
-function sum(values: readonly number[]): number {
-  return values.reduce((total, value) => total + value, 0);
-}
-
-/** Issues that mean the snapshot must not be shown or used as a denominator. */
-export function validateReference(value: unknown): string[] {
-  if (!isVerifiedPerqReference(value)) return ['Verified PERQ reference is missing snapshots.'];
-  const issues: string[] = [];
-  for (const snapshot of value.snapshots) {
-    if (snapshot.lines.length > 0) {
-      const lines = sum(snapshot.lines.map((line) => line.opportunities));
-      if (lines !== snapshot.opportunities) {
-        issues.push(`${snapshot.id} lines sum to ${lines}; the snapshot total is ${snapshot.opportunities}.`);
-      }
-    }
-    for (const addition of snapshot.additions) {
-      if (addition.date < snapshot.periodStart || addition.date > snapshot.periodEnd) {
-        issues.push(`${addition.sourceName} on ${addition.date} falls outside ${snapshot.id}.`);
-      }
-    }
-    if (snapshot.additions.length === 0) continue;
-    const bases = value.snapshots.filter(
-      (other) =>
-        other.id !== snapshot.id &&
-        other.periodStart >= snapshot.periodStart &&
-        other.periodEnd <= snapshot.periodEnd &&
-        (other.periodStart !== snapshot.periodStart || other.periodEnd !== snapshot.periodEnd),
-    );
-    if (bases.length !== 1) {
-      issues.push(`${snapshot.id} states additions and needs one narrower snapshot beside it.`);
-      continue;
-    }
-    const base = bases[0];
-    const added = sum(snapshot.additions.map((addition) => addition.opportunities));
-    if (base.opportunities + added !== snapshot.opportunities) {
-      issues.push(
-        `${snapshot.id} total is ${snapshot.opportunities}. ${base.id} is ${base.opportunities} and the stated additions are ${added}.`,
-      );
-    }
-    for (const addition of snapshot.additions) {
-      if (addition.date >= base.periodStart && addition.date <= base.periodEnd) {
-        issues.push(`${addition.sourceName} on ${addition.date} is already inside ${base.id}.`);
-      }
-    }
-  }
-  return issues;
+export function isPerqEvidence(value: unknown): value is PerqEvidence {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.snapshotMetadata) &&
+    value.snapshotMetadata.every(isMeta) &&
+    Array.isArray(value.employeeSnapshotRows) &&
+    value.employeeSnapshotRows.every(isRow)
+  );
 }
 
 function displayDay(iso: string): string {
@@ -142,159 +118,253 @@ function displayDay(iso: string): string {
   }).format(new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1)));
 }
 
-function toLines(entries: readonly { sourceName: string; opportunities: number; note: string }[]): OpportunityLine[] {
-  return entries.map((entry) => {
-    const identity = identifyEmployee(null, entry.sourceName);
-    return {
-      displayName: identity.displayName,
-      role: identity.role,
-      onCard: identity.onCard,
-      opportunities: entry.opportunities,
-      note: entry.note,
-    };
-  });
+function sourceName(row: PerqEmployeeRow): string {
+  return `${row.display_first} ${row.display_last}`.replace(/\s+/g, ' ').trim();
 }
 
-function assemble(
-  base: VerifiedPerqSnapshot,
-  wider: VerifiedPerqSnapshot,
-): { sourceName: string; opportunities: number; note: string }[] {
-  const extras = new Map<string, { opportunities: number; dates: string[] }>();
-  for (const addition of wider.additions) {
-    const current = extras.get(addition.sourceName) ?? { opportunities: 0, dates: [] };
-    current.opportunities += addition.opportunities;
-    current.dates.push(addition.date);
-    extras.set(addition.sourceName, current);
-  }
-  const seen = new Set<string>();
-  const rows = base.lines.map((line) => {
-    seen.add(line.sourceName);
-    const extra = extras.get(line.sourceName);
-    const note = extra ? `Includes ${extra.opportunities} on ${extra.dates.map(displayDay).join(', ')}.` : '';
-    return { sourceName: line.sourceName, opportunities: line.opportunities + (extra?.opportunities ?? 0), note };
-  });
-  for (const [sourceName, extra] of extras) {
-    if (seen.has(sourceName)) continue;
-    rows.push({
-      sourceName,
-      opportunities: extra.opportunities,
-      note: `Recorded on ${extra.dates.map(displayDay).join(', ')}.`,
-    });
-  }
-  return rows;
+function isManagerRow(row: PerqEmployeeRow): boolean {
+  if (row.role_at_snapshot === 'management') return true;
+  return identifyEmployee(row.employee_code, sourceName(row)).role === 'management';
 }
 
-export interface ClosedCustomerPeriod {
-  periodStart: string;
-  periodEnd: string;
+function withoutManagers(rows: readonly PerqEmployeeRow[]): PerqEmployeeRow[] {
+  return rows.filter((row) => !isManagerRow(row));
 }
 
 /**
- * Store-month opportunities only when a snapshot covers the store period exactly.
- * A shorter window is preserved and is not returned here.
+ * The compiled extract misread two codes that the salesperson screenshots print clearly.
+ * CPRI0909 matches the roster. TNASSIF is the roster alias for Ricky Nassif.
  */
-export function storeMonthOpportunities(reference: VerifiedPerqReference, store: Pick<ReportingPeriod, 'start' | 'end'>): number | null {
-  const match = reference.snapshots.find((snapshot) => snapshot.periodStart === store.start && snapshot.periodEnd === store.end);
-  return match ? match.opportunities : null;
+const SCREENSHOT_CODES: Readonly<Record<string, string>> = {
+  CPR10909: 'CPRI0909',
+  TNASSI: 'TNASSIF',
+};
+
+export function applyScreenshotCodes(evidence: PerqEvidence): { evidence: PerqEvidence; notes: string[] } {
+  const notes: string[] = [];
+  if (evidence.employeeSnapshotRows.some((row) => row.employee_code === 'TNASSI')) {
+    notes.push('The compiled extract lists TNASSI. The salesperson screenshots print TNASSIF.');
+  }
+  return {
+    notes,
+    evidence: {
+      snapshotMetadata: evidence.snapshotMetadata,
+      employeeSnapshotRows: evidence.employeeSnapshotRows.map((row) => ({
+        ...row,
+        employee_code: SCREENSHOT_CODES[row.employee_code] ?? row.employee_code,
+      })),
+    },
+  };
+}
+
+export function validateReference(value: unknown): string[] {
+  if (!isPerqEvidence(value)) return ['Verified PERQ reference is missing snapshots.'];
+  const issues: string[] = [];
+  for (const snapshot of value.snapshotMetadata) {
+    const rows = value.employeeSnapshotRows.filter((row) => row.snapshot_id === snapshot.id);
+    if (snapshot.report_level === 'employee') {
+      const sum = rows.reduce((total, row) => total + row.ups_plus_be_backs, 0);
+      if (sum !== snapshot.reported_total) {
+        issues.push(`${snapshot.id} employee rows sum to ${sum}; the snapshot total is ${snapshot.reported_total}.`);
+      }
+    }
+    for (const row of rows) {
+      if (row.is_single_day && row.filter_start !== row.filter_end) {
+        issues.push(`${row.employee_code} is marked as one day but covers ${row.filter_start} through ${row.filter_end}.`);
+      }
+    }
+    const twin = value.snapshotMetadata.find(
+      (other) =>
+        other.id !== snapshot.id &&
+        other.filter_start === snapshot.filter_start &&
+        other.filter_end === snapshot.filter_end &&
+        other.report_level !== snapshot.report_level,
+    );
+    if (twin && twin.reported_total !== snapshot.reported_total) {
+      issues.push(
+        `${snapshot.id} total is ${snapshot.reported_total} and ${twin.id} total is ${twin.reported_total} for the same filter.`,
+      );
+    }
+  }
+  return issues;
+}
+
+function statusFor(snapshot: PerqSnapshotMeta): string {
+  const timing = snapshot.source_run_time === 'UNKNOWN' ? 'Report run time unknown.' : `Report run time ${snapshot.source_run_time}.`;
+  const finality = snapshot.is_final_month_end ? 'Final month-end snapshot.' : 'Interim snapshot. The filter end is not a completed month.';
+  return `${finality} ${timing} ${snapshot.coverage}`;
+}
+
+export function storeMonthOpportunities(evidence: PerqEvidence, store: Pick<ReportingPeriod, 'start' | 'end'>): number | null {
+  const match = evidence.snapshotMetadata.find(
+    (snapshot) =>
+      snapshot.report_level === 'location' &&
+      snapshot.filter_start === store.start &&
+      snapshot.filter_end === store.end &&
+      snapshot.is_final_month_end,
+  );
+  return match ? match.reported_total : null;
+}
+
+function memberId(code: string | null, displayName: string): string {
+  if (code) return code;
+  return displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
 export function buildPerqPanel(
-  reference: VerifiedPerqReference | null,
+  evidence: PerqEvidence | null,
   readIssues: readonly string[],
   store: Pick<ReportingPeriod, 'start' | 'end'>,
   individual: Pick<ReportingPeriod, 'start' | 'end'>,
-  delivered: ClosedCustomerPeriod | null,
+  delivered: { periodStart: string; periodEnd: string } | null,
 ): PerqPanel {
   const flags = [...readIssues];
-  const deliveredMatchesStore = delivered !== null && delivered.periodStart === store.start && delivered.periodEnd === store.end;
-  if (!deliveredMatchesStore) {
-    const covered = delivered
-      ? `NWDSR delivered on file covers ${displayDay(delivered.periodStart)} through ${displayDay(delivered.periodEnd)}.`
-      : 'NWDSR delivered closed customers are not on file.';
-    flags.push(
-      `${covered} Store closing ratio uses closed customers for ${displayDay(store.start)} through ${displayDay(store.end)}.`,
-    );
-  }
-  flags.push(
-    `Individual closing ratios use associate closed-customer counts for ${displayDay(individual.start)} through ${displayDay(individual.end)}. Those counts are still required.`,
-  );
-  if (!reference) {
+  const team = cardAssociates.map((employee) => ({
+    id: memberId(employee.code, employee.displayName),
+    displayName: employee.displayName,
+    opportunities: null as number | null,
+    opportunityLabel: `Individual month ${displayDay(individual.start)} through ${displayDay(individual.end)}. PERQ for that window is not on file.`,
+    boundaryNote: null as string | null,
+  }));
+
+  if (!evidence) {
     flags.unshift('A verified PERQ snapshot for this month is still required.');
-    return { loaded: false, windows: [], flags };
-  }
-
-  const partials = reference.snapshots.filter(
-    (snapshot) => snapshot.periodStart === store.start && snapshot.periodEnd < store.end && snapshot.periodEnd >= store.start,
-  );
-  const fullStore = reference.snapshots.find((snapshot) => snapshot.periodStart === store.start && snapshot.periodEnd === store.end);
-  const month = reference.snapshots.find(
-    (snapshot) => snapshot.periodStart === individual.start && snapshot.periodEnd === individual.end,
-  );
-
-  const windows: OpportunityWindow[] = [];
-
-  for (const partial of partials) {
-    windows.push({
-      id: partial.id,
-      label: 'Store window on file',
-      periodStart: partial.periodStart,
-      periodEnd: partial.periodEnd,
-      opportunities: partial.opportunities,
-      status: `Cumulative snapshot through ${displayDay(partial.periodEnd)}. The store month continues through ${displayDay(store.end)}.`,
-      lines: toLines(partial.lines.map((line) => ({ ...line, note: '' }))),
-    });
-  }
-
-  if (fullStore) {
-    windows.push({
-      id: fullStore.id,
-      label: 'Store month',
-      periodStart: fullStore.periodStart,
-      periodEnd: fullStore.periodEnd,
-      opportunities: fullStore.opportunities,
-      status: `Cumulative snapshot for ${displayDay(fullStore.periodStart)} through ${displayDay(fullStore.periodEnd)}.`,
-      lines: toLines(fullStore.lines.map((line) => ({ ...line, note: '' }))),
-    });
-  } else if (partials.length > 0) {
-    const partial = partials[partials.length - 1];
     flags.push(
-      `Verified PERQ for ${displayDay(partial.periodStart)} through ${displayDay(partial.periodEnd)} is ${partial.opportunities} UPS + Be Backs. ${displayDay(store.end)} is still required before the store-month count is complete.`,
+      `Store closing ratio uses NWDSR closed customers and location Ups + Be Backs for ${displayDay(store.start)} through ${displayDay(store.end)}.`,
     );
-  } else {
-    flags.push(`A store PERQ snapshot for ${displayDay(store.start)} through ${displayDay(store.end)} is still required.`);
+    return { loaded: false, windows: [], team, flags };
   }
 
-  if (month) {
-    const base = partials.find((partial) => partial.periodStart >= month.periodStart && partial.periodEnd <= month.periodEnd);
-    const entries = base && month.additions.length > 0 ? assemble(base, month) : month.lines.map((line) => ({ ...line, note: '' }));
-    const lines = toLines(entries);
-    const additionText =
-      month.additions.length > 0
-        ? month.additions
-            .map((addition) => `${addition.opportunities} for ${identifyEmployee(null, addition.sourceName).displayName} on ${displayDay(addition.date)}`)
-            .join('; ')
-        : '';
-    windows.push({
-      id: month.id,
-      label: 'Individual month',
-      periodStart: month.periodStart,
-      periodEnd: month.periodEnd,
-      opportunities: month.opportunities,
-      status: additionText
-        ? `Cumulative calendar month. The difference from the matching store window is ${additionText}.`
-        : `Cumulative snapshot for ${displayDay(month.periodStart)} through ${displayDay(month.periodEnd)}.`,
-      lines,
-    });
-    const listed = new Set(lines.map((line) => line.displayName));
+  const windows: OpportunityWindow[] = evidence.snapshotMetadata.map((snapshot) => {
+    const ownRows = evidence.employeeSnapshotRows.filter((row) => row.snapshot_id === snapshot.id);
+    const twinRows =
+      snapshot.report_level === 'location'
+        ? evidence.employeeSnapshotRows.filter(
+            (row) => row.filter_start === snapshot.filter_start && row.filter_end === snapshot.filter_end && row.snapshot_id !== snapshot.id,
+          )
+        : ownRows;
+    const managerOpportunities = twinRows.filter(isManagerRow).reduce((total, row) => total + row.ups_plus_be_backs, 0);
+    const salespersonRows = withoutManagers(ownRows);
+    return {
+      id: snapshot.id,
+      label: snapshot.report_level === 'location' ? 'Location report' : 'Employee report',
+      periodStart: snapshot.filter_start,
+      periodEnd: snapshot.filter_end,
+      opportunities: snapshot.reported_total - managerOpportunities,
+      status: statusFor(snapshot),
+      lines: salespersonRows.map((row) => {
+        const identity = identifyEmployee(row.employee_code, sourceName(row));
+        return {
+          displayName: identity.displayName,
+          role: row.role_at_snapshot,
+          opportunities: row.ups_plus_be_backs,
+          note: '',
+        };
+      }),
+    };
+  });
+
+  const seenCodes = new Set<string>();
+  for (const row of evidence.employeeSnapshotRows) {
+    const identity = identifyEmployee(row.employee_code, sourceName(row));
+    if (identity.role === 'management') continue;
+    const roster = employees.find((employee) => employee.displayName === identity.displayName);
+    const knownAlias = roster?.code === row.employee_code || roster?.aliasCodes.includes(row.employee_code) === true;
+    if (roster?.code && !knownAlias && !seenCodes.has(row.employee_code)) {
+      seenCodes.add(row.employee_code);
+      flags.push(`PERQ prints ${row.employee_code} for ${identity.displayName}. The roster code is ${roster.code}.`);
+    }
+  }
+
+  for (const snapshot of evidence.snapshotMetadata) {
+    if (snapshot.report_level !== 'employee') continue;
+    const location = evidence.snapshotMetadata.find(
+      (other) =>
+        other.report_level === 'location' &&
+        other.filter_start === snapshot.filter_start &&
+        other.filter_end === snapshot.filter_end,
+    );
+    if (!location) {
+      flags.push(
+        `The ${displayDay(snapshot.filter_start)} through ${displayDay(snapshot.filter_end)} evidence is an employee report. No location report was supplied for that filter.`,
+      );
+      continue;
+    }
+    if (location.reported_total === snapshot.reported_total) {
+      flags.push(
+        `${displayDay(snapshot.filter_start)} through ${displayDay(snapshot.filter_end)} reconciles: employee rows and the location report are both ${snapshot.reported_total} Ups + Be Backs.`,
+      );
+    }
+  }
+
+  const fullStore = evidence.snapshotMetadata.find(
+    (snapshot) => snapshot.report_level === 'location' && snapshot.filter_start === store.start && snapshot.filter_end === store.end,
+  );
+  if (!fullStore) {
+    flags.push(
+      `No location PERQ snapshot covers ${displayDay(store.start)} through ${displayDay(store.end)}. November 1 is still required before the store-month count is complete.`,
+    );
+  }
+
+  const monthSnapshot = evidence.snapshotMetadata.find(
+    (snapshot) =>
+      snapshot.report_level === 'employee' &&
+      snapshot.filter_start === individual.start &&
+      snapshot.filter_end === individual.end,
+  );
+  const narrower = evidence.snapshotMetadata.find(
+    (snapshot) =>
+      snapshot.report_level === 'employee' &&
+      snapshot.filter_start === store.start &&
+      snapshot.filter_end === individual.end &&
+      snapshot.filter_end !== store.end,
+  );
+  if (monthSnapshot) {
+    const monthRows = withoutManagers(evidence.employeeSnapshotRows.filter((row) => row.snapshot_id === monthSnapshot.id));
+    const narrowRows = narrower ? withoutManagers(evidence.employeeSnapshotRows.filter((row) => row.snapshot_id === narrower.id)) : [];
+    for (const member of team) {
+      const row = monthRows.find((item) => identifyEmployee(item.employee_code, sourceName(item)).displayName === member.displayName);
+      if (!row) {
+        member.opportunityLabel = 'This associate is absent from the verified PERQ snapshot. No opportunity count is recorded.';
+        continue;
+      }
+      member.opportunities = row.ups_plus_be_backs;
+      member.opportunityLabel = monthSnapshot.is_final_month_end
+        ? `Cumulative Ups + Be Backs for ${displayDay(monthSnapshot.filter_start)} through ${displayDay(monthSnapshot.filter_end)}.`
+        : `Interim cumulative snapshot filtered ${displayDay(monthSnapshot.filter_start)} through ${displayDay(monthSnapshot.filter_end)}. Report run time unknown.`;
+      const other = narrowRows.find((item) => item.employee_code === row.employee_code);
+      if (other && other.ups_plus_be_backs !== row.ups_plus_be_backs && monthSnapshot.source_run_time === 'UNKNOWN') {
+        member.boundaryNote = `${row.ups_plus_be_backs} on the ${monthSnapshot.filter_start} filter and ${other.ups_plus_be_backs} on the ${narrower?.filter_start} filter. Run times are unknown, so the difference stays a conditional boundary note and is not an October 1 daily record.`;
+      }
+    }
+    const listed = new Set(monthRows.map((row) => identifyEmployee(row.employee_code, sourceName(row)).displayName));
     const absent = cardAssociates.filter((employee) => !listed.has(employee.displayName)).map((employee) => employee.displayName);
     if (absent.length > 0) {
-      flags.push(`${absent.join(' and ')} ${absent.length === 1 ? 'is' : 'are'} absent from the verified PERQ snapshot.`);
+      flags.push(`${absent.join(' and ')} ${absent.length === 1 ? 'is' : 'are'} absent from the verified PERQ snapshot. No zero was added.`);
     }
-  } else {
-    flags.push(
-      `An individual PERQ snapshot for ${displayDay(individual.start)} through ${displayDay(individual.end)} is still required.`,
-    );
   }
 
-  return { loaded: true, windows, flags };
+  if (monthSnapshot && narrower && monthSnapshot.source_run_time === 'UNKNOWN') {
+    flags.push(
+      `The ${monthSnapshot.filter_start} and ${narrower.filter_start} employee snapshots are separate filters. Run times are unknown, so row differences stay a conditional boundary note and are not stored as daily PERQ records.`,
+    );
+  }
+  const cumulativeEmployee = evidence.snapshotMetadata.filter((snapshot) => snapshot.report_level === 'employee' && !snapshot.is_final_month_end);
+  if (cumulativeEmployee.length > 1) {
+    flags.push('These employee snapshots are separate cumulative filters. Their totals are not subtracted into daily opportunities.');
+  }
+
+  const deliveredMatches =
+    delivered !== null && delivered.periodStart === store.start && delivered.periodEnd === store.end && fullStore?.is_final_month_end === true;
+  if (!deliveredMatches) {
+    const covered = delivered
+      ? `NWDSR delivered on file covers ${displayDay(delivered.periodStart)} through ${displayDay(delivered.periodEnd)}.`
+      : 'NWDSR delivered closed customers are not on file for the store month.';
+    flags.push(`${covered} Store closing ratio stays Not Available until the closed-customer count and the location PERQ cover ${displayDay(store.start)} through ${displayDay(store.end)}.`);
+  }
+  flags.push(
+    `Individual closing ratios use each associate's closed customers for ${displayDay(individual.start)} through ${displayDay(individual.end)}. Those counts are still required.`,
+  );
+
+  return { loaded: true, windows, team, flags };
 }

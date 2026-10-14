@@ -18,7 +18,10 @@ export const storeOperatingPeriod = {
     writtenSales: 400_000,
     deliveredSales: 320_000,
     beddingMinimum: 0.2,
-    closingRatioTarget: 0.4,
+    /** Store month and every salesperson month. Green at 50% or higher. */
+    closingRatioTarget: 0.5,
+    /** Overall attachment. Green at 90% or higher. Missing reports stay Not Available. */
+    storeAttachmentTarget: 0.9,
   },
   corporateStretch: {
     writtenSales: 652_274,

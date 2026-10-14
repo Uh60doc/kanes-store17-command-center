@@ -1,34 +1,41 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import test from 'node:test';
-import { payrollPeriod, storeOperatingPeriod } from '../src/config/periods.ts';
+import { storeOperatingPeriod } from '../src/config/periods.ts';
 import { validateReference } from '../src/reference/perqReference.ts';
-import { perqReferencePath, loadVerifiedPerq } from './perqReference.ts';
+import { loadVerifiedPerq, perqReferencePath } from './perqReference.ts';
 
-test('the verified PERQ file reconciles and leaves November 1 open', () => {
+test('the packaged PERQ snapshots reconcile inside each filter and leave November 1 open', () => {
   const file = perqReferencePath();
   if (!existsSync(file)) return;
   const loaded = loadVerifiedPerq('/workspace');
-  assert.equal(loaded.issues.length, 0);
   assert.ok(loaded.reference);
-  assert.deepEqual(validateReference(loaded.reference), []);
-  const window = loaded.reference.snapshots.find(
-    (snapshot) => snapshot.periodStart === '2026-10-02' && snapshot.periodEnd === '2026-10-31',
-  );
-  const month = loaded.reference.snapshots.find(
-    (snapshot) => snapshot.periodStart === payrollPeriod.start && snapshot.periodEnd === payrollPeriod.end,
-  );
-  assert.ok(window);
-  assert.ok(month);
-  const lineTotal = window.lines.reduce((total, line) => total + line.opportunities, 0);
-  const additions = month.additions.reduce((total, line) => total + line.opportunities, 0);
-  assert.equal(lineTotal, window.opportunities);
-  assert.equal(window.opportunities + additions, month.opportunities);
-  assert.equal(window.periodEnd < storeOperatingPeriod.end, true);
+  assert.equal(loaded.reference.employeeSnapshotRows.some((row) => row.employee_code === 'CPR10909'), false);
+  assert.equal(loaded.reference.employeeSnapshotRows.some((row) => row.employee_code === 'CPRI0909'), true);
+  assert.equal(loaded.issues.join(' ').includes('CPR10909'), false);
+  const evidence = loaded.reference;
+  for (const snapshot of evidence.snapshotMetadata) {
+    assert.equal(snapshot.source_run_time, 'UNKNOWN');
+    assert.equal(snapshot.is_final_month_end, false);
+    if (snapshot.report_level === 'employee') {
+      const rows = evidence.employeeSnapshotRows.filter((row) => row.snapshot_id === snapshot.id);
+      const sum = rows.reduce((total, row) => total + row.ups_plus_be_backs, 0);
+      assert.equal(sum, snapshot.reported_total);
+      assert.equal(rows.every((row) => row.is_single_day === false), true);
+    }
+    const twin = evidence.snapshotMetadata.find(
+      (other) =>
+        other.report_level !== snapshot.report_level &&
+        other.filter_start === snapshot.filter_start &&
+        other.filter_end === snapshot.filter_end,
+    );
+    if (twin) assert.equal(twin.reported_total, snapshot.reported_total);
+  }
   assert.equal(
-    loaded.reference.snapshots.some(
-      (snapshot) => snapshot.periodStart === storeOperatingPeriod.start && snapshot.periodEnd === storeOperatingPeriod.end,
+    evidence.snapshotMetadata.some(
+      (snapshot) => snapshot.filter_start === storeOperatingPeriod.start && snapshot.filter_end === storeOperatingPeriod.end,
     ),
     false,
   );
+  assert.deepEqual(validateReference(evidence), []);
 });

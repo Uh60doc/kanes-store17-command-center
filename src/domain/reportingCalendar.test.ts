@@ -53,6 +53,26 @@ test('store and individual calendars meet at the month boundary', () => {
   }
 });
 
+test('the mandatory business-date matrix keeps store and individual periods apart', () => {
+  const matrix = [
+    ['2026-09-30', '2026-09-02', '2026-10-01', '2026-09-01', '2026-09-30'],
+    ['2026-10-01', '2026-09-02', '2026-10-01', '2026-10-01', '2026-10-31'],
+    ['2026-10-02', '2026-10-02', '2026-11-01', '2026-10-01', '2026-10-31'],
+    ['2026-10-31', '2026-10-02', '2026-11-01', '2026-10-01', '2026-10-31'],
+    ['2026-11-01', '2026-10-02', '2026-11-01', '2026-11-01', '2026-11-30'],
+    ['2026-11-02', '2026-11-02', '2026-12-01', '2026-11-01', '2026-11-30'],
+    ['2027-02-01', '2027-01-02', '2027-02-01', '2027-02-01', '2027-02-28'],
+    ['2028-02-29', '2028-02-02', '2028-03-01', '2028-02-01', '2028-02-29'],
+    ['2028-03-01', '2028-02-02', '2028-03-01', '2028-03-01', '2028-03-31'],
+  ] as const;
+  for (const [date, storeStart, storeEnd, individualStart, individualEnd] of matrix) {
+    const store = storePeriodContaining(date);
+    const individual = individualPeriodContaining(date);
+    assert.deepEqual([store.start, store.end], [storeStart, storeEnd], date);
+    assert.deepEqual([individual.start, individual.end], [individualStart, individualEnd], date);
+  }
+});
+
 test('the 1st closes the store month and opens the individual month', () => {
   assert.deepEqual(
     [storePeriodContaining('2026-11-01').start, storePeriodContaining('2026-11-01').end],
