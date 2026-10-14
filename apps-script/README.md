@@ -21,7 +21,7 @@ npx @google/clasp push
 - `BOOTSTRAP_MANAGER`
 - `BOOTSTRAP_ADMIN`
 
-Usernames are `sales`, `manager`, and `admin`.
+Usernames are `Sales17`, `Store17`, and `Kelly`.
 
 4. Run `installDailyTrigger_` once. It checks Gmail every 30 minutes.
 5. Deploy: `npx @google/clasp deploy --description "v1"` and choose **Execute as: Me** and **Who has access: Anyone**. The custom login, not a hidden URL, protects the figures.

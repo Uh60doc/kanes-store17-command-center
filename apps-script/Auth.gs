@@ -17,11 +17,17 @@ function same_(left, right) {
   return diff === 0;
 }
 
+var USER_ROLES_ = {
+  sales17: 'sales',
+  store17: 'manager',
+  kelly: 'admin',
+};
+
 function login_(payload) {
   var username = String((payload && payload.username) || '').trim().toLowerCase();
   var password = String((payload && payload.password) || '');
   if (locked_(username)) throw new Error('Too many attempts. Wait 15 minutes.');
-  var role = username === 'sales' || username === 'manager' || username === 'admin' ? username : '';
+  var role = USER_ROLES_[username] || '';
   var props = PropertiesService.getScriptProperties();
   var hash = role ? props.getProperty('hash_' + role) : '';
   var salt = role ? props.getProperty('salt_' + role) : '';
