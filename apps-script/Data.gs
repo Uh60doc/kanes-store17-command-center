@@ -1561,8 +1561,9 @@ function staffingNote_(date, lines) {
   var working = lines.filter(function (line) { return line.worked === true && line.role === 'associate' && !line.onLeave; });
   var off = lines.filter(function (line) { return line.worked === false && line.role === 'associate' && !line.onLeave; });
   if (!working.length) return '';
-  var note = 'Confirmed staff working ' + date + ': ' + working.map(function (line) { return line.name; }).join(', ') + '.';
-  if (off.length) note += ' ' + off.map(function (line) { return line.name; }).join(', ') + ' ' + (off.length === 1 ? 'was' : 'were') + ' confirmed not working.';
+  var note = 'Confirmed staff working ' + date + ': ' + working.map(function (line) { return line.name; }).join(', ') + (working.length === 1 ? ' only.' : '.');
+  if (off.length === 1) note += ' ' + off[0].name + ' was confirmed not working.';
+  else if (off.length > 1) note += ' ' + off.slice(0, -1).map(function (line) { return line.name; }).join(', ') + ', and ' + off[off.length - 1].name + ' were confirmed not working.';
   var handled = working.filter(function (line) { return line.perqOpportunities !== null && line.perqOpportunities > 0; });
   if (handled.length) {
     note += ' Daily PERQ shows ' + handled.map(function (line) {

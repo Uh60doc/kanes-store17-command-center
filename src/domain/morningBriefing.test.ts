@@ -28,8 +28,8 @@ test('October 14 confirmed staffing names Renzo and does not treat missing PERQ 
     { name: 'Ricky Nassif', role: 'associate', worked: false, onLeave: false, nwdsrWritten: null },
     { name: 'Brenda Sanchez', role: 'associate', worked: false, onLeave: false, nwdsrWritten: null },
   ]);
-  assert.match(note, /Confirmed staff working 2026-10-14: Renzo Del Solar\./);
-  assert.match(note, /Prakash Gandhi, Eric Montes Rodriguez, Ricky Nassif, Brenda Sanchez were confirmed not working\./);
+  assert.match(note, /Confirmed staff working 2026-10-14: Renzo Del Solar only\./);
+  assert.match(note, /Prakash Gandhi, Eric Montes Rodriguez, Ricky Nassif, and Brenda Sanchez were confirmed not working\./);
   assert.match(note, /Renzo Del Solar handled 4 opportunities/);
   assert.match(note, /missing daily PERQ count is not zero and is not an absence/);
   assert.match(note, /Recorded sales activity is separate from confirmed staffing/);

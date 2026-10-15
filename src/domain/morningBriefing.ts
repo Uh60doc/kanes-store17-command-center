@@ -151,9 +151,14 @@ export function staffingStatement(
   const working = lines.filter((line) => line.worked === true && line.role === 'associate' && !line.onLeave);
   const off = lines.filter((line) => line.worked === false && line.role === 'associate' && !line.onLeave);
   if (!working.length) return '';
-  let note = `Confirmed staff working ${date}: ${working.map((line) => line.name).join(', ')}.`;
-  if (off.length) {
-    note += ` ${off.map((line) => line.name).join(', ')} ${off.length === 1 ? 'was' : 'were'} confirmed not working.`;
+  const workingNames = working.map((line) => line.name).join(', ');
+  let note = `Confirmed staff working ${date}: ${workingNames}${working.length === 1 ? ' only.' : '.'}`;
+  if (off.length === 1) {
+    note += ` ${off[0]?.name} was confirmed not working.`;
+  } else if (off.length > 1) {
+    const last = off[off.length - 1]?.name ?? '';
+    const rest = off.slice(0, -1).map((line) => line.name).join(', ');
+    note += ` ${rest}, and ${last} were confirmed not working.`;
   }
   const handled = working.filter((line) => typeof line.perqOpportunities === 'number' && line.perqOpportunities > 0);
   if (handled.length) {
