@@ -74,10 +74,27 @@ export function matchedClosing(
 }
 
 /**
+ * One cumulative count is usable only when every snapshot for that exact period agrees.
+ * Snapshots with different start or end dates are left out. They are not added together.
+ */
+export function periodSnapshot(
+  snapshots: readonly { start: string; end: string; opportunities: number }[],
+  periodStart: string,
+  periodEnd: string,
+): number | null {
+  const matches = snapshots.filter((row) => row.start === periodStart && row.end === periodEnd);
+  const first = matches[0];
+  if (!first) return null;
+  if (matches.some((row) => row.opportunities !== first.opportunities)) return null;
+  return first.opportunities;
+}
+
+/**
  * Month-to-date adds customers and opportunities separately, then divides.
  * It does not average daily percentages.
  * A full-period total is used only with the other total for that same period.
- * Otherwise only dates that have both reports are added.
+ * A daily month is used only when every date in the window has both counts.
+ * One complete day does not stand in for the rest of the month.
  */
 export function officialClosing(input: {
   periodCustomers: number | null;
@@ -102,6 +119,10 @@ export function officialClosing(input: {
       ratio: null,
       needsReconciliation: false,
     };
+  }
+  const incomplete = input.dates.some((date) => !input.customers.has(date) || !input.opportunities.has(date));
+  if (incomplete || input.dates.length === 0) {
+    return { customers: null, opportunities: null, ratio: null, needsReconciliation: false };
   }
   const matched = matchedClosing(input.dates, input.customers, input.opportunities);
   return {

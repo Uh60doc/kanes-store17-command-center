@@ -357,7 +357,7 @@
         var ratioTone = day.closingReconcile ? 'warn' : '';
         return '<tr><td>' + esc(day.date) + '</td><td>' + money(day.snapWritten) + '</td><td>' + money(day.nwdsrWritten) + '</td><td>' + money(day.nwdsrDelivered) + '</td><td>' + count(day.purchasingCustomers) + '</td><td>' + count(day.opportunities) + '</td><td class="' + ratioTone + '">' + percent(day.closingRatio) + '</td><td class="' + ratioTone + '">' + (day.closingVersus || 'Not Available') + '</td></tr>';
       }).join('');
-      document.getElementById('screen').innerHTML = '<article class="card"><h2>Daily performance</h2><p class="sub">' + salesStandard + ' Month to date purchasing customers ' + count(mtd.customers) + ' · opportunities ' + count(mtd.opportunities) + ' · closing ratio ' + percent(mtd.ratio) + ' · ' + versusText(mtd) + '. Goal ' + percent(data.goal) + '.</p><table><tr><th>Date</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR delivered</th><th>Purchasing customers</th><th>Opportunities</th><th>Closing ratio</th><th>Versus goal</th></tr>' + rows + '</table><p class="sub">Store month, the 2nd through the 1st. Closing ratio uses Net Written # OF CUST and PERQ Ups + Be Backs for the same day. Month to date adds the counts, then divides. A missing count is Not Available, not zero. ' + esc(mtd.note || '') + '</p></article>';
+      document.getElementById('screen').innerHTML = '<article class="card"><h2>Daily performance</h2><p class="sub">' + salesStandard + ' Month to date purchasing customers ' + count(mtd.customers) + ' · opportunities ' + count(mtd.opportunities) + ' · closing ratio ' + percent(mtd.ratio) + ' · ' + versusText(mtd) + '. Goal ' + percent(data.goal) + '.</p><table><tr><th>Date</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR delivered</th><th>Purchasing customers</th><th>Opportunities</th><th>Closing ratio</th><th>Versus goal</th></tr>' + rows + '</table><p class="sub">Store month, the 2nd through the 1st. A day uses Net Written # OF CUST and PERQ Ups + Be Backs from that same day. Month to date is calculated only when every open day in the window has both counts, or when one customer total and one opportunity total cover that same store period. A missing count is Not Available, not zero. ' + esc(mtd.note || '') + '</p></article>';
     }
     var peopleSort = 'snapWritten';
     var peopleCache = [];
@@ -529,6 +529,8 @@
       var closingMtd = closingFigure.mtd;
       if (closingMtd && !pending(closingMtd.ratio)) {
         closingDetail += ' · MTD ' + percent(closingMtd.ratio) + ' · ' + closingMtd.customers + ' ÷ ' + closingMtd.opportunities + (closingMtd.through ? ' · through ' + shortDate(closingMtd.through) : '');
+      } else if (closingMtd && closingMtd.gap) {
+        closingDetail += ' · ' + closingMtd.gap;
       }
       var winners = data.winners || { status: 'pending', people: [] };
       var winnerHtml = '';
