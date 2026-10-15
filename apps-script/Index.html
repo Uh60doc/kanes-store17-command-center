@@ -410,10 +410,12 @@
         var deliveredCell = row.name === 'Closing Ratio' ? 'N/A' : kpiText(row.delivered, row.unit);
         return '<tr><td>' + esc(row.name) + '</td><td class="' + toneFor(row.written, row.goal) + '">' + kpiText(row.written, row.unit) + '</td><td class="' + toneFor(row.delivered, row.goal) + '">' + deliveredCell + '</td><td>' + goalText(row.goal, row.unit) + '</td></tr>';
       }).join('');
-      var trend = (person.days || []).map(function (day) { return '<li>' + esc(day.date) + ' · SNAP ' + money(day.snapWritten) + '</li>'; }).join('');
+      var trend = (person.days || []).map(function (day) { return '<li>' + esc(day.date) + ' · SNAP ' + money(day.snapWritten) + (day.note ? ' · ' + esc(day.note) : '') + '</li>'; }).join('');
+      var vacationDays = (person.days || []).filter(function (day) { return /vacation/i.test(day.note || ''); });
       document.getElementById('screen').innerHTML =
         '<p class="noprint"><button class="linkish" id="back-people" type="button">All salespeople</button></p>' +
         '<h2 class="section-title">' + esc(person.name) + '</h2>' +
+        (vacationDays.length ? '<p class="sub">On vacation ' + vacationDays.map(function (day) { return esc(day.date); }).join(', ') + '. Those report lines stay on the scorecard and this person is not counted as working.</p>' : '') +
         '<div class="grid">' +
         card('SNAP written', money(person.snapWritten), 'Actual written sales for the salesperson month.') +
         card('NWDSR written', money(person.nwdsrWritten), 'Written, not necessarily paid. May include cancellations.') +

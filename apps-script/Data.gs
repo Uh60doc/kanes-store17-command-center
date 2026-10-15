@@ -306,7 +306,7 @@ function peopleRows_(individualStart, individualEnd) {
     if (row.amount === '' || row.amount === null) return;
     totals[name] = (totals[name] || 0) + Number(row.amount);
     if (!days[name]) days[name] = [];
-    days[name].push({ date: date, snapWritten: Math.round(Number(row.amount) * 100) / 100 });
+    days[name].push({ date: date, snapWritten: Math.round(Number(row.amount) * 100) / 100, note: String(row.note || '') });
   });
   var goals = approvedGoals_(config_());
   var closingFacts = loadClosing_();

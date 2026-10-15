@@ -19,7 +19,7 @@ export const employees: readonly Employee[] = [
     role: 'associate',
     onCard: true,
     startDate: null,
-    note: 'Vacation through October 11, 2026. Returns October 12.',
+    note: 'On vacation October 14, 2026. That day is not a working day. Report lines under his name stay on the sheet.',
     nameAliases: ['RENZO DEL SOLAR', 'RENZO DELSOLAR', 'DELSOLAR, RENZO'],
   },
   {
