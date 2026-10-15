@@ -57,6 +57,65 @@ function sumField_(rows, field, start, end) {
   return seen ? Math.round(total * 100) / 100 : null;
 }
 
+function refreshRollup_() {
+  var config = config_();
+  var start = isoDate_(config.store_period_start) || '2026-10-02';
+  var end = isoDate_(config.store_period_end) || '2026-11-01';
+  var facts = dailyFacts_();
+  var writtenGoal = numberOrNull_(config.written_goal);
+  var deliveredGoal = numberOrNull_(config.delivered_goal);
+  if (writtenGoal === null) writtenGoal = 400000;
+  if (deliveredGoal === null) deliveredGoal = 320000;
+  var nwdsrWritten = sumField_(facts, 'nwdsrWritten', start, end);
+  var snapWritten = sumField_(facts, 'snapWritten', start, end);
+  var nwdsrDelivered = sumField_(facts, 'nwdsrDelivered', start, end);
+  var latest = '';
+  facts.forEach(function (row) {
+    if (row.date < start || row.date > end || row.nwdsrWritten === null) return;
+    if (row.date > latest) latest = row.date;
+  });
+  var writtenRemaining = nwdsrWritten === null ? '' : Math.round((writtenGoal - nwdsrWritten) * 100) / 100;
+  var deliveredRemaining = nwdsrDelivered === null ? '' : Math.round((deliveredGoal - nwdsrDelivered) * 100) / 100;
+  var metrics = {
+    nwdsr_written: [nwdsrWritten === null ? '' : nwdsrWritten, 'Primary written total. Sum of CC_Daily nwdsr_written for the store period. Blank cells are skipped.'],
+    snap_written: [snapWritten === null ? '' : snapWritten, 'SNAP Written reconciliation only. Not used for written remaining.'],
+    nwdsr_delivered: [nwdsrDelivered === null ? '' : nwdsrDelivered, 'Sum of CC_Daily nwdsr_delivered for the store period. Blank cells are skipped.'],
+    written_remaining: [writtenRemaining, 'Written goal minus NWDSR written. The goal itself is not changed.'],
+    delivered_remaining: [deliveredRemaining, 'Delivered goal minus NWDSR delivered. The goal itself is not changed.'],
+    verified_through: [latest, 'Latest store-period date with NWDSR written on CC_Daily.'],
+  };
+  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var tab = spreadsheet.getSheetByName('CC_Rollup');
+  if (!tab) {
+    tab = spreadsheet.insertSheet('CC_Rollup');
+    tab.getRange(1, 1, 1, 3).setValues([['metric', 'value', 'method']]);
+  }
+  var values = tab.getDataRange().getValues();
+  if (!values.length || String(values[0][0] || '') !== 'metric') {
+    tab.getRange(1, 1, 1, 3).setValues([['metric', 'value', 'method']]);
+    values = tab.getDataRange().getValues();
+  }
+  var index = {};
+  var r;
+  for (r = 1; r < values.length; r += 1) index[String(values[r][0] || '')] = r + 1;
+  Object.keys(metrics).forEach(function (metric) {
+    var line = metrics[metric];
+    if (index[metric]) {
+      tab.getRange(index[metric], 2, 1, 2).setValues([[line[0], line[1]]]);
+      return;
+    }
+    tab.appendRow([metric, line[0], line[1]]);
+  });
+  return {
+    nwdsrWritten: nwdsrWritten,
+    snapWritten: snapWritten,
+    nwdsrDelivered: nwdsrDelivered,
+    writtenRemaining: writtenRemaining,
+    deliveredRemaining: deliveredRemaining,
+    verifiedThrough: latest,
+  };
+}
+
 function todayNy_() {
   return Utilities.formatDate(new Date(), 'America/New_York', 'yyyy-MM-dd');
 }

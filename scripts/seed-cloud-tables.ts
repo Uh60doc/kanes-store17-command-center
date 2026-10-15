@@ -129,9 +129,11 @@ const facts: DailyFact[] = dailyRows.slice(1).map((row) => ({
   nwdsrDelivered: row[3] === '' ? null : Number(row[3]),
 }));
 const snap = sumColumn(facts, 'snapWritten', '2026-10-02', '2026-11-01');
+const nwdsrWritten = sumColumn(facts, 'nwdsrWritten', '2026-10-02', '2026-11-01');
 const delivered = sumColumn(facts, 'nwdsrDelivered', '2026-10-02', '2026-11-01');
-const writtenPace = requiredPace(400_000, snap, null);
+const writtenPace = requiredPace(400_000, nwdsrWritten, null);
 const deliveredPace = requiredPace(320_000, delivered, null);
+const verifiedThrough = facts.reduce((latest, row) => (row.nwdsrWritten !== null && row.date >= '2026-10-02' && row.date <= '2026-11-01' && row.date > latest ? row.date : latest), '');
 const now = new Date().toISOString();
 const yesterday = previousDate(nyToday());
 const yesterdayRow = facts.find((row) => row.date === yesterday);
@@ -227,10 +229,12 @@ await writeTab(token, spreadsheetId, 'CC_Health', [
 await writeTab(token, spreadsheetId, 'CC_Exceptions', exceptions);
 await writeTab(token, spreadsheetId, 'CC_Rollup', [
   ['metric', 'value', 'method'],
-  ['snap_written', snap ?? '', 'Sum of CC_Daily snap_written from the store period. Blank cells are skipped, not counted as zero.'],
-  ['nwdsr_delivered', delivered ?? '', 'Sum of CC_Daily nwdsr_delivered. Blank cells are skipped.'],
-  ['written_remaining', writtenPace.remaining ?? '', 'Written goal minus snap_written. The goal itself is not changed.'],
-  ['delivered_remaining', deliveredPace.remaining ?? '', 'Delivered goal minus nwdsr_delivered. The goal itself is not changed.'],
+  ['nwdsr_written', nwdsrWritten ?? '', 'Primary written total. Sum of CC_Daily nwdsr_written for the store period. Blank cells are skipped.'],
+  ['snap_written', snap ?? '', 'SNAP Written reconciliation only. Not used for written remaining.'],
+  ['nwdsr_delivered', delivered ?? '', 'Sum of CC_Daily nwdsr_delivered for the store period. Blank cells are skipped.'],
+  ['written_remaining', writtenPace.remaining ?? '', 'Written goal minus NWDSR written. The goal itself is not changed.'],
+  ['delivered_remaining', deliveredPace.remaining ?? '', 'Delivered goal minus NWDSR delivered. The goal itself is not changed.'],
+  ['verified_through', verifiedThrough, 'Latest store-period date with NWDSR written on CC_Daily.'],
   ['written_pace', '', 'Calculated at read time from verified written sales and the generated store calendar. The written goal is not changed.'],
   ['delivered_pace', '', 'Calculated at read time from verified delivered sales and the generated store calendar. The delivered goal is not changed.'],
 ]);

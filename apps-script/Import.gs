@@ -15,6 +15,7 @@ function scheduledImport_() {
   if (!lock.tryLock(1000)) return;
   try {
     importMailbox_();
+    refreshRollup_();
     markMissingReports_();
     noteHealth_('last_calculation', new Date().toISOString());
     noteHealth_('version', APP_VERSION_);
@@ -231,12 +232,14 @@ function writeDailyAmount_(parsed) {
     var conflict = parsed.reportType + ' ' + parsed.start + ' conflicts with the figure already on file. The existing figure was kept.';
     appendException_('Update Failed', conflict);
     notifyOnce_(conflict);
+    refreshRollup_();
     return 'conflict';
   }
   tab.getRange(target, field + 1).setValue(parsed.storeTotal);
   var ledgerView = parsed.reportType === 'SNAP Written' ? 'SNAP_STORE' : parsed.reportType === 'NWDSR Written' ? 'NWDSR_WRITTEN_STORE' : 'NWDSR_DELIVERED_STORE';
   var ledgerSide = parsed.reportType === 'NWDSR Delivered' ? 'delivered' : 'written';
   upsertLedgerDaily_(ledgerView, ledgerSide, parsed.start, parsed.storeTotal, parsed.reportType);
+  refreshRollup_();
   return 'imported';
 }
 
