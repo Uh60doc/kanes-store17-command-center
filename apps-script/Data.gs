@@ -1513,7 +1513,37 @@ function staffRole_(value) {
   return 'unknown';
 }
 
+function staffingSheet_() {
+  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var tab = spreadsheet.getSheetByName('CC_Staffing');
+  if (tab) return tab;
+  tab = spreadsheet.insertSheet('CC_Staffing');
+  tab.getRange(1, 1, 1, 10).setValues([[
+    'date', 'employee_code', 'display_name', 'role', 'worked', 'on_leave', 'nwdsr_written', 'perq_opportunities', 'source', 'note'
+  ]]);
+  return tab;
+}
+
+function ensureOctober14Staff_() {
+  var tab = staffingSheet_();
+  var values = tab.getDataRange().getValues();
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    if (isoDate_(values[r][0]) === '2026-10-14') return;
+  }
+  var confirmed = 'General Manager confirmation';
+  var absent = 'Confirmed not working. No daily PERQ row. A missing opportunity count was not treated as zero and was not the reason for this status.';
+  [
+    ['2026-10-14', 'RDELSO', 'Renzo Del Solar', 'associate', 'yes', 'no', '', 4, confirmed, 'Confirmed as the only salesperson working. Daily PERQ is 4 opportunities, matching the store PERQ of 4. SNAP written is recorded sales activity, not this staffing record. Store purchasing customers were not assigned to this person.'],
+    ['2026-10-14', 'PGANDH', 'Prakash Gandhi', 'associate', 'no', 'no', '', '', confirmed, absent],
+    ['2026-10-14', 'EMON0904', 'Eric Montes Rodriguez', 'associate', 'no', 'no', '', '', confirmed, absent],
+    ['2026-10-14', 'TNASSI', 'Ricky Nassif', 'associate', 'no', 'no', '', '', confirmed, absent],
+    ['2026-10-14', '', 'Brenda Sanchez', 'associate', 'no', 'no', '', '', confirmed, absent],
+  ].forEach(function (row) { tab.appendRow(row); });
+}
+
 function readStaffing_(date) {
+  try { ensureOctober14Staff_(); } catch (error) { return []; }
   return sheet_('CC_Staffing').filter(function (row) { return isoDate_(row.date) === date; }).map(function (row) {
     var worked = String(row.worked || '').trim().toLowerCase();
     return {
@@ -1522,8 +1552,27 @@ function readStaffing_(date) {
       worked: worked === 'yes' ? true : (worked === 'no' ? false : null),
       onLeave: /^(yes|y|leave)$/i.test(String(row.on_leave || '')),
       nwdsrWritten: fineNumber_(row.nwdsr_written),
+      perqOpportunities: fineNumber_(row.perq_opportunities),
     };
   });
+}
+
+function staffingNote_(date, lines) {
+  var working = lines.filter(function (line) { return line.worked === true && line.role === 'associate' && !line.onLeave; });
+  var off = lines.filter(function (line) { return line.worked === false && line.role === 'associate' && !line.onLeave; });
+  if (!working.length) return '';
+  var note = 'Confirmed staff working ' + date + ': ' + working.map(function (line) { return line.name; }).join(', ') + '.';
+  if (off.length) note += ' ' + off.map(function (line) { return line.name; }).join(', ') + ' ' + (off.length === 1 ? 'was' : 'were') + ' confirmed not working.';
+  var handled = working.filter(function (line) { return line.perqOpportunities !== null && line.perqOpportunities > 0; });
+  if (handled.length) {
+    note += ' Daily PERQ shows ' + handled.map(function (line) {
+      return line.name + ' handled ' + line.perqOpportunities + (line.perqOpportunities === 1 ? ' opportunity' : ' opportunities');
+    }).join(', ') + '.';
+  }
+  note += ' A missing daily PERQ count is not zero and is not an absence.';
+  note += ' Recorded sales activity is separate from confirmed staffing.';
+  note += ' Store purchasing customers were not assigned to a salesperson.';
+  return note;
 }
 
 function eligibleAssociate_(line) {
@@ -1701,6 +1750,7 @@ function morning_(payload) {
       personalShare: personalShare,
     },
     winners: winners,
+    staffingNote: staffingNote_(yesterday, staffing),
     promotion: saleOnDate_(promotion, home.today),
     financing: financeOnDate_(promotion, home.today),
     beddingFinance: promotion.beddingFinance || 'Size-based qualifying amounts are not in the approved promotion.',

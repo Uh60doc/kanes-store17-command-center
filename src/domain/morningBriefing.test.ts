@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { activeFinancing, activeSale, anniversarySale, chooseVerifiedFigure, claimsZeroInterest, dailyWinners, managementName, personalShare, type StaffLine } from './morningBriefing.ts';
+import { activeFinancing, activeSale, anniversarySale, chooseVerifiedFigure, claimsZeroInterest, dailyWinners, managementName, personalShare, staffingStatement, type StaffLine } from './morningBriefing.ts';
 
 const example: StaffLine[] = [
   { name: 'A', role: 'associate', worked: true, onLeave: false, nwdsrWritten: 4000 },
@@ -18,6 +18,23 @@ test('the example lists only the associate who beat a $3,000 share', () => {
   assert.equal(result.share, 3000);
   assert.deepEqual(result.winners.map((winner) => winner.name), ['A']);
   assert.equal(result.winners[0]?.above, 1000);
+});
+
+test('October 14 confirmed staffing names Renzo and does not treat missing PERQ as an absence', () => {
+  const note = staffingStatement('2026-10-14', [
+    { name: 'Renzo Del Solar', role: 'associate', worked: true, onLeave: false, nwdsrWritten: null, perqOpportunities: 4 },
+    { name: 'Prakash Gandhi', role: 'associate', worked: false, onLeave: false, nwdsrWritten: null, perqOpportunities: null },
+    { name: 'Eric Montes Rodriguez', role: 'associate', worked: false, onLeave: false, nwdsrWritten: null },
+    { name: 'Ricky Nassif', role: 'associate', worked: false, onLeave: false, nwdsrWritten: null },
+    { name: 'Brenda Sanchez', role: 'associate', worked: false, onLeave: false, nwdsrWritten: null },
+  ]);
+  assert.match(note, /Confirmed staff working 2026-10-14: Renzo Del Solar\./);
+  assert.match(note, /Prakash Gandhi, Eric Montes Rodriguez, Ricky Nassif, Brenda Sanchez were confirmed not working\./);
+  assert.match(note, /Renzo Del Solar handled 4 opportunities/);
+  assert.match(note, /missing daily PERQ count is not zero and is not an absence/);
+  assert.match(note, /Recorded sales activity is separate from confirmed staffing/);
+  assert.match(note, /Store purchasing customers were not assigned to a salesperson/);
+  assert.equal(note.includes('0 opportunities'), false);
 });
 
 test('a sale without a working roster is not turned into a winner', () => {

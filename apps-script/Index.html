@@ -590,6 +590,7 @@
           '<label><input id="promo-approved" type="checkbox" ' + (promoSource.approved === 'yes' ? 'checked' : '') + ' /> Approved for the team</label>' +
           '<p id="promo-error" class="error"></p><button id="promo-save" type="button">Save promotion</button></article>';
       }
+      var staffNote = data.staffingNote ? '<p class="sub">' + esc(data.staffingNote) + '</p>' : '';
       document.getElementById('screen').innerHTML =
         '<div class="morning">' +
         '<h2 class="section-title">Results</h2><div class="morning-five">' +
@@ -606,7 +607,7 @@
         huddleCard('Closing target', percent(today.closingGoal), 'Net Written customers divided by PERQ.', '') +
         huddleCard('Per salesperson', huddleMoney(today.personalShare), pending(today.personalShare) ? 'Today\'s working roster is not on file.' : 'Today\'s written goal divided by associates working today.', pending(today.personalShare) ? 'pending' : '') +
         '</div>' +
-        '<h2 class="section-title">Yesterday\'s sales winners</h2><div class="morning-grid">' + winnerHtml + '</div>' +
+        '<h2 class="section-title">Yesterday\'s sales winners</h2>' + staffNote + '<div class="morning-grid">' + winnerHtml + '</div>' +
         '<h2 class="section-title">Today\'s promotion</h2>' + promoHtml +
         '<h2 class="section-title">Sales reminders</h2><ul class="list">' + reminders + '</ul>' +
         '<div class="morning-finance"><h2 class="section-title">Financing options</h2><div class="morning-grid">' + finance + '</div>' +

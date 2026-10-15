@@ -139,6 +139,34 @@ export function chooseVerifiedFigure(input: {
   return { value: null, scope: 'none', date: '', period: '' };
 }
 
+/**
+ * Confirmed staffing is the working roster. Daily PERQ names who handled opportunities.
+ * A missing or zero PERQ count is not an absence. Sales activity is a separate record.
+ * Purchasing customers are not assigned from the store total.
+ */
+export function staffingStatement(
+  date: string,
+  lines: readonly (StaffLine & { perqOpportunities?: number | null })[],
+): string {
+  const working = lines.filter((line) => line.worked === true && line.role === 'associate' && !line.onLeave);
+  const off = lines.filter((line) => line.worked === false && line.role === 'associate' && !line.onLeave);
+  if (!working.length) return '';
+  let note = `Confirmed staff working ${date}: ${working.map((line) => line.name).join(', ')}.`;
+  if (off.length) {
+    note += ` ${off.map((line) => line.name).join(', ')} ${off.length === 1 ? 'was' : 'were'} confirmed not working.`;
+  }
+  const handled = working.filter((line) => typeof line.perqOpportunities === 'number' && line.perqOpportunities > 0);
+  if (handled.length) {
+    note += ` Daily PERQ shows ${handled
+      .map((line) => `${line.name} handled ${line.perqOpportunities} ${line.perqOpportunities === 1 ? 'opportunity' : 'opportunities'}`)
+      .join(', ')}.`;
+  }
+  note += ' A missing daily PERQ count is not zero and is not an absence.';
+  note += ' Recorded sales activity is separate from confirmed staffing.';
+  note += ' Store purchasing customers were not assigned to a salesperson.';
+  return note;
+}
+
 export function personalShare(storeGoal: number | null, workedCount: number | null): number | null {
   if (storeGoal === null || workedCount === null || workedCount <= 0) return null;
   return Math.round((storeGoal / workedCount) * 100) / 100;
