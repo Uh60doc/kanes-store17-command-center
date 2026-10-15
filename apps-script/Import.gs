@@ -92,6 +92,7 @@ function importAttachment_(messageId, attachment) {
     return true;
   }
   var decision = writeDailyAmount_(parsed);
+  if (decision !== 'conflict' && parsed.reportType === 'SNAP Written') writeSnapAssociates_(parsed, text, sha);
   if (decision !== 'conflict' && parsed.reportType === 'NWDSR Written' && parsed.purchasingCustomers !== null) {
     upsertClosing_({ date: parsed.start, scope: 'store', code: '', name: '', customers: parsed.purchasingCustomers, opportunities: '', start: parsed.start, end: parsed.end, source: 'NWDSR Net Written # OF CUST', final: 'yes', note: 'Net Written # OF CUST for the report date.' });
   }
@@ -160,6 +161,51 @@ function knownSha_(sha) {
   return sheet_('CC_Imports').some(function (row) {
     var status = String(row.status);
     return String(row.sha256) === sha && status !== 'needs-review' && status !== 'failed';
+  });
+}
+
+function snapAssociates_(text) {
+  var found = [];
+  var lines = String(text).split(/\r?\n/);
+  var i;
+  for (i = 0; i < lines.length; i += 1) {
+    var line = lines[i].trim();
+    if (/totals:/i.test(line)) continue;
+    var row = /^([A-Z][A-Z' .-]+,\s*[A-Z][A-Z' .-]+?)\s+(-?\d[\d,]*(?:\.\d+)?)\b/i.exec(line);
+    if (!row) continue;
+    var amount = moneyToken_(row[2]);
+    if (amount === null) continue;
+    found.push({ sourceName: row[1].replace(/\s+/g, ' ').trim(), amount: amount });
+  }
+  return found;
+}
+
+function writeSnapAssociates_(parsed, text, sha) {
+  var lines = snapAssociates_(text);
+  if (!lines.length) return;
+  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var tab = spreadsheet.getSheetByName('CC_AssociateDays');
+  if (!tab) return;
+  var values = tab.getDataRange().getValues();
+  var known = {};
+  var r;
+  for (r = 1; r < values.length; r += 1) known[String(values[r][1]).toUpperCase()] = values[r];
+  lines.forEach(function (line) {
+    var prior = known[line.sourceName.toUpperCase()];
+    var display = prior ? String(prior[2]) : line.sourceName;
+    var role = prior ? String(prior[3]) : 'unknown';
+    var existing = 0;
+    for (r = 1; r < values.length; r += 1) {
+      if (isoDate_(values[r][0]) === parsed.start && String(values[r][1]).toUpperCase() === line.sourceName.toUpperCase()) existing = r + 1;
+    }
+    if (existing) {
+      var current = numberOrNull_(tab.getRange(existing, 5).getValue());
+      if (current !== null && current !== line.amount) {
+        notifyOnce_(line.sourceName + ' on ' + parsed.start + ' conflicts with the salesperson line already on file. The existing amount was kept.');
+      }
+      return;
+    }
+    tab.appendRow([parsed.start, line.sourceName, display, role, line.amount, sha]);
   });
 }
 

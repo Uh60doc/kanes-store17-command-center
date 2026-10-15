@@ -92,6 +92,13 @@ KANE FURNITURE #17 Totals: 93,740 10`);
   assert.equal(parseReportText(`SNAP - DELIVERED SALES RANKING REPORT
 FROM 12-OCT-2026 TO 12-OCT-2026
 17 - ORLANDO Totals: 1,370`), null);
+  const october14 = parseReportText(`SNAP - WRITTEN SALES RANKING REPORT
+FROM 14-OCT-2026 TO 14-OCT-2026
+DELSOLAR, RENZO                       2,476       1,238          0.0
+17 - ORLANDO Totals:        54.0      2,476        1,238         0.0`);
+  assert.equal(october14?.storeTotal, 2476);
+  assert.equal(october14?.associates[0]?.sourceName, 'DELSOLAR, RENZO');
+  assert.equal(october14?.associates[0]?.amount, 2476);
   const importer = readFileSync(new URL('../../apps-script/Import.gs', import.meta.url), 'utf8');
   assert.match(importer, /SNAP Delivered is not the delivered standard/);
   assert.match(importer, /upsertLedgerDaily_\('SNAP_STORE'|upsertLedgerDaily_\(ledgerView/);
