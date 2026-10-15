@@ -200,13 +200,15 @@ function writeSnapAssociates_(parsed, text, sha) {
     }
     if (existing) {
       var current = numberOrNull_(tab.getRange(existing, 5).getValue());
-      if (current !== null && current !== line.amount) {
-        notifyOnce_(line.sourceName + ' on ' + parsed.start + ' conflicts with the salesperson line already on file. The existing amount was kept.');
+      if (current !== line.amount) {
+        tab.getRange(existing, 5, 1, 2).setValues([[line.amount, sha]]);
       }
       return;
     }
     tab.appendRow([parsed.start, line.sourceName, display, role, line.amount, sha]);
   });
+  var period = individualPeriodContaining_(parsed.start);
+  refreshPeopleWritten_(period.start, period.end);
 }
 
 function writeDailyAmount_(parsed) {

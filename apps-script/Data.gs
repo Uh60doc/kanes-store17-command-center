@@ -292,21 +292,42 @@ function activePerson_(row) {
   return role !== 'management' && role !== 'former' && role !== 'unknown';
 }
 
+// Daily SNAP lines live in CC_AssociateDays. SNAP_PERSON is a copy of those same lines and is not added again.
+function snapAssociateLines_(individualStart, individualEnd) {
+  var byDay = {};
+  var order = [];
+  var latest = '';
+  sheet_('CC_AssociateDays').forEach(function (row) {
+    var name = String(row.display_name || '');
+    var date = isoDate_(row.date);
+    if (!name || !date || date < individualStart || date > individualEnd) return;
+    if (row.amount === '' || row.amount === null) return;
+    if (date > latest) latest = date;
+    var key = date + '|' + name;
+    if (!byDay[key]) order.push(key);
+    byDay[key] = {
+      name: name,
+      date: date,
+      amount: Math.round(Number(row.amount) * 100) / 100,
+      note: String(row.note || ''),
+      role: String(row.role || ''),
+    };
+  });
+  return { byDay: byDay, order: order, latest: latest };
+}
+
 function peopleRows_(individualStart, individualEnd) {
+  var lines = snapAssociateLines_(individualStart, individualEnd);
   var totals = {};
   var seenAny = {};
   var days = {};
-  sheet_('CC_AssociateDays').forEach(function (row) {
-    if (String(row.role) === 'management' || String(row.role) === 'unknown' || String(row.role) === 'former') return;
-    var name = String(row.display_name || '');
-    if (!name) return;
-    seenAny[name] = true;
-    var date = isoDate_(row.date);
-    if (!date || date < individualStart || date > individualEnd) return;
-    if (row.amount === '' || row.amount === null) return;
-    totals[name] = (totals[name] || 0) + Number(row.amount);
-    if (!days[name]) days[name] = [];
-    days[name].push({ date: date, snapWritten: Math.round(Number(row.amount) * 100) / 100, note: String(row.note || '') });
+  lines.order.forEach(function (key) {
+    var line = lines.byDay[key];
+    if (line.role === 'management' || line.role === 'unknown' || line.role === 'former') return;
+    seenAny[line.name] = true;
+    totals[line.name] = (totals[line.name] || 0) + line.amount;
+    if (!days[line.name]) days[line.name] = [];
+    days[line.name].push({ date: line.date, snapWritten: line.amount, note: line.note });
   });
   var goals = approvedGoals_(config_());
   var closingFacts = loadClosing_();
@@ -1385,11 +1406,40 @@ function saveBeddingGoals_(payload) {
   return bedding_(payload);
 }
 
+function refreshPeopleWritten_(individualStart, individualEnd) {
+  var lines = snapAssociateLines_(individualStart, individualEnd);
+  var totals = {};
+  lines.order.forEach(function (key) {
+    var line = lines.byDay[key];
+    if (line.role === 'management' || line.role === 'unknown' || line.role === 'former') return;
+    totals[line.name] = Math.round(((totals[line.name] || 0) + line.amount) * 100) / 100;
+  });
+  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var tab = spreadsheet.getSheetByName('CC_People');
+  if (!tab) return lines.latest;
+  var values = tab.getDataRange().getValues();
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    var name = String(values[r][0] || '');
+    var role = String(values[r][1] || 'associate');
+    if (role === 'management' || role === 'former' || role === 'unknown') continue;
+    if (!Object.prototype.hasOwnProperty.call(totals, name)) continue;
+    if (numberOrNull_(values[r][2]) === totals[name]) continue;
+    tab.getRange(r + 1, 3).setValue(totals[name]);
+  }
+  return lines.latest;
+}
+
 function people_(payload) {
   var individual = individualPeriodContaining_(todayNy_());
+  var snapThrough = refreshPeopleWritten_(individual.start, individual.end);
   return {
     role: payload.session.role,
     period: individual.start + ' through ' + individual.end,
+    snapThrough: snapThrough || null,
+    snapLabel: 'SNAP written',
+    nwdsrWrittenThrough: null,
+    nwdsrDeliveredThrough: null,
     people: peopleRows_(individual.start, individual.end),
     updated: healthValue_('last_calculation') || 'Not Available',
   };
