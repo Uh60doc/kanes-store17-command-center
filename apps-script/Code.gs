@@ -17,6 +17,11 @@ var ROUTES_ = {
 };
 
 function doGet() {
+  try {
+    refreshRollup_();
+  } catch (error) {
+    appendException_('Update Failed', 'CC_Rollup was not recalculated. ' + String(error && error.message ? error.message : error));
+  }
   var page = HtmlService.createHtmlOutputFromFile('Index')
     .setTitle("Kane's Store 17 Command Center")
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
