@@ -340,6 +340,7 @@ function personRecord_(name, snapWritten, role, days, goals, closing) {
     closingVersus: closing.versusGoal,
     closingNote: closing.note,
     closing: closing,
+    leave: name === 'Renzo Del Solar' ? 'On vacation October 1 through October 12, 2026. Back October 13. Sales during vacation stay on the report and those days are not counted as worked.' : '',
     days: days.sort(function (left, right) { return left.date < right.date ? -1 : 1; }),
     kpis: [
       kpiRow_('Bedding', null, null, goals.bedding, 'percent', ''),
@@ -427,18 +428,38 @@ function coveredTotal_(dates, values) {
   return total;
 }
 
+function matchedDates_(dates, customers, opportunities) {
+  var matched = [];
+  dates.forEach(function (date) {
+    if (Object.prototype.hasOwnProperty.call(customers, date) && Object.prototype.hasOwnProperty.call(opportunities, date)) matched.push(date);
+  });
+  return matched;
+}
+
 function officialClosing_(periodCustomers, periodOpportunities, dates, customers, opportunities) {
   if (periodCustomers !== null && periodOpportunities !== null) {
     var periodRatio = closingRatio_(periodCustomers, periodOpportunities);
-    return { customers: periodCustomers, opportunities: periodOpportunities, ratio: periodRatio.ratio, reconcile: periodRatio.reconcile };
+    return { customers: periodCustomers, opportunities: periodOpportunities, ratio: periodRatio.ratio, reconcile: periodRatio.reconcile, matched: [] };
   }
-  var customerEnd = periodCustomers === null ? coverageEnd_(dates, customers) : null;
-  var opportunityEnd = periodOpportunities === null ? coverageEnd_(dates, opportunities) : null;
-  var customerTotal = periodCustomers !== null ? periodCustomers : coveredTotal_(dates, customers);
-  var opportunityTotal = periodOpportunities !== null ? periodOpportunities : coveredTotal_(dates, opportunities);
-  var sameDaily = periodCustomers === null && periodOpportunities === null && customerEnd !== null && customerEnd === opportunityEnd;
-  var computed = sameDaily ? closingRatio_(customerTotal, opportunityTotal) : { ratio: null, reconcile: false };
-  return { customers: customerTotal, opportunities: opportunityTotal, ratio: computed.ratio, reconcile: computed.reconcile };
+  if (periodCustomers !== null || periodOpportunities !== null) {
+    return {
+      customers: periodCustomers !== null ? periodCustomers : coveredTotal_(dates, customers),
+      opportunities: periodOpportunities !== null ? periodOpportunities : coveredTotal_(dates, opportunities),
+      ratio: null,
+      reconcile: false,
+      matched: [],
+    };
+  }
+  var matched = matchedDates_(dates, customers, opportunities);
+  if (!matched.length) return { customers: null, opportunities: null, ratio: null, reconcile: false, matched: [] };
+  var customerTotal = 0;
+  var opportunityTotal = 0;
+  matched.forEach(function (date) {
+    customerTotal += customers[date];
+    opportunityTotal += opportunities[date];
+  });
+  var computed = closingRatio_(customerTotal, opportunityTotal);
+  return { customers: customerTotal, opportunities: opportunityTotal, ratio: computed.ratio, reconcile: computed.reconcile, matched: matched };
 }
 
 function versusGoal_(ratio, goal, reconcile) {
@@ -601,13 +622,18 @@ function storeMonthClosing_(facts, period, today, closed, goal) {
     dailyCountMap_(facts, 'store', '', 'customers'),
     dailyCountMap_(facts, 'store', '', 'opportunities')
   );
-  var verified = facts.filter(function (row) {
-    return row.scope === 'store' && !row.code && row.start === row.end && row.customers !== null && row.start >= period.start && row.start <= period.end;
-  }).sort(function (left, right) { return left.start < right.start ? -1 : 1; });
-  var note = verified.length
-    ? 'Verified Net Written purchasing customers: ' + verified.map(function (row) { return row.start + ' is ' + row.customers; }).join(', ') + '. A day without a count is Not Available, not zero.'
-    : 'No Net Written purchasing-customer count is on file for this store month.';
-  if (result.opportunities === null) note += ' No location PERQ covers ' + period.start + ' through ' + period.end + '.';
+  var customerDays = facts.filter(function (row) {
+    return row.scope === 'store' && !row.code && row.start === row.end && row.customers !== null && row.start >= period.start && row.start <= period.end && row.start <= today;
+  });
+  var unmatched = customerDays.filter(function (row) { return result.matched.indexOf(row.start) === -1; }).map(function (row) { return row.start; });
+  var through = result.matched.length ? result.matched[result.matched.length - 1] : '';
+  var note = '';
+  if (result.ratio !== null) {
+    note = 'Matched ' + result.matched.join(', ') + '. ' + result.customers + ' purchasing customers ÷ ' + result.opportunities + ' opportunities.';
+    if (unmatched.length) note += ' No PERQ on ' + unmatched.join(', ') + ', so those customers are not in this ratio.';
+  } else {
+    note = 'No store date in ' + period.start + ' through ' + period.end + ' has both Net Written customers and PERQ opportunities.';
+  }
   if (result.reconcile) note += ' The ratio is above 100% and is flagged for reconciliation.';
   return {
     customers: result.customers,
@@ -615,6 +641,8 @@ function storeMonthClosing_(facts, period, today, closed, goal) {
     ratio: result.ratio,
     reconcile: result.reconcile,
     versusGoal: versusGoal_(result.ratio, goal, result.reconcile),
+    through: through,
+    matched: result.matched,
     note: note,
   };
 }
@@ -858,7 +886,9 @@ function homeKpiStrip_(goals, actuals, closing) {
         goal: spec[2],
         written: closing.ratio,
         delivered: null,
-        note: closing.ratio === null ? 'Needs Net Written customers and PERQ for the same dates.' : '',
+        through: closing.through || '',
+        detail: closing.customers !== null && closing.opportunities !== null ? closing.customers + ' customers ÷ ' + closing.opportunities + ' opportunities' : '',
+        note: closing.note || '',
         reconcile: !!closing.reconcile,
       };
     }
@@ -1248,16 +1278,25 @@ function financeOnDate_(promotion, today) {
   }).sort(function (left, right) { return Number(left.months) - Number(right.months); });
 }
 
-function dailyBedding_(date) {
-  var written = null;
-  var delivered = null;
+function beddingDailyMap_() {
+  var map = {};
   sheet_('CC_Kpi').forEach(function (row) {
     if (String(row.metric) !== 'Daily Bedding') return;
-    if (isoDate_(row.period_start) !== date || isoDate_(row.period_end) !== date) return;
-    written = fineNumber_(row.written);
-    delivered = fineNumber_(row.delivered);
+    var start = isoDate_(row.period_start);
+    if (!start || start !== isoDate_(row.period_end)) return;
+    map[start] = { written: fineNumber_(row.written), delivered: fineNumber_(row.delivered) };
   });
-  return { written: written, delivered: delivered };
+  return map;
+}
+
+function storeBeddingLedger_(side, periodStart) {
+  var best = null;
+  ledgerRows_().forEach(function (row) {
+    if (row.view !== 'BEDDING_STORE' || row.grain !== 'cumulative' || row.side !== side || row.code || row.name) return;
+    if (!periodStart || row.periodStart !== periodStart) return;
+    best = laterLedger_(best, row);
+  });
+  return best;
 }
 
 function managementName_(name) {
@@ -1340,6 +1379,68 @@ function workedCount_(lines) {
   return count > 0 ? count : null;
 }
 
+function closingDayMap_(facts) {
+  var map = {};
+  facts.forEach(function (row) {
+    if (row.scope !== 'store' || row.code || row.start !== row.end) return;
+    if (!map[row.start]) map[row.start] = { customers: null, opportunities: null };
+    if (row.customers !== null) map[row.start].customers = row.customers;
+    if (row.opportunities !== null) map[row.start].opportunities = row.opportunities;
+  });
+  return map;
+}
+
+function morningClosing_(facts, yesterday, goal) {
+  var map = closingDayMap_(facts);
+  function pack(date, scope) {
+    var row = map[date];
+    var computed = closingRatio_(row.customers, row.opportunities);
+    return {
+      value: computed.ratio,
+      scope: scope,
+      date: date,
+      period: '',
+      goal: goal,
+      customers: row.customers,
+      opportunities: row.opportunities,
+      reconcile: computed.reconcile,
+    };
+  }
+  var yesterdayRow = map[yesterday];
+  if (yesterdayRow && yesterdayRow.customers !== null && yesterdayRow.opportunities !== null) return pack(yesterday, 'yesterday');
+  var latest = '';
+  Object.keys(map).sort().forEach(function (date) {
+    var row = map[date];
+    if (row.customers !== null && row.opportunities !== null) latest = date;
+  });
+  if (!latest) return { value: null, scope: 'none', date: '', period: '', goal: goal, customers: null, opportunities: null, reconcile: false };
+  return pack(latest, 'latest-daily');
+}
+
+function morningBeddingSide_(yesterday, side, homeValue, ledgerRow, goal, dailyMap) {
+  dailyMap = dailyMap || {};
+  var yesterdayRow = dailyMap[yesterday];
+  var yesterdayValue = yesterdayRow ? yesterdayRow[side] : null;
+  if (yesterdayValue !== null && yesterdayValue !== undefined) {
+    return { value: yesterdayValue, scope: 'yesterday', date: yesterday, period: '', goal: goal };
+  }
+  var latest = '';
+  Object.keys(dailyMap).sort().forEach(function (date) {
+    var row = dailyMap[date];
+    if (row[side] !== null && row[side] !== undefined) latest = date;
+  });
+  if (latest) return { value: dailyMap[latest][side], scope: 'latest-daily', date: latest, period: '', goal: goal };
+  var value = homeValue !== null && homeValue !== undefined ? homeValue : (ledgerRow ? ledgerRow.percent : null);
+  if (value === null || value === undefined) return { value: null, scope: 'none', date: '', period: '', goal: goal };
+  return {
+    value: value,
+    scope: 'mtd',
+    date: ledgerRow && ledgerRow.verifiedThrough ? ledgerRow.verifiedThrough : '',
+    period: ledgerRow && ledgerRow.periodStart ? ledgerRow.periodStart + ' through ' + ledgerRow.periodEnd : '',
+    goal: goal,
+  };
+}
+
 function morning_(payload) {
   var home = home_(payload);
   try { ensureMorningPromotion_(); } catch (error) { appendException_('Update Failed', 'The morning promotion could not be saved.'); }
@@ -1347,8 +1448,26 @@ function morning_(payload) {
   try { promotion = readPromotion_(); } catch (error) { promotion = null; }
   if (!promotion) promotion = anniversaryPromotion_();
   var yesterday = home.yesterday.date;
-  var bedding = { written: null, delivered: null };
-  try { bedding = dailyBedding_(yesterday); } catch (error) { bedding = { written: null, delivered: null }; }
+  var closingFacts = [];
+  var closingFigure = { value: null, scope: 'none', date: '', period: '', goal: home.closing.goal, customers: null, opportunities: null, reconcile: false };
+  var homeBedding = { written: null, delivered: null, goal: 0.2 };
+  (home.board && home.board.kpis ? home.board.kpis : []).forEach(function (row) {
+    if (row.name === 'Bedding') homeBedding = row;
+  });
+  var beddingGoal = homeBedding.goal === null || homeBedding.goal === undefined ? 0.2 : homeBedding.goal;
+  var beddingWritten = { value: null, scope: 'none', date: '', period: '', goal: beddingGoal };
+  var beddingDelivered = { value: null, scope: 'none', date: '', period: '', goal: beddingGoal };
+  try {
+    closingFacts = loadClosing_();
+    closingFigure = morningClosing_(closingFacts, yesterday, home.closing.goal);
+    closingFigure.mtd = home.closing && home.closing.mtd ? home.closing.mtd : null;
+    var storeStart = storePeriodContaining_(home.today).start;
+    var dailyBedding = beddingDailyMap_();
+    beddingWritten = morningBeddingSide_(yesterday, 'written', homeBedding.written, storeBeddingLedger_('written', storeStart), beddingGoal, dailyBedding);
+    beddingDelivered = morningBeddingSide_(yesterday, 'delivered', homeBedding.delivered, storeBeddingLedger_('delivered', storeStart), beddingGoal, dailyBedding);
+  } catch (error) {
+    try { appendException_('Update Failed', 'Morning meeting figures could not be read. Last verified totals were left in place.'); } catch (ignore) {}
+  }
   var staffing = [];
   var todayStaffing = [];
   try {
@@ -1365,9 +1484,9 @@ function morning_(payload) {
   var gaps = [];
   if (home.yesterday.written === null) gaps.push('SNAP written');
   if (home.yesterday.delivered === null) gaps.push('NWDSR delivered');
-  if (home.yesterday.closingRatio === null) gaps.push('yesterday\'s closing ratio');
-  if (bedding.written === null) gaps.push('yesterday\'s written bedding percent');
-  if (bedding.delivered === null) gaps.push('yesterday\'s delivered bedding percent');
+  if (closingFigure.scope === 'none') gaps.push('closing ratio');
+  if (beddingWritten.scope === 'none') gaps.push('written bedding');
+  if (beddingDelivered.scope === 'none') gaps.push('delivered bedding');
   if (winners.status === 'pending') gaps.push(winners.reason);
   if (personalShare === null) gaps.push('today\'s working roster');
   if (gaps.length) {
@@ -1382,11 +1501,9 @@ function morning_(payload) {
       date: yesterday,
       written: writtenPerf,
       delivered: home.board.yesterday.delivered,
-      closingRatio: home.yesterday.closingRatio,
-      closingGoal: home.closing.goal,
-      beddingWritten: bedding.written,
-      beddingDelivered: bedding.delivered,
-      beddingGoal: 0.2,
+      closing: closingFigure,
+      beddingWritten: beddingWritten,
+      beddingDelivered: beddingDelivered,
     },
     today: {
       written: home.board.today.written,

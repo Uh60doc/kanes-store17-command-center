@@ -35,11 +35,49 @@ export function coverageEnd(dates: readonly string[], values: ReadonlyMap<string
   return latest;
 }
 
+export interface MatchedClosing extends ClosingResult {
+  matchedDates: string[];
+}
+
+/** Dates that have both a customer count and an opportunity count, in order. */
+export function matchedDates(
+  dates: readonly string[],
+  customers: ReadonlyMap<string, number>,
+  opportunities: ReadonlyMap<string, number>,
+): string[] {
+  return dates.filter((date) => customers.has(date) && opportunities.has(date));
+}
+
+/**
+ * Month-to-date adds the matched daily counts, then divides once.
+ * A day with only one of the two reports is left out. It is not counted as zero.
+ */
+export function matchedClosing(
+  dates: readonly string[],
+  customers: ReadonlyMap<string, number>,
+  opportunities: ReadonlyMap<string, number>,
+): MatchedClosing {
+  const included = matchedDates(dates, customers, opportunities);
+  if (!included.length) {
+    return { customers: null, opportunities: null, ratio: null, needsReconciliation: false, matchedDates: [] };
+  }
+  const customerTotal = included.reduce((total, date) => total + (customers.get(date) ?? 0), 0);
+  const opportunityTotal = included.reduce((total, date) => total + (opportunities.get(date) ?? 0), 0);
+  const computed = closingRatio(customerTotal, opportunityTotal);
+  return {
+    customers: customerTotal,
+    opportunities: opportunityTotal,
+    ratio: computed.ratio,
+    needsReconciliation: computed.needsReconciliation,
+    matchedDates: included,
+  };
+}
+
 /**
  * Month-to-date adds customers and opportunities separately, then divides.
  * It does not average daily percentages.
  * A full-period total is used only with the other total for that same period.
- * Daily totals are divided only when both sides end on the same date.
+ * Otherwise only dates that have both reports are added.
  */
 export function officialClosing(input: {
   periodCustomers: number | null;
@@ -57,21 +95,19 @@ export function officialClosing(input: {
       needsReconciliation: computed.needsReconciliation,
     };
   }
-
-  const customerEnd = input.periodCustomers === null ? coverageEnd(input.dates, input.customers) : null;
-  const opportunityEnd = input.periodOpportunities === null ? coverageEnd(input.dates, input.opportunities) : null;
-  const customers = input.periodCustomers !== null ? input.periodCustomers : coveredTotal(input.dates, input.customers);
-  const opportunities = input.periodOpportunities !== null ? input.periodOpportunities : coveredTotal(input.dates, input.opportunities);
-  const sameDailyRange =
-    input.periodCustomers === null &&
-    input.periodOpportunities === null &&
-    customerEnd !== null &&
-    customerEnd === opportunityEnd;
-  const computed = sameDailyRange ? closingRatio(customers, opportunities) : { ratio: null, needsReconciliation: false };
+  if (input.periodCustomers !== null || input.periodOpportunities !== null) {
+    return {
+      customers: input.periodCustomers !== null ? input.periodCustomers : coveredTotal(input.dates, input.customers),
+      opportunities: input.periodOpportunities !== null ? input.periodOpportunities : coveredTotal(input.dates, input.opportunities),
+      ratio: null,
+      needsReconciliation: false,
+    };
+  }
+  const matched = matchedClosing(input.dates, input.customers, input.opportunities);
   return {
-    customers,
-    opportunities,
-    ratio: computed.ratio,
-    needsReconciliation: computed.needsReconciliation,
+    customers: matched.customers,
+    opportunities: matched.opportunities,
+    ratio: matched.ratio,
+    needsReconciliation: matched.needsReconciliation,
   };
 }

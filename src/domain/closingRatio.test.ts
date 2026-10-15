@@ -63,6 +63,25 @@ test('a gap in the store month is not treated as zero', () => {
   assert.equal(result.ratio, null);
 });
 
+test('October store month uses only the dates that have both reports', () => {
+  const result = officialClosing({
+    periodCustomers: null,
+    periodOpportunities: null,
+    dates: ['2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14'],
+    customers: new Map([
+      ['2026-10-11', 6],
+      ['2026-10-12', 4],
+      ['2026-10-13', 4],
+      ['2026-10-14', 2],
+    ]),
+    opportunities: new Map([['2026-10-14', 4]]),
+  });
+  assert.equal(result.customers, 2);
+  assert.equal(result.opportunities, 4);
+  assert.equal(result.ratio, 0.5);
+  assert.equal(result.needsReconciliation, false);
+});
+
 test('a full-period pair is not mixed with a shorter daily series', () => {
   const result = officialClosing({
     periodCustomers: 20,

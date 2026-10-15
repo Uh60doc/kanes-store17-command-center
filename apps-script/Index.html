@@ -74,12 +74,21 @@
     }
     button, input, textarea { font: inherit; }
     textarea { width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid #1d5c66; background: #070b10; color: white; }
-    .morning .figure { font-size: 36px; }
+    .morning .figure { font-size: 32px; }
     .morning-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .morning-five { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; align-items: stretch; }
+    .morning-five .card { display: flex; flex-direction: column; min-width: 0; }
+    .morning-five .card h2 { min-height: 2.4em; }
+    .morning-five .figure { font-size: 32px; }
+    .morning-five .sub { font-size: 14px; }
+    .morning-five .awaiting { font-size: 16px; font-weight: 650; line-height: 1.25; margin: 8px 0; color: #9eb0c9; }
     .promo-hero { border-color: #f3d48a; }
     .promo-hero .figure { color: #f3d48a; }
+    @media (max-width: 980px) {
+      .morning-five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
     @media (max-width: 720px) {
-      .morning-grid { grid-template-columns: 1fr; }
+      .morning-grid, .morning-five { grid-template-columns: 1fr; }
     }
     @media print {
       body { background: white; color: black; }
@@ -95,6 +104,7 @@
       .morning .section-title { margin: 10px 0 6px; }
       .morning .figure { font-size: 22px; }
       .morning .sub, .morning .list { font-size: 12px; }
+      .morning-five .awaiting { color: #444; font-size: 12px; }
       .morning-finance { break-before: page; }
     }
   </style>
@@ -302,7 +312,8 @@
         if (hasWritten && hasDelivered) extra = '<p class="sub">Delivered <span class="' + kpiTone(row.delivered, row.goal, false) + '">' + kpiValue(row.delivered, row.unit) + '</span></p>';
         else if (!hasWritten && !hasDelivered && row.note) extra = '<p class="sub">' + esc(row.note) + '</p>';
         var gap = hasWritten && hasDelivered ? 'W ' + sideGap(row, row.written) + ' · D ' + sideGap(row, row.delivered) : sideGap(row, hasWritten ? row.written : (hasDelivered ? row.delivered : null));
-        return '<article class="kpi-card"><h3>' + esc(row.name) + '</h3><p class="figure ' + mainTone + '">' + main + '</p>' + extra + '<p class="sub">Goal ' + boardGoal(row.goal, row.unit) + ' · ' + gap + '</p></article>';
+        var through = row.through ? '<p class="sub">Verified through ' + esc(String(row.through)) + (row.detail ? ' · ' + esc(row.detail) : '') + '</p>' : (row.detail ? '<p class="sub">' + esc(row.detail) + '</p>' : '');
+        return '<article class="kpi-card"><h3>' + esc(row.name === 'Closing Ratio' ? 'Closing' : row.name) + '</h3><p class="figure ' + mainTone + '">' + main + '</p>' + extra + '<p class="sub">Goal ' + boardGoal(row.goal, row.unit) + ' · ' + gap + '</p>' + through + '</article>';
       }).join('');
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Yesterday\'s results</h2>' +
@@ -411,11 +422,10 @@
         return '<tr><td>' + esc(row.name) + '</td><td class="' + toneFor(row.written, row.goal) + '">' + kpiText(row.written, row.unit) + '</td><td class="' + toneFor(row.delivered, row.goal) + '">' + deliveredCell + '</td><td>' + goalText(row.goal, row.unit) + '</td></tr>';
       }).join('');
       var trend = (person.days || []).map(function (day) { return '<li>' + esc(day.date) + ' · SNAP ' + money(day.snapWritten) + (day.note ? ' · ' + esc(day.note) : '') + '</li>'; }).join('');
-      var vacationDays = (person.days || []).filter(function (day) { return /vacation/i.test(day.note || ''); });
       document.getElementById('screen').innerHTML =
         '<p class="noprint"><button class="linkish" id="back-people" type="button">All salespeople</button></p>' +
         '<h2 class="section-title">' + esc(person.name) + '</h2>' +
-        (vacationDays.length ? '<p class="sub">On vacation ' + vacationDays.map(function (day) { return esc(day.date); }).join(', ') + '. Those report lines stay on the scorecard and this person is not counted as working.</p>' : '') +
+        (person.leave ? '<p class="sub">' + esc(person.leave) + '</p>' : '') +
         '<div class="grid">' +
         card('SNAP written', money(person.snapWritten), 'Actual written sales for the salesperson month.') +
         card('NWDSR written', money(person.nwdsrWritten), 'Written, not necessarily paid. May include cancellations.') +
@@ -461,28 +471,68 @@
         if (Math.abs(pct) < 0.0005) return 'even with the goal';
         return Math.abs(pct * 100).toFixed(1) + '% ' + (pct > 0 ? 'above' : 'below') + ' the goal · ' + signed(perf.delta);
       }
+      function shortDate(iso) {
+        if (!iso || String(iso).length < 10) return '';
+        var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        var parts = String(iso).slice(0, 10).split('-');
+        var month = months[Number(parts[1]) - 1] || '';
+        var day = Number(parts[2]);
+        if (!month || !day) return '';
+        return month + ' ' + day;
+      }
+      function periodLabel(period) {
+        var match = String(period || '').match(/(\d{4}-\d{2}-\d{2})\s+through\s+(\d{4}-\d{2}-\d{2})/);
+        if (!match) return '';
+        return shortDate(match[1]) + '–' + shortDate(match[2]);
+      }
       function resultCard(title, perf, source) {
-        if (!perf || pending(perf.actual)) return huddleCard(title, 'Pending Report', source + ' Goal ' + huddleMoney(perf && perf.goal) + '. The daily report is not in.', 'pending');
-        if (pending(perf.goal) || !perf.result) return huddleCard(title, huddleMoney(perf.actual), source + ' Yesterday\'s saved goal is not on file.', 'pending');
+        var when = 'Yesterday · ' + shortDate(yesterday.date);
+        if (!perf || pending(perf.actual)) return '<article class="card"><h2>' + esc(title) + '</h2><p class="awaiting">Awaiting first report</p><p class="sub">' + esc(when) + ' · ' + source + '</p></article>';
+        if (pending(perf.goal) || !perf.result) return huddleCard(title, huddleMoney(perf.actual), when + ' · ' + source + ' Yesterday\'s saved goal is not on file.', 'pending');
         var tone = perf.result === 'HIT' ? 'good' : 'bad';
         var gap = gapText(perf);
-        return huddleCard(title, huddleMoney(perf.actual), source + ' ' + perf.result + ' · Goal ' + huddleMoney(perf.goal) + (gap ? ' · ' + gap : ''), tone);
+        return huddleCard(title, huddleMoney(perf.actual), when + ' · ' + source + ' ' + perf.result + ' · Goal ' + huddleMoney(perf.goal) + (gap ? ' · ' + gap : ''), tone);
       }
-      function beddingCard(title, actual, goal) {
-        if (pending(actual)) return huddleCard(title, 'Pending Report', 'Goal ' + percent(goal) + '. The daily bedding report is not in.', 'pending');
-        var tone = Number(actual) >= Number(goal) ? 'good' : 'bad';
-        var points = (Number(actual) - Number(goal)) * 100;
-        return huddleCard(title, percent(actual), 'Goal ' + percent(goal) + ' · ' + (points >= 0 ? '+' : '') + points.toFixed(1) + ' pts', tone);
+      function figureWhen(figure) {
+        var scope = figure && figure.scope;
+        if (scope === 'yesterday') return 'Yesterday · ' + shortDate(figure.date);
+        if (scope === 'latest-daily') return 'Latest verified: ' + shortDate(figure.date);
+        if (scope === 'mtd') {
+          var period = periodLabel(figure.period);
+          var through = figure.date ? 'through ' + shortDate(figure.date) : '';
+          return 'Latest verified MTD' + (period ? ' · ' + period : '') + (through ? ' · ' + through : '');
+        }
+        return '';
+      }
+      function figureCard(title, figure, detail) {
+        var value = figure ? figure.value : null;
+        var goal = figure ? figure.goal : null;
+        if (!figure || figure.scope === 'none' || pending(value)) {
+          return '<article class="card"><h2>' + esc(title) + '</h2><p class="awaiting">Awaiting first report</p><p class="sub">' + esc(detail) + '</p></article>';
+        }
+        var tone = pending(goal) ? '' : (Number(value) >= Number(goal) ? 'good' : 'bad');
+        var gap = '';
+        if (!pending(goal)) {
+          var points = (Number(value) - Number(goal)) * 100;
+          gap = ' · Goal ' + percent(goal) + ' · ' + (points >= 0 ? '+' : '') + points.toFixed(1) + ' pts';
+        }
+        var when = figureWhen(figure);
+        return '<article class="card"><h2>' + esc(title) + '</h2><p class="figure ' + tone + '">' + percent(value) + '</p><p class="sub">' + esc(when) + gap + (detail ? ' · ' + esc(detail) : '') + '</p></article>';
       }
       var yesterday = data.yesterday || {};
       var today = data.today || {};
-      var closingNote = 'Goal ' + percent(yesterday.closingGoal) + '. Net Written customers divided by PERQ opportunities.';
-      var closingCard = pending(yesterday.closingRatio)
-        ? huddleCard('Closing ratio', 'Pending Report', closingNote, 'pending')
-        : huddleCard('Closing ratio', percent(yesterday.closingRatio), closingNote + ' · ' + ((Number(yesterday.closingRatio) - Number(yesterday.closingGoal)) * 100 >= 0 ? '+' : '') + ((Number(yesterday.closingRatio) - Number(yesterday.closingGoal)) * 100).toFixed(1) + ' pts', Number(yesterday.closingRatio) >= Number(yesterday.closingGoal) ? 'good' : 'bad');
+      var closingFigure = yesterday.closing || { value: null, scope: 'none', customers: null, opportunities: null };
+      var closingDetail = 'Net Written customers ÷ PERQ opportunities';
+      if (!pending(closingFigure.customers) && !pending(closingFigure.opportunities)) {
+        closingDetail = closingFigure.customers + ' customers ÷ ' + closingFigure.opportunities + ' opportunities';
+      }
+      var closingMtd = closingFigure.mtd;
+      if (closingMtd && !pending(closingMtd.ratio)) {
+        closingDetail += ' · MTD ' + percent(closingMtd.ratio) + ' · ' + closingMtd.customers + ' ÷ ' + closingMtd.opportunities + (closingMtd.through ? ' · through ' + shortDate(closingMtd.through) : '');
+      }
       var winners = data.winners || { status: 'pending', people: [] };
       var winnerHtml = '';
-      if (winners.status !== 'ready') winnerHtml = huddleCard('Winners', 'Pending Report', esc(winners.reason || 'Staffing or NWDSR lines are not on file.'), 'pending');
+      if (winners.status !== 'ready') winnerHtml = '<p class="sub">' + esc(winners.reason || 'Staffing or NWDSR lines are not on file.') + '</p>';
       else if (!winners.people.length) winnerHtml = '<p class="sub">Nobody beat yesterday\'s individual share of ' + huddleMoney(winners.share) + '.</p>';
       else winnerHtml = winners.people.map(function (person) {
         return huddleCard(person.name, huddleMoney(person.written), 'Individual goal ' + huddleMoney(person.share) + ' · EXCEEDED DAILY GOAL BY ' + huddleMoney(person.above), 'good');
@@ -540,10 +590,12 @@
       }
       document.getElementById('screen').innerHTML =
         '<div class="morning">' +
-        '<h2 class="section-title">Yesterday\'s results · ' + esc(yesterday.date || '') + '</h2><div class="morning-grid">' +
-        resultCard('Written sales', yesterday.written, 'SNAP written. Actual written sales.') + resultCard('Delivered sales', yesterday.delivered, 'NWDSR delivered.') + closingCard +
-        beddingCard('Bedding written', yesterday.beddingWritten, yesterday.beddingGoal) +
-        beddingCard('Bedding delivered', yesterday.beddingDelivered, yesterday.beddingGoal) +
+        '<h2 class="section-title">Results</h2><div class="morning-five">' +
+        resultCard('Yesterday written', yesterday.written, 'SNAP written. Actual written sales.') +
+        resultCard('Yesterday delivered', yesterday.delivered, 'NWDSR delivered.') +
+        figureCard('Closing ratio', closingFigure, closingDetail) +
+        figureCard('Bedding written', yesterday.beddingWritten, '') +
+        figureCard('Bedding delivered', yesterday.beddingDelivered, '') +
         '</div>' +
         '<h2 class="section-title">Today\'s goals</h2><div class="morning-grid">' +
         huddleCard('Written sales goal', huddleMoney(today.written), 'Remaining budget divided by days left.', '') +

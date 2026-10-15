@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { activeFinancing, activeSale, anniversarySale, claimsZeroInterest, dailyWinners, managementName, personalShare, type StaffLine } from './morningBriefing.ts';
+import { activeFinancing, activeSale, anniversarySale, chooseVerifiedFigure, claimsZeroInterest, dailyWinners, managementName, personalShare, type StaffLine } from './morningBriefing.ts';
 
 const example: StaffLine[] = [
   { name: 'A', role: 'associate', worked: true, onLeave: false, nwdsrWritten: 4000 },
@@ -69,6 +69,68 @@ test('the anniversary sale expires on October 19 and 78-month financing lasts th
   assert.equal(after[0]?.zeroInterest, true);
   assert.equal(sale.financing.some((term) => term.months === 72 || term.months === 36 || term.months === 50), false);
   assert.equal(sale.financing.filter((term) => term.zeroInterest).length, 1);
+});
+
+test('a month-to-date figure is not labeled as yesterday', () => {
+  const yesterday = chooseVerifiedFigure({
+    yesterday: '2026-10-13',
+    dailyValue: 0.5,
+    latestDailyValue: 0.206,
+    latestDailyDate: '2026-10-11',
+    mtdValue: 0.206,
+    mtdThrough: '2026-10-13',
+    mtdPeriod: '2026-10-02 through 2026-11-01',
+  });
+  assert.equal(yesterday.scope, 'yesterday');
+  assert.equal(yesterday.value, 0.5);
+  const latestDay = chooseVerifiedFigure({
+    yesterday: '2026-10-13',
+    dailyValue: null,
+    latestDailyValue: 0.5,
+    latestDailyDate: '2026-10-14',
+    mtdValue: 0.206,
+    mtdThrough: '2026-10-13',
+    mtdPeriod: '2026-10-02 through 2026-11-01',
+  });
+  assert.equal(latestDay.scope, 'latest-daily');
+  assert.equal(latestDay.date, '2026-10-14');
+  assert.notEqual(latestDay.scope, 'yesterday');
+  const mtd = chooseVerifiedFigure({
+    yesterday: '2026-10-13',
+    dailyValue: null,
+    latestDailyValue: null,
+    latestDailyDate: '',
+    mtdValue: 0.206,
+    mtdThrough: '2026-10-13',
+    mtdPeriod: '2026-10-02 through 2026-11-01',
+  });
+  assert.equal(mtd.scope, 'mtd');
+  assert.equal(mtd.value, 0.206);
+  assert.equal(mtd.date, '2026-10-13');
+  const missing = chooseVerifiedFigure({
+    yesterday: '2026-10-11',
+    dailyValue: null,
+    latestDailyValue: null,
+    latestDailyDate: '',
+    mtdValue: null,
+    mtdThrough: '',
+    mtdPeriod: '',
+  });
+  assert.equal(missing.scope, 'none');
+  assert.equal(missing.value, null);
+});
+
+test('morning meeting reuses the Home bedding figure and keeps month-to-date off yesterday', () => {
+  const data = readFileSync(new URL('../../apps-script/Data.gs', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../../apps-script/Index.html', import.meta.url), 'utf8');
+  assert.equal(data.includes("if (row.name === 'Bedding') homeBedding = row;"), true);
+  assert.equal(data.includes("scope: 'mtd'"), true);
+  assert.equal(data.includes('On vacation October 1 through October 12, 2026. Back October 13.'), true);
+  assert.equal(html.includes('Latest verified MTD'), true);
+  assert.equal(html.includes('Awaiting first report'), true);
+  assert.equal(html.includes('class="morning-five"'), true);
+  assert.equal(html.includes('The daily bedding report is not in.'), false);
+  assert.equal(html.includes('section-title">Results</h2>'), true);
 });
 
 test('the Apps Script briefing contains the approved prices and no extra finance term', () => {

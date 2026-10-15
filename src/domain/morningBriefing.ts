@@ -106,6 +106,39 @@ export function dailyWinners(lines: readonly StaffLine[], storeGoal: number | nu
   return { status: 'ready', share, winners };
 }
 
+export interface VerifiedFigure {
+  value: number | null;
+  /** Yesterday's own daily result, a later or earlier daily result, or a month-to-date snapshot. */
+  scope: 'yesterday' | 'latest-daily' | 'mtd' | 'none';
+  date: string;
+  period: string;
+}
+
+/**
+ * Yesterday's daily figure wins. A different day's figure stays labeled with its date.
+ * A month-to-date figure is never returned as yesterday.
+ */
+export function chooseVerifiedFigure(input: {
+  yesterday: string;
+  dailyValue: number | null;
+  latestDailyValue: number | null;
+  latestDailyDate: string;
+  mtdValue: number | null;
+  mtdThrough: string;
+  mtdPeriod: string;
+}): VerifiedFigure {
+  if (input.dailyValue !== null) {
+    return { value: input.dailyValue, scope: 'yesterday', date: input.yesterday, period: '' };
+  }
+  if (input.latestDailyValue !== null && input.latestDailyDate) {
+    return { value: input.latestDailyValue, scope: 'latest-daily', date: input.latestDailyDate, period: '' };
+  }
+  if (input.mtdValue !== null) {
+    return { value: input.mtdValue, scope: 'mtd', date: input.mtdThrough, period: input.mtdPeriod };
+  }
+  return { value: null, scope: 'none', date: '', period: '' };
+}
+
 export function personalShare(storeGoal: number | null, workedCount: number | null): number | null {
   if (storeGoal === null || workedCount === null || workedCount <= 0) return null;
   return Math.round((storeGoal / workedCount) * 100) / 100;
