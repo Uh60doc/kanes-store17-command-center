@@ -336,7 +336,7 @@ function peopleRows_(individualStart, individualEnd) {
     var name = String(row.name);
     var written = Object.prototype.hasOwnProperty.call(totals, name)
       ? Math.round(totals[name] * 100) / 100
-      : (seenAny[name] ? null : numberOrNull_(row.written));
+      : (seenAny[name] ? null : numberOrNull_(peopleSnapCell_(row)));
     return personRecord_(name, written, String(row.role || 'associate'), days[name] || [], goals, personClosing_(closingFacts, name, individualStart, individualEnd, goals.closing));
   }) : Object.keys(totals).map(function (name) {
     return personRecord_(name, Math.round(totals[name] * 100) / 100, 'associate', days[name] || [], goals, personClosing_(closingFacts, name, individualStart, individualEnd, goals.closing));
@@ -1406,6 +1406,12 @@ function saveBeddingGoals_(payload) {
   return bedding_(payload);
 }
 
+function peopleSnapCell_(row) {
+  if (row.snap_written !== undefined && row.snap_written !== '') return row.snap_written;
+  if (row['SNAP Written'] !== undefined && row['SNAP Written'] !== '') return row['SNAP Written'];
+  return row.written;
+}
+
 function refreshPeopleWritten_(individualStart, individualEnd) {
   var lines = snapAssociateLines_(individualStart, individualEnd);
   var totals = {};
@@ -1418,6 +1424,7 @@ function refreshPeopleWritten_(individualStart, individualEnd) {
   var tab = spreadsheet.getSheetByName('CC_People');
   if (!tab) return lines.latest;
   var values = tab.getDataRange().getValues();
+  if (String(values[0][2] || '').trim() === 'written') tab.getRange(1, 3).setValue('SNAP Written');
   var r;
   for (r = 1; r < values.length; r += 1) {
     var name = String(values[r][0] || '');
