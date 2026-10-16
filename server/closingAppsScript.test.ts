@@ -262,7 +262,7 @@ test('zero opportunities is not divided, a missing report is Pending, and a blan
   tabs.CC_Closing.push(['2026-10-15', 'person', '', 'Brenda Sanchez', '', 0, '2026-10-01', '2026-10-15', PERQ, 'yes', '', '2026-10-15']);
   const gs = load(tabs, '2026-10-16');
   assert.deepEqual(individual(gs, 'Brenda Sanchez'), { orders: 0, opportunities: 0, through: '2026-10-15', ratio: null, points: null, versus: null, status: 'No opportunities' });
-  assert.deepEqual(individual(gs, 'Caroline Amaro'), { orders: null, opportunities: null, through: '', ratio: null, points: null, versus: null, status: 'Pending: reporting dates do not match' },
+  assert.deepEqual(individual(gs, 'Caroline Amaro'), { orders: null, opportunities: null, through: '', ratio: null, points: null, versus: null, status: 'Pending: PERQ verified only through 2026-10-01' },
     'PERQ for Caroline is only verified through October 1 and the Group 17 snapshot starts at October 13');
   assert.equal(individual(load(withOrders(october()), '2026-10-16'), 'Caroline Amaro').status, 'Pending: PERQ opportunities');
   assert.equal(individual(load(october(), '2026-10-16'), 'Caroline Amaro').status, 'Pending: PERQ opportunities and Group 17 Written orders');

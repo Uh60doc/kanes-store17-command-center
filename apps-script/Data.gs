@@ -983,7 +983,9 @@ function personClosing_(facts, name, start, end, goal, ledger) {
     var missing = [];
     if (!latestOpportunities) missing.push('PERQ opportunities');
     if (!latestOrders) missing.push('Group 17 Written orders');
-    status = missing.length ? 'Pending: ' + missing.join(' and ') : 'Pending: reporting dates do not match';
+    status = missing.length
+      ? 'Pending: ' + missing.join(' and ')
+      : (latestOpportunities < latestOrders ? 'Pending: PERQ verified only through ' + latestOpportunities : 'Pending: Group 17 Written verified only through ' + latestOrders);
     note = missing.length
       ? missing.join(' and ') + ' for this salesperson ' + (missing.length > 1 ? 'are' : 'is') + ' not on file for ' + start + ' through ' + end + '.'
       : 'PERQ is through ' + latestOpportunities + ' and Group 17 Written through ' + latestOrders + ', with no common verified date.';
