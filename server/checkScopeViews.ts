@@ -140,7 +140,7 @@ for (const view of SCOPE_VIEWS) {
     assert.match(body[0][0], scope === 'PERSON' ? /^No salesperson report on file .* Pending\. Store figures are not copied here\.$/ : /^No store report on file .* Pending\.$/);
   } else if (!fitted.length) {
     assert.equal(body.length, 1, `${view} message row`);
-    assert.match(body[0][0], new RegExp(`^No record on file covers a .* ${mine.length} record\\(s\\) with other date ranges are kept in CC_Ledger`));
+    assert.match(body[0][0], new RegExp(`^No record on file covers an? (store|individual) period .* ${mine.length} record\\(s\\) with other date ranges are kept in CC_Ledger`));
   } else {
     const expected = fitted.map((entry) => {
       const period = periodContaining(category(scope), entry.start);

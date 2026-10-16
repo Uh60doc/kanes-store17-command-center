@@ -30,6 +30,7 @@ const RULE: Record<Scope, string> = {
   PERSON: 'individual periods run the 1st through the last day of the month',
 };
 const RANGE_NAME: Record<Scope, string> = { STORE: 'store', PERSON: 'individual' };
+const A_PERIOD: Record<Scope, string> = { STORE: 'a store period', PERSON: 'an individual period' };
 
 export function scopeOf(view: string): Scope | null {
   const match = /_(STORE|PERSON)$/.exec(view);
@@ -63,7 +64,7 @@ export function viewFormula(view: string): string {
   const none = scope === 'PERSON'
     ? `No salesperson report on file for ${view}. Pending. Store figures are not copied here.`
     : `No store report on file for ${view}. Pending.`;
-  const excluded = `"No record on file covers a ${RANGE_NAME[scope]} period (${RULE[scope]}). "&(total-kept)&" record(s) with other date ranges are kept in CC_Ledger and listed on ${AUDIT_TAB}."`;
+  const excluded = `"No record on file covers ${A_PERIOD[scope]} (${RULE[scope]}). "&(total-kept)&" record(s) with other date ranges are kept in CC_Ledger and listed on ${AUDIT_TAB}."`;
   const counting = 'MAP(SEQUENCE(ROWS(recs)),LAMBDA(idx,' + let_([
     ['kind', 'INDEX(gr,idx)'],
     ['st', 'INDEX(sday,idx)'],
