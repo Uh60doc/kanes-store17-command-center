@@ -62,21 +62,36 @@ function sameFigure(left: number | null, right: number | null): boolean {
   return Math.abs(left - right) < 0.0001;
 }
 
-function sameRecord(left: LedgerRecord, right: LedgerRecord): boolean {
+function sameFigures(left: LedgerRecord, right: LedgerRecord): boolean {
   return sameFigure(left.salesDollars, right.salesDollars)
     && sameFigure(left.unitCount, right.unitCount)
     && sameFigure(left.eligible, right.eligible)
     && sameFigure(left.attachments, right.attachments)
-    && sameFigure(left.kpiPercent, right.kpiPercent)
-    && left.verifiedThrough === right.verifiedThrough
-    && left.sourceReport === right.sourceReport;
+    && sameFigure(left.kpiPercent, right.kpiPercent);
 }
 
-/** Insert a new key, leave an identical reimport alone, and replace a corrected key. */
+function sameRecord(left: LedgerRecord, right: LedgerRecord): boolean {
+  return sameFigures(left, right) && left.verifiedThrough === right.verifiedThrough && left.sourceReport === right.sourceReport;
+}
+
+/**
+ * A daily record already on file is the historical record for that day. A later pull of the same day that
+ * differs is returned here instead of replacing it; a cancellation shows up on the day it is reported.
+ */
+export function heldBackDays(existing: readonly LedgerRecord[], incoming: readonly LedgerRecord[]): LedgerRecord[] {
+  const map = new Map(existing.map((row) => [row.recordKey, row]));
+  return incoming.filter((row) => {
+    const prior = map.get(row.recordKey);
+    return row.grain === 'daily' && prior !== undefined && !sameFigures(prior, row);
+  });
+}
+
+/** Insert a new key and leave an identical reimport alone. A recorded day is kept; a newer snapshot of the same filter replaces the older one. */
 export function applyRecords(existing: readonly LedgerRecord[], incoming: readonly LedgerRecord[]): LedgerRecord[] {
   const map = new Map(existing.map((row) => [row.recordKey, row]));
   incoming.forEach((row) => {
     const prior = map.get(row.recordKey);
+    if (prior && row.grain === 'daily') return;
     if (prior && sameRecord(prior, row)) return;
     map.set(row.recordKey, row);
   });

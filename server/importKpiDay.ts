@@ -1,8 +1,9 @@
 /**
- * Import one day of Data Analysis KPI workbooks into CC_Ledger, CC_Kpi, and CC_Imports.
+ * Import daily Data Analysis KPI workbooks into CC_Ledger, CC_Kpi, and CC_Imports. Pass every day after the
+ * to-date snapshot: each day is a daily record, and the store and salesperson totals are the snapshot plus those days.
  * CC_Daily and CC_Rollup are read for checks only and are never written here.
  *
- *   node --experimental-strip-types server/importKpiDay.ts [--dry] <four day files>
+ *   node --experimental-strip-types server/importKpiDay.ts [--dry] <four files for each day>
  */
 
 import { createHash } from 'node:crypto';
@@ -15,7 +16,7 @@ import { accessTokenFor, googleJson } from './google.ts';
 import { appendHistory, historyRow } from './history.ts';
 import { readStored } from './tokenStore.ts';
 import { employees } from '../src/config/roster.ts';
-import { applyRecords, makeRecord, type LedgerRecord } from '../src/domain/kpiLedger.ts';
+import { applyRecords, heldBackDays, makeRecord, type LedgerRecord } from '../src/domain/kpiLedger.ts';
 import { recordsFromKpi } from './kpiLedgerBuild.ts';
 import { parseKpiWorkbook, type KpiLine, type KpiReport, type QtyMetric } from './kpiWorkbook.ts';
 
@@ -27,6 +28,7 @@ const STORE_BASE = {
   group17: { written: 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-11-01.xlsx', delivered: 'DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-02_2026-11-01.xlsx' },
   asl: { written: 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-02_2026-11-01.xlsx', delivered: 'DATA_ANALYSIS_KPI_ASL_DELIVERED_2026-10-02_2026-11-01.xlsx' },
 };
+const HELD_BACK = 'Later report for a recorded day differs. The recorded day was kept and this figure was not applied.';
 const PERSON_BASE = { written: 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-01_2026-10-13.xlsx', delivered: 'DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-01_2026-10-13.xlsx' };
 const LEDGER_HEADERS = [
   'view', 'grain', 'report_date', 'period_start', 'period_end', 'verified_through', 'store',
@@ -222,22 +224,29 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const dry = args.includes('--dry');
   const files = args.filter((arg) => arg !== '--dry');
-  if (files.length !== 4) throw new Error('Pass the four daily files: 17 written, 17 delivered, ASL written, ASL delivered.');
+  if (!files.length || files.length % 4 !== 0) throw new Error('Pass four daily files for each day: 17 written, 17 delivered, ASL written, ASL delivered.');
 
-  const day: DayFile[] = files.map((file) => {
+  const allDays: DayFile[] = files.map((file) => {
     const bytes = readFileSync(file);
     const name = canonicalName(file);
     return { file, name, sha256: createHash('sha256').update(bytes).digest('hex'), report: parseKpiWorkbook(bytes, name) };
   });
-  day.forEach((item) => {
+  allDays.forEach((item) => {
     if (item.report.start !== item.report.end) throw new Error(`${item.name} covers ${item.report.start} through ${item.report.end}. Only daily files are imported here.`);
   });
-  const date = day[0]?.report.start ?? '';
-  if (day.some((item) => item.report.start !== date)) throw new Error('All four files must be for the same day.');
-  const find = (family: 'group17' | 'asl', side: Side): DayFile => {
-    const found = day.find((item) => item.report.family === family && item.report.side === side);
-    if (!found) throw new Error(`Missing the ${family === 'asl' ? 'ASL' : '17'} ${side} file for ${date}.`);
-    return found;
+  const dates = [...new Set(allDays.map((item) => item.report.start))].sort();
+  const date = dates[dates.length - 1] ?? '';
+  const cutoff = shiftDate(dates[0] ?? '', -1);
+  // The to-date snapshot plus every day after it, so each day must be present once and in order.
+  dates.forEach((value, index) => {
+    if (index && value !== shiftDate(dates[index - 1], 1)) throw new Error(`Day files skip from ${dates[index - 1]} to ${value}. Pass every day after the snapshot.`);
+  });
+  const personCutoff = /_(\d{4}-\d{2}-\d{2})\.xlsx$/.exec(PERSON_BASE.written)?.[1] ?? '';
+  if (personCutoff !== cutoff) throw new Error(`The salesperson snapshot ends ${personCutoff}, so the first day file must be ${shiftDate(personCutoff, 1)}, not ${dates[0]}.`);
+  const findOn = (onDate: string, family: 'group17' | 'asl', side: Side): DayFile => {
+    const found = allDays.filter((item) => item.report.start === onDate && item.report.family === family && item.report.side === side);
+    if (found.length !== 1) throw new Error(`${found.length ? 'Two' : 'Missing the'} ${family === 'asl' ? 'ASL' : '17'} ${side} file${found.length ? 's' : ''} for ${onDate}.`);
+    return found[0];
   };
 
   loadDotEnv(process.cwd());
@@ -264,48 +273,52 @@ async function main(): Promise<void> {
   const store: Record<Side, Totals> = {} as Record<Side, Totals>;
   const storeSource: Record<Side, string> = {} as Record<Side, string>;
   for (const side of ['written', 'delivered'] as Side[]) {
-    const g17 = find('group17', side).report;
-    const asl = find('asl', side).report;
-    const dayStore = g17.store;
-    const dayAsl = asl.lines.find((line) => line.name === '17') ?? null;
-    const dayNwdsr = nwdsr(side, date, date);
-    if (!dayStore || dayStore.sales === null || Math.abs(dayStore.sales - dayNwdsr) > 1) {
-      throw new Error(`${g17.filename} Store 17 sales ${dayStore?.sales} do not match CC_Daily NWDSR ${side} ${dayNwdsr} for ${date}.`);
-    }
-    checks.push(`${side} ${date}: Group 17 TOTAL sales ${dayStore.sales} matches CC_Daily NWDSR ${dayNwdsr}.`);
     const baseG17 = parseFile(path.join(BASELINE, STORE_BASE.group17[side]), STORE_BASE.group17[side]);
     const baseAsl = parseFile(path.join(BASELINE, STORE_BASE.asl[side]), STORE_BASE.asl[side]);
-    const before = nwdsr(side, STORE_START, shiftDate(date, -1));
+    const before = nwdsr(side, STORE_START, cutoff);
     const baseSales = baseG17.store?.sales ?? null;
     if (baseSales === null || Math.abs(baseSales - before) > 1) {
-      throw new Error(`${baseG17.filename} sales ${baseSales} are not NWDSR ${side} through ${shiftDate(date, -1)} (${before}). The day would overlap the snapshot, so nothing was combined.`);
+      throw new Error(`${baseG17.filename} sales ${baseSales} are not NWDSR ${side} through ${cutoff} (${before}). The days would overlap the snapshot, so nothing was combined.`);
     }
-    checks.push(`${side}: ${baseG17.filename} sales ${baseSales} equal CC_Daily NWDSR ${STORE_START} through ${shiftDate(date, -1)} (${before}), so ${date} is not already inside it.`);
-    store[side] = combine(totals(baseG17.store, baseAsl.lines.find((line) => line.name === '17') ?? null), totals(dayStore, dayAsl));
-    storeSource[side] = `${baseG17.filename} + ${baseAsl.filename} + ${g17.filename} + ${asl.filename}`;
+    checks.push(`${side}: ${baseG17.filename} sales ${baseSales} equal CC_Daily NWDSR ${STORE_START} through ${cutoff} (${before}), so ${dates.join(', ')} are not already inside it.`);
+    let running = totals(baseG17.store, baseAsl.lines.find((line) => line.name === '17') ?? null);
+    const sources = [baseG17.filename, baseAsl.filename];
+    for (const onDate of dates) {
+      const g17 = findOn(onDate, 'group17', side).report;
+      const asl = findOn(onDate, 'asl', side).report;
+      const dayStore = g17.store;
+      const dayNwdsr = nwdsr(side, onDate, onDate);
+      if (!dayStore || dayStore.sales === null || Math.abs(dayStore.sales - dayNwdsr) > 1) {
+        throw new Error(`${g17.filename} Store 17 sales ${dayStore?.sales} do not match CC_Daily NWDSR ${side} ${dayNwdsr} for ${onDate}.`);
+      }
+      checks.push(`${side} ${onDate}: Group 17 TOTAL sales ${dayStore.sales} matches CC_Daily NWDSR ${dayNwdsr}.`);
+      running = combine(running, totals(dayStore, asl.lines.find((line) => line.name === '17') ?? null));
+      sources.push(g17.filename, asl.filename);
+    }
+    store[side] = running;
+    storeSource[side] = sources.join(' + ');
   }
 
   const importedAt = new Date().toISOString();
   const incoming: LedgerRecord[] = [];
-  day.forEach((item) => incoming.push(...recordsFromKpi(item.report, date)));
+  allDays.forEach((item) => incoming.push(...recordsFromKpi(item.report, item.report.start)));
   (['written', 'delivered'] as Side[]).forEach((side) => {
     incoming.push(...derivedRecords('STORE', side, STORE_START, date, { code: '', name: '' }, store[side], storeSource[side]));
   });
 
   const people: { side: Side; name: string; value: Totals; source: string }[] = [];
   (['written', 'delivered'] as Side[]).forEach((side) => {
-    const g17 = find('group17', side).report;
+    const dayReports = dates.map((onDate) => findOn(onDate, 'group17', side).report);
     const basePeople = parseFile(path.join(BASELINE, PERSON_BASE[side]), PERSON_BASE[side]);
     const names = new Set<string>();
-    [...basePeople.lines, ...g17.lines].forEach((line) => {
+    [...basePeople.lines, ...dayReports.flatMap((report) => report.lines)].forEach((line) => {
       if (line.name.toUpperCase() === 'TOTAL') return;
       names.add(personKey(line.name));
     });
     names.forEach((name) => {
-      const before = basePeople.lines.find((line) => line.name.toUpperCase() !== 'TOTAL' && personKey(line.name) === name) ?? null;
-      const today = g17.lines.find((line) => line.name.toUpperCase() !== 'TOTAL' && personKey(line.name) === name) ?? null;
-      const value = combine(totals(before, null), totals(today, null));
-      const source = `${basePeople.filename} + ${g17.filename}`;
+      const lineFor = (report: KpiReport) => report.lines.find((line) => line.name.toUpperCase() !== 'TOTAL' && personKey(line.name) === name) ?? null;
+      const value = dayReports.reduce((sum, report) => combine(sum, totals(lineFor(report), null)), totals(lineFor(basePeople), null));
+      const source = [basePeople.filename, ...dayReports.map((report) => report.filename)].join(' + ');
       people.push({ side, name, value, source });
       incoming.push(...derivedRecords('PERSON', side, PERSON_START, date, { code: personCode(name), name }, value, source));
     });
@@ -317,6 +330,7 @@ async function main(): Promise<void> {
   const rowByKey = new Map<string, number>();
   ledgerValues.forEach((row, index) => { if (index > 0 && row[17]) rowByKey.set(String(row[17]), index + 1); });
   const applied = applyRecords(existing, incoming);
+  const heldBack = heldBackDays(existing, incoming);
   const appliedByKey = new Map(applied.map((record) => [record.recordKey, record]));
   const existingByKey = new Map(existing.map((record) => [record.recordKey, record]));
   const updates: { range: string; values: Cell[][] }[] = [];
@@ -335,6 +349,13 @@ async function main(): Promise<void> {
       updates.push({ range: `CC_Ledger!A${row}:R${row}`, values: [ledgerRow(kept, importedAt)] });
     } else appends.push(ledgerRow(kept, importedAt));
   });
+  heldBack.forEach((record) => {
+    const row = rowByKey.get(record.recordKey);
+    replaced.push(historyRow({
+      at: importedAt, tab: 'CC_Ledger', key: record.recordKey, replacedBy: `not applied: ${record.sourceReport}`, previous: row ? ledgerValues[row - 1] ?? [] : [],
+      reason: `${HELD_BACK} Later figures: ${JSON.stringify(ledgerRow(record, importedAt).slice(10, 15))}.`,
+    }));
+  });
 
   const kpi = await read('CC_Kpi!A1:G60');
   const kpiHeader = (kpi[0] ?? []).map(String);
@@ -344,7 +365,7 @@ async function main(): Promise<void> {
   const pct = (top: number, bottom: number): number => rate(top, bottom) ?? 0;
   const countNote = (label: string, left: Counted | null, right: Counted | null): string =>
     `${label}. Written ${left?.sold ?? 0} of ${left?.qual ?? 0}, delivered ${right?.sold ?? 0} of ${right?.qual ?? 0}.`;
-  const through = `${STORE_START} through ${shiftDate(date, -1)} snapshot plus the ${date} daily file`;
+  const through = `${STORE_START} through ${cutoff} snapshot plus the ${dates.length > 1 ? `${dates[0]} through ${date} daily files` : `${date} daily file`}`;
   const kpiRows: [string, number | null, number | null, string][] = [
     ['Bedding', pct(w.bedding, w.sales), pct(d.bedding, d.sales), `Bedding dollars ÷ sales, ${through}. Written ${w.bedding} of ${w.sales}, delivered ${d.bedding} of ${d.sales}.`],
     ['Adjustable Base Attachment', w.bases ? pct(w.bases.sold, w.bases.qual) : null, d.bases ? pct(d.bases.sold, d.bases.qual) : null, countNote(`ASL Store 17 ADJ, ${through}`, w.bases, d.bases)],
@@ -364,25 +385,33 @@ async function main(): Promise<void> {
     const index = kpi.findIndex((row, i) => i > 0 && String(row[0]) === metric && String(row[4] ?? '') === STORE_START && String(row[5] ?? '') === STORE_END);
     const values: Cell[] = [metric, written ?? '', delivered ?? '', note, STORE_START, STORE_END, date];
     if (index < 0) kpiAppends.push(values);
-    else if (JSON.stringify(kpi[index]?.map(String)) !== JSON.stringify(values.map(String))) kpiUpdates.push({ range: `CC_Kpi!A${index + 1}:G${index + 1}`, values: [values] });
+    else if (JSON.stringify(kpi[index]?.map(String)) !== JSON.stringify(values.map(String))) {
+      replaced.push(historyRow({ at: importedAt, tab: 'CC_Kpi', key: `${metric}|${STORE_START}|${STORE_END}`, replacedBy: `snapshot through ${date}`, previous: kpi[index] ?? [], reason: 'A newer store-period snapshot replaced this row.' }));
+      kpiUpdates.push({ range: `CC_Kpi!A${index + 1}:G${index + 1}`, values: [values] });
+    }
   });
-  const dayBedding = (side: Side): number => find('group17', side).report.store?.beddingPercent ?? 0;
-  const dailyValues: Cell[] = ['Daily Bedding', dayBedding('written'), dayBedding('delivered'), `Group 17 TOTAL bedding dollars ÷ sales for ${date} only.`, date, date, date];
-  const dailyIndex = kpi.findIndex((row, i) => i > 0 && String(row[0]) === 'Daily Bedding' && String(row[4] ?? '') === date);
-  if (dailyIndex < 0) kpiAppends.push(dailyValues);
-  else if (JSON.stringify(kpi[dailyIndex]?.map(String)) !== JSON.stringify(dailyValues.map(String))) kpiUpdates.push({ range: `CC_Kpi!A${dailyIndex + 1}:G${dailyIndex + 1}`, values: [dailyValues] });
+  const dayBedding = (onDate: string, side: Side): number => findOn(onDate, 'group17', side).report.store?.beddingPercent ?? 0;
+  const dailyBedding = dates.map((onDate) => {
+    const values: Cell[] = ['Daily Bedding', dayBedding(onDate, 'written'), dayBedding(onDate, 'delivered'), `Group 17 TOTAL bedding dollars ÷ sales for ${onDate} only.`, onDate, onDate, onDate];
+    const index = kpi.findIndex((row, i) => i > 0 && String(row[0]) === 'Daily Bedding' && String(row[4] ?? '') === onDate);
+    if (index < 0) kpiAppends.push(values);
+    else if (Number(kpi[index]?.[1]) !== values[1] || Number(kpi[index]?.[2]) !== values[2]) {
+      replaced.push(historyRow({ at: importedAt, tab: 'CC_Kpi', key: `Daily Bedding|${onDate}`, replacedBy: 'not applied', previous: kpi[index] ?? [], reason: `${HELD_BACK} Later figures: ${values[1]} written, ${values[2]} delivered.` }));
+    }
+    return { date: onDate, written: values[1], delivered: values[2] };
+  });
 
   const imports = await read('CC_Imports!A1:F1000');
   const known = new Set(imports.slice(1).map((row) => String(row[0] ?? '')));
   const importAppends: Cell[][] = [];
-  const fileStatus = day.map((item) => {
+  const fileStatus = allDays.map((item) => {
     const already = known.has(item.sha256);
     const label = `Data Analysis KPI ${item.report.family === 'asl' ? 'ASL' : '17'} ${item.report.side === 'written' ? 'Written' : 'Delivered'}`;
     const scope = item.report.family === 'asl' ? 'Only the Store 17 row was used (pillows, adjustable bases, rugs).' : 'Store 17 TOTAL and every salesperson line were used.';
     if (!already) {
-      importAppends.push([item.sha256, item.name, label, 'imported', importedAt, `Daily report ${date}. ${scope} Saved to CC_Ledger and CC_Kpi. CC_Daily and CC_Rollup were not changed.`]);
+      importAppends.push([item.sha256, item.name, label, 'imported', importedAt, `Daily report ${item.report.start}. ${scope} Saved to CC_Ledger and CC_Kpi. CC_Daily and CC_Rollup were not changed.`]);
     }
-    return { file: item.name, uploadedAs: path.basename(item.file), reportDate: date, type: label, sha256: item.sha256, status: already ? 'already imported (skipped)' : 'imported' };
+    return { file: item.name, uploadedAs: path.basename(item.file), reportDate: item.report.start, type: label, sha256: item.sha256, status: already ? 'already imported (skipped)' : 'imported' };
   });
 
   const summary = {
@@ -390,12 +419,13 @@ async function main(): Promise<void> {
     dry,
     checks,
     files: fileStatus,
-    ledger: { existingRows: existing.length, incoming: incoming.length, updated: updates.length, appended: appends.length, unchanged: incoming.length - updates.length - appends.length },
+    ledger: { existingRows: existing.length, incoming: incoming.length, updated: updates.length, appended: appends.length, heldBack: heldBack.map((record) => record.recordKey), unchanged: incoming.length - updates.length - appends.length - heldBack.length },
+    history: replaced.length,
     kpi: { updated: kpiUpdates.length, appended: kpiAppends.length },
     importsAppended: importAppends.length,
     store: { written: w, delivered: d },
     kpiRows: kpiRows.map(([metric, written, delivered]) => ({ metric, written, delivered })),
-    dailyBedding: { written: dailyValues[1], delivered: dailyValues[2] },
+    dailyBedding,
     people: people.map((item) => ({
       side: item.side, name: item.name, sales: item.value.sales, bedding: rate(item.value.bedding, item.value.sales),
       fabric: `${item.value.fabric.sold}/${item.value.fabric.qual}`, power: `${item.value.power.sold}/${item.value.power.qual}`,

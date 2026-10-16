@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { applyRecords, attachmentFromDaily, latestCumulative, makeRecord, sumDaily, type LedgerRecord } from './kpiLedger.ts';
+import { applyRecords, attachmentFromDaily, heldBackDays, latestCumulative, makeRecord, sumDaily, type LedgerRecord } from './kpiLedger.ts';
 
 function day(date: string, dollars: number, source = 'day.pdf'): LedgerRecord {
   return makeRecord({
@@ -36,18 +36,41 @@ test('reimporting the same report does not change the total', () => {
   assert.equal(sumDaily(again, 'SNAP_STORE', 'written', '2026-10-02', '2026-11-01', 'salesDollars'), 6686);
 });
 
-test('a corrected report replaces the day instead of adding to it', () => {
+test('a later pull of a recorded day is held back and the recorded day stays', () => {
   const first = applyRecords([], [day('2026-10-12', 4000, 'first.pdf')]);
-  const corrected = applyRecords(first, [day('2026-10-12', 4361, 'corrected.pdf')]);
-  assert.equal(corrected.length, 1);
-  assert.equal(corrected[0]?.salesDollars, 4361);
-  assert.equal(sumDaily(corrected, 'SNAP_STORE', 'written', '2026-10-02', '2026-11-01', 'salesDollars'), 4361);
+  const later = [day('2026-10-12', 4361, 'later.pdf')];
+  const after = applyRecords(first, later);
+  assert.equal(after.length, 1);
+  assert.equal(after[0]?.salesDollars, 4000);
+  assert.equal(after[0]?.sourceReport, 'first.pdf');
+  assert.deepEqual(heldBackDays(first, later).map((row) => row.salesDollars), [4361]);
+  assert.equal(sumDaily(after, 'SNAP_STORE', 'written', '2026-10-02', '2026-11-01', 'salesDollars'), 4000);
 });
 
-test('revising an earlier date changes the monthly total', () => {
+test('the same figures under another file name are not held back', () => {
+  const first = applyRecords([], [day('2026-10-13', 6686, 'output.pdf')]);
+  assert.deepEqual(heldBackDays(first, [day('2026-10-13', 6686, 'output (1).pdf')]), []);
+  assert.equal(applyRecords(first, [day('2026-10-13', 6686, 'output (1).pdf')])[0]?.sourceReport, 'output.pdf');
+});
+
+test('a later cancellation is recorded on the day it is reported, not on the original day', () => {
   const base = applyRecords([], [day('2026-10-02', -284), day('2026-10-03', 1000)]);
-  const revised = applyRecords(base, [day('2026-10-02', -300)]);
+  const revised = applyRecords(base, [day('2026-10-02', -300), day('2026-10-16', -16)]);
+  assert.equal(revised.find((row) => row.reportDate === '2026-10-02')?.salesDollars, -284);
   assert.equal(sumDaily(revised, 'SNAP_STORE', 'written', '2026-10-02', '2026-11-01', 'salesDollars'), 700);
+});
+
+test('a newer snapshot of the same filter replaces the older snapshot', () => {
+  const snapshot = (attachments: number, through: string) => makeRecord({
+    view: 'MPPA_STORE', grain: 'cumulative', reportDate: '', periodStart: '2026-10-02', periodEnd: '2026-11-01',
+    verifiedThrough: through, store: '17', employeeCode: '', employeeName: '', side: 'written',
+    salesDollars: null, unitCount: attachments, eligible: 9, attachments, sourceReport: `through-${through}`,
+  });
+  const first = applyRecords([], [snapshot(3, '2026-10-13')]);
+  const next = applyRecords(first, [snapshot(4, '2026-10-14')]);
+  assert.equal(next.length, 1);
+  assert.equal(next[0]?.attachments, 4);
+  assert.deepEqual(heldBackDays(first, [snapshot(4, '2026-10-14')]), []);
 });
 
 test('monthly attachment uses the counts and ignores a cumulative snapshot', () => {
