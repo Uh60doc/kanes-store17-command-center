@@ -306,16 +306,16 @@ test('closing ratio uses Net Written customers and the full store-month PERQ', (
         reportType: 'NWDSR Written',
         periodStart: '2026-10-02',
         periodEnd: '2026-11-01',
-        metrics: { writtenSales: 1, writtenCustomers: 20 },
+        metrics: { writtenSales: 1, writtenCustomers: 25 },
         daily: [],
       }),
     ],
     perq,
   );
   assert.equal(model.closingRatio.kind, 'value');
-  if (model.closingRatio.kind === 'value') assert.equal(model.closingRatio.value, 0.4);
+  if (model.closingRatio.kind === 'value') assert.equal(model.closingRatio.value, 0.5);
   assert.equal(model.closingReconciliation, false);
-  assert.equal(storeOperatingPeriod.managementGoals.closingRatioTarget, 0.4);
+  assert.equal(storeOperatingPeriod.managementGoals.closingRatioTarget, 0.5);
   if (model.closingRatio.kind === 'value') {
     assert.equal(model.closingRatio.value, storeOperatingPeriod.managementGoals.closingRatioTarget);
   }

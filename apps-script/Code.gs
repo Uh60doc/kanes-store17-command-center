@@ -5,6 +5,7 @@ var ROUTES_ = {
   login: null,
   home: ['sales', 'manager', 'admin'],
   daily: ['sales', 'manager', 'admin'],
+  closing: ['sales', 'manager', 'admin'],
   people: ['sales', 'manager', 'admin'],
   morning: ['sales', 'manager', 'admin'],
   savePromotion: ['admin'],
@@ -40,6 +41,7 @@ function dispatch(name, payload) {
   payload.session = session;
   if (name === 'home') return home_(payload);
   if (name === 'daily') return daily_(payload);
+  if (name === 'closing') return closing_(payload);
   if (name === 'people') return people_(payload);
   if (name === 'morning') return morning_(payload);
   if (name === 'savePromotion') return savePromotion_(payload);
