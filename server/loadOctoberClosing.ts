@@ -38,7 +38,7 @@ function dailyCustomerRows(): Cell[][] {
         throw new Error(`${name} did not give a single-day Net Written # OF CUST.`);
       }
       const sha = createHash('sha256').update(readFileSync(file)).digest('hex');
-      rows.push([report.start, 'store', '', '', report.purchasingCustomers, '', report.start, report.start, NET_WRITTEN, 'yes', `Net Written # OF CUST for the report date. ${name} sha256 ${sha.slice(0, 12)}.`, report.start]);
+      rows.push([report.start, 'store', '', '', report.purchasingCustomers, '', report.start, report.start, NET_WRITTEN, 'yes', `Net Written # OF CUST for the report date. ${name} sha256 ${sha.slice(0, 12)}.`, report.start, '17']);
     });
   });
   return rows;
@@ -63,8 +63,8 @@ async function main(): Promise<void> {
 
   const wanted: Cell[][] = [
     ...dailyCustomerRows(),
-    ['2026-10-14', 'store', '', '', 52, '', '2026-10-02', '2026-10-14', NET_WRITTEN, 'yes', 'NET WRITTEN store report for October 2 through October 14: 52 purchasing customers, written sales $108,583. The daily # OF CUST for October 2 through October 14 also adds to 52.', '2026-10-14'],
-    [PERQ_CUTOFF, 'store', '', '', '', 100, '2026-10-02', '2026-10-31', PERQ, 'yes', `Store 17 South Orlando location Ups + Be Backs, filter October 2 through October 31. ${PERQ_CUTOFF_NOTE} The October 1 snapshot of 104 is a different period and is not used for the store month.`, PERQ_CUTOFF],
+    ['2026-10-14', 'store', '', '', 52, '', '2026-10-02', '2026-10-14', NET_WRITTEN, 'yes', 'NET WRITTEN store report for October 2 through October 14: 52 purchasing customers, written sales $108,583. The daily # OF CUST for October 2 through October 14 also adds to 52.', '2026-10-14', '17'],
+    [PERQ_CUTOFF, 'store', '', '', '', 100, '2026-10-02', '2026-10-31', PERQ, 'yes', `Store 17 South Orlando location Ups + Be Backs, filter October 2 through October 31. ${PERQ_CUTOFF_NOTE} The October 1 snapshot of 104 is a different period and is not used for the store month.`, PERQ_CUTOFF, '17'],
   ];
   const appends: Cell[][] = [];
   const skipped: string[] = [];
