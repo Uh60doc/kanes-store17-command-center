@@ -200,7 +200,8 @@ function kpiRecords_(source, family, side, start, end, filename) {
         ['FABW_' + scope, columns.groups.FABRIC],
         ['PWAR_' + scope, columns.groups['POWER FURNITURE'] || columns.groups.POWER],
         ['LTHW_' + scope, columns.groups.LEATHER],
-        ['MPPA_' + scope, columns.groups['MATTRESS PADS']]
+        ['MPPA_' + scope, columns.groups['MATTRESS PADS']],
+        ['ATTACH_' + scope, columns.groups['TOTAL ATTACHMENTS %'] || columns.groups['TOTAL ATTACHMENTS']]
       ].forEach(function (spec) {
         var qty = kpiQty_(row, spec[1]);
         if (!qty) return;

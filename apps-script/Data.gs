@@ -275,6 +275,7 @@ function approvedGoals_(config) {
     finance: goalOr_(config, 'finance_goal', 0.5),
     warranty: goalOr_(config, 'warranty_sales_goal', 0.055),
     individualVolume: goalOr_(config, 'individual_volume_goal', 65000),
+    attachment: goalOr_(config, 'attachment_goal', null),
   };
 }
 
@@ -360,7 +361,12 @@ function snapAssociateLines_(individualStart, individualEnd) {
   return { byDay: byDay, order: order, latest: latest };
 }
 
-function peopleRows_(individualStart, individualEnd) {
+/**
+ * options.only limits the rows to one salesperson. options.cachedSnap false never falls back to the month total
+ * saved on CC_People, which is only right for the current salesperson month.
+ */
+function peopleRows_(individualStart, individualEnd, options) {
+  options = options || {};
   var lines = snapAssociateLines_(individualStart, individualEnd);
   var totals = {};
   var seenAny = {};
@@ -377,11 +383,12 @@ function peopleRows_(individualStart, individualEnd) {
   var closingFacts = loadClosing_();
   var analysis = personAnalysisContext_({ start: individualStart, end: individualEnd });
   var roster = sheet_('CC_People').filter(activePerson_);
+  if (options.only) roster = roster.filter(function (row) { return String(row.name) === options.only; });
   var rows = roster.length ? roster.map(function (row) {
     var name = String(row.name);
     var written = Object.prototype.hasOwnProperty.call(totals, name)
       ? Math.round(totals[name] * 100) / 100
-      : (seenAny[name] ? null : numberOrNull_(peopleSnapCell_(row)));
+      : (seenAny[name] || options.cachedSnap === false ? null : numberOrNull_(peopleSnapCell_(row)));
     return personRecord_(name, written, String(row.role || 'associate'), days[name] || [], goals, personClosing_(closingFacts, name, individualStart, individualEnd, goals.closing, analysis.ledger), personAnalysis_(analysis, name));
   }) : Object.keys(totals).map(function (name) {
     return personRecord_(name, Math.round(totals[name] * 100) / 100, 'associate', days[name] || [], goals, personClosing_(closingFacts, name, individualStart, individualEnd, goals.closing, analysis.ledger), personAnalysis_(analysis, name));
@@ -389,7 +396,7 @@ function peopleRows_(individualStart, individualEnd) {
   return rows;
 }
 
-var PERSON_ANALYSIS_VIEWS_ = ['DA_SALES', 'BEDDING', 'MPPA', 'FABW', 'LTHW', 'PWAR', 'FINANCE', 'AVERAGE'];
+var PERSON_ANALYSIS_VIEWS_ = ['DA_SALES', 'BEDDING', 'MPPA', 'FABW', 'LTHW', 'PWAR', 'ATTACH', 'FINANCE', 'AVERAGE'];
 var PERSON_ANALYSIS_SOURCE_ = /DATA_ANALYSIS_KPI_17_/i;
 
 /**
@@ -402,7 +409,7 @@ function personAnalysisCoverage_(ledger, side, period, closed) {
   var dayFiles = {};
   ledger.forEach(function (row) {
     if (row.side !== side || !PERSON_ANALYSIS_SOURCE_.test(row.source)) return;
-    if (row.view === 'DA_SALES_PERSON' && row.grain === 'cumulative' && row.fitsTrack && row.periodStart === period.start && row.verifiedThrough > snapshot) snapshot = row.verifiedThrough;
+    if (row.view === 'DA_SALES_PERSON' && row.grain === 'cumulative' && row.fitsTrack && row.periodStart === period.start && row.verifiedThrough <= period.end && row.verifiedThrough > snapshot) snapshot = row.verifiedThrough;
     if (row.view === 'DA_SALES_STORE' && row.grain === 'daily') dayFiles[row.reportDate] = true;
   });
   var days = [];
@@ -475,6 +482,26 @@ function personAnalysisSide_(ledger, name, coverage) {
     });
     return { value: eligible ? Math.round((attachments / eligible) * 1000) / 1000 : null, sold: attachments, detail: attachments + ' of ' + eligible, text: eligible ? '' : 'No qualifying sales' };
   }
+  // Group 17 quantities can be fractional on Delivered, so sums are rounded to 4 places. A covered part with
+  // category lines but no Total Attachments line was loaded before that group was kept: the total is not on file.
+  function tally(prefix) {
+    var qualified = 0;
+    var sold = 0;
+    var dollars = 0;
+    var complete = true;
+    keys.forEach(function (part) {
+      var row = parts[prefix][part];
+      if (!row) {
+        if (prefix === 'ATTACH' && ['FABW', 'PWAR', 'LTHW', 'MPPA'].some(function (other) { return parts[other][part] && (parts[other][part].eligible || parts[other][part].attachments); })) complete = false;
+        return;
+      }
+      qualified += row.eligible || 0;
+      sold += row.attachments || 0;
+      if (dollars !== null) dollars = row.sales === null ? ((row.attachments || 0) === 0 ? dollars : null) : dollars + row.sales;
+    });
+    var round4 = function (value) { return Math.round(value * 10000) / 10000; };
+    return complete ? { qualified: round4(qualified), sold: round4(sold), dollars: dollars === null ? null : Math.round(dollars * 100) / 100 } : null;
+  }
   var round2 = function (value) { return Math.round(value * 100) / 100; };
   return {
     through: coverage.through,
@@ -488,6 +515,7 @@ function personAnalysisSide_(ledger, name, coverage) {
     fabric: counted('FABW'),
     leather: counted('LTHW'),
     power: counted('PWAR'),
+    tallies: { fabric: tally('FABW'), leather: tally('LTHW'), power: tally('PWAR'), pads: tally('MPPA'), total: tally('ATTACH') },
     finance: { value: sales && financed !== null ? Math.round((financed / sales) * 1000) / 1000 : null, detail: '', text: sales ? (financed === null ? 'Not on file' : '') : 'No sales' },
     average: { value: orders ? round2(sales / orders) : null, detail: orders === null ? '' : moneyText_(sales) + ' ÷ ' + orders + ' orders', text: orders === 0 ? 'No orders' : (orders === null ? 'Not on file' : '') },
   };
@@ -495,6 +523,66 @@ function personAnalysisSide_(ledger, name, coverage) {
 
 function personAnalysis_(context, name) {
   return { written: personAnalysisSide_(context.ledger, name, context.written), delivered: personAnalysisSide_(context.ledger, name, context.delivered) };
+}
+
+var ATTACHMENT_CATEGORIES_ = [
+  { key: 'fabric', name: 'Fabric', source: 'FABRIC', goal: 'fabric' },
+  { key: 'leather', name: 'Leather', source: 'LEATHER', goal: 'leather' },
+  { key: 'power', name: 'Power Upholstery', source: 'POWER FURNITURE', goal: 'power' },
+  { key: 'pads', name: 'Mattress Protectors (Pads)', source: 'MATTRESS PADS', goal: 'mattress' },
+  { key: 'total', name: 'Total Attachment', source: 'TOTAL ATTACHMENTS', goal: 'attachment' },
+];
+
+/**
+ * One attachment category from Group 17 quantities. Missed = MAX(0, qualified - sold). Actual = sold ÷ qualified.
+ * To hit goal = MAX(0, CEILING(qualified × goal) - sold). The product is rounded to 6 places first so 5 × 0.8
+ * is 4, not 4.000000000000001.
+ */
+function attachmentLine_(category, tally, goal) {
+  var line = { key: category.key, name: category.name, source: 'Group 17 ' + category.source, goal: goal, qualified: null, sold: null, missed: null, actual: null, points: null, needed: null, dollars: null, status: 'pending', flag: '' };
+  if (!tally) return line;
+  var round4 = function (value) { return Math.round(value * 10000) / 10000; };
+  line.qualified = tally.qualified;
+  line.sold = tally.sold;
+  line.dollars = tally.dollars;
+  line.missed = round4(Math.max(0, tally.qualified - tally.sold));
+  if (goal !== null) line.needed = round4(Math.max(0, Math.ceil(Math.round(tally.qualified * goal * 1e6) / 1e6) - tally.sold));
+  if (tally.sold > tally.qualified) line.flag = 'Sold exceeds qualified. The source figures are kept as printed and flagged for review.';
+  if (!tally.qualified) {
+    line.status = 'na';
+    return line;
+  }
+  line.actual = Math.round((tally.sold / tally.qualified) * 10000) / 10000;
+  if (goal !== null) {
+    line.points = Math.round((tally.sold / tally.qualified - goal) * 1000) / 10;
+    line.status = tally.sold >= tally.qualified * goal - 1e-9 ? 'at' : 'below';
+  } else line.status = 'nogoal';
+  return line;
+}
+
+/** Written or Delivered attachment scorecard for one salesperson. Written and Delivered are never combined. */
+function attachmentSide_(side, goals) {
+  var tallies = side ? side.tallies : null;
+  var lines = ATTACHMENT_CATEGORIES_.map(function (category) {
+    return attachmentLine_(category, tallies ? tallies[category.key] : null, goals[category.goal] === undefined ? null : goals[category.goal]);
+  });
+  var flags = [];
+  var total = lines[4];
+  if (tallies && total.qualified !== null && lines.slice(0, 4).every(function (line) { return line.qualified !== null; })) {
+    var round4 = function (value) { return Math.round(value * 10000) / 10000; };
+    var qualified = round4(lines.slice(0, 4).reduce(function (sum, line) { return sum + line.qualified; }, 0));
+    var sold = round4(lines.slice(0, 4).reduce(function (sum, line) { return sum + line.sold; }, 0));
+    if (qualified !== total.qualified || sold !== total.sold) {
+      flags.push('Group 17 Total Attachments (' + total.sold + ' of ' + total.qualified + ') differs from the four categories (' + sold + ' of ' + qualified + '). Flagged for review.');
+    }
+  }
+  if (tallies && !tallies.total) flags.push('Group 17 Total Attachments is not on file for every report in this range, so the total is Pending.');
+  lines.forEach(function (line) { if (line.flag) flags.push(line.name + ': ' + line.flag); });
+  return { through: side ? side.through : '', basis: side ? side.basis : '', lines: lines, flags: flags };
+}
+
+function personAttachments_(analysis, goals) {
+  return { written: attachmentSide_(analysis.written, goals), delivered: attachmentSide_(analysis.delivered, goals) };
 }
 
 function analysisKpi_(name, unit, goal, analysis, field, note) {
@@ -537,6 +625,7 @@ function personRecord_(name, snapWritten, role, days, goals, closing, analysis) 
     analysisWrittenThrough: analysis.written ? analysis.written.through : '',
     analysisWrittenBasis: analysis.written ? analysis.written.basis : '',
     analysis: analysis,
+    attachments: personAttachments_(analysis, goals),
     monthlyGoal: goals.individualVolume,
     closingOrders: closing.orders,
     opportunities: closing.opportunities,
@@ -1769,6 +1858,68 @@ function people_(payload) {
     snapLabel: 'SNAP written',
     analysisThrough: { written: (people[0] && people[0].analysisWrittenThrough) || null, delivered: (people[0] && people[0].deliveredThrough) || null },
     people: people,
+    today: today,
+    evaluation: evaluationCycle_(today),
+    updated: healthValue_('last_calculation') || 'Not Available',
+  };
+}
+
+function activeAssociates_() {
+  return sheet_('CC_People').filter(activePerson_).map(function (row) { return String(row.name); });
+}
+
+/**
+ * Evaluations cover the previous three completed salesperson months, prepared on the 3rd and delivered before the
+ * 7th. Through the 6th the cycle is this month's; from the 7th it is next month's.
+ */
+function evaluationCycle_(today) {
+  var parts = isoParts_(today);
+  var year = parts.month === 12 ? parts.year + 1 : parts.year;
+  var month = parts.month === 12 ? 1 : parts.month + 1;
+  if (parts.day < 7) {
+    year = parts.year;
+    month = parts.month;
+  }
+  var months = [3, 2, 1].map(function (back) {
+    var m = month - back;
+    var y = year;
+    if (m < 1) { m += 12; y -= 1; }
+    return periodFor_('individual', y, m);
+  });
+  var label = year + '-' + pad2_(month);
+  return { cycle: label, prepare: label + '-03', deliverBy: label + '-06', covers: months.map(function (period) { return { start: period.start, end: period.end }; }) };
+}
+
+/** Printable associate summary for one salesperson and a date range inside one salesperson month. */
+function summary_(payload) {
+  var today = todayNy_();
+  var month = individualPeriodContaining_(today);
+  var start = payload.start ? String(payload.start) : month.start;
+  var end = payload.end ? String(payload.end) : month.end;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || shiftDate_(start, 0) !== start || shiftDate_(end, 0) !== end) throw new Error('Choose a start and end date.');
+  if (end < start) throw new Error('The end date is before the start date.');
+  var period = individualPeriodContaining_(start);
+  if (end > period.end) throw new Error('Choose dates inside one salesperson month, the 1st through the last day.');
+  if (start > today) throw new Error('The start date is in the future.');
+  var associates = activeAssociates_();
+  var name = String(payload.name || associates[0] || '');
+  if (associates.indexOf(name) === -1) throw new Error('Choose an associate on the Sales Team.');
+  var lines = snapAssociateLines_(start, end);
+  var currentMonth = start === month.start && end === month.end;
+  var person = peopleRows_(start, end, { only: name, cachedSnap: currentMonth })[0] || null;
+  var goals = approvedGoals_(config_());
+  return {
+    role: payload.session.role,
+    name: name,
+    associates: associates,
+    start: start,
+    end: end,
+    period: { start: period.start, end: period.end },
+    fromFirst: start === period.start,
+    snapThrough: lines.latest || null,
+    snapPending: lines.latest ? snapPendingDates_(start, end, lines.latest) : [],
+    person: person,
+    goals: { bedding: goals.bedding, averageTicket: goals.averageTicket, closing: goals.closing, individualVolume: goals.individualVolume, fabric: goals.fabric, leather: goals.leather, power: goals.power, mattress: goals.mattress, attachment: goals.attachment },
     updated: healthValue_('last_calculation') || 'Not Available',
   };
 }

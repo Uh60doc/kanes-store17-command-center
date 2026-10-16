@@ -208,3 +208,23 @@ test('October store KPI files reconcile without adding the day snapshot', { skip
     assert.equal(match[3] === 'null' ? null : Number(match[3]), pair[1], name);
   }
 });
+
+test('the Group 17 Total Attachments group is kept as printed, with its sold dollars, on ATTACH rows', () => {
+  const head = (cells: [string, string][], r: number) => `<row r="${r}">${cells.map(([ref, text]) => `<c r="${ref}${r}" t="inlineStr"><is><t>${text}</t></is></c>`).join('')}</row>`;
+  const nums = (name: string, values: [string, number][], r: number) => `<row r="${r}"><c r="A${r}" t="inlineStr"><is><t>${name}</t></is></c>${values.map(([ref, value]) => `<c r="${ref}${r}"><v>${value}</v></c>`).join('')}</row>`;
+  const sheet = `<?xml version="1.0"?><worksheet><sheetData>
+    ${head([['A', 'GROUP 17'], ['B', 'DELIVERED ORDERS'], ['F', 'MATTRESS PADS'], ['J', 'TOTAL ATTACHMENTS %']], 1)}
+    ${head([['A', 'Sales Person'], ['B', 'Sales'], ['C', 'Avg Sales'], ['D', 'Fin %'], ['F', 'Qual Qty'], ['G', 'Sold Qty'], ['H', 'Sold $'], ['I', 'Attach %'], ['J', 'Qual Qty'], ['K', 'Sold Qty'], ['L', 'Sold $'], ['M', 'Attach %']], 2)}
+    ${nums('RENZO DELSOLAR', [['B', 32267.815], ['C', 1290.7126], ['F', 1], ['G', 2], ['H', 259.98], ['I', 200], ['J', 43], ['K', 44], ['L', 1357.57], ['M', 102.3]], 3)}
+    ${nums('TOTAL', [['B', 32267.815], ['C', 1290.7126], ['F', 1], ['G', 2], ['H', 259.98], ['I', 200], ['J', 43], ['K', 44], ['L', 1357.57], ['M', 102.3]], 4)}
+  </sheetData></worksheet>`;
+  const report = parseKpiWorkbook(zipStored({ 'xl/worksheets/sheet1.xml': sheet }), 'DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-01_2026-10-13.xlsx');
+  const renzo = report.lines.find((line) => line.name === 'RENZO DELSOLAR');
+  assert.deepEqual([renzo?.totalAttach?.qual, renzo?.totalAttach?.sold, renzo?.totalAttach?.dollars, renzo?.totalAttach?.percent], [43, 44, 1357.57, 1.023],
+    'sold above qualified is kept as printed');
+  const attach = recordsFromKpi(report, '2026-10-13').filter((record) => record.view.startsWith('ATTACH_'));
+  assert.deepEqual(attach.map((record) => [record.view, record.employeeName, record.eligible, record.attachments, record.salesDollars]), [
+    ['ATTACH_STORE', '', 43, 44, 1357.57],
+    ['ATTACH_PERSON', 'Renzo Del Solar', 43, 44, 1357.57],
+  ]);
+});

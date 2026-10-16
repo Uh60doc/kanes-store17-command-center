@@ -21,6 +21,7 @@ export interface KpiLine {
   power: QtyMetric;
   leather: QtyMetric;
   pads: QtyMetric;
+  totalAttach: QtyMetric | null;
   pillows: QtyMetric | null;
   adjustable: QtyMetric | null;
   powerBasePercent: number | null;
@@ -150,6 +151,7 @@ function lineFrom(row: readonly (string | null)[], columns: ColumnMap): KpiLine 
   const beddingDollars = cents(num(cell(row, beddingGroup.SALES)));
   const beddingPrinted = num(cell(row, beddingGroup['%']));
   const adjustable = columns.groups.ADJ;
+  const totalAttach = columns.groups['TOTAL ATTACHMENTS %'] ?? columns.groups['TOTAL ATTACHMENTS'];
   return {
     name,
     sales,
@@ -166,6 +168,9 @@ function lineFrom(row: readonly (string | null)[], columns: ColumnMap): KpiLine 
     ),
     leather: qtyMetric(cell(row, columns.groups.LEATHER?.['QUAL QTY']), cell(row, columns.groups.LEATHER?.['SOLD QTY']), cell(row, columns.groups.LEATHER?.['SOLD $']), cell(row, columns.groups.LEATHER?.['ATTACH %'])),
     pads: qtyMetric(cell(row, columns.groups['MATTRESS PADS']?.['QUAL QTY']), cell(row, columns.groups['MATTRESS PADS']?.['SOLD QTY']), cell(row, columns.groups['MATTRESS PADS']?.['SOLD $']), cell(row, columns.groups['MATTRESS PADS']?.['ATTACH %'])),
+    totalAttach: totalAttach
+      ? qtyMetric(cell(row, totalAttach['QUAL QTY']), cell(row, totalAttach['SOLD QTY']), cell(row, totalAttach['SOLD $']), cell(row, totalAttach['ATTACH %']))
+      : null,
     pillows: columns.groups.PILLOWS
       ? qtyMetric(cell(row, columns.groups.PILLOWS['QUAL QTY']), cell(row, columns.groups.PILLOWS['SOLD QTY']), cell(row, columns.groups.PILLOWS['SOLD $']), cell(row, columns.groups.PILLOWS['ATTACH %']))
       : null,

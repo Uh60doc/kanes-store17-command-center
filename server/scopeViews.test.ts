@@ -14,7 +14,7 @@ function balanced(formula: string): boolean {
 }
 
 test('every STORE and PERSON tab formula filters CC_Ledger by its own view and scope', () => {
-  assert.equal(SCOPE_VIEWS.length, 32);
+  assert.equal(SCOPE_VIEWS.length, 34);
   for (const view of SCOPE_VIEWS) {
     const formula = viewFormula(view);
     assert.ok(balanced(formula), `${view} parentheses`);

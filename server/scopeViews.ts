@@ -15,6 +15,7 @@ export const SCOPE_VIEWS = [
   'PILLOWS_STORE', 'PILLOWS_PERSON', 'FABW_STORE', 'FABW_PERSON', 'LTHW_STORE', 'LTHW_PERSON',
   'PWAR_STORE', 'PWAR_PERSON', 'UVWL_STORE', 'UVWL_PERSON', 'FINANCE_STORE', 'FINANCE_PERSON',
   'RUGS_STORE', 'RUGS_PERSON', 'AVERAGE_STORE', 'AVERAGE_PERSON', 'DA_SALES_STORE', 'DA_SALES_PERSON',
+  'ATTACH_STORE', 'ATTACH_PERSON',
 ] as const;
 
 /** NWDSR Net Written and Delivered are store-level ranking reports. No report supplies these salesperson views. */

@@ -55,6 +55,7 @@ interface Totals {
   power: Counted;
   leather: Counted;
   pads: Counted;
+  attach: Counted;
   pillows: Counted | null;
   bases: Counted | null;
   rugs: number | null;
@@ -92,7 +93,7 @@ function totals(line: KpiLine | null, asl: KpiLine | null): Totals {
   const none: QtyMetric = { qual: 0, sold: 0, dollars: 0, percent: null, mismatch: false };
   const empty: KpiLine = {
     name: '', sales: 0, averageSale: null, finance: null, beddingDollars: 0, beddingPercent: null,
-    fabric: none, power: none, leather: none, pads: none, pillows: null, adjustable: null, powerBasePercent: null, rugsQty: null, rugsDollars: null,
+    fabric: none, power: none, leather: none, pads: none, totalAttach: none, pillows: null, adjustable: null, powerBasePercent: null, rugsQty: null, rugsDollars: null,
   };
   const row = line ?? empty;
   const sales = row.sales ?? 0;
@@ -105,6 +106,7 @@ function totals(line: KpiLine | null, asl: KpiLine | null): Totals {
     power: counted(row.power),
     leather: counted(row.leather),
     pads: counted(row.pads),
+    attach: counted(row.totalAttach),
     pillows: asl ? counted(asl.pillows) : null,
     bases: asl ? counted(asl.adjustable) : null,
     rugs: asl ? asl.rugsQty ?? 0 : null,
@@ -122,6 +124,7 @@ function combine(left: Totals, right: Totals): Totals {
     power: addCounted(left.power, right.power),
     leather: addCounted(left.leather, right.leather),
     pads: addCounted(left.pads, right.pads),
+    attach: addCounted(left.attach, right.attach),
     pillows: left.pillows && right.pillows ? addCounted(left.pillows, right.pillows) : null,
     bases: left.bases && right.bases ? addCounted(left.bases, right.bases) : null,
     rugs: left.rugs === null || right.rugs === null ? null : left.rugs + right.rugs,
@@ -153,7 +156,7 @@ function derivedRecords(scope: 'STORE' | 'PERSON', side: Side, start: string, th
     makeRecord({ ...common, view: `BEDDING_${scope}`, salesDollars: value.bedding, unitCount: null, eligible: null, attachments: null, kpiPercent: rate(value.bedding, value.sales) ?? 0 }),
   ];
   const qty: [string, Counted | null][] = [
-    [`FABW_${scope}`, value.fabric], [`PWAR_${scope}`, value.power], [`LTHW_${scope}`, value.leather], [`MPPA_${scope}`, value.pads],
+    [`FABW_${scope}`, value.fabric], [`PWAR_${scope}`, value.power], [`LTHW_${scope}`, value.leather], [`MPPA_${scope}`, value.pads], [`ATTACH_${scope}`, value.attach],
     [`PILLOWS_${scope}`, value.pillows], [`BASES_${scope}`, value.bases],
   ];
   qty.forEach(([view, metric]) => {
@@ -298,7 +301,7 @@ async function main(): Promise<void> {
   // The to-date snapshots were loaded before Data Analysis sales were kept. Their other rows are already on file.
   (['written', 'delivered'] as Side[]).forEach((side) => {
     [PERSON_BASE[side], STORE_BASE.group17[side]].forEach((file) => {
-      incoming.push(...recordsFromKpi(parseFile(path.join(BASELINE, file), file), cutoff).filter((record) => record.view.startsWith('DA_SALES_')));
+      incoming.push(...recordsFromKpi(parseFile(path.join(BASELINE, file), file), cutoff).filter((record) => record.view.startsWith('DA_SALES_') || record.view.startsWith('ATTACH_')));
     });
   });
   (['written', 'delivered'] as Side[]).forEach((side) => {

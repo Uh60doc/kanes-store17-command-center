@@ -7,6 +7,7 @@ var ROUTES_ = {
   daily: ['sales', 'manager', 'admin'],
   closing: ['sales', 'manager', 'admin'],
   people: ['sales', 'manager', 'admin'],
+  summary: ['manager', 'admin'],
   morning: ['sales', 'manager', 'admin'],
   savePromotion: ['admin'],
   health: ['manager', 'admin'],
@@ -43,6 +44,7 @@ function dispatch(name, payload) {
   if (name === 'daily') return daily_(payload);
   if (name === 'closing') return closing_(payload);
   if (name === 'people') return people_(payload);
+  if (name === 'summary') return summary_(payload);
   if (name === 'morning') return morning_(payload);
   if (name === 'savePromotion') return savePromotion_(payload);
   if (name === 'health') return health_(payload);

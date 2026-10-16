@@ -117,6 +117,7 @@ function pushLine(records: LedgerRecord[], report: KpiReport, through: string, l
     qtyRow(`FABW_${scope}`, report, through, { code: employeeCode, display: employeeName }, line.fabric),
     qtyRow(`LTHW_${scope}`, report, through, { code: employeeCode, display: employeeName }, line.leather),
     qtyRow(`PWAR_${scope}`, report, through, { code: employeeCode, display: employeeName }, line.power),
+    qtyRow(`ATTACH_${scope}`, report, through, { code: employeeCode, display: employeeName }, line.totalAttach),
     qtyRow(`PILLOWS_${scope}`, report, through, { code: employeeCode, display: employeeName }, line.pillows),
     qtyRow(`BASES_${scope}`, report, through, { code: employeeCode, display: employeeName }, line.adjustable),
   ];

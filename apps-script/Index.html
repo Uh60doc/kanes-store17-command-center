@@ -94,7 +94,64 @@
     @media (max-width: 720px) {
       .morning-grid, .morning-five { grid-template-columns: 1fr; }
     }
+    select { min-height: 44px; padding: 6px 10px; border-radius: 10px; border: 1px solid #1d5c66; background: #070b10; color: white; font: inherit; }
+    button.secondary { background: #10161c; border: 1px solid #1d5c66; color: #f3f6f8; }
+    .team-nav { margin: 6px 0 14px; }
+    .score-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 6px; }
+    .score-controls label { margin: 0; }
+    .score-controls .nav { margin: 0; }
+    table.score { width: 100%; }
+    table.score td, table.score th { padding: 7px 6px; vertical-align: top; }
+    table.score td .pending { display: block; font-size: 12px; }
+    .goal-actual { margin-top: 16px; padding-top: 10px; border-top: 2px solid #1d5c66; }
+    .summary-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 12px; }
+    .summary-controls label { margin: 0 0 6px; }
+    .summary-controls input { width: auto; min-height: 44px; }
+    .summary-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .summary-sheet { border: 1px solid #1d5c66; border-radius: 14px; padding: 16px 18px; background: #10161c; }
+    .summary-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; border-bottom: 2px solid #14c4d4; padding-bottom: 8px; }
+    .summary-kicker { margin: 0; color: #14c4d4; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; }
+    .summary-name { margin: 2px 0; font-size: 24px; letter-spacing: 0; text-transform: none; color: #f3f6f8; }
+    .summary-verified { max-width: 560px; text-align: right; font-size: 13px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+    .summary-box { border: 1px solid #1d5c66; border-radius: 10px; padding: 8px 10px; }
+    .summary-box h3, .summary-sheet h3 { margin: 0; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0c9; }
+    .summary-sheet h3 { margin: 12px 0 4px; }
+    .summary-box h3 { margin: 0; }
+    .summary-figure { margin: 4px 0 2px; font-size: 24px; font-weight: 750; line-height: 1.1; }
+    .summary-box .sub { font-size: 12px; }
+    .summary-tables { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .summary-sheet table.score td, .summary-sheet table.score th { padding: 4px 5px; font-size: 13px; }
+    .summary-goal th[colspan] { text-align: center; border-bottom: 1px solid #1d5c66; }
+    .summary-flags { font-size: 13px; }
+    .summary-foot { font-size: 12px; margin-top: 8px; }
+    @media (max-width: 980px) {
+      .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .summary-tables { grid-template-columns: 1fr; }
+      .summary-verified { text-align: left; }
+    }
     @media print {
+      @page { size: letter portrait; margin: 0.35in; }
+      body.print-summary .wrap { padding: 0; max-width: none; }
+      body.print-summary header.brand, body.print-summary .section-title { display: none !important; }
+      body.print-summary .summary-sheet { border: 0; padding: 0; background: white; color: black; font-size: 10px; }
+      body.print-summary .summary-head { border-bottom-color: #111; padding-bottom: 4px; }
+      body.print-summary .summary-kicker { color: #111; font-size: 9px; }
+      body.print-summary .summary-name { color: black; font-size: 18px; }
+      body.print-summary .summary-verified { font-size: 9px; max-width: 3.4in; }
+      body.print-summary .summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 6px 0; }
+      body.print-summary .summary-box { border-color: #999; padding: 4px 6px; }
+      body.print-summary .summary-box h3, body.print-summary .summary-sheet h3 { color: #333; font-size: 8.5px; }
+      body.print-summary .summary-sheet h3 { margin: 6px 0 2px; }
+      body.print-summary .summary-figure { font-size: 15px; margin: 2px 0 1px; }
+      body.print-summary .summary-box .sub, body.print-summary .summary-sheet .sub { font-size: 8px; color: #333; }
+      body.print-summary .summary-tables { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      body.print-summary .summary-sheet table.score td, body.print-summary .summary-sheet table.score th { padding: 1.5px 3px; font-size: 8.5px; border-bottom-color: #bbb; color: black; }
+      body.print-summary .summary-sheet td.good { color: #0b6b3a; font-weight: 700; }
+      body.print-summary .summary-sheet td.bad { color: #9b1c33; font-weight: 700; }
+      body.print-summary .summary-flags { font-size: 8px; margin: 4px 0 0; color: #444; }
+      body.print-summary .summary-foot { font-size: 7.5px; margin-top: 4px; }
+      body.print-summary .summary-sheet { break-inside: avoid; }
       body { background: white; color: black; }
       .nav, .noprint, .login { display: none !important; }
       .card { break-inside: avoid; border-color: #ccc; background: white; }
@@ -481,6 +538,8 @@
       peopleSnapThrough = data.snapThrough || '';
       peopleSnapPending = data.snapPending || [];
       peopleAnalysisThrough = data.analysisThrough || {};
+      peopleEvaluation = data.evaluation || null;
+      peopleToday = data.today || '';
       if (!peopleSort) peopleSort = 'snapWritten';
       document.getElementById('header-note').textContent = 'Salesperson month ' + (data.period || '') + ' · SNAP written through ' + (peopleSnapThrough || 'Not Available') + ' · Data Analysis delivered through ' + (peopleAnalysisThrough.delivered || 'Not Available') + ' · Updated ' + data.updated;
       drawPeopleTable();
@@ -506,6 +565,7 @@
     }
     var PERSON_COMPARE = ['Bedding', 'Mattress Pads', 'Adjustable Bases', 'Pillows', 'Fabric', 'Leather', 'Power', 'Financing', 'Average Ticket', 'Orders'];
     function drawPeopleTable() {
+      document.body.classList.remove('print-summary');
       var rows = sortedPeople().map(function (person) {
         return '<tr><td><button class="linkish" type="button" data-person="' + esc(person.name) + '">' + esc(person.name) + '</button></td><td>' + money(person.snapWritten) + '</td><td>' + (person.monthlyGoal === null || person.monthlyGoal === undefined ? 'Data Pending' : money(person.monthlyGoal)) + '</td><td class="pending">' + goalProgress(person) + '</td><td>' + money(person.deliveredSales) + '</td><td>' + (person.closingThrough ? count(person.closingOrders) : 'Pending') + '</td><td>' + (person.closingThrough ? count(person.opportunities) : 'Pending') + '</td><td class="' + personRatioTone(person) + '">' + personRatioText(person) + (person.closingThrough ? ' <span class="pending">through ' + esc(person.closingThrough) + '</span>' : '') + '</td></tr>';
       }).join('');
@@ -520,17 +580,260 @@
       var heads = sortedPeople().map(function (person) { return '<th>' + esc(person.name) + '</th>'; }).join('');
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Sales Team leaderboard</h2>' +
-        '<div class="nav noprint"><button class="sort" type="button" data-sort="snapWritten">SNAP written</button><button class="sort" type="button" data-sort="deliveredSales">Delivered</button></div>' +
+        teamNav('board') +
         '<article class="card kpi-wrap"><table class="kpi"><tr><th>Sales Team</th><th>SNAP written</th><th>Monthly goal</th><th>% to goal</th><th>Delivered</th><th>Written orders</th><th>Opportunities</th><th>Closing ratio</th></tr>' + rows + '</table><p class="sub">Salesperson month, the 1st through the last day. SNAP written through ' + esc(peopleSnapThrough || 'Not Available') + ' is the only source for individual written sales and % to the monthly goal. ' + (peopleSnapPending.length ? 'Salesperson SNAP for ' + esc(peopleSnapPending.join(', ')) + ' is Pending: no report on file, so those dates are not in the total and are not zero. ' : '') + 'Delivered sales are from the Data Analysis Group 17 Delivered report (through ' + esc(peopleAnalysisThrough.delivered || 'Not Available') + '). Data Analysis written (through ' + esc(peopleAnalysisThrough.written || 'Not Available') + ') is kept for KPIs and reconciliation and is never used for the goal. There is no individual NWDSR: the NWDSR reports are store-level ranking reports. Closing ratio = Group 17 Written orders ÷ PERQ Ups + Be Backs × 100, both from the 1st through the date shown, with points from the ' + percent((peopleCache[0] && peopleCache[0].closing && peopleCache[0].closing.goal) || 0.5) + ' goal. The store customer count is never divided among associates. Managers and former associates are not listed as active.</p></article>' +
+        '<h2 class="section-title">Individual KPI scorecard</h2><div id="kpi-scorecard"></div>' +
         '<h2 class="section-title">KPI comparison</h2>' +
         '<article class="card kpi-wrap"><table class="kpi"><tr><th>KPI</th>' + heads + '</tr>' + compare + '</table><p class="sub">Written results from Data Analysis Group 17 Written through ' + esc(peopleAnalysisThrough.written || 'Not Available') + '. Delivered results are on each scorecard. Not in report means the Group 17 report has no salesperson column for that KPI.</p></article>';
-      document.querySelectorAll('[data-sort]').forEach(function (button) {
-        if (button.getAttribute('data-sort') === peopleSort) button.className = 'sort active';
-        button.addEventListener('click', function () { peopleSort = button.getAttribute('data-sort'); drawPeopleTable(); });
-      });
+      bindTeamNav();
       document.querySelectorAll('[data-person]').forEach(function (button) {
         button.addEventListener('click', function () { renderPerson(button.getAttribute('data-person')); });
       });
+      drawScorecard();
+    }
+    var scorePerson = '';
+    var scoreSide = 'written';
+    var peopleEvaluation = null;
+    var peopleToday = '';
+    function canManage() { return role === 'manager' || role === 'admin'; }
+    function teamNav(active) {
+      if (!canManage()) return '';
+      var items = [['reports', 'Reports'], ['evals', 'Evals'], ['summary', 'Summary']];
+      return '<div class="nav noprint team-nav">' + items.map(function (item) {
+        return '<button type="button" class="' + (item[0] === active ? 'active' : '') + '" data-team="' + item[0] + '">' + item[1] + '</button>';
+      }).join('') + (active === 'board' ? '' : '<button type="button" data-team="board">Sales Team leaderboard</button>') + '</div>';
+    }
+    function bindTeamNav() {
+      document.querySelectorAll('[data-team]').forEach(function (button) {
+        button.addEventListener('click', function () { openTeam(button.getAttribute('data-team')); });
+      });
+    }
+    function openTeam(name) {
+      document.body.classList.remove('print-summary');
+      if (name === 'reports') drawReports();
+      else if (name === 'evals') drawEvals();
+      else if (name === 'summary') drawSummary(scorePerson || (sortedPeople()[0] && sortedPeople()[0].name) || '', '', '');
+      else drawPeopleTable();
+      window.scrollTo(0, 0);
+    }
+    function qty(value) {
+      if (value === null || value === undefined || value === '') return 'Pending';
+      var number = Number(value);
+      return Math.abs(number - Math.round(number)) < 1e-9 ? String(Math.round(number)) : number.toFixed(1);
+    }
+    function cents(value) {
+      if (value === null || value === undefined || value === '') return 'Not supplied';
+      var number = Number(value);
+      return (number < 0 ? '-' : '') + '$' + Math.abs(number).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function attachTone(line) {
+      if (line.status === 'at') return 'good';
+      if (line.status === 'below') return 'bad';
+      return 'pending';
+    }
+    function attachActual(line) {
+      if (line.status === 'pending') return 'Pending';
+      if (line.status === 'na') return 'N/A';
+      return percent(line.actual);
+    }
+    function pointsText(points) {
+      if (points === null || points === undefined) return '—';
+      return (points > 0 ? '+' : '') + Number(points).toFixed(1) + ' pts';
+    }
+    function attachPoints(line) {
+      if (line.status === 'pending') return 'Pending';
+      if (line.status === 'na') return 'N/A';
+      return line.goal === null ? 'No goal' : pointsText(line.points);
+    }
+    function attachNeeded(line) {
+      if (line.status === 'pending') return 'Pending';
+      if (line.goal === null) return 'No goal';
+      return qty(line.needed);
+    }
+    function attachGoal(line) { return line.goal === null || line.goal === undefined ? 'Not configured' : percent(line.goal); }
+    function attachDollars(line) { return line.status === 'pending' ? 'Pending' : cents(line.dollars); }
+    function attachmentTable(side, withDollars) {
+      var rows = (side.lines || []).map(function (line) {
+        return '<tr><td>' + esc(line.name) + (withDollars ? ' <span class="pending">' + esc(line.source) + '</span>' : '') + '</td><td>' + qty(line.qualified) + '</td><td>' + qty(line.sold) + '</td><td>' + qty(line.missed) + '</td><td class="' + attachTone(line) + '">' + attachActual(line) + '</td><td>' + attachGoal(line) + '</td><td class="' + attachTone(line) + '">' + attachPoints(line) + '</td>' +
+          (withDollars ? '<td>' + attachNeeded(line) + '</td><td>' + attachDollars(line) + '</td>' : '') + '</tr>';
+      }).join('');
+      return '<table class="score"><tr><th>Category</th><th>Qualified</th><th>Sold</th><th>Missed</th><th>Actual %</th><th>Goal %</th><th>Difference</th>' + (withDollars ? '<th>To hit goal</th><th>Attachment $</th>' : '') + '</tr>' + rows + '</table>';
+    }
+    function attachmentFlags(side) {
+      return (side.flags || []).length ? '<ul class="list warn">' + side.flags.map(function (flag) { return '<li>' + esc(flag) + '</li>'; }).join('') + '</ul>' : '';
+    }
+    function totalAttachmentText(side) {
+      var total = (side.lines || []).filter(function (line) { return line.key === 'total'; })[0];
+      if (!total || total.status === 'pending') return 'Group 17 Total Attachments: Pending.';
+      return 'Group 17 Total Attachments: ' + qty(total.sold) + ' sold of ' + qty(total.qualified) + ' qualified (' + attachActual(total) + '), ' + qty(total.missed) + ' missed, attachment sales ' + cents(total.dollars) + '.';
+    }
+    function drawScorecard() {
+      var host = document.getElementById('kpi-scorecard');
+      if (!host) return;
+      var people = sortedPeople();
+      if (!people.length) { host.innerHTML = '<article class="card"><p class="sub">No active salesperson is on file.</p></article>'; return; }
+      if (!people.some(function (person) { return person.name === scorePerson; })) scorePerson = people[0].name;
+      var person = people.filter(function (item) { return item.name === scorePerson; })[0];
+      var side = (person.attachments || {})[scoreSide] || { lines: [], flags: [] };
+      var label = scoreSide === 'written' ? 'Written' : 'Delivered';
+      var options = people.map(function (item) { return '<option' + (item.name === scorePerson ? ' selected' : '') + '>' + esc(item.name) + '</option>'; }).join('');
+      var goalRows = (side.lines || []).map(function (line) {
+        return '<tr><td>' + esc(line.name) + '</td><td class="' + attachTone(line) + '">' + attachActual(line) + '</td><td>' + attachGoal(line) + '</td><td class="' + attachTone(line) + '">' + attachPoints(line) + '</td><td>' + attachNeeded(line) + '</td></tr>';
+      }).join('');
+      host.innerHTML =
+        '<article class="card"><div class="score-controls noprint"><label for="score-person">Salesperson</label><select id="score-person">' + options + '</select>' +
+        '<div class="nav"><button type="button" class="' + (scoreSide === 'written' ? 'active' : '') + '" data-side="written">Written</button><button type="button" class="' + (scoreSide === 'delivered' ? 'active' : '') + '" data-side="delivered">Delivered</button></div></div>' +
+        '<h2>' + esc(person.name) + ' · ' + label + '</h2>' +
+        '<p class="sub">Data Analysis Group 17 ' + label + (side.through ? ' through ' + esc(side.through) + ' (' + esc(side.basis) + ')' : ': no report on file for this salesperson month, so every figure is Pending') + '. Salesperson month, the 1st through the last day.</p>' +
+        attachmentTable(side, true) + attachmentFlags(side) +
+        '<p class="sub">Missed = qualified − sold, never below 0. Actual % = sold ÷ qualified, recalculated from month-to-date quantities, never averaged. To hit goal = qualified × goal rounded up, less sold. N/A means no qualified opportunity, which is not poor performance. Written and Delivered are never combined.</p>' +
+        '<div class="goal-actual"><h2>Goal vs actual</h2><table class="score"><tr><th>Category</th><th>Actual %</th><th>Required goal</th><th>Difference</th><th>Additional attachments needed</th></tr>' + goalRows + '</table>' +
+        '<p class="sub">' + totalAttachmentText(side) + '</p></div></article>';
+      document.getElementById('score-person').addEventListener('change', function (event) { scorePerson = event.target.value; drawScorecard(); });
+      host.querySelectorAll('[data-side]').forEach(function (button) {
+        button.addEventListener('click', function () { scoreSide = button.getAttribute('data-side'); drawScorecard(); });
+      });
+    }
+    function monthName(iso) {
+      var names = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      return names[Number(String(iso).slice(5, 7)) - 1] + ' ' + String(iso).slice(0, 4);
+    }
+    function drawReports() {
+      var people = sortedPeople();
+      var closingThrough = people.map(function (person) { return person.closingThrough || ''; }).sort().pop() || '';
+      document.getElementById('screen').innerHTML =
+        '<h2 class="section-title">Reports</h2>' + teamNav('reports') +
+        '<article class="card"><h2>Manager report library · next build stage</h2>' +
+        '<p>This section will hold the manager\'s report library: choose one or more associates, a date range, and an available sales or KPI report, then view or print it. Only reports with verified data on file will be offered.</p>' +
+        '<p class="sub">Available now: the one-page associate summary.</p><p class="noprint"><button type="button" data-team="summary">Open the associate summary</button></p></article>' +
+        '<article class="card kpi-wrap" style="margin-top:12px"><h2>Verified data on file for the salesperson month</h2><table class="kpi"><tr><th>Source</th><th>Used for</th><th>Verified through</th></tr>' +
+        '<tr><td>SNAP Written by salesperson</td><td>Individual written sales and the monthly goal</td><td>' + esc(peopleSnapThrough || 'Pending') + '</td></tr>' +
+        '<tr><td>Data Analysis Group 17 Written</td><td>Written orders, attachment KPIs, bedding %, average ticket</td><td>' + esc(peopleAnalysisThrough.written || 'Pending') + '</td></tr>' +
+        '<tr><td>Data Analysis Group 17 Delivered</td><td>Delivered sales and delivered KPIs</td><td>' + esc(peopleAnalysisThrough.delivered || 'Pending') + '</td></tr>' +
+        '<tr><td>PERQ Ups + Be Backs</td><td>Opportunities and closing ratio</td><td>' + esc(closingThrough || 'Pending') + ' (latest salesperson)</td></tr>' +
+        '</table></article>';
+      bindTeamNav();
+    }
+    function drawEvals() {
+      var cycle = peopleEvaluation;
+      var people = sortedPeople();
+      var months = cycle ? cycle.covers.map(function (period) { return monthName(period.start); }).join(', ') : 'Not Available';
+      var rows = people.map(function (person) {
+        return '<tr><td>' + esc(person.name) + '</td><td>Scheduled ' + esc(cycle ? cycle.prepare : '') + ' · not prepared</td><td>Waiting for preparation</td><td>Not delivered · due by ' + esc(cycle ? cycle.deliverBy : '') + '</td></tr>';
+      }).join('');
+      document.getElementById('screen').innerHTML =
+        '<h2 class="section-title">Evals</h2>' + teamNav('evals') +
+        '<article class="card"><h2>Rolling three-month evaluations · next build stage</h2>' +
+        '<p>Each evaluation covers the previous three completed salesperson months (the 1st through the last day). Preparation is scheduled for the 3rd of each month and the manager delivers before the 7th.</p>' +
+        '<p><strong>Next cycle:</strong> ' + esc(months) + ' · prepare ' + esc(cycle ? cycle.prepare : 'Not Available') + ' · deliver by ' + esc(cycle ? cycle.deliverBy : 'Not Available') + '</p>' +
+        '<p class="sub">Preparation, manager review and delivery are tracked as three separate statuses. Nothing is sent or marked delivered automatically: the manager records each step. The established evaluation format and goal rules will be used unchanged when evaluations are built.</p></article>' +
+        '<article class="card kpi-wrap" style="margin-top:12px"><h2>Status for the next cycle</h2><table class="kpi"><tr><th>Associate</th><th>Preparation</th><th>Manager review</th><th>Delivery</th></tr>' + rows + '</table></article>';
+      bindTeamNav();
+    }
+    var summaryCache = null;
+    function drawSummary(name, start, end) {
+      document.getElementById('screen').innerHTML = '<h2 class="section-title">Summary</h2>' + teamNav('summary') + '<p class="sub">Loading the associate summary…</p>';
+      bindTeamNav();
+      api('summary', { name: name, start: start, end: end }).then(function (data) {
+        summaryCache = data;
+        renderSummary(data);
+      }).catch(function (error) {
+        if (/sign in/i.test(error.message)) { showLogin(error.message); return; }
+        document.getElementById('screen').innerHTML = '<h2 class="section-title">Summary</h2>' + teamNav('summary') + summaryControls(summaryCache || { associates: sortedPeople().map(function (person) { return person.name; }), name: name, start: start, end: end }) + '<p class="error">' + esc(error.message) + '</p>';
+        bindTeamNav();
+        bindSummaryControls();
+      });
+    }
+    function summaryControls(data) {
+      var options = (data.associates || []).map(function (item) { return '<option' + (item === data.name ? ' selected' : '') + '>' + esc(item) + '</option>'; }).join('');
+      return '<div class="card summary-controls noprint"><div><label for="sum-name">Associate</label><select id="sum-name">' + options + '</select></div>' +
+        '<div><label for="sum-start">Start date</label><input id="sum-start" type="date" value="' + esc(data.start || '') + '" /></div>' +
+        '<div><label for="sum-end">End date</label><input id="sum-end" type="date" value="' + esc(data.end || '') + '" /></div>' +
+        '<div class="summary-actions"><button type="button" id="sum-show">Show summary</button><button type="button" id="sum-month" class="secondary">This salesperson month</button><button type="button" id="sum-print">Print / Save as PDF</button></div></div>';
+    }
+    function bindSummaryControls() {
+      var show = document.getElementById('sum-show');
+      if (!show) return;
+      show.addEventListener('click', function () { drawSummary(document.getElementById('sum-name').value, document.getElementById('sum-start').value, document.getElementById('sum-end').value); });
+      document.getElementById('sum-month').addEventListener('click', function () { drawSummary(document.getElementById('sum-name').value, '', ''); });
+      document.getElementById('sum-print').addEventListener('click', function () { window.print(); });
+    }
+    function sideFigure(side, field) {
+      if (!side) return 'Pending';
+      var figure = side[field];
+      if (figure.value === null || figure.value === undefined) return esc(figure.text || 'Not Available');
+      return field === 'average' ? money(figure.value) : percent(figure.value);
+    }
+    function summaryBox(title, figure, note, tone) {
+      return '<div class="summary-box"><h3>' + title + '</h3><p class="summary-figure ' + (tone || '') + '">' + figure + '</p><p class="sub">' + (note || '') + '</p></div>';
+    }
+    function goalRow(measure, goal, written, delivered) {
+      function cells(part) {
+        if (!part) return '<td class="pending">—</td><td class="pending">—</td><td class="pending">—</td>';
+        return '<td class="' + (part.tone || '') + '">' + part.actual + '</td><td class="' + (part.tone || '') + '">' + part.diff + '</td><td>' + part.needed + '</td>';
+      }
+      return '<tr><td>' + measure + '</td><td>' + goal + '</td>' + cells(written) + cells(delivered) + '</tr>';
+    }
+    function attachGoalPart(line) {
+      return { actual: attachActual(line), diff: attachPoints(line), needed: attachNeeded(line), tone: attachTone(line) };
+    }
+    function rateGoalPart(value, goal, text) {
+      if (value === null || value === undefined) return { actual: esc(text || 'Pending'), diff: '—', needed: '—', tone: 'pending' };
+      return { actual: percent(value), diff: pointsText(Math.round((value - goal) * 1000) / 10), needed: '—', tone: value >= goal ? 'good' : 'bad' };
+    }
+    function renderSummary(data) {
+      document.body.classList.add('print-summary');
+      var person = data.person || {};
+      var analysis = person.analysis || {};
+      var written = analysis.written;
+      var delivered = analysis.delivered;
+      var attach = person.attachments || { written: { lines: [], flags: [] }, delivered: { lines: [], flags: [] } };
+      var goals = data.goals || {};
+      var snapKnown = person.snapWritten !== null && person.snapWritten !== undefined;
+      var attained = data.fromFirst && snapKnown && person.monthlyGoal ? person.snapWritten / person.monthlyGoal : null;
+      var closing = person.closing || {};
+      var closingKnown = person.closingRatio !== null && person.closingRatio !== undefined;
+      var ordersNeeded = person.closingThrough && person.opportunities ? Math.max(0, Math.ceil(Math.round(person.opportunities * goals.closing * 1e6) / 1e6) - person.closingOrders) : null;
+      var goalRows =
+        goalRow('Written sales (SNAP)', money(person.monthlyGoal), data.fromFirst && snapKnown
+          ? { actual: money(person.snapWritten), diff: money(person.snapWritten - person.monthlyGoal), needed: money(Math.max(0, person.monthlyGoal - person.snapWritten)), tone: person.snapWritten >= person.monthlyGoal ? 'good' : 'bad' }
+          : { actual: snapKnown ? money(person.snapWritten) : 'Not Available', diff: '—', needed: data.fromFirst ? '—' : 'Monthly goal not compared', tone: 'pending' }, null) +
+        goalRow('Closing ratio', percent(goals.closing), closingKnown
+          ? { actual: percent(person.closingRatio), diff: pointsText(person.closingPoints), needed: ordersNeeded === null ? '—' : ordersNeeded + ' orders', tone: personRatioTone(person) }
+          : { actual: esc(closing.ratioStatus || 'Pending'), diff: '—', needed: '—', tone: 'pending' }, null) +
+        goalRow('Bedding %', percent(goals.bedding), written ? rateGoalPart(written.bedding.value, goals.bedding, written.bedding.text) : null, delivered ? rateGoalPart(delivered.bedding.value, goals.bedding, delivered.bedding.text) : null) +
+        goalRow('Average ticket', money(goals.averageTicket),
+          written ? (written.average.value === null ? { actual: esc(written.average.text || 'Not Available'), diff: '—', needed: '—', tone: 'pending' } : { actual: money(written.average.value), diff: money(written.average.value - goals.averageTicket), needed: '—', tone: written.average.value >= goals.averageTicket ? 'good' : 'bad' }) : null,
+          delivered ? (delivered.average.value === null ? { actual: esc(delivered.average.text || 'Not Available'), diff: '—', needed: '—', tone: 'pending' } : { actual: money(delivered.average.value), diff: money(delivered.average.value - goals.averageTicket), needed: '—', tone: delivered.average.value >= goals.averageTicket ? 'good' : 'bad' }) : null) +
+        (attach.written.lines || []).map(function (line, index) {
+          var other = (attach.delivered.lines || [])[index];
+          return goalRow(esc(line.name), attachGoal(line), attachGoalPart(line), other ? attachGoalPart(other) : null);
+        }).join('');
+      var flags = (attach.written.flags || []).map(function (flag) { return 'Written: ' + flag; }).concat((attach.delivered.flags || []).map(function (flag) { return 'Delivered: ' + flag; }));
+      document.getElementById('screen').innerHTML =
+        '<h2 class="section-title noprint">Summary</h2>' + teamNav('summary') + summaryControls(data) +
+        '<article class="summary-sheet" id="summary-sheet">' +
+        '<header class="summary-head"><div><p class="summary-kicker">Kane\'s Store 17 · Associate summary</p><h2 class="summary-name">' + esc(data.name) + '</h2>' +
+        '<p class="sub">' + esc(data.start) + ' through ' + esc(data.end) + ' · salesperson month ' + esc(data.period.start) + ' through ' + esc(data.period.end) + '</p></div>' +
+        '<p class="sub summary-verified">Verified through: SNAP Written ' + esc(person.snapWritten === null || person.snapWritten === undefined ? 'Pending' : (data.snapThrough || 'Pending')) + ' · Group 17 Written ' + esc(person.analysisWrittenThrough || 'Pending') + ' · Group 17 Delivered ' + esc(person.deliveredThrough || 'Pending') + ' · Closing ' + esc(person.closingThrough || 'Pending') + '</p></header>' +
+        '<div class="summary-grid">' +
+        summaryBox('SNAP Written sales', snapKnown ? money(person.snapWritten) : 'Not Available', data.snapPending && data.snapPending.length ? 'SNAP Pending for ' + esc(data.snapPending.join(', ')) + '.' : 'Individual written source.') +
+        summaryBox('Delivered sales', money(person.deliveredSales), 'Group 17 Delivered.') +
+        summaryBox('Monthly written goal', money(person.monthlyGoal), attained === null ? (data.fromFirst ? 'Attainment Pending.' : 'Not compared: the range does not start on the 1st.') : percent(attained) + ' attained (SNAP ÷ goal).', attained === null ? '' : (attained >= 1 ? 'good' : 'bad')) +
+        summaryBox('Written orders', person.closingThrough ? count(person.closingOrders) : 'Pending', person.closingThrough ? 'Group 17 Written through ' + esc(person.closingThrough) + '.' : esc(closing.ratioStatus || '')) +
+        summaryBox('PERQ opportunities', person.closingThrough ? count(person.opportunities) : 'Pending', person.closingThrough ? 'Ups + Be Backs through ' + esc(person.closingThrough) + '.' : '') +
+        summaryBox('Closing ratio', closingKnown ? percent(person.closingRatio) : (person.closingThrough && person.opportunities === 0 ? 'N/A' : 'Pending'), 'Goal ' + percent(goals.closing) + (closingKnown ? ' · ' + pointsText(person.closingPoints) : ''), closingKnown ? personRatioTone(person) : 'pending') +
+        summaryBox('Average ticket', sideFigure(written, 'average'), 'Written · Delivered ' + sideFigure(delivered, 'average') + '.') +
+        summaryBox('Bedding %', sideFigure(written, 'bedding'), 'Written · Delivered ' + sideFigure(delivered, 'bedding') + '. Goal ' + percent(goals.bedding) + '.') +
+        '</div>' +
+        '<div class="summary-tables"><div><h3>Attachment KPIs · Written' + (attach.written.through ? ' through ' + esc(attach.written.through) : ' · Pending') + '</h3>' + attachmentTable(attach.written, false) + '</div>' +
+        '<div><h3>Attachment KPIs · Delivered' + (attach.delivered.through ? ' through ' + esc(attach.delivered.through) : ' · Pending') + '</h3>' + attachmentTable(attach.delivered, false) + '</div></div>' +
+        (flags.length ? '<ul class="list warn summary-flags">' + flags.map(function (flag) { return '<li>' + esc(flag) + '</li>'; }).join('') + '</ul>' : '') +
+        '<h3>Goal vs actual</h3><table class="score summary-goal"><tr><th rowspan="2">Measure</th><th rowspan="2">Goal</th><th colspan="3">Written</th><th colspan="3">Delivered</th></tr><tr><th>Actual</th><th>Difference</th><th>Needed to reach goal</th><th>Actual</th><th>Difference</th><th>Needed to reach goal</th></tr>' + goalRows + '</table>' +
+        '<p class="sub summary-foot">' + esc(totalAttachmentText(attach.written)) + ' Written sales and the monthly goal use SNAP Written only. Delivered sales, orders and KPIs are Data Analysis Group 17; opportunities are PERQ. Rates are recalculated from quantities, never averaged, and Written and Delivered are never combined. Pending means no verified report is on file; N/A means no qualified opportunity. Updated ' + esc(data.updated) + '.</p>' +
+        '</article>';
+      bindTeamNav();
+      bindSummaryControls();
     }
     function reconciliationNote(person) {
       if (person.analysisWritten === null || person.analysisWritten === undefined) return 'Not on file. Reconciliation only; never used for the goal.';
@@ -925,6 +1228,7 @@
     }
     function openScreen(name) {
       screen = name;
+      document.body.classList.remove('print-summary');
       drawNav();
       var request = name === 'written' || name === 'delivered' || name === 'orders' ? 'home' : name;
       if (name === 'admin') { renderAdmin(); return; }
