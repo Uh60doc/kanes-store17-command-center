@@ -159,6 +159,7 @@ function customersThrough(mode: Mode): string {
 /**
  * Opportunities through a date: the latest store-month PERQ snapshot verified on or before that date, plus each
  * later day's own PERQ count. Only one snapshot is used. Without a snapshot, every day needs its own PERQ count.
+ * The cutoff is unconfirmed only when no snapshot of the same count ends on its verified date.
  */
 function opportunitiesThrough(mode: Mode): string {
   const dailyOnly = {
@@ -180,7 +181,7 @@ function opportunitiesThrough(mode: Mode): string {
   return 'MAP(dlist,LAMBDA(rday,LET(' +
     'cs,FILTER(ccol,dlist<=rday),full,SUMPRODUCT(ISNUMBER(cs)+(cs="Closed"))=ROWS(cs),' +
     'snap,ARRAYFORMULA(opprow*(sdate=pstart)*(edate>sdate)*(thru>=pstart)*(thru<=rday)),' +
-    `IF(SUM(snap)=0,${dailyOnly},LET(snapthru,MAX(FILTER(thru,snap)),at,ARRAYFORMULA(snap*(thru=snapthru)),v,FILTER(opp,at),snapend,MAX(FILTER(edate,at)),` +
+    `IF(SUM(snap)=0,${dailyOnly},LET(snapthru,MAX(FILTER(thru,snap)),at,ARRAYFORMULA(snap*(thru=snapthru)),v,FILTER(opp,at),snapend,MIN(FILTER(edate,at)),` +
     `IF(MAX(v)<>MIN(v),${disagree},IF(snapthru=rday,${snapOnly},LET(after,FILTER(ccol,dlist>snapthru,dlist<=rday),` +
     `IF(SUMPRODUCT(ISNUMBER(after)+(after="Closed"))=ROWS(after),${snapPlus},${dailyOnly})))))))))`;
 }

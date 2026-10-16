@@ -1,6 +1,7 @@
 /**
- * Check the closing-view formulas on a scratch spreadsheet seeded with a copy of the live CC_Closing rows.
- * The production spreadsheet is only read.
+ * Check the closing-view formulas on a scratch spreadsheet. Most scenarios start from CC_Closing as it stood on
+ * October 14 (fixtures/closing-rows-2026-10-14.json), so they do not move as reports arrive; one scenario uses a copy
+ * of the live rows. The production spreadsheet is only read.
  *
  *   node --experimental-strip-types server/checkClosingView.ts
  */
@@ -112,8 +113,10 @@ async function view(): Promise<View> {
   };
 }
 
-const header = liveClosing[0];
-const base = liveClosing.slice(1);
+const pinned = JSON.parse(readFileSync(new URL('./fixtures/closing-rows-2026-10-14.json', import.meta.url), 'utf8')) as { rows: Cell[][] };
+const header = pinned.rows[0];
+const base = pinned.rows.slice(1);
+assert.deepEqual(liveClosing[0].slice(0, header.length), header, 'CC_Closing headers changed');
 const netWritten = (date: string, customers: Cell, start = date, end = date, through = end): Cell[] => [date, 'store', '', '', customers, '', start, end, 'NWDSR Net Written # OF CUST', 'yes', 'check', through];
 const perq = (date: string, opportunities: Cell, start = date, end = date, through = end, final = 'yes'): Cell[] => [date, 'store', '', '', '', opportunities, start, end, 'PERQ Ups + Be Backs', final, 'check', through];
 const results: string[] = [];
@@ -234,6 +237,38 @@ await scenario('a PERQ snapshot whose period ends on its verified date is not pr
   assert.equal(result.day('2026-10-14')['MTD opportunities'], 104);
   assert.equal(result.day('2026-10-14')['MTD sources'], 'NWDSR Written report 2026-10-02 to 2026-10-14 (52) · PERQ snapshot 2026-10-02 to 2026-10-14 (104)');
   assert.equal(result.day('2026-10-14')['MTD verification status'], 'Verified');
+});
+
+await scenario('a snapshot of the same count that ends on its verified date confirms the cutoff', [...base, perq('2026-10-13', 100, '2026-10-02', '2026-10-13')], (result) => {
+  assert.equal(result.day('2026-10-13')['MTD opportunities'], 100);
+  assert.equal(result.day('2026-10-13')['MTD verification status'], 'Verified');
+  assert.equal(result.day('2026-10-14')['MTD verification status'], 'Verified');
+  assert.equal(result.mtd['Verification status'], 'Verified');
+});
+
+await scenario('live CC_Closing rows after the October 15 and PERQ history imports', liveClosing.slice(1), (result) => {
+  assert.equal(result.dates.at(-1), '2026-10-15');
+  const oct15 = result.day('2026-10-15');
+  assert.equal(oct15['NWDSR Written purchasing customers'], 2);
+  assert.equal(oct15['PERQ opportunities'], 7);
+  near(oct15['Closing ratio'], 2 / 7);
+  assert.equal(oct15['Verification status'], 'Verified');
+  assert.equal(oct15['MTD purchasing customers'], 54);
+  assert.equal(oct15['MTD opportunities'], 111);
+  near(oct15['MTD closing ratio'], 54 / 111);
+  near(oct15['MTD difference from goal (pts)'], -1.4);
+  assert.equal(oct15['MTD versus goal'], 'Below Goal');
+  assert.equal(oct15['MTD verification status'], 'Verified');
+  assert.equal(result.day('2026-10-12')['PERQ opportunities'], 9);
+  assert.equal(result.day('2026-10-13')['PERQ opportunities'], 4);
+  assert.equal(result.day('2026-10-11')['MTD opportunities'], 87);
+  assert.equal(result.day('2026-10-12')['MTD opportunities'], 96);
+  assert.equal(result.day('2026-10-13')['MTD opportunities'], 100);
+  for (const date of ['2026-10-02', '2026-10-06', '2026-10-11']) assert.equal(result.day(date)['PERQ opportunities'], 'Pending');
+  assert.equal(result.day('2026-10-10')['MTD opportunities'], 'Pending');
+  assert.equal(result.mtd['MTD through'], '2026-10-15');
+  assert.equal(result.mtd['Opportunities'], 111);
+  assert.equal(result.mtd['Verification status'], 'Verified');
 });
 
 await scenario('a report that is not final is ignored', [...base, perq('2026-10-15', 9, '2026-10-15', '2026-10-15', '2026-10-15', 'no')], (result) => {

@@ -145,6 +145,47 @@ test('when October 15 reports reach CC_Closing, the recalculated view moves the 
   assert.equal(month.latest.status, 'Below Goal');
 });
 
+const IMPORTED = 'live CC_Closing rows after the October 15 and PERQ history imports';
+
+function afterPerqHistory(): Record<string, Grid> {
+  const tabs = withView(IMPORTED);
+  const day = (date: string, scope: string, code: string, name: string, opportunities: number): (string | number)[] => [date, scope, code, name, '', opportunities, date, date, PERQ, 'yes', '', date];
+  tabs.CC_Closing = [
+    ...tabs.CC_Closing,
+    ['2026-10-15', 'store', '', '', 2, '', '2026-10-15', '2026-10-15', NW, 'yes', '', '2026-10-15'],
+    day('2026-10-01', 'store', '', '', 4), day('2026-10-01', 'person', 'TNASSI', 'Ricky Nassif', 4),
+    day('2026-10-12', 'store', '', '', 9), day('2026-10-12', 'person', 'EMON0904', 'Eric Montes Rodriguez', 3), day('2026-10-12', 'person', 'JMEYERS', 'Kelly Meyers', 0),
+    day('2026-10-12', 'person', 'RDELSO', 'Renzo Del Solar', 3), day('2026-10-12', 'person', 'TNASSI', 'Ricky Nassif', 3),
+    day('2026-10-13', 'store', '', '', 4), day('2026-10-13', 'person', 'EMON0904', 'Eric Montes Rodriguez', 0),
+    day('2026-10-13', 'person', 'RDELSO', 'Renzo Del Solar', 4), day('2026-10-13', 'person', 'TNASSI', 'Ricky Nassif', 0),
+    day('2026-10-15', 'store', '', '', 7), day('2026-10-15', 'person', 'EMON0904', 'Eric Montes Rodriguez', 3), day('2026-10-15', 'person', 'TNASSI', 'Ricky Nassif', 3),
+    ['2026-10-11', 'store', '', '', '', 87, '2026-10-02', '2026-10-11', PERQ, 'yes', '', '2026-10-11'],
+    ['2026-10-13', 'store', '', '', '', 100, '2026-10-02', '2026-10-13', PERQ, 'yes', '', '2026-10-13'],
+    ...([['EMON0904', 'Eric Montes Rodriguez', 29], ['PGANDH', 'Prakash Gandhi', 31], ['TNASSI', 'Ricky Nassif', 29], ['RDELSO', 'Renzo Del Solar', 0]] as const)
+      .map(([code, name, count]) => ['2026-10-11', 'person', code, name, '', count, '2026-10-01', '2026-10-11', PERQ, 'yes', '', '2026-10-11']),
+  ];
+  return tabs;
+}
+
+test('after the PERQ history import the month is a verified 54 ÷ 111 and October 15 counts only the listed salespeople', () => {
+  const gs = load(afterPerqHistory(), '2026-10-16');
+  const month = gs.storeMonthClosing_(gs.loadClosingView_(), STORE, 0.5);
+  assert.equal(month.through, '2026-10-15');
+  assert.equal(month.customers, 54);
+  assert.equal(month.opportunities, 111);
+  assert.equal(month.ratio, 0.486);
+  assert.equal(month.verification, 'Verified');
+  assert.equal(month.provisional, false);
+  assert.equal(month.trend.find((day: { date: string }) => day.date === '2026-10-12').ratio, 0.444);
+  const facts = gs.loadClosing_();
+  const person = (name: string) => gs.personClosing_(facts, name, '2026-10-01', '2026-10-31', 0.5);
+  assert.deepEqual([person('Eric Montes Rodriguez').opportunities, person('Eric Montes Rodriguez').opportunitiesThrough], [35, '2026-10-15']);
+  assert.deepEqual([person('Ricky Nassif').opportunities, person('Ricky Nassif').opportunitiesThrough], [35, '2026-10-15']);
+  assert.deepEqual([person('Prakash Gandhi').opportunities, person('Prakash Gandhi').opportunitiesThrough], [31, '2026-10-14']);
+  assert.deepEqual([person('Renzo Del Solar').opportunities, person('Renzo Del Solar').opportunitiesThrough], [11, '2026-10-14']);
+  assert.equal(person('Ricky Nassif').ratioStatus, 'Awaiting Verified Data');
+});
+
 test('zero opportunities and disagreeing reports are not divided', () => {
   let gs = load(withView('blank figures on completed October 15 reports are zero'), '2026-10-16');
   let month = gs.storeMonthClosing_(gs.loadClosingView_(), STORE, 0.5);

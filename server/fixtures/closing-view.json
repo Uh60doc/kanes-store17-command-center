@@ -2849,6 +2849,718 @@
     ]
    ]
   },
+  "a snapshot of the same count that ends on its verified date confirms the cutoff": {
+   "daily": [
+    [
+     "Date",
+     "NWDSR Written purchasing customers",
+     "PERQ opportunities",
+     "Closing ratio",
+     "Store closing goal",
+     "Difference from goal (pts)",
+     "Versus goal",
+     "Source reporting dates",
+     "Verification status",
+     "MTD purchasing customers",
+     "MTD opportunities",
+     "MTD closing ratio",
+     "MTD difference from goal (pts)",
+     "MTD versus goal",
+     "MTD sources",
+     "MTD verification status"
+    ],
+    [
+     "2026-10-02",
+     2,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-02 · PERQ not received",
+     "Pending: PERQ",
+     2,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-02 (2) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-03",
+     6,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-03 · PERQ not received",
+     "Pending: PERQ",
+     8,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-03 (8) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-04",
+     5,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-04 · PERQ not received",
+     "Pending: PERQ",
+     13,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-04 (13) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-05",
+     2,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-05 · PERQ not received",
+     "Pending: PERQ",
+     15,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-05 (15) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-06",
+     3,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-06 · PERQ not received",
+     "Pending: PERQ",
+     18,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-06 (18) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-07",
+     2,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-07 · PERQ not received",
+     "Pending: PERQ",
+     20,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-07 (20) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-08",
+     2,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-08 · PERQ not received",
+     "Pending: PERQ",
+     22,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-08 (22) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-09",
+     5,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-09 · PERQ not received",
+     "Pending: PERQ",
+     27,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-09 (27) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-10",
+     9,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-10 · PERQ not received",
+     "Pending: PERQ",
+     36,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-10 (36) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-11",
+     6,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-11 · PERQ not received",
+     "Pending: PERQ",
+     42,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-11 (42) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-12",
+     4,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-12 · PERQ not received",
+     "Pending: PERQ",
+     46,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-12 (46) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-13",
+     4,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-13 · PERQ not received",
+     "Pending: PERQ",
+     50,
+     100,
+     0.5,
+     0,
+     "On Target",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-13 (50) · PERQ snapshot 2026-10-02 to 2026-10-13 (100)",
+     "Verified"
+    ],
+    [
+     "2026-10-14",
+     2,
+     4,
+     0.5,
+     0.5,
+     0,
+     "On Target",
+     "NWDSR Written 2026-10-14 · PERQ 2026-10-14",
+     "Verified",
+     52,
+     104,
+     0.5,
+     0,
+     "On Target",
+     "NWDSR Written report 2026-10-02 to 2026-10-14 (52) · PERQ snapshot 2026-10-02 to 2026-10-13 (100) + daily 2026-10-14 to 2026-10-14 (4)",
+     "Verified"
+    ],
+    [
+     "2026-10-15",
+     "Pending",
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written not received · PERQ not received",
+     "Pending: NWDSR Written and PERQ",
+     "Pending",
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written pending · PERQ pending",
+     "Pending: NWDSR Written and PERQ"
+    ]
+   ],
+   "mtd": [
+    [
+     "Metric",
+     "Value"
+    ],
+    [
+     "Period start",
+     "2026-10-02"
+    ],
+    [
+     "Period end",
+     "2026-11-01"
+    ],
+    [
+     "MTD through",
+     "2026-10-14"
+    ],
+    [
+     "Purchasing customers",
+     52
+    ],
+    [
+     "Opportunities",
+     104
+    ],
+    [
+     "Closing ratio",
+     0.5
+    ],
+    [
+     "Store closing goal",
+     0.5
+    ],
+    [
+     "Difference from goal (pts)",
+     0
+    ],
+    [
+     "Versus goal",
+     "On Target"
+    ],
+    [
+     "Verification status",
+     "Verified"
+    ],
+    [
+     "Sources",
+     "NWDSR Written report 2026-10-02 to 2026-10-14 (52) · PERQ snapshot 2026-10-02 to 2026-10-13 (100) + daily 2026-10-14 to 2026-10-14 (4)"
+    ],
+    [
+     "Latest daily date",
+     "2026-10-14"
+    ],
+    [
+     "Latest daily purchasing customers",
+     2
+    ],
+    [
+     "Latest daily opportunities",
+     4
+    ],
+    [
+     "Latest daily closing ratio",
+     0.5
+    ],
+    [
+     "Latest daily difference from goal (pts)",
+     0
+    ],
+    [
+     "Latest daily versus goal",
+     "On Target"
+    ],
+    [
+     "Latest daily verification status",
+     "Verified"
+    ],
+    [
+     "Individual closing ratio",
+     "Awaiting Verified Data"
+    ]
+   ]
+  },
+  "live CC_Closing rows after the October 15 and PERQ history imports": {
+   "daily": [
+    [
+     "Date",
+     "NWDSR Written purchasing customers",
+     "PERQ opportunities",
+     "Closing ratio",
+     "Store closing goal",
+     "Difference from goal (pts)",
+     "Versus goal",
+     "Source reporting dates",
+     "Verification status",
+     "MTD purchasing customers",
+     "MTD opportunities",
+     "MTD closing ratio",
+     "MTD difference from goal (pts)",
+     "MTD versus goal",
+     "MTD sources",
+     "MTD verification status"
+    ],
+    [
+     "2026-10-02",
+     2,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-02 · PERQ not received",
+     "Pending: PERQ",
+     2,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-02 (2) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-03",
+     6,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-03 · PERQ not received",
+     "Pending: PERQ",
+     8,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-03 (8) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-04",
+     5,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-04 · PERQ not received",
+     "Pending: PERQ",
+     13,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-04 (13) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-05",
+     2,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-05 · PERQ not received",
+     "Pending: PERQ",
+     15,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-05 (15) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-06",
+     3,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-06 · PERQ not received",
+     "Pending: PERQ",
+     18,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-06 (18) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-07",
+     2,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-07 · PERQ not received",
+     "Pending: PERQ",
+     20,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-07 (20) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-08",
+     2,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-08 · PERQ not received",
+     "Pending: PERQ",
+     22,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-08 (22) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-09",
+     5,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-09 · PERQ not received",
+     "Pending: PERQ",
+     27,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-09 (27) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-10",
+     9,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-10 · PERQ not received",
+     "Pending: PERQ",
+     36,
+     "Pending",
+     "Pending",
+     "",
+     "Pending",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-10 (36) · PERQ pending",
+     "Pending: PERQ"
+    ],
+    [
+     "2026-10-11",
+     6,
+     "Pending",
+     "Pending",
+     0.5,
+     "",
+     "Pending",
+     "NWDSR Written 2026-10-11 · PERQ not received",
+     "Pending: PERQ",
+     42,
+     87,
+     0.4827586206896552,
+     -1.7,
+     "Below Goal",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-11 (42) · PERQ snapshot 2026-10-02 to 2026-10-11 (87)",
+     "Verified"
+    ],
+    [
+     "2026-10-12",
+     4,
+     9,
+     0.4444444444444444,
+     0.5,
+     -5.6,
+     "Below Goal",
+     "NWDSR Written 2026-10-12 · PERQ 2026-10-12",
+     "Verified",
+     46,
+     96,
+     0.4791666666666667,
+     -2.1,
+     "Below Goal",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-12 (46) · PERQ snapshot 2026-10-02 to 2026-10-11 (87) + daily 2026-10-12 to 2026-10-12 (9)",
+     "Verified"
+    ],
+    [
+     "2026-10-13",
+     4,
+     4,
+     1,
+     0.5,
+     50,
+     "Above Goal",
+     "NWDSR Written 2026-10-13 · PERQ 2026-10-13",
+     "Verified",
+     50,
+     100,
+     0.5,
+     0,
+     "On Target",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-13 (50) · PERQ snapshot 2026-10-02 to 2026-10-13 (100)",
+     "Verified"
+    ],
+    [
+     "2026-10-14",
+     2,
+     4,
+     0.5,
+     0.5,
+     0,
+     "On Target",
+     "NWDSR Written 2026-10-14 · PERQ 2026-10-14",
+     "Verified",
+     52,
+     104,
+     0.5,
+     0,
+     "On Target",
+     "NWDSR Written report 2026-10-02 to 2026-10-14 (52) · PERQ snapshot 2026-10-02 to 2026-10-13 (100) + daily 2026-10-14 to 2026-10-14 (4)",
+     "Verified"
+    ],
+    [
+     "2026-10-15",
+     2,
+     7,
+     0.2857142857142857,
+     0.5,
+     -21.4,
+     "Below Goal",
+     "NWDSR Written 2026-10-15 · PERQ 2026-10-15",
+     "Verified",
+     54,
+     111,
+     0.4864864864864865,
+     -1.4,
+     "Below Goal",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-15 (54) · PERQ snapshot 2026-10-02 to 2026-10-13 (100) + daily 2026-10-14 to 2026-10-15 (11)",
+     "Verified"
+    ]
+   ],
+   "mtd": [
+    [
+     "Metric",
+     "Value"
+    ],
+    [
+     "Period start",
+     "2026-10-02"
+    ],
+    [
+     "Period end",
+     "2026-11-01"
+    ],
+    [
+     "MTD through",
+     "2026-10-15"
+    ],
+    [
+     "Purchasing customers",
+     54
+    ],
+    [
+     "Opportunities",
+     111
+    ],
+    [
+     "Closing ratio",
+     0.4864864864864865
+    ],
+    [
+     "Store closing goal",
+     0.5
+    ],
+    [
+     "Difference from goal (pts)",
+     -1.4
+    ],
+    [
+     "Versus goal",
+     "Below Goal"
+    ],
+    [
+     "Verification status",
+     "Verified"
+    ],
+    [
+     "Sources",
+     "NWDSR Written daily reports 2026-10-02 to 2026-10-15 (54) · PERQ snapshot 2026-10-02 to 2026-10-13 (100) + daily 2026-10-14 to 2026-10-15 (11)"
+    ],
+    [
+     "Latest daily date",
+     "2026-10-15"
+    ],
+    [
+     "Latest daily purchasing customers",
+     2
+    ],
+    [
+     "Latest daily opportunities",
+     7
+    ],
+    [
+     "Latest daily closing ratio",
+     0.2857142857142857
+    ],
+    [
+     "Latest daily difference from goal (pts)",
+     -21.4
+    ],
+    [
+     "Latest daily versus goal",
+     "Below Goal"
+    ],
+    [
+     "Latest daily verification status",
+     "Verified"
+    ],
+    [
+     "Individual closing ratio",
+     "Awaiting Verified Data"
+    ]
+   ]
+  },
   "a report that is not final is ignored": {
    "daily": [
     [
