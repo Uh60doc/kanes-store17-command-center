@@ -132,6 +132,8 @@
     }
     @media print {
       @page { size: letter portrait; margin: 0.35in; }
+      :root { color-scheme: light; }
+      html:has(body.print-summary), body.print-summary { background: white !important; }
       body.print-summary .wrap { padding: 0; max-width: none; }
       body.print-summary header.brand, body.print-summary .section-title { display: none !important; }
       body.print-summary .summary-sheet { border: 0; padding: 0; background: white; color: black; font-size: 10px; }
@@ -647,6 +649,7 @@
     }
     function attachNeeded(line) {
       if (line.status === 'pending') return 'Pending';
+      if (line.status === 'na') return 'N/A';
       if (line.goal === null) return 'No goal';
       return qty(line.needed);
     }
@@ -817,7 +820,7 @@
         '<p class="sub">' + esc(data.start) + ' through ' + esc(data.end) + ' · salesperson month ' + esc(data.period.start) + ' through ' + esc(data.period.end) + '</p></div>' +
         '<p class="sub summary-verified">Verified through: SNAP Written ' + esc(person.snapWritten === null || person.snapWritten === undefined ? 'Pending' : (data.snapThrough || 'Pending')) + ' · Group 17 Written ' + esc(person.analysisWrittenThrough || 'Pending') + ' · Group 17 Delivered ' + esc(person.deliveredThrough || 'Pending') + ' · Closing ' + esc(person.closingThrough || 'Pending') + '</p></header>' +
         '<div class="summary-grid">' +
-        summaryBox('SNAP Written sales', snapKnown ? money(person.snapWritten) : 'Not Available', data.snapPending && data.snapPending.length ? 'SNAP Pending for ' + esc(data.snapPending.join(', ')) + '.' : 'Individual written source.') +
+        summaryBox('SNAP Written sales', snapKnown ? money(person.snapWritten) : 'Not Available', data.snapPending && data.snapPending.length ? 'SNAP report Pending for ' + esc(data.snapPending.join(', ')) + ': not in the total, not zero.' : 'Individual written source.') +
         summaryBox('Delivered sales', money(person.deliveredSales), 'Group 17 Delivered.') +
         summaryBox('Monthly written goal', money(person.monthlyGoal), attained === null ? (data.fromFirst ? 'Attainment Pending.' : 'Not compared: the range does not start on the 1st.') : '<span class="' + (attained >= 1 ? 'good' : 'bad') + '">' + percent(attained) + ' attained</span> (SNAP ÷ goal).') +
         summaryBox('Written orders', person.closingThrough ? count(person.closingOrders) : 'Pending', person.closingThrough ? 'Group 17 Written through ' + esc(person.closingThrough) + '.' : esc(closing.ratioStatus || '')) +
