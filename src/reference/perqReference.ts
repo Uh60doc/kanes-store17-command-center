@@ -363,7 +363,7 @@ export function buildPerqPanel(
     flags.push(`${covered} Store closing ratio stays Not Available until that customer count and the location PERQ cover ${displayDay(store.start)} through ${displayDay(store.end)}.`);
   }
   flags.push(
-    `Individual closing ratios use each associate's Net Written purchasing customers for ${displayDay(individual.start)} through ${displayDay(individual.end)}. Those counts are still required.`,
+    `Individual closing ratios use each associate's Data Analysis Group 17 Written order count ÷ their PERQ opportunities for ${displayDay(individual.start)} through ${displayDay(individual.end)}, both through the same verified date.`,
   );
 
   return { loaded: true, windows, team, flags };

@@ -179,11 +179,106 @@ test('after the PERQ history import the month is a verified 54 ÷ 111 and Octobe
   assert.equal(month.trend.find((day: { date: string }) => day.date === '2026-10-12').ratio, 0.444);
   const facts = gs.loadClosing_();
   const person = (name: string) => gs.personClosing_(facts, name, '2026-10-01', '2026-10-31', 0.5);
-  assert.deepEqual([person('Eric Montes Rodriguez').opportunities, person('Eric Montes Rodriguez').opportunitiesThrough], [35, '2026-10-15']);
-  assert.deepEqual([person('Ricky Nassif').opportunities, person('Ricky Nassif').opportunitiesThrough], [35, '2026-10-15']);
-  assert.deepEqual([person('Prakash Gandhi').opportunities, person('Prakash Gandhi').opportunitiesThrough], [31, '2026-10-14']);
-  assert.deepEqual([person('Renzo Del Solar').opportunities, person('Renzo Del Solar').opportunitiesThrough], [11, '2026-10-14']);
-  assert.equal(person('Ricky Nassif').ratioStatus, 'Awaiting Verified Data');
+  assert.equal(person('Ricky Nassif').ratio, null, 'no Group 17 Written report is on file, so nothing is divided');
+  assert.equal(person('Ricky Nassif').ratioStatus, 'Pending: Group 17 Written orders');
+  assert.equal(person('Ricky Nassif').orders, null);
+});
+
+const G17_SNAPSHOT = 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-01_2026-10-13.xlsx';
+const G17_DAY = (date: string) => `DATA_ANALYSIS_KPI_17_WRITTEN_${date}_${date}.xlsx`;
+const sales = (view: string, grain: string, start: string, end: string, code: string, name: string, dollars: number, orders: number | '', source: string): (string | number)[] =>
+  [view, grain, grain === 'daily' ? start : '', start, end, end, '17', code, name, 'written', dollars, orders, '', '', '', source, '', `${view}|${grain}|${start}|${end}|${code || 'STORE'}`];
+
+/** Group 17 Written: the October 1-13 salesperson snapshot, then the October 13, 14 and 15 day files. */
+function withOrders(tabs: Record<string, Grid>, days = ['2026-10-14', '2026-10-15']): Record<string, Grid> {
+  const rows = [
+    sales('DA_SALES_PERSON', 'cumulative', '2026-10-01', '2026-10-13', 'EMON0904', 'Eric Montes Rodriguez', 31794.47, 11, G17_SNAPSHOT),
+    sales('DA_SALES_PERSON', 'cumulative', '2026-10-01', '2026-10-13', 'PGANDH', 'Prakash Gandhi', 20000, 9, G17_SNAPSHOT),
+    sales('DA_SALES_PERSON', 'cumulative', '2026-10-01', '2026-10-13', 'TNASSI', 'Ricky Nassif', 16804.84, 8, G17_SNAPSHOT),
+    sales('DA_SALES_PERSON', 'cumulative', '2026-10-01', '2026-10-13', 'RDELSO', 'Renzo Del Solar', 4000, 3, G17_SNAPSHOT),
+    sales('DA_SALES_PERSON', 'cumulative', '2026-10-01', '2026-10-13', 'EDURAN', 'Elizabeth Duran', -301.3, 5, G17_SNAPSHOT),
+    sales('DA_SALES_PERSON', 'cumulative', '2026-10-02', '2026-11-01', 'EMON0904', 'Eric Montes Rodriguez', 99999, 50, 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-11-01.xlsx'),
+    sales('DA_SALES_STORE', 'daily', '2026-10-13', '2026-10-13', '', '', 7106, 4, G17_DAY('2026-10-13')),
+    sales('DA_SALES_PERSON', 'daily', '2026-10-13', '2026-10-13', 'EMON0904', 'Eric Montes Rodriguez', 5000, 2, G17_DAY('2026-10-13')),
+  ];
+  if (days.includes('2026-10-14')) {
+    rows.push(
+      sales('DA_SALES_STORE', 'daily', '2026-10-14', '2026-10-14', '', '', 3300, 3, G17_DAY('2026-10-14')),
+      sales('DA_SALES_PERSON', 'daily', '2026-10-14', '2026-10-14', 'TNASSI', 'Ricky Nassif', 2476, 2, G17_DAY('2026-10-14')),
+      sales('DA_SALES_PERSON', 'daily', '2026-10-14', '2026-10-14', 'RDELSO', 'Renzo Del Solar', 824, 1, G17_DAY('2026-10-14')),
+    );
+  }
+  if (days.includes('2026-10-15')) {
+    rows.push(
+      sales('DA_SALES_STORE', 'daily', '2026-10-15', '2026-10-15', '', '', 1409.97, 2, G17_DAY('2026-10-15')),
+      sales('DA_SALES_PERSON', 'daily', '2026-10-15', '2026-10-15', 'EMON0904', 'Eric Montes Rodriguez', 500, 1, G17_DAY('2026-10-15')),
+      sales('DA_SALES_PERSON', 'daily', '2026-10-15', '2026-10-15', 'TNASSI', 'Ricky Nassif', 0, '', G17_DAY('2026-10-15')),
+      sales('DA_SALES_PERSON', 'daily', '2026-10-15', '2026-10-15', 'JMEYERS', 'Kelly Meyers', 909.97, 1, G17_DAY('2026-10-15')),
+    );
+  }
+  return { ...tabs, CC_Ledger: [...tabs.CC_Ledger, ...rows] };
+}
+
+const individual = (gs: Record<string, (...args: unknown[]) => any>, name: string) => {
+  const result = gs.personClosing_(gs.loadClosing_(), name, '2026-10-01', '2026-10-31', 0.5);
+  return { orders: result.orders, opportunities: result.opportunities, through: result.through, ratio: result.ratio, points: result.points, versus: result.versusGoal, status: result.ratioStatus };
+};
+
+test('individual closing is Group 17 Written orders ÷ PERQ opportunities, both through the same verified date', () => {
+  const gs = load(withOrders(afterPerqHistory()), '2026-10-16');
+  assert.deepEqual(individual(gs, 'Eric Montes Rodriguez'), { orders: 12, opportunities: 35, through: '2026-10-15', ratio: 0.343, points: -15.7, versus: 'Below Goal', status: '' });
+  assert.deepEqual(individual(gs, 'Ricky Nassif'), { orders: 10, opportunities: 35, through: '2026-10-15', ratio: 0.286, points: -21.4, versus: 'Below Goal', status: '' });
+  assert.deepEqual(individual(gs, 'Prakash Gandhi'), { orders: 9, opportunities: 31, through: '2026-10-14', ratio: 0.29, points: -21, versus: 'Below Goal', status: '' },
+    'PERQ for Prakash is through October 14, so October 15 orders are not counted');
+  assert.deepEqual(individual(gs, 'Renzo Del Solar'), { orders: 4, opportunities: 11, through: '2026-10-14', ratio: 0.364, points: -13.6, versus: 'Below Goal', status: '' });
+  const eric = gs.personClosing_(gs.loadClosing_(), 'Eric Montes Rodriguez', '2026-10-01', '2026-10-31', 0.5);
+  assert.equal(eric.ordersSource, '11 for 2026-10-01 through 2026-10-13 plus day files 2026-10-14 0, 2026-10-15 1',
+    'the October 13 day file is inside the snapshot, and the October 2 store-track report is not used');
+});
+
+test('when the October 15 Group 17 report is missing, the ratio moves back to the last date both reports cover', () => {
+  const gs = load(withOrders(afterPerqHistory(), ['2026-10-14']), '2026-10-16');
+  assert.deepEqual(individual(gs, 'Eric Montes Rodriguez'), { orders: 11, opportunities: 32, through: '2026-10-14', ratio: 0.344, points: -15.6, versus: 'Below Goal', status: '' });
+  const eric = gs.personClosing_(gs.loadClosing_(), 'Eric Montes Rodriguez', '2026-10-01', '2026-10-31', 0.5);
+  assert.match(eric.note, /PERQ through 2026-10-15 waits for the Group 17 Written report/);
+});
+
+test('a later salesperson snapshot replaces the earlier snapshot and its day files instead of adding to them', () => {
+  const tabs = withOrders(afterPerqHistory());
+  const derived = `${G17_SNAPSHOT} + ${G17_DAY('2026-10-14')} + ${G17_DAY('2026-10-15')}`;
+  tabs.CC_Ledger.push(
+    sales('DA_SALES_PERSON', 'cumulative', '2026-10-01', '2026-10-15', 'EMON0904', 'Eric Montes Rodriguez', 32294.47, 12, derived),
+    sales('DA_SALES_PERSON', 'cumulative', '2026-10-01', '2026-10-15', 'TNASSI', 'Ricky Nassif', 19280.84, 10, derived),
+  );
+  const gs = load(tabs, '2026-10-16');
+  assert.equal(individual(gs, 'Eric Montes Rodriguez').orders, 12);
+  assert.equal(individual(gs, 'Ricky Nassif').orders, 10);
+  const eric = gs.personClosing_(gs.loadClosing_(), 'Eric Montes Rodriguez', '2026-10-01', '2026-10-31', 0.5);
+  assert.equal(eric.ordersSource, '12 for 2026-10-01 through 2026-10-15');
+});
+
+test('zero opportunities is not divided, a missing report is Pending, and a blank line on a covered report is 0', () => {
+  const tabs = withOrders(afterPerqHistory());
+  tabs.CC_Closing.push(['2026-10-15', 'person', '', 'Brenda Sanchez', '', 0, '2026-10-01', '2026-10-15', PERQ, 'yes', '', '2026-10-15']);
+  const gs = load(tabs, '2026-10-16');
+  assert.deepEqual(individual(gs, 'Brenda Sanchez'), { orders: 0, opportunities: 0, through: '2026-10-15', ratio: null, points: null, versus: null, status: 'No opportunities' });
+  assert.deepEqual(individual(gs, 'Caroline Amaro'), { orders: null, opportunities: null, through: '', ratio: null, points: null, versus: null, status: 'Pending: reporting dates do not match' },
+    'PERQ for Caroline is only verified through October 1 and the Group 17 snapshot starts at October 13');
+  assert.equal(individual(load(withOrders(october()), '2026-10-16'), 'Caroline Amaro').status, 'Pending: PERQ opportunities');
+  assert.equal(individual(load(october(), '2026-10-16'), 'Caroline Amaro').status, 'Pending: PERQ opportunities and Group 17 Written orders');
+});
+
+test('an order count that could not be read is Pending, never guessed', () => {
+  const tabs = withOrders(afterPerqHistory());
+  tabs.CC_Ledger = tabs.CC_Ledger.map((row) => (row[0] === 'DA_SALES_PERSON' && row[1] === 'daily' && row[2] === '2026-10-15' && row[8] === 'Eric Montes Rodriguez' ? [...row.slice(0, 11), '', ...row.slice(12)] : row));
+  const gs = load(tabs, '2026-10-16');
+  assert.deepEqual(individual(gs, 'Eric Montes Rodriguez'), { orders: 11, opportunities: 32, through: '2026-10-14', ratio: 0.344, points: -15.6, versus: 'Below Goal', status: '' });
+});
+
+test('salesperson order counts never change the store closing ratio', () => {
+  const gs = load(withOrders(afterPerqHistory()), '2026-10-16');
+  const month = gs.storeMonthClosing_(gs.loadClosingView_(), STORE, 0.5);
+  assert.deepEqual([month.customers, month.opportunities, month.ratio, month.through], [54, 111, 0.486, '2026-10-15']);
 });
 
 test('zero opportunities and disagreeing reports are not divided', () => {
@@ -209,17 +304,11 @@ test('store closing is Pending without the view tabs or for another store month'
   assert.match(month.gap, /covers 2026-10-02 through 2026-11-01/);
 });
 
-test('salespeople show verified PERQ opportunities and Awaiting Verified Data for customers and ratio', () => {
-  const gs = load(october(), '2026-10-15');
-  const facts = gs.loadClosing_();
-  const renzo = gs.personClosing_(facts, 'Renzo Del Solar', '2026-10-01', '2026-10-31', 0.5);
-  assert.equal(renzo.opportunities, 11);
-  assert.equal(renzo.opportunitiesThrough, '2026-10-14');
-  assert.equal(renzo.customers, null);
-  assert.equal(renzo.customersStatus, 'Awaiting Verified Data');
-  assert.equal(renzo.ratio, null);
-  assert.equal(renzo.ratioStatus, 'Awaiting Verified Data');
-  const ricky = gs.personClosing_(facts, 'Ricky Nassif', '2026-10-01', '2026-10-31', 0.5);
-  assert.equal(ricky.opportunities, 32);
-  assert.equal(ricky.ratio, null);
+test('salespeople are matched by code or alias, and the store purchasing-customer count is never used', () => {
+  const gs = load(withOrders(october()), '2026-10-15');
+  const renzo = individual(gs, 'Renzo Del Solar');
+  assert.deepEqual(renzo, { orders: 4, opportunities: 11, through: '2026-10-14', ratio: 0.364, points: -13.6, versus: 'Below Goal', status: '' });
+  const ricky = gs.personClosing_(gs.loadClosing_(), 'Ricky Nassif', '2026-10-01', '2026-10-31', 0.5);
+  assert.equal(ricky.orders, 10);
+  assert.ok(!('customers' in ricky));
 });

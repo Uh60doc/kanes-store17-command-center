@@ -178,7 +178,7 @@ await scenario('live CC_Closing rows: October 14 daily and October 2-14 month to
   assert.equal(result.mtd['Latest daily purchasing customers'], 2);
   assert.equal(result.mtd['Latest daily opportunities'], 4);
   near(result.mtd['Latest daily closing ratio'], 0.5);
-  assert.equal(result.mtd['Individual closing ratio'], 'Awaiting Verified Data');
+  assert.equal(result.mtd['Individual closing ratio'], 'See the dashboard Closing page');
 });
 
 await scenario('tomorrow: October 15 Net Written 2 and PERQ 7 arrive', [...base, netWritten('2026-10-15', 2), perq('2026-10-15', 7)], (result) => {

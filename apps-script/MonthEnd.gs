@@ -11,6 +11,7 @@ var MONTH_END_METRICS_ = {
   NWDSR_WRITTEN: { label: 'NWDSR Written', unit: 'dollars', order: 1 },
   NWDSR_DELIVERED: { label: 'NWDSR Delivered', unit: 'dollars', order: 2 },
   SNAP: { label: 'SNAP Written', unit: 'dollars', order: 3 },
+  DA_SALES: { label: 'Data Analysis Group 17 sales', unit: 'dollars', order: 3.5 },
   PERQ: { label: 'PERQ opportunities', unit: 'count', field: 'eligible', order: 5 },
   BEDDING: { label: 'Bedding dollars', unit: 'dollars', order: 7 },
   MPPA: { label: 'Mattress protectors', unit: 'percent', order: 8 },
@@ -158,7 +159,7 @@ function monthEndRowsFor_(track, period, ledger, closing, closed, today) {
   });
 
   if (scope === 'STORE') out = out.concat(monthEndClosingRows_(period, days, closing, ledger));
-  else out.push(['CUSTOMERS', monthEndRow_(track, period, 'Purchasing customers', '', 'Each salesperson', 'count', null, 'No report gives a salesperson\'s own Net Written # OF CUST', null, 'Store customers are not divided among salespeople', null, AWAITING_)]);
+  else out.push(['CUSTOMERS', monthEndRow_(track, period, 'Closing numerator', 'written', 'Each salesperson', 'count', null, 'Individual closing uses the Data Analysis Group 17 Written order count (unit_count on DA_SALES_PERSON), not purchasing customers', null, 'Store purchasing customers are not divided among salespeople', null, 'See the Closing page')]);
 
   out.sort(function (left, right) {
     var a = MONTH_END_METRICS_[left[0]] ? MONTH_END_METRICS_[left[0]].order : left[0] === 'CUSTOMERS' ? 4 : 6;

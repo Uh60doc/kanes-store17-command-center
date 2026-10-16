@@ -375,51 +375,201 @@ function peopleRows_(individualStart, individualEnd) {
   });
   var goals = approvedGoals_(config_());
   var closingFacts = loadClosing_();
+  var analysis = personAnalysisContext_({ start: individualStart, end: individualEnd });
   var roster = sheet_('CC_People').filter(activePerson_);
   var rows = roster.length ? roster.map(function (row) {
     var name = String(row.name);
     var written = Object.prototype.hasOwnProperty.call(totals, name)
       ? Math.round(totals[name] * 100) / 100
       : (seenAny[name] ? null : numberOrNull_(peopleSnapCell_(row)));
-    return personRecord_(name, written, String(row.role || 'associate'), days[name] || [], goals, personClosing_(closingFacts, name, individualStart, individualEnd, goals.closing));
+    return personRecord_(name, written, String(row.role || 'associate'), days[name] || [], goals, personClosing_(closingFacts, name, individualStart, individualEnd, goals.closing, analysis.ledger), personAnalysis_(analysis, name));
   }) : Object.keys(totals).map(function (name) {
-    return personRecord_(name, Math.round(totals[name] * 100) / 100, 'associate', days[name] || [], goals, personClosing_(closingFacts, name, individualStart, individualEnd, goals.closing));
+    return personRecord_(name, Math.round(totals[name] * 100) / 100, 'associate', days[name] || [], goals, personClosing_(closingFacts, name, individualStart, individualEnd, goals.closing, analysis.ledger), personAnalysis_(analysis, name));
   });
   return rows;
 }
 
-function personRecord_(name, snapWritten, role, days, goals, closing) {
-  closing = closing || { customers: null, opportunities: null, ratio: null, reconcile: false, versusGoal: null, note: '', goal: goals.closing };
+var PERSON_ANALYSIS_VIEWS_ = ['DA_SALES', 'BEDDING', 'MPPA', 'FABW', 'LTHW', 'PWAR', 'FINANCE', 'AVERAGE'];
+var PERSON_ANALYSIS_SOURCE_ = /DATA_ANALYSIS_KPI_17_/i;
+
+/**
+ * What the Data Analysis Group 17 reports cover for the salesperson month on one side: the latest salesperson
+ * snapshot that starts on the 1st, then each following day whose Group 17 day file is on file. Days inside the
+ * snapshot are never added to it, and nothing after a missing open day is counted.
+ */
+function personAnalysisCoverage_(ledger, side, period, closed) {
+  var snapshot = '';
+  var dayFiles = {};
+  ledger.forEach(function (row) {
+    if (row.side !== side || !PERSON_ANALYSIS_SOURCE_.test(row.source)) return;
+    if (row.view === 'DA_SALES_PERSON' && row.grain === 'cumulative' && row.fitsTrack && row.periodStart === period.start && row.verifiedThrough > snapshot) snapshot = row.verifiedThrough;
+    if (row.view === 'DA_SALES_STORE' && row.grain === 'daily') dayFiles[row.reportDate] = true;
+  });
+  var days = [];
+  var through = snapshot;
+  var cursor = snapshot ? shiftDate_(snapshot, 1) : period.start;
+  while (cursor <= period.end) {
+    if (dayFiles[cursor]) {
+      days.push(cursor);
+      through = cursor;
+    } else if (!closed[cursor]) break;
+    cursor = shiftDate_(cursor, 1);
+  }
+  return { side: side, period: period, snapshot: snapshot, days: days, through: through };
+}
+
+function personAnalysisLedger_() {
+  return ledgerRows_().filter(function (row) {
+    return row.scope === 'PERSON' || row.view === 'DA_SALES_STORE';
+  });
+}
+
+function personAnalysisContext_(period) {
+  var ledger = personAnalysisLedger_();
+  var closed = closedDates_();
+  return {
+    ledger: ledger,
+    written: personAnalysisCoverage_(ledger, 'written', period, closed),
+    delivered: personAnalysisCoverage_(ledger, 'delivered', period, closed),
+  };
+}
+
+/** One side for one salesperson. A covered report without a line for this person is 0 for that person. */
+function personAnalysisSide_(ledger, name, coverage) {
+  if (!coverage.through) return null;
+  var parts = {};
+  PERSON_ANALYSIS_VIEWS_.forEach(function (prefix) { parts[prefix] = {}; });
+  ledger.forEach(function (row) {
+    if (row.scope !== 'PERSON' || row.side !== coverage.side || !PERSON_ANALYSIS_SOURCE_.test(row.source)) return;
+    var prefix = row.view.replace(/_PERSON$/, '');
+    if (!parts[prefix] || !rowMatchesPerson_(row, name)) return;
+    var part = '';
+    if (row.grain === 'cumulative' && coverage.snapshot && row.fitsTrack && row.periodStart === coverage.period.start && row.verifiedThrough === coverage.snapshot) part = 'snapshot';
+    if (row.grain === 'daily' && coverage.days.indexOf(row.reportDate) !== -1) part = row.reportDate;
+    if (part) parts[prefix][part] = row;
+  });
+  var keys = (coverage.snapshot ? ['snapshot'] : []).concat(coverage.days);
+  var sales = 0;
+  var orders = 0;
+  var bedding = 0;
+  var financed = 0;
+  keys.forEach(function (part) {
+    var sale = parts.DA_SALES[part];
+    var amount = sale && sale.sales !== null ? sale.sales : 0;
+    sales += amount;
+    if (orders !== null) orders = amount === 0 ? orders : (sale && sale.units !== null ? orders + sale.units : null);
+    bedding += parts.BEDDING[part] && parts.BEDDING[part].sales !== null ? parts.BEDDING[part].sales : 0;
+    if (financed !== null && amount !== 0) {
+      var finance = parts.FINANCE[part];
+      financed = finance && finance.percent !== null ? financed + finance.percent * amount : null;
+    }
+  });
+  function counted(prefix) {
+    var eligible = 0;
+    var attachments = 0;
+    keys.forEach(function (part) {
+      var row = parts[prefix][part];
+      if (!row) return;
+      eligible += row.eligible || 0;
+      attachments += row.attachments || 0;
+    });
+    return { value: eligible ? Math.round((attachments / eligible) * 1000) / 1000 : null, sold: attachments, detail: attachments + ' of ' + eligible, text: eligible ? '' : 'No qualifying sales' };
+  }
+  var round2 = function (value) { return Math.round(value * 100) / 100; };
+  return {
+    through: coverage.through,
+    basis: (coverage.snapshot ? 'Group 17 salesperson report ' + coverage.period.start + ' through ' + coverage.snapshot : '') +
+      (coverage.days.length ? (coverage.snapshot ? ' plus the ' : 'Group 17 ') + 'day files ' + coverage.days.join(', ') : ''),
+    sales: round2(sales),
+    orders: orders,
+    beddingDollars: round2(bedding),
+    bedding: { value: sales ? Math.round((bedding / sales) * 1000) / 1000 : null, detail: moneyText_(bedding) + ' of ' + moneyText_(sales), text: sales ? '' : 'No sales' },
+    pads: counted('MPPA'),
+    fabric: counted('FABW'),
+    leather: counted('LTHW'),
+    power: counted('PWAR'),
+    finance: { value: sales && financed !== null ? Math.round((financed / sales) * 1000) / 1000 : null, detail: '', text: sales ? (financed === null ? 'Not on file' : '') : 'No sales' },
+    average: { value: orders ? round2(sales / orders) : null, detail: orders === null ? '' : moneyText_(sales) + ' ÷ ' + orders + ' orders', text: orders === 0 ? 'No orders' : (orders === null ? 'Not on file' : '') },
+  };
+}
+
+function personAnalysis_(context, name) {
+  return { written: personAnalysisSide_(context.ledger, name, context.written), delivered: personAnalysisSide_(context.ledger, name, context.delivered) };
+}
+
+function analysisKpi_(name, unit, goal, analysis, field, note) {
+  function side(value) {
+    if (!value) return { value: null, detail: '', text: '' };
+    var figure = value[field];
+    return { value: figure.value, detail: figure.detail || '', text: figure.text || '' };
+  }
+  var written = side(analysis.written);
+  var delivered = side(analysis.delivered);
+  var row = kpiRow_(name, written.value, delivered.value, goal, unit, note);
+  row.writtenDetail = written.detail;
+  row.deliveredDetail = delivered.detail;
+  row.writtenText = written.text;
+  row.deliveredText = delivered.text;
+  return row;
+}
+
+function notInReportKpi_(name, unit, goal) {
+  var row = kpiRow_(name, null, null, goal, unit, 'The Group 17 report has no salesperson column for this. ASL reports it for the store only.');
+  row.writtenText = 'Not in report';
+  row.deliveredText = 'Not in report';
+  return row;
+}
+
+function personRecord_(name, snapWritten, role, days, goals, closing, analysis) {
+  closing = closing || { orders: null, opportunities: null, through: '', ratio: null, ratioStatus: 'Pending: PERQ opportunities and Group 17 Written orders', reconcile: false, versusGoal: null, points: null, note: '', goal: goals.closing };
+  analysis = analysis || { written: null, delivered: null };
+  var orders = kpiRow_('Orders', analysis.written ? analysis.written.orders : null, analysis.delivered ? analysis.delivered.orders : null, null, 'count', 'Group 17 sales ÷ average ticket.');
   return {
     name: name,
     role: role,
     written: snapWritten,
     snapWritten: snapWritten,
-    nwdsrWritten: null,
-    nwdsrDelivered: null,
+    deliveredSales: analysis.delivered ? analysis.delivered.sales : null,
+    deliveredThrough: analysis.delivered ? analysis.delivered.through : '',
+    deliveredBasis: analysis.delivered ? analysis.delivered.basis : '',
+    writtenOrders: analysis.written ? analysis.written.orders : null,
+    analysisWritten: analysis.written ? analysis.written.sales : null,
+    analysisWrittenThrough: analysis.written ? analysis.written.through : '',
+    analysisWrittenBasis: analysis.written ? analysis.written.basis : '',
+    analysis: analysis,
     monthlyGoal: goals.individualVolume,
-    purchasingCustomers: closing.customers,
+    closingOrders: closing.orders,
     opportunities: closing.opportunities,
+    closingThrough: closing.through,
     closingRatio: closing.ratio,
     closingReconcile: closing.reconcile,
     closingVersus: closing.versusGoal,
+    closingPoints: closing.points,
     closingNote: closing.note,
     closing: closing,
     leave: name === 'Renzo Del Solar' ? 'On vacation October 1 through October 12, 2026. Back October 13. Sales during vacation stay on the report and those days are not counted as worked.' : '',
     days: days.sort(function (left, right) { return left.date < right.date ? -1 : 1; }),
     kpis: [
-      kpiRow_('Bedding', null, null, goals.bedding, 'percent', ''),
-      kpiRow_('Mattress Protectors', null, null, goals.mattress, 'percent', ''),
-      kpiRow_('Fabric Maintenance', null, null, goals.fabric, 'percent', ''),
-      kpiRow_('Leather Maintenance', null, null, goals.leather, 'percent', ''),
-      kpiRow_('Power Maintenance', null, null, goals.power, 'percent', ''),
-      kpiRow_('Wood Maintenance', null, null, goals.wood, 'percent', ''),
-      kpiRow_('Overall Maintenance', null, null, goals.maintenance, 'percent', ''),
-      kpiRow_('Rugs', null, null, goals.rugs, 'count', ''),
-      kpiRow_('Average Ticket', null, null, goals.averageTicket, 'dollars', ''),
-      kpiRow_('Closing Ratio', closing.ratio, null, goals.closing, 'percent', closing.note, closing.reconcile),
+      analysisKpi_('Bedding', 'percent', goals.bedding, analysis, 'bedding', 'Bedding dollars ÷ Group 17 sales.'),
+      analysisKpi_('Mattress Pads', 'percent', goals.mattress, analysis, 'pads', 'Pads sold ÷ qualifying mattresses.'),
+      notInReportKpi_('Adjustable Bases', 'percent', goals.adjustableBase),
+      notInReportKpi_('Pillows', 'percent', goals.pillow),
+      analysisKpi_('Fabric', 'percent', goals.fabric, analysis, 'fabric', 'Protection sold ÷ qualifying fabric pieces.'),
+      analysisKpi_('Leather', 'percent', goals.leather, analysis, 'leather', 'Protection sold ÷ qualifying leather pieces.'),
+      analysisKpi_('Power', 'percent', goals.power, analysis, 'power', 'Warranties sold ÷ qualifying power pieces.'),
+      analysisKpi_('Financing', 'percent', goals.finance, analysis, 'finance', 'Financed dollars ÷ Group 17 sales.'),
+      analysisKpi_('Average Ticket', 'dollars', goals.averageTicket, analysis, 'average', 'Group 17 sales ÷ orders.'),
+      orders,
+      closingKpi_(closing, goals.closing),
     ],
   };
+}
+
+function closingKpi_(closing, goal) {
+  var row = kpiRow_('Closing Ratio', closing.ratio, null, goal, 'percent', closing.note, closing.reconcile);
+  row.writtenText = closing.ratioStatus || '';
+  row.writtenDetail = closing.through ? closing.orders + ' orders ÷ ' + closing.opportunities + ' opportunities through ' + closing.through : '';
+  return row;
 }
 
 function attention_(facts, config, role) {
@@ -738,36 +888,121 @@ function personDailyOpportunities_(facts, name) {
 
 var AWAITING_ = 'Awaiting Verified Data';
 
-function personClosing_(facts, name, start, end, goal) {
+function saleOrders_(row) {
+  return row.sales === 0 ? 0 : row.units;
+}
+
+/**
+ * Data Analysis Group 17 Written order count for one salesperson from the 1st through date: the latest salesperson
+ * snapshot that ends on or before date, plus each day after it whose Group 17 Written day file is on file. Days
+ * inside the snapshot are never added again. A covered report without a line for this salesperson is 0. A missing
+ * open day or an order count that could not be read leaves the total unknown.
+ */
+function personOrdersThrough_(ledger, name, period, date, closed) {
+  var snapshots = {};
+  var dayFiles = {};
+  var dayOrders = {};
+  ledger.forEach(function (row) {
+    if (row.side !== 'written' || !PERSON_ANALYSIS_SOURCE_.test(row.source)) return;
+    if (row.view === 'DA_SALES_STORE' && row.grain === 'daily' && row.reportDate >= period.start && row.reportDate <= date) dayFiles[row.reportDate] = true;
+    if (row.view !== 'DA_SALES_PERSON') return;
+    var mine = rowMatchesPerson_(row, name);
+    if (row.grain === 'cumulative') {
+      if (!row.fitsTrack || row.periodStart !== period.start || row.verifiedThrough < period.start || row.verifiedThrough > date) return;
+      var snapshot = snapshots[row.verifiedThrough] || (snapshots[row.verifiedThrough] = { orders: 0, seen: false });
+      if (!mine) return;
+      var orders = saleOrders_(row);
+      snapshot.orders = snapshot.seen && snapshot.orders !== orders ? null : orders;
+      snapshot.seen = true;
+    } else if (row.grain === 'daily' && mine) {
+      var day = saleOrders_(row);
+      dayOrders[row.reportDate] = Object.prototype.hasOwnProperty.call(dayOrders, row.reportDate) && dayOrders[row.reportDate] !== day ? null : day;
+    }
+  });
+  var bases = Object.keys(snapshots).sort().reverse().concat(['']);
+  var b;
+  for (b = 0; b < bases.length; b += 1) {
+    var base = bases[b];
+    var total = base ? snapshots[base].orders : 0;
+    if (total === null) continue;
+    var added = [];
+    var complete = true;
+    eachDate_(base ? shiftDate_(base, 1) : period.start, date).forEach(function (day) {
+      if (!complete) return;
+      if (dayFiles[day]) {
+        var count = Object.prototype.hasOwnProperty.call(dayOrders, day) ? dayOrders[day] : 0;
+        if (count === null) complete = false;
+        else {
+          total += count;
+          added.push(day + ' ' + count);
+        }
+      } else if (!closed[day]) complete = false;
+    });
+    if (!complete) continue;
+    var parts = [];
+    if (base) parts.push(snapshots[base].orders + ' for ' + period.start + ' through ' + base);
+    if (added.length) parts.push((base ? 'plus day files ' : 'day files ') + added.join(', '));
+    return { total: total, source: parts.join(' ') };
+  }
+  return null;
+}
+
+/**
+ * Individual closing ratio = Data Analysis Group 17 Written order count ÷ the salesperson's PERQ Ups + Be Backs,
+ * both from the 1st through the same verified date: the latest date on which both counts are on file.
+ */
+function personClosing_(facts, name, start, end, goal, ledger) {
+  if (!ledger) {
+    try { ledger = personAnalysisLedger_(); } catch (error) { ledger = []; }
+  }
   var closed = closedDates_();
   var today = todayNy_();
   var last = end < today ? end : today;
-  var dailyCustomers = dailyCountMap_(facts, 'person', name, 'customers');
+  var period = { start: start, end: end };
   var dailyOpportunities = personDailyOpportunities_(facts, name);
   var opportunities = null;
-  var customers = null;
+  var orders = null;
   var through = '';
+  var latestOpportunities = '';
+  var latestOrders = '';
   eachDate_(start, last).reverse().forEach(function (date) {
-    if (opportunities) return;
+    if (opportunities && orders) return;
     var counted = countThrough_(facts, 'person', name, start, date, 'opportunities', closed, dailyOpportunities);
-    if (!counted) return;
+    var written = personOrdersThrough_(ledger, name, period, date, closed);
+    if (counted && !latestOpportunities) latestOpportunities = date;
+    if (written && !latestOrders) latestOrders = date;
+    if (!counted || !written) return;
     opportunities = counted;
+    orders = written;
     through = date;
-    customers = countThrough_(facts, 'person', name, start, date, 'customers', closed, dailyCustomers);
   });
-  var computed = customers && opportunities ? closingRatio_(customers.total, opportunities.total) : { ratio: null, reconcile: false };
-  var note = opportunities
-    ? 'PERQ Ups + Be Backs ' + opportunities.source + '.'
-    : 'Verified PERQ opportunities for this associate are not on file for ' + start + ' through ' + end + '.';
-  if (!customers) note += ' Purchasing customers are ' + AWAITING_ + ': no report gives this associate\'s Net Written # OF CUST, and the store count is not divided among associates.';
+  var computed = orders && opportunities ? closingRatio_(orders.total, opportunities.total) : { ratio: null, reconcile: false };
+  var status = '';
+  var note = '';
+  if (!through) {
+    var missing = [];
+    if (!latestOpportunities) missing.push('PERQ opportunities');
+    if (!latestOrders) missing.push('Group 17 Written orders');
+    status = missing.length ? 'Pending: ' + missing.join(' and ') : 'Pending: reporting dates do not match';
+    note = missing.length
+      ? missing.join(' and ') + ' for this salesperson ' + (missing.length > 1 ? 'are' : 'is') + ' not on file for ' + start + ' through ' + end + '.'
+      : 'PERQ is through ' + latestOpportunities + ' and Group 17 Written through ' + latestOrders + ', with no common verified date.';
+  } else {
+    note = 'Through ' + through + ': Group 17 Written orders ' + orders.source + '; PERQ Ups + Be Backs ' + opportunities.source + '.';
+    if (latestOpportunities > through) note += ' PERQ through ' + latestOpportunities + ' waits for the Group 17 Written report for the same dates.';
+    if (latestOrders > through) note += ' Group 17 Written through ' + latestOrders + ' waits for PERQ for the same dates.';
+    if (opportunities.total === 0) status = 'No opportunities';
+  }
   if (computed.reconcile) note += ' Above 100%. Flagged for reconciliation.';
   return {
-    customers: customers ? customers.total : null,
-    customersStatus: customers ? '' : AWAITING_,
+    orders: orders ? orders.total : null,
+    ordersSource: orders ? orders.source : '',
     opportunities: opportunities ? opportunities.total : null,
+    opportunitiesSource: opportunities ? opportunities.source : '',
+    through: through,
     opportunitiesThrough: through,
     ratio: computed.ratio,
-    ratioStatus: computed.ratio !== null ? '' : (customers && opportunities && opportunities.total === 0 ? 'No opportunities' : AWAITING_),
+    ratioStatus: status,
     reconcile: computed.reconcile,
     versusGoal: versusGoal_(computed.ratio, goal, computed.reconcile),
     points: pointsFromGoal_(computed.ratio, goal),
@@ -1370,10 +1605,11 @@ function closing_(payload) {
       var closing = person.closing || {};
       return {
         name: person.name,
+        orders: closing.orders === undefined ? null : closing.orders,
+        ordersSource: closing.ordersSource || '',
         opportunities: closing.opportunities === undefined ? null : closing.opportunities,
-        opportunitiesThrough: closing.opportunitiesThrough || '',
-        customers: closing.customers === undefined ? null : closing.customers,
-        customersStatus: closing.customersStatus || '',
+        opportunitiesSource: closing.opportunitiesSource || '',
+        through: closing.through || '',
         ratio: closing.ratio === undefined ? null : closing.ratio,
         ratioStatus: closing.ratioStatus || '',
         versusGoal: closing.versusGoal || null,
@@ -1402,15 +1638,17 @@ function bedding_(payload) {
   var beddingNote = beddingRow ? String(beddingRow.note || '') : '';
   var covers = beddingValue !== null && metricCovers_(beddingNote, store.start, store.end);
   var people = peopleRows_(individual.start, individual.end).map(function (person) {
+    var written = person.analysis.written;
+    var delivered = person.analysis.delivered;
     return {
       name: person.name,
-      mattressWritten: null,
-      mattressDelivered: null,
-      writtenPercent: null,
-      deliveredPercent: null,
+      beddingWritten: written ? written.beddingDollars : null,
+      beddingDelivered: delivered ? delivered.beddingDollars : null,
+      writtenPercent: written ? written.bedding.value : null,
+      deliveredPercent: delivered ? delivered.bedding.value : null,
       units: null,
-      protectorPercent: null,
-      protectorUnits: null,
+      protectorPercent: written ? written.pads.value : null,
+      protectorUnits: written ? written.pads.sold : null,
       pillowUnits: null,
       pillowDollars: null,
       baseUnits: null,
@@ -1520,15 +1758,15 @@ function people_(payload) {
   var today = todayNy_();
   var individual = individualPeriodContaining_(today);
   var snapThrough = refreshPeopleWritten_(individual.start, individual.end);
+  var people = peopleRows_(individual.start, individual.end);
   return {
     role: payload.session.role,
     period: individual.start + ' through ' + individual.end,
     snapThrough: snapThrough || null,
     snapPending: snapThrough ? snapPendingDates_(individual.start, individual.end, snapThrough) : [],
     snapLabel: 'SNAP written',
-    nwdsrWrittenThrough: null,
-    nwdsrDeliveredThrough: null,
-    people: peopleRows_(individual.start, individual.end),
+    analysisThrough: { written: (people[0] && people[0].analysisWrittenThrough) || null, delivered: (people[0] && people[0].deliveredThrough) || null },
+    people: people,
     updated: healthValue_('last_calculation') || 'Not Available',
   };
 }
@@ -1689,7 +1927,6 @@ function readStaffing_(date) {
       role: staffRole_(row.role),
       worked: worked === 'yes' ? true : (worked === 'no' ? false : null),
       onLeave: /^(yes|y|leave)$/i.test(String(row.on_leave || '')),
-      nwdsrWritten: fineNumber_(row.nwdsr_written),
       perqOpportunities: fineNumber_(row.perq_opportunities),
     };
   });
@@ -1718,7 +1955,25 @@ function eligibleAssociate_(line) {
   return line.worked === true && line.role === 'associate' && !line.onLeave && !managementName_(line.name);
 }
 
-function morningWinners_(lines, goal) {
+/** One day's SNAP Written by salesperson. With the day's SNAP report on file, a salesperson without a line wrote 0. */
+function snapWrittenOn_(date) {
+  var lines = snapAssociateLines_(date, date);
+  var reported = lines.order.length > 0 || dailyFacts_().some(function (row) { return row.date === date && row.snapWritten !== null; });
+  return {
+    reported: reported,
+    amountFor: function (name) {
+      var aliases = personAliases_(name);
+      var total = 0;
+      lines.order.forEach(function (key) {
+        var line = lines.byDay[key];
+        if (line.name === name || aliases.indexOf(line.name.toLowerCase()) !== -1) total += line.amount;
+      });
+      return Math.round(total * 100) / 100;
+    },
+  };
+}
+
+function morningWinners_(lines, goal, snap) {
   if (!lines.length) return { status: 'pending', reason: 'Yesterday\'s working roster is not on file.', share: null, people: [] };
   if (goal === null) return { status: 'pending', reason: 'Yesterday\'s saved written goal is not on file.', share: null, people: [] };
   if (lines.some(function (line) { return line.worked === null; })) {
@@ -1729,18 +1984,19 @@ function morningWinners_(lines, goal) {
   }
   var eligible = lines.filter(eligibleAssociate_);
   if (!eligible.length) return { status: 'pending', reason: 'No eligible salesperson is marked as worked.', share: null, people: [] };
-  if (eligible.some(function (line) { return line.nwdsrWritten === null; })) {
-    return { status: 'pending', reason: 'NWDSR Written by salesperson is not on file.', share: null, people: [] };
+  if (!snap || !snap.reported) {
+    return { status: 'pending', reason: 'Yesterday\'s SNAP Written by salesperson is not on file.', share: null, people: [] };
   }
   var share = Math.round((goal / eligible.length) * 100) / 100;
   var people = [];
   eligible.forEach(function (line) {
-    if (line.nwdsrWritten <= share) return;
+    var written = snap.amountFor(line.name);
+    if (written <= share) return;
     people.push({
       name: line.name,
-      written: line.nwdsrWritten,
+      written: written,
       share: share,
-      above: Math.round((line.nwdsrWritten - share) * 100) / 100,
+      above: Math.round((written - share) * 100) / 100,
     });
   });
   return { status: 'ready', reason: '', share: share, people: people };
@@ -1835,7 +2091,7 @@ function morning_(payload) {
     todayStaffing = [];
   }
   var writtenPerf = home.board.yesterday.written;
-  var winners = morningWinners_(staffing, writtenPerf.goal);
+  var winners = morningWinners_(staffing, writtenPerf.goal, snapWrittenOn_(yesterday));
   var workedToday = workedCount_(todayStaffing);
   var personalShare = workedToday === null || home.board.today.written === null ? null : Math.round((home.board.today.written / workedToday) * 100) / 100;
   var gaps = [];

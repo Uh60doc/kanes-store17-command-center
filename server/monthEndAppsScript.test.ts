@@ -80,8 +80,9 @@ test('during the month the daily total is in progress and a partial snapshot is 
   assert.match(String(finance.daily_basis), /not summed/);
   const customers = result.find((row) => row.track === 'Store' && row.metric === 'Purchasing customers')!;
   assert.equal(customers.daily_tracked, 28);
-  const individual = result.find((row) => row.track === 'Person' && row.metric === 'Purchasing customers')!;
-  assert.equal(individual.status, 'Awaiting Verified Data');
+  assert.equal(result.find((row) => row.track === 'Person' && row.metric === 'Purchasing customers'), undefined);
+  const individual = result.find((row) => row.track === 'Person' && row.metric === 'Closing numerator')!;
+  assert.match(String(individual.daily_basis), /Group 17 Written order count/);
 });
 
 test('after the month the official final sits beside the daily total and the variance is final minus daily', () => {

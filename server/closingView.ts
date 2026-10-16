@@ -246,7 +246,7 @@ export function mtdRows(asOf?: string): string[][] {
     [at(13, 'F'), ''],
     [at(13, 'G'), ''],
     [at(13, 'I'), ''],
-    ['Awaiting Verified Data', 'No report gives a salesperson\'s own Net Written # OF CUST. Store customers are not divided among salespeople.'],
+    ['See the dashboard Closing page', 'Individual closing = Data Analysis Group 17 Written order count ÷ the salesperson\'s PERQ Ups + Be Backs, both from the 1st through the same verified date. Store customers are not divided among salespeople.'],
   ];
   return [['Metric', 'Value', 'Basis'], ...MTD_LABELS.map((label, index) => [label, values[index][0], values[index][1]])];
 }
