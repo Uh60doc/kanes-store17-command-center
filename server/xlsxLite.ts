@@ -2,22 +2,34 @@
 
 import { inflateRawSync } from 'node:zlib';
 
+/** Sizes come from the central directory: archives written with data descriptors leave them 0 in the local headers. */
 export function unzip(buffer: Buffer): Map<string, Buffer> {
   const files = new Map<string, Buffer>();
-  let offset = 0;
-  while (offset + 30 <= buffer.length) {
-    if (buffer.readUInt32LE(offset) !== 0x04034b50) break;
-    const method = buffer.readUInt16LE(offset + 8);
-    const compressedSize = buffer.readUInt32LE(offset + 18);
-    const nameLength = buffer.readUInt16LE(offset + 26);
-    const extraLength = buffer.readUInt16LE(offset + 28);
-    const name = buffer.subarray(offset + 30, offset + 30 + nameLength).toString('utf8');
-    const dataStart = offset + 30 + nameLength + extraLength;
+  let end = -1;
+  for (let at = buffer.length - 22; at >= Math.max(0, buffer.length - 22 - 0xffff); at -= 1) {
+    if (buffer.readUInt32LE(at) === 0x06054b50) {
+      end = at;
+      break;
+    }
+  }
+  if (end < 0) throw new Error('Not a ZIP archive.');
+  const count = buffer.readUInt16LE(end + 10);
+  let offset = buffer.readUInt32LE(end + 16);
+  for (let index = 0; index < count; index += 1) {
+    if (buffer.readUInt32LE(offset) !== 0x02014b50) throw new Error('The ZIP central directory is damaged.');
+    const method = buffer.readUInt16LE(offset + 10);
+    const compressedSize = buffer.readUInt32LE(offset + 20);
+    const nameLength = buffer.readUInt16LE(offset + 28);
+    const extraLength = buffer.readUInt16LE(offset + 30);
+    const commentLength = buffer.readUInt16LE(offset + 32);
+    const local = buffer.readUInt32LE(offset + 42);
+    const name = buffer.subarray(offset + 46, offset + 46 + nameLength).toString('utf8');
+    const dataStart = local + 30 + buffer.readUInt16LE(local + 26) + buffer.readUInt16LE(local + 28);
     const compressed = buffer.subarray(dataStart, dataStart + compressedSize);
     const data = method === 0 ? Buffer.from(compressed) : method === 8 ? inflateRawSync(compressed) : null;
     if (!data) throw new Error(`Unsupported ZIP method ${method} in ${name}`);
     files.set(name, data);
-    offset = dataStart + compressedSize;
+    offset += 46 + nameLength + extraLength + commentLength;
   }
   return files;
 }
