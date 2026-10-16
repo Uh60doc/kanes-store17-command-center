@@ -262,6 +262,10 @@ function markMissingReports_() {
   var yesterday = shiftDate_(todayNy_(), -1);
   var facts = dailyFacts_();
   var row = facts.filter(function (item) { return item.date === yesterday; })[0];
+  var complete = facts.filter(function (item) {
+    return item.snapWritten !== null && item.nwdsrWritten !== null && item.nwdsrDelivered !== null;
+  }).map(function (item) { return item.date; }).sort();
+  if (complete.length) noteHealth_('latest_report_day', complete[complete.length - 1]);
   var missing = [];
   if (!row || row.snapWritten === null) missing.push('SNAP Written');
   if (!row || row.nwdsrWritten === null) missing.push('NWDSR Written');
