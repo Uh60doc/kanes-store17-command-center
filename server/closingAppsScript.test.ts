@@ -312,3 +312,10 @@ test('salespeople are matched by code or alias, and the store purchasing-custome
   assert.equal(ricky.orders, 10);
   assert.ok(!('customers' in ricky));
 });
+
+test('a former associate on CC_People is left off the sales team list', () => {
+  const tabs = withOrders(afterPerqHistory());
+  tabs.CC_People = [['name', 'role', 'SNAP Written'], ['Eric Montes Rodriguez', 'associate', 32294], ['Brenda Sanchez', 'associate', ''], ['Caroline Amaro', 'former', '']];
+  const names = [...load(tabs, '2026-10-16').peopleRows_('2026-10-01', '2026-10-31')].map((person: { name: string }) => person.name);
+  assert.deepEqual(names, ['Eric Montes Rodriguez', 'Brenda Sanchez']);
+});
