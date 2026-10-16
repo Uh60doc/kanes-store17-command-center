@@ -77,7 +77,7 @@ function qtyMetric(
     if (amount === null) amount = 0;
   }
   if (soldQty === null || qualified === null || qualified === 0) {
-    return { qual: qualified, sold: soldQty, dollars: amount, percent: null, mismatch: false };
+    return { qual: qualified, sold: soldQty, dollars: amount, percent: percentFraction(printedPercent), mismatch: false };
   }
   const rounded = Math.round((soldQty / qualified) * 1000) / 10;
   const fraction = fractionFromPercent(rounded);
@@ -96,13 +96,14 @@ function cell(row: readonly (string | null)[], index: number | undefined): strin
   return row[index] ?? null;
 }
 
-function groupLabels(header: readonly (string | null)[]): string[] {
+function groupLabels(header: readonly (string | null)[], width: number): string[] {
   const labels: string[] = [];
   let current = '';
-  header.forEach((value, index) => {
+  for (let index = 0; index < Math.max(header.length, width); index += 1) {
+    const value = header[index];
     if (value && value.trim()) current = value.trim().toUpperCase();
     labels[index] = current;
-  });
+  }
   return labels;
 }
 
@@ -115,14 +116,14 @@ interface ColumnMap {
 }
 
 function mapColumns(rows: (string | null)[][]): ColumnMap {
-  const groups = groupLabels(rows[0] ?? []);
   const sub = rows[1] ?? [];
+  const groups = groupLabels(rows[0] ?? [], sub.length);
   const mapped: ColumnMap = { name: 0, sales: 1, average: 2, finance: 3, groups: {} };
   sub.forEach((value, index) => {
     const label = (value ?? '').trim().toUpperCase();
     const group = groups[index] ?? '';
     if (label === 'SALES PERSON' || label === 'STORE') mapped.name = index;
-    if (group === 'WRITTEN ORDERS' || group.startsWith('GROUP')) {
+    if (group === 'WRITTEN ORDERS' || group === 'DELIVERED ORDERS' || group.startsWith('GROUP')) {
       if (label === 'SALES') mapped.sales = index;
       if (label === 'AVG SALES') mapped.average = index;
       if (label === 'FIN %') mapped.finance = index;
@@ -182,7 +183,13 @@ export function parseKpiWorkbook(bytes: Buffer, filename: string): KpiReport {
   if (!match || !match[1] || !match[2] || !match[3]) throw new Error(`KPI filename has no period: ${filename}`);
   const rows = firstSheet(unzip(bytes));
   const columns = mapColumns(rows);
-  const lines = rows.slice(2).map((row) => lineFrom(row, columns)).filter((row): row is KpiLine => row !== null);
+  const daily = match[2] === match[3];
+  const labelled = (rows[1] ?? []).map((value, index) => index !== columns.name && !!(value && value.trim()));
+  // A daily report is complete for its date, so a blank figure there is zero and a blank rate is 0%.
+  const filled = daily
+    ? rows.slice(2).map((row) => labelled.map((isFigure, index) => (isFigure && (row[index] === null || row[index] === undefined) ? '0' : row[index] ?? null)))
+    : rows.slice(2);
+  const lines = filled.map((row) => lineFrom(row, columns)).filter((row): row is KpiLine => row !== null);
   const family = /_ASL_/i.test(filename) ? 'asl' : 'group17';
   const store = family === 'asl'
     ? lines.find((row) => row.name === '17') ?? null

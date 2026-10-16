@@ -72,6 +72,21 @@ test('a complete daily report counts a blank sold quantity as zero and keeps a n
   assert.equal(report.store?.fabric.percent, 0);
 });
 
+test('a blank group is zero and 0% in a daily report but stays blank in a snapshot', () => {
+  const sheet = `<?xml version="1.0"?><worksheet><sheetData>
+    <row r="1"><c r="A1" t="inlineStr"><is><t>GROUP 17</t></is></c><c r="B1" t="inlineStr"><is><t>DELIVERED ORDERS</t></is></c><c r="E1" t="inlineStr"><is><t>LEATHER</t></is></c></row>
+    <row r="2"><c r="A2" t="inlineStr"><is><t>Sales Person</t></is></c><c r="B2" t="inlineStr"><is><t>Sales</t></is></c><c r="C2" t="inlineStr"><is><t>Avg Sales</t></is></c><c r="D2" t="inlineStr"><is><t>Fin %</t></is></c><c r="E2" t="inlineStr"><is><t>Qual Qty</t></is></c><c r="F2" t="inlineStr"><is><t>Sold Qty</t></is></c><c r="G2" t="inlineStr"><is><t>Sold $</t></is></c><c r="H2" t="inlineStr"><is><t>Attach %</t></is></c></row>
+    <row r="3"><c r="A3" t="inlineStr"><is><t>TOTAL</t></is></c><c r="B3"><v>500</v></c><c r="C3"><v>250</v></c></row>
+  </sheetData></worksheet>`;
+  const bytes = zipStored({ 'xl/worksheets/sheet1.xml': sheet });
+  const day = parseKpiWorkbook(bytes, 'DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-14_2026-10-14.xlsx').store;
+  assert.equal(day?.finance, 0);
+  assert.deepEqual([day?.leather.qual, day?.leather.sold, day?.leather.dollars, day?.leather.percent], [0, 0, 0, 0]);
+  const snapshot = parseKpiWorkbook(bytes, 'DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-02_2026-11-01.xlsx').store;
+  assert.equal(snapshot?.finance, null);
+  assert.deepEqual([snapshot?.leather.qual, snapshot?.leather.sold, snapshot?.leather.percent], [null, null, null]);
+});
+
 test('a blank shared string does not become its index', () => {
   const strings = Array.from({ length: 20 }, () => '<si><t></t></si>').join('');
   const workbook = zipStored({

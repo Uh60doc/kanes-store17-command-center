@@ -53,6 +53,9 @@ function importKpiAttachment_(sha, attachment) {
     return true;
   }
   upsertKpiRecords_(records);
+  records.forEach(function (record) {
+    if (record[0] === 'BEDDING_STORE' && record[16] !== '') upsertDailyBedding_(start, side, record[16], name);
+  });
   var grain = start === end ? 'daily' : 'cumulative';
   recordImport_(sha, name, grain === 'daily' ? 'imported' : 'cumulative-not-added', side + ' ' + start + ' through ' + end + '. Store NWDSR totals were not changed.');
   return true;
@@ -85,6 +88,23 @@ function kpiRate_(sold, qualified) {
   return Math.round((sold / qualified) * 1000) / 1000;
 }
 
+function kpiPrinted_(value) {
+  var number = kpiNumber_(value);
+  return number === null ? null : Math.round(number * 10) / 1000;
+}
+
+// A daily report is complete for its date, so a blank figure there is zero and a blank rate is 0%.
+function kpiZeroFill_(grid, columns) {
+  var sub = grid[1] || [];
+  return grid.map(function (row, r) {
+    if (r < 2) return row;
+    return sub.map(function (label, i) {
+      var blank = row[i] === '' || row[i] === null || row[i] === undefined;
+      return blank && i !== columns.name && String(label || '').trim() ? 0 : row[i];
+    });
+  });
+}
+
 function kpiColumns_(grid) {
   var groups = [];
   var current = '';
@@ -100,7 +120,7 @@ function kpiColumns_(grid) {
     var label = String(sub[i] || '').trim().toUpperCase();
     var group = groups[i] || '';
     if (label === 'SALES PERSON' || label === 'STORE') mapped.name = i;
-    if (group === 'WRITTEN ORDERS' || group.indexOf('GROUP') === 0) {
+    if (group === 'WRITTEN ORDERS' || group === 'DELIVERED ORDERS' || group.indexOf('GROUP') === 0) {
       if (label === 'SALES') mapped.sales = i;
       if (label === 'AVG SALES') mapped.average = i;
       if (label === 'FIN %') mapped.finance = i;
@@ -135,12 +155,14 @@ function kpiQty_(row, group) {
   var qualified = kpiNumber_(kpiCell_(row, group['QUAL QTY']));
   var counted = kpiBlankZero_(qualified, kpiNumber_(kpiCell_(row, group['SOLD QTY'])), kpiMoney_(kpiCell_(row, group['SOLD $'])));
   if (qualified === null && counted.sold === null && counted.dollars === null) return null;
-  return { qual: qualified, sold: counted.sold, dollars: counted.dollars, percent: kpiRate_(counted.sold, qualified) };
+  var rate = kpiRate_(counted.sold, qualified);
+  return { qual: qualified, sold: counted.sold, dollars: counted.dollars, percent: rate === null ? kpiPrinted_(kpiCell_(row, group['ATTACH %'])) : rate };
 }
 
-function kpiRecords_(grid, family, side, start, end, filename) {
-  var columns = kpiColumns_(grid);
+function kpiRecords_(source, family, side, start, end, filename) {
+  var columns = kpiColumns_(source);
   var daily = start === end;
+  var grid = daily ? kpiZeroFill_(source, columns) : source;
   var records = [];
   var r;
   for (r = 2; r < grid.length; r += 1) {
@@ -158,7 +180,7 @@ function kpiRecords_(grid, family, side, start, end, filename) {
     var beddingGroup = columns.groups['WRITTEN BEDDING'] || columns.groups['DELIVERED BEDDING'] || {};
     var beddingDollars = kpiMoney_(kpiCell_(row, beddingGroup.SALES));
     var sales = kpiMoney_(kpiCell_(row, columns.sales));
-    var beddingPercent = sales && beddingDollars !== null ? kpiRate_(beddingDollars, sales) : null;
+    var beddingPercent = sales && beddingDollars !== null ? kpiRate_(beddingDollars, sales) : kpiPrinted_(kpiCell_(row, beddingGroup['%']));
     if (family === 'group17') {
       if (beddingDollars !== null || beddingPercent !== null) {
         records.push(kpiRecord_(daily, start, end, 'BEDDING_' + scope, code, display, side, beddingDollars, null, null, null, beddingPercent, filename));
@@ -219,6 +241,22 @@ function kpiRecord_(daily, start, end, view, code, display, side, sales, units, 
     new Date().toISOString(),
     [view, grain, start, end, reportDate, side, keyName].join('|')
   ];
+}
+
+function upsertDailyBedding_(date, side, percent, filename) {
+  var tab = kpiSheet_();
+  var values = tab.getDataRange().getValues();
+  var column = side === 'delivered' ? 3 : 2;
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    if (String(values[r][0]) !== 'Daily Bedding' || isoDate_(values[r][4]) !== date || isoDate_(values[r][5]) !== date) continue;
+    tab.getRange(r + 1, column).setValue(percent);
+    tab.getRange(r + 1, 7).setValue(date);
+    return;
+  }
+  var row = ['Daily Bedding', '', '', 'Group 17 TOTAL bedding dollars ÷ sales. ' + filename, date, date, date];
+  row[column - 1] = percent;
+  tab.appendRow(row);
 }
 
 function upsertKpiRecords_(records) {

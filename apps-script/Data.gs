@@ -1090,7 +1090,7 @@ function kpiSheet_() {
   var tab = spreadsheet.getSheetByName('CC_Kpi');
   if (tab) return tab;
   tab = spreadsheet.insertSheet('CC_Kpi');
-  tab.getRange(1, 1, 1, 6).setValues([['metric', 'written', 'delivered', 'note', 'period_start', 'period_end']]);
+  tab.getRange(1, 1, 1, 7).setValues([['metric', 'written', 'delivered', 'note', 'period_start', 'period_end', 'verified_through']]);
   return tab;
 }
 
@@ -1114,7 +1114,7 @@ function readKpiActuals_() {
     if (start && start !== '2026-10-02') return;
     if (end && end !== '2026-11-01') return;
     if (!row.metric) return;
-    map[String(row.metric)] = { written: fineNumber_(row.written), delivered: fineNumber_(row.delivered), note: String(row.note || '') };
+    map[String(row.metric)] = { written: fineNumber_(row.written), delivered: fineNumber_(row.delivered), note: String(row.note || ''), through: isoDate_(row.verified_through) };
   });
   if (!Object.keys(map).length) {
     kpiActuals_().forEach(function (row) {
@@ -1161,7 +1161,7 @@ function homeKpiStrip_(goals, actuals, closing) {
       };
     }
     var row = actuals[spec[0]] || { written: null, delivered: null, note: '' };
-    return { name: spec[0], unit: spec[1], goal: spec[2], written: row.written, delivered: row.delivered, note: row.note || '', reconcile: false };
+    return { name: spec[0], unit: spec[1], goal: spec[2], written: row.written, delivered: row.delivered, through: row.through || '', note: row.note || '', reconcile: false };
   });
 }
 
