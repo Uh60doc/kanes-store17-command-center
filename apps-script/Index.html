@@ -475,9 +475,11 @@
       });
     }
     var peopleSnapThrough = '';
+    var peopleSnapPending = [];
     function renderPeople(data) {
       peopleCache = data.people || [];
       peopleSnapThrough = data.snapThrough || '';
+      peopleSnapPending = data.snapPending || [];
       if (!peopleSort) peopleSort = 'snapWritten';
       document.getElementById('header-note').textContent = 'Salesperson month ' + (data.period || '') + ' · SNAP written through ' + (peopleSnapThrough || 'Not Available') + ' · Updated ' + data.updated;
       drawPeopleTable();
@@ -499,7 +501,7 @@
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Salesperson sales leaderboard</h2>' +
         '<div class="nav noprint"><button class="sort" type="button" data-sort="snapWritten">SNAP written</button><button class="sort" type="button" data-sort="nwdsrDelivered">NWDSR delivered</button><button class="sort" type="button" data-sort="nwdsrWritten">NWDSR written</button></div>' +
-        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Salesperson</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR delivered</th><th>Monthly goal</th><th>% to goal</th><th>Opportunities</th><th>Purchasing customers</th><th>Closing ratio</th><th>Versus goal</th></tr>' + rows + '</table><p class="sub">Salesperson month, the 1st through the last day. SNAP written is the daily SNAP reconciliation through ' + esc(peopleSnapThrough || 'Not Available') + '. It is not an NWDSR total. ' + (nwdsrReady ? '' : 'NWDSR written and NWDSR delivered by salesperson are Not Available. The supplied Net Written and Delivered reports are store totals and have no salesperson lines.') + ' The monthly goal uses SNAP written. Opportunities are that associate\'s PERQ Ups + Be Backs. No report on file gives an associate\'s own Net Written # OF CUST, so purchasing customers and closing ratio are Awaiting Verified Data. The store customer count is not assigned to a person. Managers and former associates are not listed as active.</p></article>' +
+        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Salesperson</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR delivered</th><th>Monthly goal</th><th>% to goal</th><th>Opportunities</th><th>Purchasing customers</th><th>Closing ratio</th><th>Versus goal</th></tr>' + rows + '</table><p class="sub">Salesperson month, the 1st through the last day. SNAP written is the daily SNAP reconciliation through ' + esc(peopleSnapThrough || 'Not Available') + '. It is not an NWDSR total. ' + (peopleSnapPending.length ? 'Salesperson SNAP for ' + esc(peopleSnapPending.join(', ')) + ' is Pending: no report on file, so those dates are not in the total and are not zero. ' : '') + (nwdsrReady ? '' : 'NWDSR written and NWDSR delivered by salesperson are Not Available. The supplied Net Written and Delivered reports are store totals and have no salesperson lines.') + ' The monthly goal uses SNAP written. Opportunities are that associate\'s PERQ Ups + Be Backs. No report on file gives an associate\'s own Net Written # OF CUST, so purchasing customers and closing ratio are Awaiting Verified Data. The store customer count is not assigned to a person. Managers and former associates are not listed as active.</p></article>' +
         '<h2 class="section-title">KPI comparison</h2>' +
         '<article class="card kpi-wrap"><table class="kpi"><tr><th>KPI</th>' + heads + '</tr>' + compare + '</table><p class="sub">Written result for each person. Delivered results open on the individual scorecard. Pending means the source report is not on file.</p></article>';
       document.querySelectorAll('[data-sort]').forEach(function (button) {
@@ -524,7 +526,7 @@
         '<h2 class="section-title">' + esc(person.name) + '</h2>' +
         (person.leave ? '<p class="sub">' + esc(person.leave) + '</p>' : '') +
         '<div class="grid">' +
-        card('SNAP written', money(person.snapWritten), 'SNAP written reconciliation through ' + (peopleSnapThrough || 'the latest daily line') + '. Not an NWDSR total.') +
+        card('SNAP written', money(person.snapWritten), 'SNAP written reconciliation through ' + (peopleSnapThrough || 'the latest daily line') + '. Not an NWDSR total.' + (peopleSnapPending.length ? ' ' + esc(peopleSnapPending.join(', ')) + ' Pending.' : '')) +
         card('NWDSR written', money(person.nwdsrWritten), 'Not on file. The supplied Net Written reports are store totals and have no salesperson lines.') +
         card('NWDSR delivered', money(person.nwdsrDelivered), 'Not on file. The supplied Delivered reports are store totals and have no salesperson lines.') +
         card('Monthly goal', person.monthlyGoal === null || person.monthlyGoal === undefined ? 'Data Pending' : money(person.monthlyGoal), 'Individual sales volume for the salesperson month. Store budgets are separate.') +

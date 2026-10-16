@@ -491,7 +491,7 @@ function closingSheet_() {
   var tab = spreadsheet.getSheetByName('CC_Closing');
   if (tab) return tab;
   tab = spreadsheet.insertSheet('CC_Closing');
-  tab.getRange(1, 1, 1, 11).setValues([['date', 'scope', 'employee_code', 'display_name', 'customers', 'opportunities', 'period_start', 'period_end', 'source', 'final', 'note']]);
+  tab.getRange(1, 1, 1, 13).setValues([['date', 'scope', 'employee_code', 'display_name', 'customers', 'opportunities', 'period_start', 'period_end', 'source', 'final', 'note', 'verified_through', 'store']]);
   return tab;
 }
 
@@ -520,8 +520,9 @@ function upsertClosing_(row) {
     if (row.opportunities !== '' && row.opportunities !== null && existingOpportunities === null) tab.getRange(r + 1, 6).setValue(row.opportunities);
     return 'imported';
   }
+  // A blank date hides the row from sheet_(), so a cumulative row is dated by the last day it covers.
   tab.appendRow([
-    row.date || '',
+    row.date || row.end,
     row.scope,
     row.code || '',
     row.name || '',
@@ -532,6 +533,8 @@ function upsertClosing_(row) {
     row.source,
     row.final || 'no',
     row.note || '',
+    row.through || (row.start === row.end ? row.start : ''),
+    '17',
   ]);
   return 'imported';
 }
@@ -573,7 +576,10 @@ function readClosing_() {
 function loadClosing_() {
   try {
     ensureClosingFacts_();
-    return mergePerq_(readClosing_());
+    var facts = readClosing_().filter(function (row) {
+      return fitsTrack_(row.scope === 'store' ? 'STORE' : row.scope === 'person' ? 'PERSON' : '', row.start, row.end);
+    });
+    return mergePerq_(facts);
   } catch (error) {
     try { appendException_('Update Failed', 'Closing counts could not be read. Ratios stay Not Available.'); } catch (ignore) {}
     return [];
@@ -599,6 +605,7 @@ function mergePerq_(facts) {
   try { rows = ledgerRows_(); } catch (error) { return facts; }
   rows.forEach(function (row) {
     if (row.view !== 'PERQ_STORE' && row.view !== 'PERQ_PERSON') return;
+    if (!row.fitsTrack) return;
     var opportunities = row.eligible !== null ? row.eligible : row.units;
     if (opportunities === null || !row.periodStart || !row.periodEnd) return;
     var scope = row.view === 'PERQ_STORE' ? 'store' : 'person';
@@ -1075,17 +1082,17 @@ function ensureKpiActuals_() {
   });
 }
 
+/** CC_Kpi holds store figures, so only rows for the current store month are used. */
 function readKpiActuals_() {
   var map = {};
+  var store = storePeriodContaining_(todayNy_());
   sheet_('CC_Kpi').forEach(function (row) {
-    var start = isoDate_(row.period_start);
-    var end = isoDate_(row.period_end);
-    if (start && start !== '2026-10-02') return;
-    if (end && end !== '2026-11-01') return;
-    if (!row.metric) return;
+    if (!row.metric || String(row.metric) === 'Daily Bedding') return;
+    if (isoDate_(row.period_start) !== store.start || isoDate_(row.period_end) !== store.end) return;
     map[String(row.metric)] = { written: fineNumber_(row.written), delivered: fineNumber_(row.delivered), note: String(row.note || ''), through: isoDate_(row.verified_through) };
   });
-  if (!Object.keys(map).length) {
+  // The built-in figures are the October 2026 store month only.
+  if (!Object.keys(map).length && store.start === '2026-10-02') {
     kpiActuals_().forEach(function (row) {
       map[row[0]] = { written: row[1], delivered: row[2], note: row[3] };
     });
@@ -1495,13 +1502,29 @@ function refreshPeopleWritten_(individualStart, individualEnd) {
   return lines.latest;
 }
 
+/**
+ * Individual-month dates with no salesperson SNAP report. The daily SNAP report carries the salesperson lines,
+ * so a date with a store SNAP figure or any salesperson line had its report. Other dates are Pending, not zero.
+ */
+function snapPendingDates_(individualStart, individualEnd, through) {
+  var reported = {};
+  sheet_('CC_AssociateDays').forEach(function (row) { reported[isoDate_(row.date)] = true; });
+  dailyFacts_().forEach(function (row) { if (row.snapWritten !== null) reported[row.date] = true; });
+  var closed = closedDates_();
+  return eachDate_(individualStart, through < individualEnd ? through : individualEnd).filter(function (date) {
+    return !reported[date] && !closed[date];
+  });
+}
+
 function people_(payload) {
-  var individual = individualPeriodContaining_(todayNy_());
+  var today = todayNy_();
+  var individual = individualPeriodContaining_(today);
   var snapThrough = refreshPeopleWritten_(individual.start, individual.end);
   return {
     role: payload.session.role,
     period: individual.start + ' through ' + individual.end,
     snapThrough: snapThrough || null,
+    snapPending: snapThrough ? snapPendingDates_(individual.start, individual.end, snapThrough) : [],
     snapLabel: 'SNAP written',
     nwdsrWrittenThrough: null,
     nwdsrDeliveredThrough: null,
@@ -1596,7 +1619,7 @@ function storeBeddingLedger_(side, periodStart) {
   var best = null;
   ledgerRows_().forEach(function (row) {
     if (row.view !== 'BEDDING_STORE' || row.grain !== 'cumulative' || row.side !== side || row.code || row.name) return;
-    if (!periodStart || row.periodStart !== periodStart) return;
+    if (!periodStart || !row.fitsTrack || row.periodStart !== periodStart) return;
     best = laterLedger_(best, row);
   });
   return best;

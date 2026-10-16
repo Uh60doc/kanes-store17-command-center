@@ -268,6 +268,10 @@ function upsertKpiRecords_(records) {
   records.forEach(function (record) {
     var key = record[17];
     if (index[key]) {
+      var previous = values[index[key] - 1];
+      // Columns A–P are the report figures; Q is the import time.
+      if (previous && sameRowValues_(previous, record, 16)) return;
+      if (previous) archiveReplaced_('CC_Ledger', key, previous, record[15]);
       tab.getRange(index[key], 1, 1, record.length).setValues([record]);
       return;
     }

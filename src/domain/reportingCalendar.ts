@@ -139,6 +139,17 @@ export function operatingDaysRemaining(
   return datesInPeriod(period).filter((date) => date >= today && date <= period.end && !closed.has(date)).length;
 }
 
+/**
+ * Whether a record's dates belong on a track. A single day fits either track. A cumulative record must start on
+ * its track's first day (store: the 2nd, individual: the 1st) and end inside that same period.
+ */
+export function fitsTrack(category: ReportingCategory, start: string, end: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || end < start) return false;
+  if (start === end) return true;
+  const period = periodContaining(category, start);
+  return period.start === start && end <= period.end;
+}
+
 /** Copies the rows whose own dates fall in the category period. The input list is left unchanged. */
 export function filterByCategory<T>(
   rows: readonly T[],

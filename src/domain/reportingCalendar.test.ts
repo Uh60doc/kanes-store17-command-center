@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   datesInPeriod,
   filterByCategory,
+  fitsTrack,
   individualPeriodContaining,
   lastCalendarDay,
   operatingDaysRemaining,
@@ -148,4 +149,26 @@ test('every future month gets both calendars, and a day is open unless it is mar
   assert.equal(operatingDaysRemaining(octoberStore, '2026-11-02'), 0);
   assert.equal(operatingDaysRemaining(octoberStore, '2026-10-14', ['2026-10-15']), 18);
   assert.equal(operatingDaysRemaining(octoberStore, '2026-10-14', ['2026-10-14', '2026-11-01']), 17);
+});
+
+test('a cumulative record fits only the track whose period it starts and ends in', () => {
+  const cases: [string, string, boolean, boolean][] = [
+    ['2026-10-02', '2026-10-14', true, false],
+    ['2026-10-02', '2026-11-01', true, false],
+    ['2026-10-02', '2026-10-31', true, false],
+    ['2026-10-01', '2026-10-13', false, true],
+    ['2026-10-01', '2026-10-31', false, true],
+    ['2026-10-01', '2026-11-01', false, false],
+    ['2026-10-02', '2026-11-02', false, false],
+    ['2026-10-03', '2026-10-14', false, false],
+    ['2026-10-14', '2026-10-14', true, true],
+    ['2026-10-01', '2026-10-01', true, true],
+    ['2026-12-02', '2027-01-01', true, false],
+    ['2026-10-14', '2026-10-13', false, false],
+    ['', '2026-10-13', false, false],
+  ];
+  for (const [start, end, store, individual] of cases) {
+    assert.equal(fitsTrack('store', start, end), store, `store ${start}..${end}`);
+    assert.equal(fitsTrack('individual', start, end), individual, `individual ${start}..${end}`);
+  }
 });

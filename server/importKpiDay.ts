@@ -12,6 +12,7 @@ import path from 'node:path';
 import { SHEETS_SCOPE } from './access.ts';
 import { loadConfig, loadDotEnv } from './config.ts';
 import { accessTokenFor, googleJson } from './google.ts';
+import { appendHistory, historyRow } from './history.ts';
 import { readStored } from './tokenStore.ts';
 import { employees } from '../src/config/roster.ts';
 import { applyRecords, makeRecord, type LedgerRecord } from '../src/domain/kpiLedger.ts';
@@ -320,6 +321,7 @@ async function main(): Promise<void> {
   const existingByKey = new Map(existing.map((record) => [record.recordKey, record]));
   const updates: { range: string; values: Cell[][] }[] = [];
   const appends: Cell[][] = [];
+  const replaced: Cell[][] = [];
   const seen = new Set<string>();
   incoming.forEach((record) => {
     if (seen.has(record.recordKey)) throw new Error(`Two incoming rows share ${record.recordKey}.`);
@@ -328,8 +330,10 @@ async function main(): Promise<void> {
     const prior = existingByKey.get(record.recordKey);
     if (!kept || kept === prior) return;
     const row = rowByKey.get(record.recordKey);
-    if (row) updates.push({ range: `CC_Ledger!A${row}:R${row}`, values: [ledgerRow(kept, importedAt)] });
-    else appends.push(ledgerRow(kept, importedAt));
+    if (row) {
+      replaced.push(historyRow({ at: importedAt, tab: 'CC_Ledger', key: record.recordKey, replacedBy: kept.sourceReport, previous: ledgerValues[row - 1] ?? [] }));
+      updates.push({ range: `CC_Ledger!A${row}:R${row}`, values: [ledgerRow(kept, importedAt)] });
+    } else appends.push(ledgerRow(kept, importedAt));
   });
 
   const kpi = await read('CC_Kpi!A1:G60');
@@ -401,6 +405,7 @@ async function main(): Promise<void> {
     })),
   };
   if (!dry) {
+    await appendHistory(token, spreadsheetId, replaced);
     const data = [...updates, ...kpiUpdates];
     if (data.length) await googleJson({ accessToken: token, method: 'POST', url: `${base}/values:batchUpdate`, body: { valueInputOption: 'RAW', data } });
     const append = async (range: string, values: Cell[][]): Promise<void> => {

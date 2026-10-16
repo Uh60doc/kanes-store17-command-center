@@ -89,7 +89,7 @@ function importAttachment_(messageId, attachment) {
   if (!parsed.singleDay) {
     recordImport_(sha, attachment.getName(), 'cumulative-not-added', parsed.reportType + ' ' + parsed.start + ' through ' + parsed.end + ' was recorded and was not added to the daily table.');
     if (parsed.reportType === 'NWDSR Written' && parsed.purchasingCustomers !== null) {
-      upsertClosing_({ date: '', scope: 'store', code: '', name: '', customers: parsed.purchasingCustomers, opportunities: '', start: parsed.start, end: parsed.end, source: 'NWDSR Net Written # OF CUST', final: 'yes', note: 'Cumulative Net Written purchasing customers for the printed period. Dollars were not added again.' });
+      upsertClosing_({ date: parsed.end, scope: 'store', code: '', name: '', customers: parsed.purchasingCustomers, opportunities: '', start: parsed.start, end: parsed.end, through: parsed.end, source: 'NWDSR Net Written # OF CUST', final: 'yes', note: 'Cumulative Net Written purchasing customers for the printed period. Dollars were not added again.' });
     }
     return true;
   }
@@ -203,6 +203,7 @@ function writeSnapAssociates_(parsed, text, sha) {
     if (existing) {
       var current = numberOrNull_(tab.getRange(existing, 5).getValue());
       if (current !== line.amount) {
+        archiveReplaced_('CC_AssociateDays', parsed.start + '|' + line.sourceName, values[existing - 1], sha);
         tab.getRange(existing, 5, 1, 2).setValues([[line.amount, sha]]);
       }
       return;

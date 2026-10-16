@@ -20,10 +20,40 @@ function ledgerSheet_() {
   return tab;
 }
 
+/** STORE or PERSON, from the view name. Everything else is neither track. */
+function viewScope_(view) {
+  var match = /_(STORE|PERSON)$/.exec(String(view || ''));
+  return match ? match[1] : '';
+}
+
+/**
+ * The reporting track a record belongs to decides which dates it may cover.
+ * STORE: the 2nd through the 1st of the next month. PERSON: the 1st through the last calendar day.
+ * A single-day record fits either track. A cumulative record must start on its track's first day
+ * and end inside that same period.
+ */
+function trackPeriod_(scope, start) {
+  if (!start) return null;
+  return scope === 'STORE' ? storePeriodContaining_(start) : individualPeriodContaining_(start);
+}
+
+function fitsTrack_(scope, start, end) {
+  if (scope !== 'STORE' && scope !== 'PERSON') return false;
+  if (!start || !end || end < start) return false;
+  if (start === end) return true;
+  var period = trackPeriod_(scope, start);
+  return period.start === start && end <= period.end;
+}
+
 function ledgerRows_() {
   return sheet_('CC_Ledger').map(function (row) {
+    var view = String(row.view || '');
+    var periodStart = isoDate_(row.period_start);
+    var periodEnd = isoDate_(row.period_end);
     return {
-      view: String(row.view || ''),
+      scope: viewScope_(view),
+      fitsTrack: fitsTrack_(viewScope_(view), periodStart, periodEnd),
+      view: view,
       grain: String(row.grain || ''),
       reportDate: isoDate_(row.report_date),
       periodStart: isoDate_(row.period_start),
@@ -50,26 +80,49 @@ function laterLedger_(current, candidate) {
   return current;
 }
 
+/** A row from another period is never a stand-in: no match is Pending. */
 function latestStoreLedger_(view, side, periodStart) {
   var best = null;
-  var fallback = null;
+  if (viewScope_(view) !== 'STORE' || !periodStart) return null;
   ledgerRows_().forEach(function (row) {
     if (row.view !== view || row.grain !== 'cumulative' || row.side !== side || row.code || row.name) return;
-    fallback = laterLedger_(fallback, row);
-    if (periodStart && row.periodStart === periodStart) best = laterLedger_(best, row);
+    if (!row.fitsTrack || row.periodStart !== periodStart) return;
+    best = laterLedger_(best, row);
   });
-  return best || fallback;
+  return best;
 }
 
 function latestPersonLedger_(view, side, name, periodStart) {
   var best = null;
-  var fallback = null;
+  if (viewScope_(view) !== 'PERSON' || !periodStart) return null;
   ledgerRows_().forEach(function (row) {
     if (row.view !== view || row.grain !== 'cumulative' || row.side !== side || row.name !== name) return;
-    fallback = laterLedger_(fallback, row);
-    if (!periodStart || row.periodStart === periodStart) best = laterLedger_(best, row);
+    if (!row.fitsTrack || row.periodStart !== periodStart) return;
+    best = laterLedger_(best, row);
   });
-  return best || fallback;
+  return best;
+}
+
+function historySheet_() {
+  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var tab = spreadsheet.getSheetByName('CC_History');
+  if (tab) return tab;
+  tab = spreadsheet.insertSheet('CC_History');
+  tab.getRange(1, 1, 1, 6).setValues([['archived_at', 'tab', 'record_key', 'reason', 'replaced_by', 'previous_row']]);
+  return tab;
+}
+
+/** Keep the row a corrected report replaces. CC_History is append-only. */
+function archiveReplaced_(tabName, key, previousRow, replacedBy, reason) {
+  historySheet_().appendRow([new Date().toISOString(), tabName, key, reason || 'Corrected report replaced this row.', replacedBy || '', JSON.stringify(previousRow)]);
+}
+
+function sameRowValues_(left, right, upTo) {
+  var i;
+  for (i = 0; i < upTo; i += 1) {
+    if (String(left[i] === null || left[i] === undefined ? '' : left[i]) !== String(right[i] === null || right[i] === undefined ? '' : right[i])) return false;
+  }
+  return true;
 }
 
 function ledgerFigure_(row, unit) {
@@ -89,7 +142,11 @@ function ledgerDetail_(row) {
 function ledgerSources_() {
   var grouped = {};
   ledgerRows_().forEach(function (row) {
-    if (!grouped[row.view]) grouped[row.view] = { view: row.view, rows: 0, through: '', source: '' };
+    if (!grouped[row.view]) grouped[row.view] = { view: row.view, rows: 0, outOfScope: 0, through: '', source: '' };
+    if (!row.fitsTrack) {
+      grouped[row.view].outOfScope += 1;
+      return;
+    }
     grouped[row.view].rows += 1;
     if (row.verifiedThrough >= grouped[row.view].through) {
       grouped[row.view].through = row.verifiedThrough;
@@ -97,7 +154,7 @@ function ledgerSources_() {
     }
   });
   return LEDGER_VIEWS_.map(function (view) {
-    return grouped[view] || { view: view, rows: 0, through: '', source: '' };
+    return grouped[view] || { view: view, rows: 0, outOfScope: 0, through: '', source: '' };
   });
 }
 
@@ -146,6 +203,7 @@ function upsertLedgerDaily_(view, side, date, dollars, source) {
     if (String(values[r][keyCol]) !== key) continue;
     var current = fineNumber_(values[r][headers.indexOf('sales_dollars')]);
     if (current === Number(dollars)) return;
+    archiveReplaced_('CC_Ledger', key, values[r], source);
     tab.getRange(r + 1, 1, 1, payload.length).setValues([payload]);
     return;
   }
