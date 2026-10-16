@@ -203,10 +203,7 @@ function writeSnapAssociates_(parsed, text, sha) {
     }
     if (existing) {
       var current = numberOrNull_(tab.getRange(existing, 5).getValue());
-      if (current !== line.amount) {
-        archiveReplaced_('CC_AssociateDays', parsed.start + '|' + line.sourceName, values[existing - 1], sha);
-        tab.getRange(existing, 5, 1, 2).setValues([[line.amount, sha]]);
-      }
+      if (current !== line.amount) holdBackDay_('CC_AssociateDays', parsed.start + '|' + line.sourceName, values[existing - 1], String(line.amount), 'sha256 ' + sha);
       return;
     }
     tab.appendRow([parsed.start, line.sourceName, display, role, line.amount, sha]);
