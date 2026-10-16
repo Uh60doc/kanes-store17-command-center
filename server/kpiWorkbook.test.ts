@@ -72,6 +72,24 @@ test('a complete daily report counts a blank sold quantity as zero and keeps a n
   assert.equal(report.store?.fabric.percent, 0);
 });
 
+test('a Group 17 day file keeps each salesperson\'s Data Analysis sales and order count at source precision', () => {
+  const sheet = `<?xml version="1.0"?><worksheet><sheetData>
+    <row r="1"><c r="A1" t="inlineStr"><is><t>GROUP 17</t></is></c><c r="B1" t="inlineStr"><is><t>DELIVERED ORDERS</t></is></c></row>
+    <row r="2"><c r="A2" t="inlineStr"><is><t>Sales Person</t></is></c><c r="B2" t="inlineStr"><is><t>Sales</t></is></c><c r="C2" t="inlineStr"><is><t>Avg Sales</t></is></c><c r="D2" t="inlineStr"><is><t>Fin %</t></is></c></row>
+    <row r="3"><c r="A3" t="inlineStr"><is><t>TARIK NASSIF</t></is></c><c r="B3"><v>3003.97</v></c><c r="C3"><v>1001.32</v></c><c r="D3"><v>50</v></c></row>
+    <row r="4"><c r="A4" t="inlineStr"><is><t>ELIZABETH PEREZ</t></is></c><c r="B4"><v>-301.3</v></c><c r="C4"><v>-60.26</v></c></row>
+    <row r="5"><c r="A5" t="inlineStr"><is><t>TOTAL</t></is></c><c r="B5"><v>2702.67</v></c><c r="C5"><v>337.83</v></c></row>
+  </sheetData></worksheet>`;
+  const report = parseKpiWorkbook(zipStored({ 'xl/worksheets/sheet1.xml': sheet }), 'DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-15_2026-10-15.xlsx');
+  const sales = recordsFromKpi(report, '2026-10-15').filter((record) => record.view.startsWith('DA_SALES_'));
+  assert.deepEqual(sales.map((record) => [record.view, record.grain, record.employeeName, record.side, record.salesDollars, record.unitCount, record.reportDate]), [
+    ['DA_SALES_STORE', 'daily', '', 'delivered', 2702.67, 8, '2026-10-15'],
+    ['DA_SALES_PERSON', 'daily', 'Ricky Nassif', 'delivered', 3003.97, 3, '2026-10-15'],
+    ['DA_SALES_PERSON', 'daily', 'Elizabeth Perez', 'delivered', -301.3, 5, '2026-10-15'],
+  ]);
+  assert.equal(sales[1]?.recordKey, 'DA_SALES_PERSON|daily|2026-10-15|2026-10-15|2026-10-15|delivered|TNASSI');
+});
+
 test('a blank group is zero and 0% in a daily report but stays blank in a snapshot', () => {
   const sheet = `<?xml version="1.0"?><worksheet><sheetData>
     <row r="1"><c r="A1" t="inlineStr"><is><t>GROUP 17</t></is></c><c r="B1" t="inlineStr"><is><t>DELIVERED ORDERS</t></is></c><c r="E1" t="inlineStr"><is><t>LEATHER</t></is></c></row>

@@ -4,8 +4,11 @@ var LEDGER_VIEWS_ = [
   'BEDDING_STORE', 'BEDDING_PERSON', 'MPPA_STORE', 'MPPA_PERSON', 'BASES_STORE', 'BASES_PERSON',
   'PILLOWS_STORE', 'PILLOWS_PERSON', 'FABW_STORE', 'FABW_PERSON', 'LTHW_STORE', 'LTHW_PERSON',
   'PWAR_STORE', 'PWAR_PERSON', 'UVWL_STORE', 'UVWL_PERSON', 'FINANCE_STORE', 'FINANCE_PERSON',
-  'RUGS_STORE', 'RUGS_PERSON', 'AVERAGE_STORE', 'AVERAGE_PERSON'
+  'RUGS_STORE', 'RUGS_PERSON', 'AVERAGE_STORE', 'AVERAGE_PERSON', 'DA_SALES_STORE', 'DA_SALES_PERSON'
 ];
+
+// NWDSR Net Written and Delivered are store-level ranking reports, so no report supplies these salesperson views.
+var NOT_SUPPLIED_VIEWS_ = ['NWDSR_WRITTEN_PERSON', 'NWDSR_DELIVERED_PERSON'];
 
 function ledgerSheet_() {
   var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
@@ -208,7 +211,8 @@ function sources_(payload) {
     spreadsheet: 'Store 17 Command Center',
     sources: ledgerSources_(),
     lastImport: last ? { file: String(last.file_name || ''), status: String(last.status || ''), at: String(last.imported_at || ''), note: String(last.note || '') } : null,
-    missing: ledgerSources_().filter(function (row) { return !row.rows; }).map(function (row) { return row.view; }),
+    missing: ledgerSources_().filter(function (row) { return !row.rows && NOT_SUPPLIED_VIEWS_.indexOf(row.view) === -1; }).map(function (row) { return row.view; }),
+    notSupplied: NOT_SUPPLIED_VIEWS_,
   };
 }
 

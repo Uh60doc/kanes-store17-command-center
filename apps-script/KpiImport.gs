@@ -88,6 +88,14 @@ function kpiRate_(sold, qualified) {
   return Math.round((sold / qualified) * 1000) / 1000;
 }
 
+/** Order count is printed sales ÷ printed average ticket. Only a whole number is trusted. */
+function kpiOrders_(sales, average) {
+  if (sales === null || sales === 0) return 0;
+  if (!average) return null;
+  var count = sales / average;
+  return Math.abs(count - Math.round(count)) < 0.02 ? Math.round(count) : null;
+}
+
 function kpiPrinted_(value) {
   var number = kpiNumber_(value);
   return number === null ? null : Math.round(number * 10) / 1000;
@@ -182,6 +190,9 @@ function kpiRecords_(source, family, side, start, end, filename) {
     var sales = kpiMoney_(kpiCell_(row, columns.sales));
     var beddingPercent = sales && beddingDollars !== null ? kpiRate_(beddingDollars, sales) : kpiPrinted_(kpiCell_(row, beddingGroup['%']));
     if (family === 'group17') {
+      if (sales !== null) {
+        records.push(kpiRecord_(daily, start, end, 'DA_SALES_' + scope, code, display, side, sales, kpiOrders_(sales, kpiMoney_(kpiCell_(row, columns.average))), null, null, null, filename));
+      }
       if (beddingDollars !== null || beddingPercent !== null) {
         records.push(kpiRecord_(daily, start, end, 'BEDDING_' + scope, code, display, side, beddingDollars, null, null, null, beddingPercent, filename));
       }

@@ -14,8 +14,14 @@ export const SCOPE_VIEWS = [
   'BEDDING_STORE', 'BEDDING_PERSON', 'MPPA_STORE', 'MPPA_PERSON', 'BASES_STORE', 'BASES_PERSON',
   'PILLOWS_STORE', 'PILLOWS_PERSON', 'FABW_STORE', 'FABW_PERSON', 'LTHW_STORE', 'LTHW_PERSON',
   'PWAR_STORE', 'PWAR_PERSON', 'UVWL_STORE', 'UVWL_PERSON', 'FINANCE_STORE', 'FINANCE_PERSON',
-  'RUGS_STORE', 'RUGS_PERSON', 'AVERAGE_STORE', 'AVERAGE_PERSON',
+  'RUGS_STORE', 'RUGS_PERSON', 'AVERAGE_STORE', 'AVERAGE_PERSON', 'DA_SALES_STORE', 'DA_SALES_PERSON',
 ] as const;
+
+/** NWDSR Net Written and Delivered are store-level ranking reports. No report supplies these salesperson views. */
+export const NOT_SUPPLIED: Partial<Record<(typeof SCOPE_VIEWS)[number], string>> = {
+  NWDSR_WRITTEN_PERSON: 'No individual NWDSR Written: the NWDSR reports are store-level ranking reports. Individual written sales and the $65,000 goal use SNAP_PERSON.',
+  NWDSR_DELIVERED_PERSON: 'No individual NWDSR Delivered: the NWDSR reports are store-level ranking reports. Individual delivered sales are Data Analysis Group 17 Delivered on DA_SALES_PERSON.',
+};
 
 export const AUDIT_TAB = 'CC_ScopeAudit';
 export const VIEW_EXTRA_HEADERS = ['scope', 'reporting_period_start', 'reporting_period_end', 'counting'] as const;
@@ -61,9 +67,9 @@ export function viewFormula(view: string): string {
   const scope = scopeOf(view);
   if (!scope) throw new Error(`${view} has no STORE or PERSON scope.`);
   const width = LEDGER_WIDTH + VIEW_EXTRA_HEADERS.length;
-  const none = scope === 'PERSON'
+  const none = NOT_SUPPLIED[view as (typeof SCOPE_VIEWS)[number]] ?? (scope === 'PERSON'
     ? `No salesperson report on file for ${view}. Pending. Store figures are not copied here.`
-    : `No store report on file for ${view}. Pending.`;
+    : `No store report on file for ${view}. Pending.`);
   const excluded = `"No record on file covers ${A_PERIOD[scope]} (${RULE[scope]}). "&(total-kept)&" record(s) with other date ranges are kept in CC_Ledger and listed on ${AUDIT_TAB}."`;
   const counting = 'MAP(SEQUENCE(ROWS(recs)),LAMBDA(idx,' + let_([
     ['kind', 'INDEX(gr,idx)'],

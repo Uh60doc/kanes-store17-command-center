@@ -17,7 +17,7 @@ import { appendHistory, historyRow } from './history.ts';
 import { readStored } from './tokenStore.ts';
 import { employees } from '../src/config/roster.ts';
 import { applyRecords, heldBackDays, makeRecord, type LedgerRecord } from '../src/domain/kpiLedger.ts';
-import { recordsFromKpi } from './kpiLedgerBuild.ts';
+import { orderCount, recordsFromKpi } from './kpiLedgerBuild.ts';
 import { parseKpiWorkbook, type KpiLine, type KpiReport, type QtyMetric } from './kpiWorkbook.ts';
 
 const STORE_START = '2026-10-02';
@@ -88,14 +88,6 @@ function addCounted(left: Counted, right: Counted): Counted {
   return { qual: left.qual + right.qual, sold: left.sold + right.sold, dollars: round(left.dollars + right.dollars, 2) };
 }
 
-/** Order count is printed sales ÷ printed average ticket. Only a whole number is trusted. */
-function orders(line: KpiLine): number | null {
-  if (line.sales === null || line.sales === 0) return 0;
-  if (!line.averageSale) return null;
-  const count = line.sales / line.averageSale;
-  return Math.abs(count - Math.round(count)) < 0.02 ? Math.round(count) : null;
-}
-
 function totals(line: KpiLine | null, asl: KpiLine | null): Totals {
   const none: QtyMetric = { qual: 0, sold: 0, dollars: 0, percent: null, mismatch: false };
   const empty: KpiLine = {
@@ -106,7 +98,7 @@ function totals(line: KpiLine | null, asl: KpiLine | null): Totals {
   const sales = row.sales ?? 0;
   return {
     sales,
-    orders: orders(row),
+    orders: orderCount(row),
     financed: row.finance === null ? (sales === 0 ? 0 : null) : row.finance * sales,
     bedding: row.beddingDollars ?? 0,
     fabric: counted(row.fabric),
@@ -157,6 +149,7 @@ function derivedRecords(scope: 'STORE' | 'PERSON', side: Side, start: string, th
     store: '17', employeeCode: who.code, employeeName: who.name, side, sourceReport: source,
   };
   const out: LedgerRecord[] = [
+    makeRecord({ ...common, view: `DA_SALES_${scope}`, salesDollars: value.sales, unitCount: value.orders, eligible: null, attachments: null, kpiPercent: null }),
     makeRecord({ ...common, view: `BEDDING_${scope}`, salesDollars: value.bedding, unitCount: null, eligible: null, attachments: null, kpiPercent: rate(value.bedding, value.sales) ?? 0 }),
   ];
   const qty: [string, Counted | null][] = [
@@ -302,6 +295,12 @@ async function main(): Promise<void> {
   const importedAt = new Date().toISOString();
   const incoming: LedgerRecord[] = [];
   allDays.forEach((item) => incoming.push(...recordsFromKpi(item.report, item.report.start)));
+  // The to-date snapshots were loaded before Data Analysis sales were kept. Their other rows are already on file.
+  (['written', 'delivered'] as Side[]).forEach((side) => {
+    [PERSON_BASE[side], STORE_BASE.group17[side]].forEach((file) => {
+      incoming.push(...recordsFromKpi(parseFile(path.join(BASELINE, file), file), cutoff).filter((record) => record.view.startsWith('DA_SALES_')));
+    });
+  });
   (['written', 'delivered'] as Side[]).forEach((side) => {
     incoming.push(...derivedRecords('STORE', side, STORE_START, date, { code: '', name: '' }, store[side], storeSource[side]));
   });

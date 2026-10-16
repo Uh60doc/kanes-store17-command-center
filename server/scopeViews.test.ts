@@ -14,7 +14,7 @@ function balanced(formula: string): boolean {
 }
 
 test('every STORE and PERSON tab formula filters CC_Ledger by its own view and scope', () => {
-  assert.equal(SCOPE_VIEWS.length, 30);
+  assert.equal(SCOPE_VIEWS.length, 32);
   for (const view of SCOPE_VIEWS) {
     const formula = viewFormula(view);
     assert.ok(balanced(formula), `${view} parentheses`);
@@ -22,7 +22,9 @@ test('every STORE and PERSON tab formula filters CC_Ledger by its own view and s
     assert.ok(formula.includes(`LAMBDA(x,"${scopeOf(view)}")`), `${view} labels its scope`);
     assert.doesNotMatch(formula, /QUERY\(/);
   }
-  assert.match(viewFormula('NWDSR_WRITTEN_PERSON'), /No salesperson report on file for NWDSR_WRITTEN_PERSON\. Pending\. Store figures are not copied here\./);
+  assert.match(viewFormula('NWDSR_WRITTEN_PERSON'), /No individual NWDSR Written: the NWDSR reports are store-level ranking reports\. Individual written sales and the \$65,000 goal use SNAP_PERSON\./);
+  assert.match(viewFormula('NWDSR_DELIVERED_PERSON'), /Individual delivered sales are Data Analysis Group 17 Delivered on DA_SALES_PERSON\./);
+  assert.match(viewFormula('BASES_PERSON'), /No salesperson report on file for BASES_PERSON\. Pending\./);
   assert.throws(() => viewFormula('CC_Kpi'), /no STORE or PERSON scope/);
 });
 

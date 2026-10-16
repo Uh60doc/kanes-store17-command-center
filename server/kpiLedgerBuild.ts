@@ -67,12 +67,36 @@ function qtyRow(
   });
 }
 
+/** Order count is printed sales ÷ printed average ticket. Only a whole number is trusted. */
+export function orderCount(line: Pick<KpiLine, 'sales' | 'averageSale'>): number | null {
+  if (line.sales === null || line.sales === 0) return 0;
+  if (!line.averageSale) return null;
+  const count = line.sales / line.averageSale;
+  return Math.abs(count - Math.round(count)) < 0.02 ? Math.round(count) : null;
+}
+
 function pushLine(records: LedgerRecord[], report: KpiReport, through: string, line: KpiLine, storeLine: boolean): void {
   const identity = storeLine ? null : canonicalPerson(line.name);
   if (!storeLine && !identity) return;
   const scope = storeLine ? 'STORE' : 'PERSON';
   const employeeCode = identity?.code ?? '';
   const employeeName = identity?.display ?? '';
+  // Data Analysis sales dollars are kept for individual delivered sales, KPIs and reconciliation. They are not
+  // the individual written goal (SNAP) or the store volume (NWDSR).
+  if (line.sales !== null) {
+    records.push(makeRecord({
+      ...base(report, through),
+      view: `DA_SALES_${scope}`,
+      employeeCode,
+      employeeName,
+      side: report.side,
+      salesDollars: line.sales,
+      unitCount: orderCount(line),
+      eligible: null,
+      attachments: null,
+      kpiPercent: null,
+    }));
+  }
   const bedding = line.beddingDollars === null && line.beddingPercent === null
     ? null
     : makeRecord({
