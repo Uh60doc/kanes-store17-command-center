@@ -8,24 +8,9 @@ import { makeRecord, type LedgerRecord } from '../src/domain/kpiLedger.ts';
 import { recordsFromKpi, recordsFromMaintenance } from './kpiLedgerBuild.ts';
 import { parseKpiWorkbook } from './kpiWorkbook.ts';
 import { parseMppa, parseRugs, parseUvwl } from './maintenanceText.ts';
+import { installScopeViews } from './scopeViews.ts';
 
 const PULLED_THROUGH = '2026-10-13';
-const VIEWS = [
-  'SNAP_STORE', 'SNAP_PERSON',
-  'NWDSR_WRITTEN_STORE', 'NWDSR_WRITTEN_PERSON',
-  'NWDSR_DELIVERED_STORE', 'NWDSR_DELIVERED_PERSON',
-  'PERQ_STORE', 'PERQ_PERSON',
-  'BEDDING_STORE', 'BEDDING_PERSON',
-  'MPPA_STORE', 'MPPA_PERSON',
-  'BASES_STORE', 'BASES_PERSON',
-  'PILLOWS_STORE', 'PILLOWS_PERSON',
-  'FABW_STORE', 'FABW_PERSON',
-  'LTHW_STORE', 'LTHW_PERSON',
-  'PWAR_STORE', 'PWAR_PERSON',
-  'UVWL_STORE', 'UVWL_PERSON',
-  'FINANCE_STORE', 'FINANCE_PERSON',
-  'RUGS_STORE', 'RUGS_PERSON',
-];
 const HEADERS = [
   'view', 'grain', 'report_date', 'period_start', 'period_end', 'verified_through', 'store',
   'employee_code', 'employee_name', 'side', 'sales_dollars', 'unit_count', 'eligible',
@@ -208,16 +193,10 @@ async function main(): Promise<void> {
   const values = [HEADERS, ...merged.map((record) => rowValues(record, importedAt))];
   const requests: Record<string, unknown>[] = [];
   if (!titles.has('CC_Ledger')) requests.push({ addSheet: { properties: { title: 'CC_Ledger' } } });
-  VIEWS.forEach((view) => {
-    if (!titles.has(view)) requests.push({ addSheet: { properties: { title: view } } });
-  });
   if (requests.length) await sheets(token, `${base}:batchUpdate`, 'POST', { requests });
   await sheets(token, `${base}/values/${encodeURIComponent('CC_Ledger!A1')}:clear`, 'POST', {});
   await sheets(token, `${base}/values/${encodeURIComponent('CC_Ledger!A1')}?valueInputOption=RAW`, 'PUT', { values });
-  for (const view of VIEWS) {
-    const formula = `=QUERY(CC_Ledger!A:R,"select * where A='${view}'",1)`;
-    await sheets(token, `${base}/values/${encodeURIComponent(`${view}!A1`)}?valueInputOption=USER_ENTERED`, 'PUT', { values: [[formula]] });
-  }
+  await installScopeViews({ accessToken: token, spreadsheetId });
   const counts = new Map<string, number>();
   merged.forEach((record) => counts.set(record.view, (counts.get(record.view) ?? 0) + 1));
   console.log(`CC_Ledger rows ${merged.length}`);
