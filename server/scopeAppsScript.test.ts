@@ -165,31 +165,62 @@ test('salesperson SNAP dates with no report on file are Pending, not zero', () =
   assert.deepEqual(plain(closed.snapPendingDates_('2026-10-01', '2026-10-31', '2026-10-02')), []);
 });
 
-test('a corrected report keeps the replaced row in CC_History and an identical re-import writes nothing', () => {
-  const original = ledger('BEDDING_STORE', 'daily', '2026-10-14', '2026-10-14', '2026-10-14', 'written', 100);
+test('a newer snapshot replaces the older one and keeps it in CC_History; an identical re-import writes nothing', () => {
+  const original = ledger('BEDDING_STORE', 'cumulative', '2026-10-02', '2026-11-01', '2026-10-14', 'written', 100);
   const tabs: Record<string, Grid> = { CC_Ledger: [LEDGER_HEAD, [...original]] };
   const gs = load(tabs, '2026-10-16');
   gs.upsertKpiRecords_([[...original]]);
   assert.equal('CC_History' in tabs, false, 'an identical re-import archives nothing');
-  const corrected = [...original];
-  corrected[10] = 80;
-  corrected[15] = 'corrected.xlsx';
-  gs.upsertKpiRecords_([corrected]);
+  const newer = [...original];
+  newer[5] = '2026-10-15';
+  newer[10] = 180;
+  newer[15] = 'through-15.xlsx';
+  gs.upsertKpiRecords_([newer]);
   assert.equal(tabs.CC_Ledger.length, 2);
-  assert.equal(tabs.CC_Ledger[1][10], 80);
+  assert.equal(tabs.CC_Ledger[1][10], 180);
   assert.deepEqual(tabs.CC_History[0], ['archived_at', 'tab', 'record_key', 'reason', 'replaced_by', 'previous_row']);
   assert.equal(tabs.CC_History.length, 2);
-  assert.deepEqual(tabs.CC_History[1].slice(1, 5), ['CC_Ledger', original[17], 'Corrected report replaced this row.', 'corrected.xlsx']);
+  assert.deepEqual(tabs.CC_History[1].slice(1, 5), ['CC_Ledger', original[17], 'A newer store-period snapshot replaced this row.', 'through-15.xlsx']);
   assert.equal(JSON.parse(String(tabs.CC_History[1][5]))[10], 100);
+});
 
+test('a later pull that differs from a recorded day is logged and not applied', () => {
+  const exceptions: string[] = [];
+  const recordedKpi = ledger('BEDDING_STORE', 'daily', '2026-10-14', '2026-10-14', '2026-10-14', 'written', 100);
   const dailyKey = ['NWDSR_WRITTEN_STORE', 'daily', '2026-10-14', '2026-10-14', '2026-10-14', 'written', 'STORE'].join('|');
-  tabs.CC_Ledger.push(['NWDSR_WRITTEN_STORE', 'daily', '2026-10-14', '2026-10-14', '2026-10-14', '2026-10-14', '17', '', '', 'written', 500, '', '', '', '', 'first.pdf', '', dailyKey]);
+  const recordedNwdsr = ['NWDSR_WRITTEN_STORE', 'daily', '2026-10-14', '2026-10-14', '2026-10-14', '2026-10-14', '17', '', '', 'written', 500, '', '', '', '', 'first.pdf', '', dailyKey];
+  const tabs: Record<string, Grid> = {
+    CC_Ledger: [LEDGER_HEAD, [...recordedKpi], [...recordedNwdsr]],
+    CC_Kpi: [KPI_HEAD, ['Daily Bedding', 0.2, '', 'first.xlsx', '2026-10-14', '2026-10-14', '2026-10-14']],
+  };
+  const gs = load(tabs, '2026-10-16');
+  gs.appendException_ = (...args: unknown[]) => { exceptions.push(String(args[1])); };
+
+  const renamed = [...recordedKpi];
+  renamed[15] = 'same-figures-again.xlsx';
+  gs.upsertKpiRecords_([renamed]);
   gs.upsertLedgerDaily_('NWDSR_WRITTEN_STORE', 'written', '2026-10-14', 500, 'again.pdf');
-  assert.equal(tabs.CC_History.length, 2);
+  gs.upsertDailyBedding_('2026-10-14', 'written', 0.2, 'again.xlsx');
+  assert.equal('CC_History' in tabs, false, 'the same figures under another file name change nothing');
+
+  const later = [...recordedKpi];
+  later[10] = 80;
+  later[15] = 'later.xlsx';
+  gs.upsertKpiRecords_([later]);
   gs.upsertLedgerDaily_('NWDSR_WRITTEN_STORE', 'written', '2026-10-14', -120, 'cancellation.pdf');
-  assert.equal(tabs.CC_History.length, 3);
-  assert.equal(tabs.CC_History[2][2], dailyKey);
-  assert.equal(tabs.CC_History[2][4], 'cancellation.pdf');
+  gs.upsertDailyBedding_('2026-10-14', 'written', 0.15, 'later.xlsx');
+  gs.upsertDailyBedding_('2026-10-14', 'delivered', 0.1, 'later.xlsx');
+
+  assert.deepEqual(tabs.CC_Ledger.slice(1), [recordedKpi, recordedNwdsr]);
+  assert.deepEqual(tabs.CC_Kpi[1], ['Daily Bedding', 0.2, 0.1, 'first.xlsx', '2026-10-14', '2026-10-14', '2026-10-14'], 'a blank side is filled, a recorded side is kept');
+  assert.equal(tabs.CC_History.length, 4);
+  assert.deepEqual(tabs.CC_History.slice(1).map((row) => [row[1], row[2], row[4]]), [
+    ['CC_Ledger', recordedKpi[17], 'not applied: later.xlsx'],
+    ['CC_Ledger', dailyKey, 'not applied: cancellation.pdf'],
+    ['CC_Kpi', 'Daily Bedding|2026-10-14|written', 'not applied: later.xlsx'],
+  ]);
+  assert.match(String(tabs.CC_History[2][3]), /The recorded day was kept and this figure was not applied\. Later figure: -120\./);
   assert.equal(JSON.parse(String(tabs.CC_History[2][5]))[10], 500);
-  assert.equal(tabs.CC_Ledger.at(-1)![10], -120);
+  assert.equal(exceptions.length, 3);
+  assert.match(exceptions[1], /re-pull \(cancellation\.pdf\) shows -120, which differs from the recorded day/);
 });

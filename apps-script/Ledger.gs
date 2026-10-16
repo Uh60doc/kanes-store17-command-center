@@ -117,6 +117,30 @@ function archiveReplaced_(tabName, key, previousRow, replacedBy, reason) {
   historySheet_().appendRow([new Date().toISOString(), tabName, key, reason || 'Corrected report replaced this row.', replacedBy || '', JSON.stringify(previousRow)]);
 }
 
+var NOT_APPLIED_ = 'Later report for a recorded day differs. The recorded day was kept and this figure was not applied.';
+
+/**
+ * A recorded day is the historical record. A later pull that disagrees is logged, never applied: a cancellation
+ * belongs to the day it is reported on.
+ */
+function holdBackDay_(tabName, key, previousRow, laterFigure, source) {
+  archiveReplaced_(tabName, key, previousRow, 'not applied: ' + (source || ''), NOT_APPLIED_ + ' Later figure: ' + laterFigure + '.');
+  appendException_('Needs Review', key + ' re-pull (' + (source || 'unknown file') + ') shows ' + laterFigure + ', which differs from the recorded day. The recorded figure was kept.');
+}
+
+/** Sales, units, eligible, attachments, and percent: the figures of a ledger row. */
+function sameLedgerFigures_(left, right) {
+  var i;
+  for (i = 10; i <= 14; i += 1) {
+    if (fineNumber_(left[i]) !== fineNumber_(right[i])) return false;
+  }
+  return true;
+}
+
+function ledgerFigureText_(row) {
+  return [10, 11, 12, 13, 14].map(function (i) { return row[i] === '' || row[i] === null || row[i] === undefined ? '-' : String(row[i]); }).join(' / ');
+}
+
 function sameRowValues_(left, right, upTo) {
   var i;
   for (i = 0; i < upTo; i += 1) {
@@ -202,9 +226,7 @@ function upsertLedgerDaily_(view, side, date, dollars, source) {
   for (r = 1; r < values.length; r += 1) {
     if (String(values[r][keyCol]) !== key) continue;
     var current = fineNumber_(values[r][headers.indexOf('sales_dollars')]);
-    if (current === Number(dollars)) return;
-    archiveReplaced_('CC_Ledger', key, values[r], source);
-    tab.getRange(r + 1, 1, 1, payload.length).setValues([payload]);
+    if (current !== fineNumber_(dollars)) holdBackDay_('CC_Ledger', key, values[r], String(dollars), source);
     return;
   }
   tab.appendRow(payload);

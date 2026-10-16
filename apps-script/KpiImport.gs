@@ -250,8 +250,11 @@ function upsertDailyBedding_(date, side, percent, filename) {
   var r;
   for (r = 1; r < values.length; r += 1) {
     if (String(values[r][0]) !== 'Daily Bedding' || isoDate_(values[r][4]) !== date || isoDate_(values[r][5]) !== date) continue;
-    tab.getRange(r + 1, column).setValue(percent);
-    tab.getRange(r + 1, 7).setValue(date);
+    var recorded = fineNumber_(values[r][column - 1]);
+    if (recorded === null) {
+      tab.getRange(r + 1, column).setValue(percent);
+      tab.getRange(r + 1, 7).setValue(date);
+    } else if (recorded !== fineNumber_(percent)) holdBackDay_('CC_Kpi', 'Daily Bedding|' + date + '|' + side, values[r], String(percent), filename);
     return;
   }
   var row = ['Daily Bedding', '', '', 'Group 17 TOTAL bedding dollars ÷ sales. ' + filename, date, date, date];
@@ -269,9 +272,13 @@ function upsertKpiRecords_(records) {
     var key = record[17];
     if (index[key]) {
       var previous = values[index[key] - 1];
+      if (previous && record[1] === 'daily') {
+        if (!sameLedgerFigures_(previous, record)) holdBackDay_('CC_Ledger', key, previous, ledgerFigureText_(record), record[15]);
+        return;
+      }
       // Columns A–P are the report figures; Q is the import time.
       if (previous && sameRowValues_(previous, record, 16)) return;
-      if (previous) archiveReplaced_('CC_Ledger', key, previous, record[15]);
+      if (previous) archiveReplaced_('CC_Ledger', key, previous, record[15], 'A newer store-period snapshot replaced this row.');
       tab.getRange(index[key], 1, 1, record.length).setValues([record]);
       return;
     }

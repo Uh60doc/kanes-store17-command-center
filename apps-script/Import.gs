@@ -16,6 +16,7 @@ function scheduledImport_() {
   try {
     importMailbox_();
     refreshRollup_();
+    try { refreshMonthEnd_(); } catch (error) { appendException_('Update Failed', 'CC_MonthEnd could not be refreshed. The daily record was not changed.'); }
     markMissingReports_();
     noteHealth_('last_calculation', new Date().toISOString());
     noteHealth_('version', APP_VERSION_);
