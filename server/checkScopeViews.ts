@@ -15,7 +15,7 @@ import path from 'node:path';
 import { SHEETS_SCOPE } from './access.ts';
 import { loadConfig, loadDotEnv } from './config.ts';
 import { accessTokenFor, googleJson } from './google.ts';
-import { AUDIT_HEADERS, AUDIT_TAB, SCOPE_VIEWS, VIEW_EXTRA_HEADERS, installScopeViews, scopeOf, type Scope } from './scopeViews.ts';
+import { AUDIT_HEADERS, AUDIT_TAB, NOT_SUPPLIED, SCOPE_VIEWS, VIEW_EXTRA_HEADERS, installScopeViews, scopeOf, type Scope } from './scopeViews.ts';
 import { readStored } from './tokenStore.ts';
 import { fitsTrack, periodContaining, type ReportingCategory } from '../src/domain/reportingCalendar.ts';
 
@@ -137,7 +137,8 @@ for (const view of SCOPE_VIEWS) {
   const body = shown.slice(1).map((row) => Array.from({ length: 22 }, (_, column) => row[column] ?? ''));
   if (!mine.length) {
     assert.equal(body.length, 1, `${view} message row`);
-    assert.match(body[0][0], scope === 'PERSON' ? /^No salesperson report on file .* Pending\. Store figures are not copied here\.$/ : /^No store report on file .* Pending\.$/);
+    if (NOT_SUPPLIED[view]) assert.equal(body[0][0], NOT_SUPPLIED[view]);
+    else assert.match(body[0][0], scope === 'PERSON' ? /^No salesperson report on file .* Pending\. Store figures are not copied here\.$/ : /^No store report on file .* Pending\.$/);
   } else if (!fitted.length) {
     assert.equal(body.length, 1, `${view} message row`);
     assert.match(body[0][0], new RegExp(`^No record on file covers an? (store|individual) period .* ${mine.length} record\\(s\\) with other date ranges are kept in CC_Ledger`));
