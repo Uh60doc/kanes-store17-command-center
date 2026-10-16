@@ -8,7 +8,7 @@ Phase 1 is the store dashboard for a desktop office monitor. October 2026 manage
 
 ## Reporting calendars
 
-The subject picks the calendar. Store reports, store KPIs, and the store closing ratio use the 2nd of the month through the 1st of the next month. Individual reports, compensation, and individual closing ratios use the 1st through the last calendar day of the month. The closing-ratio goal is 40% for the store and for each salesperson. Green starts at 40%. A missing count stays Not Available. Daily records keep the date printed on them. Each view filters those dates on its own.
+The subject picks the calendar. Store reports, store KPIs, and the store closing ratio use the 2nd of the month through the 1st of the next month. Individual reports, compensation, and individual closing ratios use the 1st through the last calendar day of the month. The closing-ratio goal is 50% for the store and for each salesperson. Closing Ratio = Net Written # OF CUST ÷ PERQ Ups + Be Backs. Below 50.0% is Below Goal, exactly 50.0% is On Target, and above 50.0% is Above Goal. A missing report shows Pending, and an individual's purchasing customers stay Awaiting Verified Data until a source reports them per salesperson. Daily records keep the date printed on them. Each view filters those dates on its own.
 
 A verified PERQ snapshot is cumulative. The October reference file stays outside Git at `~/.config/store17-command-center/reference/perq-october-2026.json`. Closing ratio is Net Written `# OF CUST` divided by PERQ `Ups + Be Backs` for the same dates. Month to date adds those counts, then divides. A missing count stays Not Available.
 

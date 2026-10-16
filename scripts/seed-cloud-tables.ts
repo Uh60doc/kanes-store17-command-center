@@ -189,7 +189,7 @@ const configRows: Row[] = [
   ['written_goal', 400000],
   ['delivered_goal', 320000],
   ['bedding_minimum', 0.2],
-  ['closing_goal', 0.4],
+  ['closing_goal', 0.5],
   ['attachment_goal', 0.9],
   ['stretch_written', 652274],
   ['stretch_delivered', 564373],
