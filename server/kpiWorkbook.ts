@@ -69,9 +69,13 @@ function qtyMetric(
   printed: string | null | undefined,
 ): QtyMetric {
   const qualified = num(qual);
-  const soldQty = num(sold);
-  const amount = cents(num(dollars));
+  let soldQty = num(sold);
+  let amount = cents(num(dollars));
   const printedPercent = num(printed);
+  if (soldQty === null && qualified !== null && qualified !== 0) {
+    soldQty = 0;
+    if (amount === null) amount = 0;
+  }
   if (soldQty === null || qualified === null || qualified === 0) {
     return { qual: qualified, sold: soldQty, dollars: amount, percent: null, mismatch: false };
   }

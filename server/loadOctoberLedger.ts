@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { applyRecords, makeRecord, type LedgerRecord } from '../src/domain/kpiLedger.ts';
+import { makeRecord, type LedgerRecord } from '../src/domain/kpiLedger.ts';
 import { recordsFromKpi, recordsFromMaintenance } from './kpiLedgerBuild.ts';
 import { parseKpiWorkbook } from './kpiWorkbook.ts';
 import { parseMppa, parseRugs, parseUvwl } from './maintenanceText.ts';
@@ -174,7 +174,36 @@ async function main(): Promise<void> {
       side: '', salesDollars: null, unitCount: null, eligible: opportunities, attachments: null, sourceReport: 'CC_Closing',
     }));
   });
-  const merged = applyRecords([], records);
+  const current = await sheets(token, `${base}/values/${encodeURIComponent('CC_Ledger!A1:R2000')}`) as { values?: (string | number)[][] };
+  const kept: LedgerRecord[] = [];
+  (current.values ?? []).slice(1).forEach((row) => {
+    const view = String(row[0] ?? '');
+    if (!view || view === 'SNAP_STORE' || view === 'NWDSR_WRITTEN_STORE' || view === 'NWDSR_DELIVERED_STORE') return;
+    kept.push(makeRecord({
+      view,
+      grain: String(row[1] ?? '') === 'daily' ? 'daily' : 'cumulative',
+      reportDate: String(row[2] ?? ''),
+      periodStart: String(row[3] ?? ''),
+      periodEnd: String(row[4] ?? ''),
+      verifiedThrough: String(row[5] ?? ''),
+      store: String(row[6] ?? '17'),
+      employeeCode: String(row[7] ?? ''),
+      employeeName: String(row[8] ?? ''),
+      side: String(row[9] ?? '') === 'delivered' ? 'delivered' : String(row[9] ?? '') === 'written' ? 'written' : '',
+      salesDollars: row[10] === '' || row[10] === undefined ? null : Number(row[10]),
+      unitCount: row[11] === '' || row[11] === undefined ? null : Number(row[11]),
+      eligible: row[12] === '' || row[12] === undefined ? null : Number(row[12]),
+      attachments: row[13] === '' || row[13] === undefined ? null : Number(row[13]),
+      kpiPercent: row[14] === '' || row[14] === undefined ? null : Number(row[14]),
+      sourceReport: String(row[15] ?? ''),
+    }));
+  });
+  const fromDailySheet = new Set(['SNAP_STORE', 'SNAP_PERSON', 'NWDSR_WRITTEN_STORE', 'NWDSR_DELIVERED_STORE']);
+  const mergedMap = new Map(kept.map((record) => [record.recordKey, record]));
+  records.forEach((record) => {
+    if (fromDailySheet.has(record.view) || !mergedMap.has(record.recordKey)) mergedMap.set(record.recordKey, record);
+  });
+  const merged = [...mergedMap.values()];
   const importedAt = new Date().toISOString();
   const values = [HEADERS, ...merged.map((record) => rowValues(record, importedAt))];
   const requests: Record<string, unknown>[] = [];

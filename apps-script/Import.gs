@@ -62,6 +62,7 @@ function importAttachment_(messageId, attachment) {
     return (value < 16 ? '0' : '') + value.toString(16);
   }).join('');
   if (knownSha_(sha)) return false;
+  if (/\.xlsx$/i.test(attachment.getName())) return importKpiAttachment_(sha, attachment);
   var text = '';
   try {
     text = pdfText_(attachment.copyBlob().setName(attachment.getName()));

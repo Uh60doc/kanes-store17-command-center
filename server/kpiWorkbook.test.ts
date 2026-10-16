@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { crc32 } from 'node:zlib';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
+import { attachmentFromDaily } from '../src/domain/kpiLedger.ts';
+import { recordsFromKpi } from './kpiLedgerBuild.ts';
 import { parseKpiWorkbook, storeSnapshot } from './kpiWorkbook.ts';
 import { firstSheet, unzip } from './xlsxLite.ts';
 
@@ -50,6 +52,26 @@ function zipStored(files: Record<string, string>): Buffer {
   return Buffer.concat([...locals, directory, end]);
 }
 
+test('a complete daily report counts a blank sold quantity as zero and keeps a negative sale', () => {
+  const sheet = `<?xml version="1.0"?><worksheet><sheetData>
+    <row r="1"><c r="A1" t="inlineStr"><is><t>GROUP 17</t></is></c><c r="B1" t="inlineStr"><is><t>WRITTEN ORDERS</t></is></c><c r="F1" t="inlineStr"><is><t>FABRIC</t></is></c></row>
+    <row r="2"><c r="A2" t="inlineStr"><is><t>Sales Person</t></is></c><c r="B2" t="inlineStr"><is><t>Sales</t></is></c><c r="C2" t="inlineStr"><is><t>Avg Sales</t></is></c><c r="D2" t="inlineStr"><is><t>Fin %</t></is></c><c r="F2" t="inlineStr"><is><t>Qual Qty</t></is></c><c r="G2" t="inlineStr"><is><t>Sold Qty</t></is></c><c r="H2" t="inlineStr"><is><t>Sold $</t></is></c><c r="I2" t="inlineStr"><is><t>Attach %</t></is></c></row>
+    <row r="3"><c r="A3" t="inlineStr"><is><t>RENZO DELSOLAR</t></is></c><c r="B3"><v>-40</v></c><c r="C3"><v>-40</v></c><c r="D3"><v>0</v></c><c r="F3"><v>4</v></c></row>
+    <row r="4"><c r="A4" t="inlineStr"><is><t>TOTAL</t></is></c><c r="B4"><v>-40</v></c><c r="C4"><v>-40</v></c><c r="D4"><v>0</v></c><c r="F4"><v>4</v></c></row>
+  </sheetData></worksheet>`;
+  const report = parseKpiWorkbook(zipStored({ 'xl/worksheets/sheet1.xml': sheet }), 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-14_2026-10-14.xlsx');
+  assert.equal(report.family, 'group17');
+  assert.equal(report.side, 'written');
+  assert.equal(report.start, '2026-10-14');
+  assert.equal(report.end, '2026-10-14');
+  assert.equal(report.store?.sales, -40);
+  assert.equal(report.store?.averageSale, -40);
+  assert.equal(report.store?.fabric.qual, 4);
+  assert.equal(report.store?.fabric.sold, 0);
+  assert.equal(report.store?.fabric.dollars, 0);
+  assert.equal(report.store?.fabric.percent, 0);
+});
+
 test('a blank shared string does not become its index', () => {
   const strings = Array.from({ length: 20 }, () => '<si><t></t></si>').join('');
   const workbook = zipStored({
@@ -96,14 +118,25 @@ test('October store KPI files reconcile without adding the day snapshot', { skip
   assert.equal(aslWritten.powerBasePercent, null);
   assert.equal(aslDelivered.powerBasePercent, null);
   assert.equal(aslWritten.pillows?.qual, 10);
-  assert.equal(aslWritten.pillows?.sold, null);
-  assert.equal(aslWritten.pillows?.percent, null);
-  assert.equal(aslDelivered.pillows?.sold, null);
+  assert.equal(aslWritten.pillows?.sold, 0);
+  assert.equal(aslWritten.pillows?.dollars, 0);
+  assert.equal(aslWritten.pillows?.percent, 0);
+  assert.equal(aslDelivered.pillows?.sold, 0);
   assert.equal(aslWritten.rugsQty, 7);
   assert.equal(aslDelivered.rugsQty, 3);
   assert.equal(written.fabric.mismatch, false);
   assert.equal(delivered.power.mismatch, false);
 
+  const aslDay = reports.find((report) => report.family === 'asl' && report.side === 'written' && report.start === '2026-10-13' && report.end === '2026-10-13');
+  const aslRecords = aslDay ? recordsFromKpi(aslDay, '2026-10-13') : [];
+  assert.equal(aslRecords.some((row) => row.employeeName === '09' || row.view.endsWith('_PERSON')), false);
+  assert.equal(aslRecords.some((row) => row.view === 'FABW_STORE'), false);
+  const dayRecords = recordsFromKpi(reports.find((report) => report.filename.includes('17_WRITTEN_2026-10-13'))!, '2026-10-13');
+  const snapshotRecords = recordsFromKpi(reports.find((report) => report.filename.includes('17_WRITTEN_2026-10-02_2026-11-01'))!, '2026-10-13');
+  const counted = attachmentFromDaily([...dayRecords, ...snapshotRecords], 'FABW_STORE', 'written', '2026-10-02', '2026-11-01');
+  const dayOnly = attachmentFromDaily(dayRecords, 'FABW_STORE', 'written', '2026-10-02', '2026-11-01');
+  assert.equal(counted.attachments, dayOnly.attachments);
+  assert.equal(dayRecords.some((row) => row.view === 'AVERAGE_STORE' && row.salesDollars !== null), true);
   const day = reports.find((report) => report.family === 'group17' && report.side === 'written' && report.start === '2026-10-13' && report.end === '2026-10-13');
   const deliveredDay = reports.find((report) => report.family === 'group17' && report.side === 'delivered' && report.start === '2026-10-13' && report.end === '2026-10-13');
   assert.equal(day?.store?.sales, 7105.89);

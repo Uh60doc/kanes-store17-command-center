@@ -97,6 +97,20 @@ function pushLine(records: LedgerRecord[], report: KpiReport, through: string, l
     qtyRow(`BASES_${scope}`, report, through, { code: employeeCode, display: employeeName }, line.adjustable),
   ];
   rows.forEach((row) => { if (row) records.push(row); });
+  if (line.averageSale !== null) {
+    records.push(makeRecord({
+      ...base(report, through),
+      view: `AVERAGE_${scope}`,
+      employeeCode,
+      employeeName,
+      side: report.side,
+      salesDollars: line.averageSale,
+      unitCount: null,
+      eligible: null,
+      attachments: null,
+      kpiPercent: null,
+    }));
+  }
   if (line.finance !== null) {
     records.push(makeRecord({
       ...base(report, through),
