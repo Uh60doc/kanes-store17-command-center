@@ -471,26 +471,6 @@ function percentText_(ratio) {
   return (Number(ratio) * 100).toFixed(1) + '%';
 }
 
-function dateSpan_(dates) {
-  if (!dates.length) return '';
-  var sorted = dates.slice().sort();
-  var groups = [];
-  var start = sorted[0];
-  var prev = sorted[0];
-  var i;
-  for (i = 1; i < sorted.length; i += 1) {
-    if (shiftDate_(prev, 1) === sorted[i]) {
-      prev = sorted[i];
-      continue;
-    }
-    groups.push(start === prev ? start : start + ' through ' + prev);
-    start = sorted[i];
-    prev = sorted[i];
-  }
-  groups.push(start === prev ? start : start + ' through ' + prev);
-  return groups.join(', ');
-}
-
 function versusGoal_(ratio, goal, reconcile) {
   if (ratio === null || goal === null) return null;
   if (reconcile || ratio > 1) return 'Reconcile';
@@ -652,21 +632,6 @@ function mergePerq_(facts) {
   return facts;
 }
 
-function storePerqSnapshots_() {
-  var rows = [];
-  try {
-    ledgerRows_().forEach(function (row) {
-      if (row.view !== 'PERQ_STORE' || row.grain === 'daily') return;
-      var count = row.eligible !== null ? row.eligible : row.units;
-      if (count === null || !row.periodStart || !row.periodEnd) return;
-      rows.push({ count: count, start: row.periodStart, end: row.periodEnd, through: row.verifiedThrough || '' });
-    });
-  } catch (error) {
-    return [];
-  }
-  return rows;
-}
-
 function personAliases_(name) {
   var key = String(name || '').toLowerCase();
   var table = {
@@ -702,123 +667,6 @@ function dailyCountMap_(facts, scope, personName, field) {
   });
   Object.keys(conflict).forEach(function (date) { delete map[date]; });
   return map;
-}
-
-function elapsedDates_(period, today, closed) {
-  var dates = [];
-  eachDate_(period.start, period.end).forEach(function (date) {
-    if (date <= today && !closed[date]) dates.push(date);
-  });
-  return dates;
-}
-
-function storeClosingCopy_(period, asOf, dates, customers, opportunities, result, latest, latestClosing) {
-  var parts = [];
-  if (latest && latestClosing && latestClosing.ratio !== null) {
-    parts.push(latest + ' daily closing is ' + latestClosing.customers + ' customers ÷ ' + latestClosing.opportunities + ' opportunities = ' + percentText_(latestClosing.ratio) + '.');
-  }
-  if (result.ratio !== null) {
-    parts.push('Month to date through ' + asOf + ' is ' + result.customers + ' purchasing customers ÷ ' + result.opportunities + ' opportunities = ' + percentText_(result.ratio) + ' for ' + period.start + ' through ' + period.end + '.');
-    if (result.reconcile) parts.push('The ratio is above 100% and is flagged for reconciliation.');
-    return { gap: '', note: parts.join(' ') };
-  }
-  parts.push('Month-to-date closing for ' + period.start + ' through ' + period.end + ' is not calculated.');
-  var missingPerq = [];
-  var missingCustomers = [];
-  var countedWithoutPerq = [];
-  dates.forEach(function (date) {
-    var hasCustomers = Object.prototype.hasOwnProperty.call(customers, date);
-    var hasOpportunities = Object.prototype.hasOwnProperty.call(opportunities, date);
-    if (!hasOpportunities) missingPerq.push(date);
-    if (!hasCustomers) missingCustomers.push(date);
-    if (hasCustomers && !hasOpportunities) countedWithoutPerq.push(date + ' (' + customers[date] + ' customers)');
-  });
-  if (missingPerq.length) parts.push('Daily PERQ Ups + Be Backs is not on file for ' + dateSpan_(missingPerq) + '.');
-  if (countedWithoutPerq.length) parts.push('Purchasing customers are on file without a daily PERQ count for ' + countedWithoutPerq.join(', ') + '.');
-  if (missingCustomers.length) parts.push('Daily Net Written # OF CUST is not on file for ' + dateSpan_(missingCustomers) + '.');
-  var rejected = storePerqSnapshots_().filter(function (row) {
-    return row.start !== period.start || row.end !== period.end;
-  });
-  if (rejected.length) {
-    parts.push('Cumulative PERQ snapshots were not added: ' + rejected.map(function (row) {
-      return row.count + ' for ' + row.start + ' through ' + row.end + (row.through ? ' (verified through ' + row.through + ')' : '');
-    }).join(', and ') + '. They cover different periods from each other and from the store month ending ' + period.end + ', so they are not added to the daily count.');
-  }
-  parts.push('Written sales dollars are not purchasing-customer counts.');
-  var gap = 'Month-to-date is not calculated.';
-  if (missingPerq.length) gap += ' Daily PERQ is missing for ' + dateSpan_(missingPerq) + '.';
-  if (missingCustomers.length) gap += ' Daily Net Written customers are missing for ' + dateSpan_(missingCustomers) + '.';
-  if (rejected.length) {
-    gap += ' Cumulative PERQ of ' + rejected.map(function (row) {
-      return row.count + ' (' + row.start + ' through ' + row.end + ')';
-    }).join(' and ') + ' was not added.';
-  }
-  return { gap: gap, note: parts.join(' ') };
-}
-
-function storeMonthClosing_(facts, period, today, closed, goal) {
-  var asOf = today;
-  var todayRow = dayClosing_(facts, today, goal);
-  if (todayRow.customers === null && todayRow.opportunities === null) {
-    var prior = shiftDate_(today, -1);
-    if (prior >= period.start) asOf = prior;
-  }
-  var dates = [];
-  eachDate_(period.start, period.end).forEach(function (date) {
-    if (date <= asOf && !closed[date]) dates.push(date);
-  });
-  var customers = dailyCountMap_(facts, 'store', '', 'customers');
-  var opportunities = dailyCountMap_(facts, 'store', '', 'opportunities');
-  var trend = dates.map(function (date) {
-    var day = dayClosing_(facts, date, goal);
-    var mtd = closingThrough_(facts, 'store', '', period.start, date, closed, customers, opportunities, goal);
-    return {
-      date: date,
-      customers: day.customers,
-      opportunities: day.opportunities,
-      ratio: day.ratio,
-      status: dayClosingStatus_(day),
-      points: pointsFromGoal_(day.ratio, goal),
-      mtdRatio: mtd ? mtd.ratio : null,
-    };
-  });
-  var result = null;
-  var i;
-  for (i = dates.length - 1; i >= 0 && !result; i -= 1) {
-    result = closingThrough_(facts, 'store', '', period.start, dates[i], closed, customers, opportunities, goal);
-  }
-  var latestDay = trend.filter(function (day) { return day.ratio !== null; }).pop() || null;
-  var latest = latestDay ? latestDay.date : '';
-  var latestClosing = latest ? dayClosing_(facts, latest, goal) : null;
-  var copy = result
-    ? { gap: '', note: 'Month to date ' + period.start + ' through ' + result.through + ': ' + result.customers + ' purchasing customers ÷ ' + result.opportunities + ' opportunities = ' + percentText_(result.ratio) + '. Customers: ' + result.customerSource + '. Opportunities: ' + result.opportunitySource + '.' + (result.reconcile ? ' The ratio is above 100% and is flagged for reconciliation.' : '') }
-    : storeClosingCopy_(period, asOf, dates, customers, opportunities, { ratio: null }, latest, latestClosing);
-  return {
-    customers: result ? result.customers : null,
-    opportunities: result ? result.opportunities : null,
-    ratio: result ? result.ratio : null,
-    reconcile: result ? result.reconcile : false,
-    versusGoal: result ? result.versusGoal : null,
-    points: result ? result.points : null,
-    goal: goal,
-    through: result ? result.through : '',
-    customerSource: result ? result.customerSource : '',
-    opportunitySource: result ? result.opportunitySource : '',
-    matched: [],
-    latest: latestDay ? { date: latestDay.date, customers: latestDay.customers, opportunities: latestDay.opportunities, ratio: latestDay.ratio, status: latestDay.status, points: latestDay.points } : null,
-    trend: trend,
-    gap: copy.gap,
-    note: copy.note,
-  };
-}
-
-function dayClosingStatus_(day) {
-  if (day.ratio !== null) return day.versusGoal;
-  if (day.opportunities === 0) return 'No opportunities';
-  if (day.customers === null && day.opportunities === null) return 'Pending: Net Written and PERQ';
-  if (day.customers === null) return 'Pending: Net Written # OF CUST';
-  if (day.opportunities === null) return 'Pending: PERQ';
-  return 'Pending: counts disagree';
 }
 
 /**
@@ -861,67 +709,6 @@ function countThrough_(facts, scope, name, start, date, field, closed, daily) {
     return { total: total, source: parts.join(' ') || 'none' };
   }
   return null;
-}
-
-function closingThrough_(facts, scope, name, start, date, closed, dailyCustomers, dailyOpportunities, goal) {
-  var customers = countThrough_(facts, scope, name, start, date, 'customers', closed, dailyCustomers);
-  var opportunities = countThrough_(facts, scope, name, start, date, 'opportunities', closed, dailyOpportunities);
-  if (!customers || !opportunities) return null;
-  var computed = closingRatio_(customers.total, opportunities.total);
-  return {
-    through: date,
-    customers: customers.total,
-    opportunities: opportunities.total,
-    ratio: computed.ratio,
-    reconcile: computed.reconcile,
-    versusGoal: versusGoal_(computed.ratio, goal, computed.reconcile),
-    points: pointsFromGoal_(computed.ratio, goal),
-    customerSource: 'Net Written # OF CUST ' + customers.source,
-    opportunitySource: 'PERQ Ups + Be Backs ' + opportunities.source,
-  };
-}
-
-function dayClosing_(facts, date, goal) {
-  var customers = null;
-  var opportunities = null;
-  var conflict = false;
-  facts.forEach(function (row) {
-    if (row.scope !== 'store' || row.code || row.start !== date || row.end !== date) return;
-    if (row.customerConflict || row.opportunityConflict) conflict = true;
-    if (row.customers !== null) {
-      if (customers !== null && customers !== row.customers) conflict = true;
-      customers = row.customers;
-    }
-    if (row.opportunities !== null) {
-      if (opportunities !== null && opportunities !== row.opportunities) conflict = true;
-      opportunities = row.opportunities;
-    }
-  });
-  if (conflict) {
-    return {
-      customers: null,
-      opportunities: null,
-      ratio: null,
-      reconcile: false,
-      versusGoal: null,
-      note: 'The customer or opportunity rows for this day disagree, so the ratio was not calculated.',
-    };
-  }
-  var computed = closingRatio_(customers, opportunities);
-  var note = '';
-  if (customers === null || opportunities === null) note = 'Purchasing customers and opportunities are not both on file for this day.';
-  if (customers !== null && opportunities === null) note = 'Opportunities for this day are Not Available, so the ratio was not calculated.';
-  if (opportunities !== null && customers === null) note = 'Purchasing customers for this day are Not Available, so the ratio was not calculated.';
-  if (opportunities === 0) note = 'Zero opportunities. The ratio was not divided.';
-  if (computed.reconcile) note = 'Above 100%. Flagged for reconciliation.';
-  return {
-    customers: customers,
-    opportunities: opportunities,
-    ratio: computed.ratio,
-    reconcile: computed.reconcile,
-    versusGoal: versusGoal_(computed.ratio, goal, computed.reconcile),
-    note: note,
-  };
 }
 
 /** A daily store PERQ whose associate rows add up to the store count is complete, so an absent associate had 0 that day. */
@@ -982,9 +769,178 @@ function personClosing_(facts, name, start, end, goal) {
   };
 }
 
-function withDayClosing_(days, facts, goal) {
+var CLOSING_DAILY_HEADERS_ = [
+  'Date', 'NWDSR Written purchasing customers', 'PERQ opportunities', 'Closing ratio', 'Store closing goal',
+  'Difference from goal (pts)', 'Versus goal', 'Source reporting dates', 'Verification status',
+  'MTD purchasing customers', 'MTD opportunities', 'MTD closing ratio', 'MTD difference from goal (pts)',
+  'MTD versus goal', 'MTD sources', 'MTD verification status',
+];
+
+function viewNumber_(value) {
+  return typeof value === 'number' && isFinite(value) ? value : null;
+}
+
+function viewRatio_(value) {
+  var number = viewNumber_(value);
+  return number === null ? null : Math.round(number * 1000) / 1000;
+}
+
+function viewVersus_(value) {
+  var text = String(value || '');
+  return ['On Target', 'Above Goal', 'Below Goal', 'Reconcile'].indexOf(text) === -1 ? null : text;
+}
+
+function viewText_(value) {
+  var text = String(value === null || value === undefined ? '' : value);
+  return /^#[A-Z]/.test(text) ? 'Pending: calculation error on CC_ClosingDaily' : text;
+}
+
+/**
+ * CC_ClosingDaily and CC_ClosingMTD are formulas over CC_Closing, so a new CC_Closing row updates them.
+ * The dashboard shows their results and does not count again.
+ */
+function closingView_() {
+  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var dailyTab = spreadsheet.getSheetByName('CC_ClosingDaily');
+  var mtdTab = spreadsheet.getSheetByName('CC_ClosingMTD');
+  if (!dailyTab || !mtdTab) return null;
+  var values = dailyTab.getDataRange().getValues();
+  var header = (values[0] || []).map(function (cell) { return String(cell || '').trim(); });
+  if (header.slice(0, CLOSING_DAILY_HEADERS_.length).join('|') !== CLOSING_DAILY_HEADERS_.join('|')) return null;
+  var days = [];
+  var byDate = {};
+  values.slice(1).forEach(function (row) {
+    var date = isoDate_(row[0]);
+    if (!date) return;
+    var day = {
+      date: date,
+      customers: viewNumber_(row[1]),
+      opportunities: viewNumber_(row[2]),
+      ratio: viewRatio_(row[3]),
+      points: viewNumber_(row[5]),
+      versusGoal: viewVersus_(row[6]),
+      sources: viewText_(row[7]),
+      status: viewText_(row[8]),
+      mtd: {
+        customers: viewNumber_(row[9]),
+        opportunities: viewNumber_(row[10]),
+        ratio: viewRatio_(row[11]),
+        points: viewNumber_(row[12]),
+        versusGoal: viewVersus_(row[13]),
+        sources: viewText_(row[14]),
+        status: viewText_(row[15]),
+      },
+    };
+    days.push(day);
+    byDate[date] = day;
+  });
+  var summary = {};
+  mtdTab.getDataRange().getValues().slice(1).forEach(function (row) { summary[String(row[0] || '').trim()] = row[1]; });
+  return { days: days, byDate: byDate, summary: summary, start: isoDate_(summary['Period start']), end: isoDate_(summary['Period end']) };
+}
+
+function loadClosingView_() {
+  try {
+    return closingView_();
+  } catch (error) {
+    try { appendException_('Update Failed', 'CC_ClosingDaily could not be read. Store closing stays Pending.'); } catch (ignore) {}
+    return null;
+  }
+}
+
+function closingDayStatus_(day) {
+  if (day.ratio !== null) return day.versusGoal || 'Reconcile';
+  if (day.status === 'Verified: no opportunities') return 'No opportunities';
+  return day.status || 'Pending';
+}
+
+function viewDayClosing_(view, date) {
+  var day = view && view.byDate[date];
+  if (!day) return { customers: null, opportunities: null, ratio: null, reconcile: false, versusGoal: null, status: 'Pending', note: date + ' is not on CC_ClosingDaily.' };
+  return {
+    customers: day.customers,
+    opportunities: day.opportunities,
+    ratio: day.ratio,
+    reconcile: day.ratio !== null && day.ratio > 1,
+    versusGoal: day.ratio === null ? null : day.versusGoal,
+    status: day.status,
+    note: day.status + '. ' + day.sources + '.',
+  };
+}
+
+/** Store month to date as calculated on CC_ClosingMTD, with each CC_ClosingDaily row for the trend. */
+function storeMonthClosing_(view, period, goal) {
+  var pending = {
+    customers: null, opportunities: null, ratio: null, reconcile: false, versusGoal: null, points: null, goal: goal,
+    through: '', customerSource: '', opportunitySource: '', verification: 'Pending', provisional: false, matched: [], latest: null, trend: [],
+  };
+  if (!view) {
+    pending.gap = 'The CC_ClosingDaily and CC_ClosingMTD tabs are not on the spreadsheet, so store closing is Pending.';
+    pending.note = pending.gap;
+    return pending;
+  }
+  if (view.start !== period.start) {
+    pending.gap = 'CC_ClosingDaily covers ' + view.start + ' through ' + view.end + ', not ' + period.start + ' through ' + period.end + '.';
+    pending.note = pending.gap;
+    return pending;
+  }
+  var through = isoDate_(view.summary['MTD through']);
+  var month = through ? view.byDate[through] : null;
+  var sources = String(view.summary.Sources || '').split(' · ');
+  var latestDate = isoDate_(view.summary['Latest daily date']);
+  var latestDay = latestDate ? view.byDate[latestDate] : null;
+  var lastDay = view.days.length ? view.days[view.days.length - 1] : null;
+  var verification = month ? month.mtd.status : (lastDay ? lastDay.mtd.status : 'Pending');
+  var note = month
+    ? 'Month to date ' + period.start + ' through ' + through + ': ' + month.mtd.customers + ' purchasing customers ÷ ' + month.mtd.opportunities + ' opportunities = ' + percentText_(month.mtd.ratio) + '. ' + verification + '.'
+    : 'Month to date is ' + verification + '.';
+  return {
+    customers: month ? month.mtd.customers : null,
+    opportunities: month ? month.mtd.opportunities : null,
+    ratio: month ? month.mtd.ratio : null,
+    reconcile: !!(month && month.mtd.ratio !== null && month.mtd.ratio > 1),
+    versusGoal: month ? month.mtd.versusGoal : null,
+    points: month ? month.mtd.points : null,
+    goal: goal,
+    through: through,
+    customerSource: month ? sources[0] || '' : '',
+    opportunitySource: month ? sources[1] || '' : '',
+    verification: verification,
+    provisional: /^Provisional/.test(verification),
+    matched: [],
+    latest: latestDay ? {
+      date: latestDay.date,
+      customers: latestDay.customers,
+      opportunities: latestDay.opportunities,
+      ratio: latestDay.ratio,
+      status: closingDayStatus_(latestDay),
+      points: latestDay.points,
+      verification: latestDay.status,
+    } : null,
+    trend: view.days.map(function (day) {
+      return {
+        date: day.date,
+        customers: day.customers,
+        opportunities: day.opportunities,
+        ratio: day.ratio,
+        status: closingDayStatus_(day),
+        points: day.points,
+        verification: day.status,
+        sources: day.sources,
+        mtdCustomers: day.mtd.customers,
+        mtdOpportunities: day.mtd.opportunities,
+        mtdRatio: day.mtd.ratio,
+        mtdStatus: day.mtd.status,
+      };
+    }),
+    gap: month ? '' : 'Month to date is ' + verification + '.',
+    note: note,
+  };
+}
+
+function withDayClosing_(days, view) {
   return days.map(function (day) {
-    var closing = dayClosing_(facts, day.date, goal);
+    var closing = viewDayClosing_(view, day.date);
     return {
       date: day.date,
       snapWritten: day.snapWritten,
@@ -996,6 +952,7 @@ function withDayClosing_(days, facts, goal) {
       closingRatio: closing.ratio,
       closingReconcile: closing.reconcile,
       closingVersus: closing.versusGoal,
+      closingStatus: closing.status,
     };
   });
 }
@@ -1250,10 +1207,10 @@ function home_(payload) {
   var metrics = {};
   sheet_('CC_Metrics').forEach(function (row) { metrics[String(row.key)] = row; });
   var bedding = metrics.bedding_percent ? numberOrNull_(metrics.bedding_percent.value) : null;
-  var closingFacts = loadClosing_();
+  var closingView = loadClosingView_();
   var closingGoal = closingGoal_(config);
-  var monthClosing = storeMonthClosing_(closingFacts, store, today, closed, closingGoal);
-  var yesterdayClosing = dayClosing_(closingFacts, yesterday, closingGoal);
+  var monthClosing = storeMonthClosing_(closingView, store, closingGoal);
+  var yesterdayClosing = viewDayClosing_(closingView, yesterday);
   // Written actuals are SNAP. Delivered actuals are NWDSR Delivered.
   // NWDSR Written stays on the daily row and is not the written total: it may be unpaid or cancelled.
   // SNAP Delivered is not a required report.
@@ -1377,15 +1334,15 @@ function daily_(payload) {
   var today = todayNy_();
   var store = storePeriodContaining_(today);
   var closed = closedDates_();
-  var facts = loadClosing_();
+  var view = loadClosingView_();
   var goal = closingGoal_(config_());
   return {
     role: payload.session.role,
     period: store.start + ' through ' + store.end,
     updated: healthValue_('last_calculation') || 'Not Available',
     goal: goal,
-    closing: storeMonthClosing_(facts, store, today, closed, goal),
-    days: withDayClosing_(storeCalendar_(dailyFacts_(), store, closed), facts, goal),
+    closing: storeMonthClosing_(view, store, goal),
+    days: withDayClosing_(storeCalendar_(dailyFacts_(), store, closed), view),
   };
 }
 
@@ -1394,7 +1351,7 @@ function closing_(payload) {
   var store = storePeriodContaining_(today);
   var individual = individualPeriodContaining_(today);
   var goal = closingGoal_(config_());
-  var month = storeMonthClosing_(loadClosing_(), store, today, closedDates_(), goal);
+  var month = storeMonthClosing_(loadClosingView_(), store, goal);
   return {
     role: payload.session.role,
     updated: healthValue_('last_calculation') || 'Not Available',
@@ -1775,42 +1732,25 @@ function workedCount_(lines) {
   return count > 0 ? count : null;
 }
 
-function closingDayMap_(facts) {
-  var map = {};
-  facts.forEach(function (row) {
-    if (row.scope !== 'store' || row.code || row.start !== row.end) return;
-    if (!map[row.start]) map[row.start] = { customers: null, opportunities: null };
-    if (row.customers !== null) map[row.start].customers = row.customers;
-    if (row.opportunities !== null) map[row.start].opportunities = row.opportunities;
-  });
-  return map;
-}
-
-function morningClosing_(facts, yesterday, goal) {
-  var map = closingDayMap_(facts);
-  function pack(date, scope) {
-    var row = map[date];
-    var computed = closingRatio_(row.customers, row.opportunities);
+function morningClosing_(view, yesterday, goal) {
+  function pack(day, scope) {
     return {
-      value: computed.ratio,
+      value: day.ratio,
       scope: scope,
-      date: date,
+      date: day.date,
       period: '',
       goal: goal,
-      customers: row.customers,
-      opportunities: row.opportunities,
-      reconcile: computed.reconcile,
+      customers: day.customers,
+      opportunities: day.opportunities,
+      reconcile: day.ratio !== null && day.ratio > 1,
     };
   }
-  var yesterdayRow = map[yesterday];
-  if (yesterdayRow && yesterdayRow.customers !== null && yesterdayRow.opportunities !== null) return pack(yesterday, 'yesterday');
-  var latest = '';
-  Object.keys(map).sort().forEach(function (date) {
-    var row = map[date];
-    if (row.customers !== null && row.opportunities !== null) latest = date;
-  });
-  if (!latest) return { value: null, scope: 'none', date: '', period: '', goal: goal, customers: null, opportunities: null, reconcile: false };
-  return pack(latest, 'latest-daily');
+  var days = view ? view.days : [];
+  var complete = days.filter(function (day) { return day.customers !== null && day.opportunities !== null; });
+  var yesterdayRow = complete.filter(function (day) { return day.date === yesterday; })[0];
+  if (yesterdayRow) return pack(yesterdayRow, 'yesterday');
+  if (!complete.length) return { value: null, scope: 'none', date: '', period: '', goal: goal, customers: null, opportunities: null, reconcile: false };
+  return pack(complete[complete.length - 1], 'latest-daily');
 }
 
 function morningBeddingSide_(yesterday, side, homeValue, ledgerRow, goal, dailyMap) {
@@ -1844,7 +1784,6 @@ function morning_(payload) {
   try { promotion = readPromotion_(); } catch (error) { promotion = null; }
   if (!promotion) promotion = anniversaryPromotion_();
   var yesterday = home.yesterday.date;
-  var closingFacts = [];
   var closingFigure = { value: null, scope: 'none', date: '', period: '', goal: home.closing.goal, customers: null, opportunities: null, reconcile: false };
   var homeBedding = { written: null, delivered: null, goal: 0.2 };
   (home.board && home.board.kpis ? home.board.kpis : []).forEach(function (row) {
@@ -1854,8 +1793,7 @@ function morning_(payload) {
   var beddingWritten = { value: null, scope: 'none', date: '', period: '', goal: beddingGoal };
   var beddingDelivered = { value: null, scope: 'none', date: '', period: '', goal: beddingGoal };
   try {
-    closingFacts = loadClosing_();
-    closingFigure = morningClosing_(closingFacts, yesterday, home.closing.goal);
+    closingFigure = morningClosing_(loadClosingView_(), yesterday, home.closing.goal);
     closingFigure.mtd = home.closing && home.closing.mtd ? home.closing.mtd : null;
     var storeStart = storePeriodContaining_(home.today).start;
     var dailyBedding = beddingDailyMap_();

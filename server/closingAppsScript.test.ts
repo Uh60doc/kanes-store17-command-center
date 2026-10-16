@@ -74,68 +74,98 @@ test('the closing goal is 50%, and exactly 50.0% is On Target', () => {
   assert.doesNotMatch(readFileSync(new URL('../apps-script/Data.gs', import.meta.url), 'utf8'), /closing_goal', 0\.4|set_40/);
 });
 
-test('October 2 through 14 is 52 ÷ 104 = 50.0% and October 14 is 2 ÷ 4 = 50.0%', () => {
-  const gs = load(october(), '2026-10-15');
-  const month = gs.storeMonthClosing_(gs.loadClosing_(), STORE, '2026-10-15', {}, 0.5);
+interface CapturedView { daily: Grid; mtd: Grid }
+const captured = JSON.parse(readFileSync(new URL('./fixtures/closing-view.json', import.meta.url), 'utf8')) as { scenarios: Record<string, CapturedView> };
+const LIVE = 'live CC_Closing rows: October 14 daily and October 2-14 month to date';
+const TOMORROW = 'tomorrow: October 15 Net Written 2 and PERQ 7 arrive';
+
+/** CC_ClosingDaily and CC_ClosingMTD exactly as Google Sheets calculated them on the scratch copy (server/checkClosingView.ts). */
+function withView(scenario: string): Record<string, Grid> {
+  const view = captured.scenarios[scenario];
+  assert.ok(view, `no captured view for ${scenario}`);
+  return { ...october(), CC_ClosingDaily: view.daily, CC_ClosingMTD: view.mtd };
+}
+
+test('the dashboard shows October 2 through 14 as 52 ÷ 104 = 50.0% and October 14 as 2 ÷ 4 = 50.0% from CC_ClosingMTD', () => {
+  const gs = load(withView(LIVE), '2026-10-16');
+  const month = gs.storeMonthClosing_(gs.loadClosingView_(), STORE, 0.5);
   assert.equal(month.through, '2026-10-14');
   assert.equal(month.customers, 52);
   assert.equal(month.opportunities, 104);
   assert.equal(month.ratio, 0.5);
   assert.equal(month.versusGoal, 'On Target');
   assert.equal(month.points, 0);
-  assert.match(month.customerSource, /52 for 2026-10-02 through 2026-10-14/);
-  assert.match(month.opportunitySource, /100 for 2026-10-02 through 2026-10-13 plus daily 2026-10-14 4/);
+  assert.equal(month.verification, 'Provisional: PERQ cutoff unconfirmed');
+  assert.equal(month.provisional, true);
+  assert.equal(month.customerSource, 'NWDSR Written report 2026-10-02 to 2026-10-14 (52)');
+  assert.equal(month.opportunitySource, 'PERQ snapshot 2026-10-02 to 2026-10-13 (100) + daily 2026-10-14 to 2026-10-14 (4)');
   assert.deepEqual(
-    { date: month.latest.date, customers: month.latest.customers, opportunities: month.latest.opportunities, ratio: month.latest.ratio, status: month.latest.status },
-    { date: '2026-10-14', customers: 2, opportunities: 4, ratio: 0.5, status: 'On Target' },
+    { date: month.latest.date, customers: month.latest.customers, opportunities: month.latest.opportunities, ratio: month.latest.ratio, status: month.latest.status, points: month.latest.points },
+    { date: '2026-10-14', customers: 2, opportunities: 4, ratio: 0.5, status: 'On Target', points: 0 },
   );
   const oct13 = month.trend.find((day: { date: string }) => day.date === '2026-10-13');
+  assert.equal(oct13.customers, 4);
+  assert.equal(oct13.opportunities, null);
   assert.equal(oct13.ratio, null);
   assert.equal(oct13.status, 'Pending: PERQ');
   assert.equal(oct13.mtdRatio, 0.5);
-  const oct05 = month.trend.find((day: { date: string }) => day.date === '2026-10-05');
-  assert.equal(oct05.mtdRatio, null);
+  assert.equal(month.trend.find((day: { date: string }) => day.date === '2026-10-05').mtdRatio, null);
+  const oct15 = month.trend.at(-1);
+  assert.equal(oct15.date, '2026-10-15');
+  assert.equal(oct15.status, 'Pending: NWDSR Written and PERQ');
+  assert.equal(oct15.customers, null);
   assert.equal(month.trend.filter((day: { ratio: number | null }) => day.ratio !== null).length, 1);
 });
 
-test('the October 1 PERQ snapshot of 104 is never used for the store month', () => {
-  const tabs = october();
-  tabs.CC_Closing = tabs.CC_Closing!.filter((row) => !(row[5] === 100 && row[1] === 'store'));
-  tabs.CC_Ledger = tabs.CC_Ledger!.filter((row) => row[12] !== 100);
-  const gs = load(tabs, '2026-10-15');
-  const month = gs.storeMonthClosing_(gs.loadClosing_(), STORE, '2026-10-15', {}, 0.5);
-  assert.equal(month.ratio, null);
-  assert.equal(month.opportunities, null);
+test('the Daily page and Morning Meeting read the same CC_ClosingDaily rows', () => {
+  const gs = load(withView(LIVE), '2026-10-16');
+  const view = gs.loadClosingView_();
+  const days = gs.withDayClosing_([{ date: '2026-10-14' }, { date: '2026-10-15' }], view);
+  assert.deepEqual(
+    { customers: days[0].purchasingCustomers, opportunities: days[0].opportunities, ratio: days[0].closingRatio, versus: days[0].closingVersus, status: days[0].closingStatus },
+    { customers: 2, opportunities: 4, ratio: 0.5, versus: 'On Target', status: 'Verified' },
+  );
+  assert.equal(days[1].closingRatio, null);
+  assert.equal(days[1].closingStatus, 'Pending: NWDSR Written and PERQ');
+  const morning = gs.morningClosing_(view, '2026-10-15', 0.5);
+  assert.deepEqual({ value: morning.value, scope: morning.scope, date: morning.date }, { value: 0.5, scope: 'latest-daily', date: '2026-10-14' });
 });
 
-test('a later day adds to the month only when both of its reports arrive', () => {
-  const tabs = october();
-  tabs.CC_Closing!.push(['2026-10-15', 'store', '', '', 2, '', '2026-10-15', '2026-10-15', NW, 'yes', '']);
-  let gs = load(tabs, '2026-10-16');
-  let month = gs.storeMonthClosing_(gs.loadClosing_(), STORE, '2026-10-16', {}, 0.5);
-  assert.equal(month.through, '2026-10-14');
-  assert.equal(month.trend.at(-1).status, 'Pending: PERQ');
-  tabs.CC_Closing!.push(['2026-10-15', 'store', '', '', '', 7, '2026-10-15', '2026-10-15', PERQ, 'yes', '']);
-  gs = load(tabs, '2026-10-16');
-  month = gs.storeMonthClosing_(gs.loadClosing_(), STORE, '2026-10-16', {}, 0.5);
+test('when October 15 reports reach CC_Closing, the recalculated view moves the month to 54 ÷ 111', () => {
+  const gs = load(withView(TOMORROW), '2026-10-16');
+  const month = gs.storeMonthClosing_(gs.loadClosingView_(), STORE, 0.5);
   assert.equal(month.through, '2026-10-15');
   assert.equal(month.customers, 54);
   assert.equal(month.opportunities, 111);
   assert.equal(month.ratio, 0.486);
   assert.equal(month.versusGoal, 'Below Goal');
   assert.equal(month.points, -1.4);
+  assert.equal(month.latest.date, '2026-10-15');
   assert.equal(month.latest.ratio, 0.286);
+  assert.equal(month.latest.status, 'Below Goal');
 });
 
-test('zero opportunities is not divided', () => {
-  const tabs = october();
-  tabs.CC_Closing!.push(['2026-10-15', 'store', '', '', 0, '', '2026-10-15', '2026-10-15', NW, 'yes', '']);
-  tabs.CC_Closing!.push(['2026-10-15', 'store', '', '', '', 0, '2026-10-15', '2026-10-15', PERQ, 'yes', '']);
-  const gs = load(tabs, '2026-10-16');
-  const month = gs.storeMonthClosing_(gs.loadClosing_(), STORE, '2026-10-16', {}, 0.5);
-  const day = month.trend.at(-1);
-  assert.equal(day.ratio, null);
-  assert.equal(day.status, 'No opportunities');
+test('zero opportunities and disagreeing reports are not divided', () => {
+  let gs = load(withView('blank figures on completed October 15 reports are zero'), '2026-10-16');
+  let month = gs.storeMonthClosing_(gs.loadClosingView_(), STORE, 0.5);
+  assert.equal(month.trend.at(-1).ratio, null);
+  assert.equal(month.trend.at(-1).status, 'No opportunities');
+  assert.equal(month.latest.date, '2026-10-14');
+  gs = load(withView('two October 15 PERQ reports that disagree are Reconcile, not added'), '2026-10-16');
+  month = gs.storeMonthClosing_(gs.loadClosingView_(), STORE, 0.5);
+  assert.equal(month.through, '2026-10-14');
+  assert.equal(month.trend.at(-1).status, 'Reconcile: reports disagree');
+});
+
+test('store closing is Pending without the view tabs or for another store month', () => {
+  let gs = load(october(), '2026-10-16');
+  let month = gs.storeMonthClosing_(gs.loadClosingView_(), STORE, 0.5);
+  assert.equal(month.ratio, null);
+  assert.match(month.gap, /CC_ClosingDaily and CC_ClosingMTD tabs are not on the spreadsheet/);
+  gs = load(withView(LIVE), '2026-11-03');
+  month = gs.storeMonthClosing_(gs.loadClosingView_(), { start: '2026-11-02', end: '2026-12-01' }, 0.5);
+  assert.equal(month.ratio, null);
+  assert.match(month.gap, /covers 2026-10-02 through 2026-11-01/);
 });
 
 test('salespeople show verified PERQ opportunities and Awaiting Verified Data for customers and ratio', () => {
