@@ -421,7 +421,7 @@ async function main(): Promise<void> {
     dry,
     checks,
     files: fileStatus,
-    ledger: { existingRows: existing.length, incoming: incoming.length, updated: updates.length, appended: appends.length, heldBack: heldBack.map((record) => record.recordKey), unchanged: incoming.length - updates.length - appends.length - heldBack.length },
+    ledger: { existingRows: existing.length, incoming: incoming.length, updated: updates.length, appended: appends.length, appendedViews: [...new Set(appends.map((row) => String(row[0])))], heldBack: heldBack.map((record) => record.recordKey), unchanged: incoming.length - updates.length - appends.length - heldBack.length },
     history: replaced.length,
     kpi: { updated: kpiUpdates.length, appended: kpiAppends.length },
     importsAppended: importAppends.length,

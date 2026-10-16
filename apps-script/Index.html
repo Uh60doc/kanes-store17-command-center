@@ -819,7 +819,7 @@
         '<div class="summary-grid">' +
         summaryBox('SNAP Written sales', snapKnown ? money(person.snapWritten) : 'Not Available', data.snapPending && data.snapPending.length ? 'SNAP Pending for ' + esc(data.snapPending.join(', ')) + '.' : 'Individual written source.') +
         summaryBox('Delivered sales', money(person.deliveredSales), 'Group 17 Delivered.') +
-        summaryBox('Monthly written goal', money(person.monthlyGoal), attained === null ? (data.fromFirst ? 'Attainment Pending.' : 'Not compared: the range does not start on the 1st.') : percent(attained) + ' attained (SNAP ÷ goal).', attained === null ? '' : (attained >= 1 ? 'good' : 'bad')) +
+        summaryBox('Monthly written goal', money(person.monthlyGoal), attained === null ? (data.fromFirst ? 'Attainment Pending.' : 'Not compared: the range does not start on the 1st.') : '<span class="' + (attained >= 1 ? 'good' : 'bad') + '">' + percent(attained) + ' attained</span> (SNAP ÷ goal).') +
         summaryBox('Written orders', person.closingThrough ? count(person.closingOrders) : 'Pending', person.closingThrough ? 'Group 17 Written through ' + esc(person.closingThrough) + '.' : esc(closing.ratioStatus || '')) +
         summaryBox('PERQ opportunities', person.closingThrough ? count(person.opportunities) : 'Pending', person.closingThrough ? 'Ups + Be Backs through ' + esc(person.closingThrough) + '.' : '') +
         summaryBox('Closing ratio', closingKnown ? percent(person.closingRatio) : (person.closingThrough && person.opportunities === 0 ? 'N/A' : 'Pending'), 'Goal ' + percent(goals.closing) + (closingKnown ? ' · ' + pointsText(person.closingPoints) : ''), closingKnown ? personRatioTone(person) : 'pending') +

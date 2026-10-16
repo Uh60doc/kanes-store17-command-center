@@ -535,8 +535,9 @@ var ATTACHMENT_CATEGORIES_ = [
 
 /**
  * One attachment category from Group 17 quantities. Missed = MAX(0, qualified - sold). Actual = sold ÷ qualified.
- * To hit goal = MAX(0, CEILING(qualified × goal) - sold). The product is rounded to 6 places first so 5 × 0.8
- * is 4, not 4.000000000000001.
+ * To hit goal = MAX(0, CEILING(qualified × goal - sold)): the same as CEILING(qualified × goal) - sold for whole
+ * quantities, and still whole attachments when Group 17 Delivered prints halves. The difference is rounded to
+ * 6 places first so 5 × 0.8 - 4 is 0, not 4.4e-16.
  */
 function attachmentLine_(category, tally, goal) {
   var line = { key: category.key, name: category.name, source: 'Group 17 ' + category.source, goal: goal, qualified: null, sold: null, missed: null, actual: null, points: null, needed: null, dollars: null, status: 'pending', flag: '' };
@@ -546,7 +547,7 @@ function attachmentLine_(category, tally, goal) {
   line.sold = tally.sold;
   line.dollars = tally.dollars;
   line.missed = round4(Math.max(0, tally.qualified - tally.sold));
-  if (goal !== null) line.needed = round4(Math.max(0, Math.ceil(Math.round(tally.qualified * goal * 1e6) / 1e6) - tally.sold));
+  if (goal !== null) line.needed = Math.max(0, Math.ceil(Math.round((tally.qualified * goal - tally.sold) * 1e6) / 1e6));
   if (tally.sold > tally.qualified) line.flag = 'Sold exceeds qualified. The source figures are kept as printed and flagged for review.';
   if (!tally.qualified) {
     line.status = 'na';

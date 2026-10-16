@@ -146,6 +146,8 @@ test('attachment math: missed, actual %, points from goal and attachments needed
   assert.deepEqual(line(gs, 0, 0, 0.8), { missed: 0, actual: null, points: null, needed: 0, status: 'na', flagged: false }, 'no opportunity is N/A, not 0%');
   assert.deepEqual(line(gs, 1, 2, 0.8), { missed: 0, actual: 2, points: 120, needed: 0, status: 'at', flagged: true }, 'sold above qualified is kept and flagged');
   assert.deepEqual(line(gs, 1.5, 1, 0.8), { missed: 0.5, actual: 0.6667, points: -13.3, needed: 1, status: 'below', flagged: false }, 'Delivered can print fractional quantities');
+  assert.deepEqual(line(gs, 1.5, 1.5, 0.8), { missed: 0, actual: 1, points: 20, needed: 0, status: 'at', flagged: false }, 'a fractional count at goal needs nothing more');
+  assert.deepEqual(line(gs, 4.5, 3.5, 0.8), { missed: 1, actual: 0.7778, points: -2.2, needed: 1, status: 'below', flagged: false }, 'one whole attachment reaches 80%');
   assert.deepEqual(line(gs, 44, 37, null), { missed: 7, actual: 0.8409, points: null, needed: null, status: 'nogoal', flagged: false });
 });
 
