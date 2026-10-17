@@ -130,6 +130,8 @@
     .roster-actions button { min-height: 36px; padding: 0 10px; }
     .roster-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 14px; }
     .roster-fields select { width: 100%; }
+    .roster-fields > div { display: flex; flex-direction: column; justify-content: flex-end; }
+    .roster-fields > div.eval-wide { justify-content: flex-start; }
     .roster-preview { margin-top: 10px; padding: 10px 12px; border: 1px solid #f3d48a; border-radius: 10px; }
     .roster-history { font-size: 13px; color: #9eb0c9; }
     .roster-card h3 { margin: 14px 0 4px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0c9; }
@@ -1440,12 +1442,12 @@
       return text;
     }
     function rosterInput(id, label, value, type) {
-      return '<label for="' + id + '">' + label + '</label><input id="' + id + '" type="' + (type || 'text') + '" value="' + esc(value || '') + '" />';
+      return '<div><label for="' + id + '">' + label + '</label><input id="' + id + '" type="' + (type || 'text') + '" value="' + esc(value || '') + '" /></div>';
     }
     function rosterSelect(id, label, options, value) {
-      return '<label for="' + id + '">' + label + '</label><select id="' + id + '">' + options.map(function (option) {
+      return '<div><label for="' + id + '">' + label + '</label><select id="' + id + '">' + options.map(function (option) {
         return '<option' + (option === value ? ' selected' : '') + '>' + esc(option) + '</option>';
-      }).join('') + '</select>';
+      }).join('') + '</select></div>';
     }
     function rosterForm(mode) {
       var data = rosterCache;
