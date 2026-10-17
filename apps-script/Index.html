@@ -1778,7 +1778,7 @@
         return '<button type="button" class="' + (day.date === data.date ? '' : 'secondary') + '" data-upload-day="' + esc(day.date) + '">' + esc(day.date.slice(5)) + ' · ' + day.imported + '/' + data.total + (day.review ? ' · ' + day.review + ' to review' : '') + '</button>';
       }).join('');
       var history = data.history.map(function (row) {
-        return '<li>' + uploadPill(row.status) + '<strong>' + esc(row.file) + '</strong> <span class="pending">' + esc(row.report || 'Not identified') + ' · business date ' + esc(row.date) + ' · ' + esc(row.role) + ' · ' + uploadWhen(row.at) + '</span><p class="sub">' + esc(row.message) + '</p></li>';
+        return '<li>' + uploadPill(row.status) + '<strong>' + esc(row.file) + '</strong> <span class="pending">' + esc(row.report || (row.status === 'Already on file' ? 'Same file as an earlier import' : 'Not identified')) + ' · business date ' + esc(row.date) + ' · ' + esc(row.role) + ' · ' + uploadWhen(row.at) + '</span><p class="sub">' + esc(row.message) + '</p></li>';
       }).join('');
       var last = data.lastSuccess;
       document.getElementById('screen').innerHTML =
