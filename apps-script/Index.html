@@ -98,6 +98,7 @@
     }
     select { min-height: 44px; padding: 6px 10px; border-radius: 10px; border: 1px solid #1d5c66; background: #070b10; color: white; font: inherit; }
     button.secondary { background: #10161c; border: 1px solid #1d5c66; color: #f3f6f8; }
+    button:disabled { opacity: 0.5; cursor: default; }
     .team-nav { margin: 6px 0 14px; }
     .score-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 6px; }
     .score-controls label { margin: 0; }
@@ -137,6 +138,19 @@
     .roster-preview { margin-top: 10px; padding: 10px 12px; border: 1px solid #f3d48a; border-radius: 10px; }
     .roster-history { font-size: 13px; color: #9eb0c9; }
     .roster-card h3 { margin: 14px 0 4px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0c9; }
+    .upload-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; align-items: start; }
+    .upload-card h3 { margin: 14px 0 4px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0c9; }
+    .upload-list { list-style: none; margin: 8px 0 0; padding: 0; }
+    .upload-list li { padding: 9px 0; border-bottom: 1px solid #1d5c66; overflow-wrap: anywhere; }
+    .upload-list li:last-child { border-bottom: 0; }
+    .upload-list .sub { font-size: 13px; }
+    .upload-list .status-pill { font-size: 12px; margin: 0 6px 4px 0; }
+    .upload-confirm { display: flex; align-items: flex-start; gap: 10px; margin: 12px 0 4px; color: #f3f6f8; }
+    .upload-confirm input { width: 22px; min-height: 22px; height: 22px; margin: 1px 0 0; flex: none; }
+    .upload-days { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .upload-days button { min-height: 40px; padding: 0 10px; font-weight: 600; }
+    .upload-count { font-size: 34px; font-weight: 750; margin: 4px 0; }
+    #upload-date { max-width: 260px; }
     .eval-results td, .eval-results th { white-space: nowrap; }
     .eval-results td:first-child { white-space: normal; min-width: 220px; }
     .eval-results th .pending { display: block; font-size: 12px; font-weight: 400; }
@@ -314,7 +328,7 @@
     }
     function navItems() {
       var items = [['home', 'Home'], ['daily', 'Daily'], ['closing', 'Closing'], ['written', 'Written'], ['delivered', 'Delivered'], ['people', 'Sales Team'], ['morning', 'Morning meeting']];
-      if (role !== 'sales') items.push(['bedding', 'Bedding'], ['orders', 'Open orders'], ['health', 'System health']);
+      if (role !== 'sales') items.push(['bedding', 'Bedding'], ['orders', 'Open orders'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
     }
@@ -1712,12 +1726,167 @@
       document.getElementById('screen').innerHTML =
         '<article class="card kpi-wrap"><h2>Historical report coverage</h2><p class="sub">' + salesStandard + ' A cumulative snapshot is not counted as a daily result. October 14 is still open, so it is not listed as missing.</p><table class="kpi"><tr><th>Report</th><th>Earliest</th><th>Latest</th><th>Daily records</th><th>Missing daily dates</th><th>In Google Sheets</th></tr>' + rows + '</table></article>';
     }
+    var uploadCache = null;
+    var uploadFiles = [];
+    var uploadResults = [];
+    var uploadBusy = false;
+    function uploadTone(status) {
+      if (status === 'Imported' || status === 'Already on file') return 'good';
+      if (status === 'Needs Review') return 'warn';
+      if (status === 'Failed') return 'bad';
+      return 'pending';
+    }
+    function uploadPill(status) {
+      return '<span class="status-pill ' + uploadTone(status) + '">' + esc(status) + '</span>';
+    }
+    function uploadWhen(iso) {
+      return iso ? esc(String(iso).slice(0, 16).replace('T', ' ')) + ' UTC' : '';
+    }
+    function uploadSize(bytes) {
+      return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB';
+    }
+    function uploadOrder(files) {
+      var rank = function (file) {
+        if (/\.pdf$/i.test(file.name)) return 0;
+        return /salesperson/i.test(file.name) ? 2 : 1;
+      };
+      return files.slice().sort(function (left, right) { return rank(left) - rank(right); });
+    }
+    function loadUploads(date, refresh) {
+      return api('uploads', { date: date, refresh: !!refresh }).then(function (data) { renderUpload(data); });
+    }
+    function renderUpload(data) {
+      uploadCache = data;
+      document.getElementById('header-note').textContent = 'Upload reports · business date ' + data.dateText;
+      var checklist = data.checklist.map(function (item) {
+        return '<li>' + uploadPill(item.status) + '<strong>' + esc(item.label) + '</strong> <span class="pending">' + esc(item.format) + '</span>' +
+          '<p class="sub">' + esc(item.message) + '</p>' +
+          (item.lastFile ? '<p class="sub">Last file: ' + esc(item.lastFile) + (item.lastAt ? ' · ' + uploadWhen(item.lastAt) : '') + '</p>' : '') + '</li>';
+      }).join('');
+      var missing = data.checklist.filter(function (item) { return item.status === 'Missing'; }).map(function (item) { return item.label; });
+      var selected = uploadFiles.map(function (file) {
+        return '<li>' + esc(file.name) + ' <span class="pending">' + uploadSize(file.size) + '</span></li>';
+      }).join('');
+      var results = uploadResults.map(function (result) {
+        return '<li>' + uploadPill(result.status) + '<strong>' + esc(result.file) + '</strong>' + (result.report ? ' <span class="pending">' + esc(result.report) + '</span>' : '') + '<p class="sub">' + esc(result.message) + '</p></li>';
+      }).join('');
+      var days = data.recent.map(function (day) {
+        return '<button type="button" class="' + (day.date === data.date ? '' : 'secondary') + '" data-upload-day="' + esc(day.date) + '">' + esc(day.date.slice(5)) + ' · ' + day.imported + '/' + data.total + (day.review ? ' · ' + day.review + ' to review' : '') + '</button>';
+      }).join('');
+      var history = data.history.map(function (row) {
+        return '<li>' + uploadPill(row.status) + '<strong>' + esc(row.file) + '</strong> <span class="pending">' + esc(row.report || 'Not identified') + ' · business date ' + esc(row.date) + ' · ' + esc(row.role) + ' · ' + uploadWhen(row.at) + '</span><p class="sub">' + esc(row.message) + '</p></li>';
+      }).join('');
+      var last = data.lastSuccess;
+      document.getElementById('screen').innerHTML =
+        '<h2 class="section-title">Upload reports</h2>' +
+        '<div class="upload-grid">' +
+        '<article class="card upload-card"><h2>1 · Business date</h2>' +
+        '<label for="upload-date">The day these reports cover</label><input id="upload-date" type="date" max="' + esc(data.today) + '" value="' + esc(data.date) + '" />' +
+        '<p class="sub">Each PDF prints its own report date, and it must match this date. PERQ exports and renamed Excel files do not print a date, so you confirm it below.</p>' +
+        '<h3>2 · Choose the files</h3>' +
+        '<input id="upload-files" type="file" multiple accept=".pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />' +
+        (selected ? '<ul class="upload-list">' + selected + '</ul>' : '<p class="sub">No files chosen. You can choose some or all nine; the rest can be uploaded later.</p>') +
+        '<label class="upload-confirm"><input id="upload-confirm" type="checkbox" /> <span>These Excel files are for ' + esc(data.dateText) + '. Required for the PERQ exports.</span></label>' +
+        '<p id="upload-error" class="error"></p>' +
+        '<p class="summary-actions"><button id="upload-go" type="button"' + (uploadFiles.length && !uploadBusy ? '' : ' disabled') + '>' + (uploadBusy ? 'Importing…' : 'Import reports') + '</button>' +
+        (uploadFiles.length && !uploadBusy ? ' <button id="upload-clear" type="button" class="secondary">Clear</button>' : '') + '</p>' +
+        (results ? '<h3>This import</h3><ul class="upload-list">' + results + '</ul>' : '') +
+        '</article>' +
+        '<article class="card upload-card"><h2>Reports for ' + esc(data.dateText) + '</h2>' +
+        '<p class="upload-count ' + (data.imported === data.total ? 'good' : 'warn') + '">' + data.imported + ' of ' + data.total + ' imported</p>' +
+        (missing.length ? '<p class="sub">Missing: ' + esc(missing.join(', ')) + '.</p>' : '') +
+        '<ul class="upload-list">' + checklist + '</ul></article>' +
+        '</div>' +
+        '<div class="upload-grid" style="margin-top:12px">' +
+        '<article class="card upload-card"><h2>Status</h2>' +
+        '<p><strong>Last successful import:</strong> ' + (last ? esc(last.report) + ' for ' + esc(last.date) + ' · ' + uploadWhen(last.at) : 'None yet') + '</p>' +
+        '<p><strong>Latest day with all nine reports:</strong> ' + esc(data.latestComplete || 'None in the last 10 days') + '</p>' +
+        '<p><strong>Store month KPIs counted through:</strong> ' + esc(data.kpiThrough || 'Not Available') + '</p>' +
+        (data.refreshed && data.refreshed.issues.length ? '<ul class="list warn">' + data.refreshed.issues.map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('') + '</ul>' : '') +
+        '<h3>Last 10 days</h3><div class="upload-days">' + days + '</div></article>' +
+        '<article class="card upload-card"><h2>Import history</h2>' + (history ? '<ul class="upload-list">' + history + '</ul>' : '<p class="sub">No uploads yet.</p>') + '</article>' +
+        '</div>';
+      document.getElementById('upload-date').addEventListener('change', function (event) {
+        if (!event.target.value) return;
+        uploadResults = [];
+        loadUploads(event.target.value, false).catch(uploadFailed);
+      });
+      document.getElementById('upload-files').addEventListener('change', function (event) {
+        uploadFiles = Array.prototype.slice.call(event.target.files || []);
+        uploadResults = [];
+        renderUpload(uploadCache);
+      });
+      var clear = document.getElementById('upload-clear');
+      if (clear) clear.addEventListener('click', function () { uploadFiles = []; renderUpload(uploadCache); });
+      document.getElementById('upload-go').addEventListener('click', runUpload);
+      Array.prototype.forEach.call(document.querySelectorAll('[data-upload-day]'), function (button) {
+        button.addEventListener('click', function () { uploadResults = []; loadUploads(button.getAttribute('data-upload-day'), false).catch(uploadFailed); });
+      });
+    }
+    function uploadFailed(error) {
+      if (/sign in/i.test(error.message)) { showLogin(error.message); return; }
+      var note = document.getElementById('upload-error');
+      if (note) note.textContent = error.message;
+      else document.getElementById('screen').innerHTML = '<p class="error">' + esc(error.message) + '</p>';
+    }
+    function readBase64(file) {
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () { resolve(String(reader.result).split(',')[1] || ''); };
+        reader.onerror = function () { reject(new Error(file.name + ' could not be read from this device.')); };
+        reader.readAsDataURL(file);
+      });
+    }
+    function runUpload() {
+      if (uploadBusy || !uploadFiles.length) return;
+      var date = document.getElementById('upload-date').value;
+      var confirmed = document.getElementById('upload-confirm').checked;
+      var files = uploadOrder(uploadFiles);
+      uploadBusy = true;
+      uploadResults = [];
+      renderUpload(uploadCache);
+      document.getElementById('upload-confirm').checked = confirmed;
+      var note = document.getElementById('upload-error');
+      var step = function (index) {
+        if (index >= files.length) return Promise.resolve();
+        var file = files[index];
+        note.className = 'sub';
+        note.textContent = 'Importing ' + (index + 1) + ' of ' + files.length + ': ' + file.name + '…';
+        return readBase64(file).then(function (base64) {
+          return api('uploadReport', { date: date, fileName: file.name, base64: base64, confirmDate: confirmed ? date : '' });
+        }).then(function (result) {
+          uploadResults.push(result);
+        }, function (error) {
+          if (/sign in/i.test(error.message)) throw error;
+          uploadResults.push({ file: file.name, status: 'Failed', report: '', message: error.message });
+        }).then(function () { return step(index + 1); });
+      };
+      step(0).then(function () {
+        note.textContent = 'Recalculating the dashboard…';
+        return api('uploads', { date: date, refresh: true });
+      }).then(function (data) {
+        uploadBusy = false;
+        uploadFiles = [];
+        renderUpload(data);
+      }).catch(function (error) {
+        uploadBusy = false;
+        renderUpload(uploadCache);
+        uploadFailed(error);
+      });
+    }
     function openScreen(name) {
       screen = name;
       document.body.classList.remove('print-summary', 'print-eval');
       drawNav();
       var request = name === 'written' || name === 'delivered' || name === 'orders' ? 'home' : name;
       if (name === 'admin') { renderAdmin(); return; }
+      if (name === 'upload') {
+        uploadFiles = [];
+        uploadResults = [];
+        document.getElementById('screen').innerHTML = '<p class="sub">Loading the report checklist…</p>';
+        loadUploads(uploadCache ? uploadCache.date : '', false).catch(uploadFailed);
+        return;
+      }
       api(request).then(function (data) {
         if (name === 'home' || name === 'written' || name === 'delivered') renderHome(data, name);
         else if (name === 'bedding') renderBedding(data);
