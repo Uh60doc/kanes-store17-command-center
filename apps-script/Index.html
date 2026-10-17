@@ -1423,13 +1423,28 @@
       } else if (closingMtd && closingMtd.gap) {
         closingDetail += ' · ' + closingMtd.gap;
       }
-      var winners = data.winners || { status: 'pending', people: [] };
+      var winners = data.winners || { status: 'pending', reason: 'PERQ Report Pending', people: [] };
+      var winnerDay = shortDate(winners.date) || 'yesterday';
       var winnerHtml = '';
-      if (winners.status !== 'ready') winnerHtml = '<p class="sub">' + esc(winners.reason || 'Staffing or SNAP lines are not on file.') + '</p>';
-      else if (!winners.people.length) winnerHtml = '<p class="sub">Nobody beat yesterday\'s individual share of ' + huddleMoney(winners.share) + '.</p>';
-      else winnerHtml = winners.people.map(function (person) {
-        return huddleCard(person.name, huddleMoney(person.written), 'Individual goal ' + huddleMoney(person.share) + ' · EXCEEDED DAILY GOAL BY ' + huddleMoney(person.above), 'good');
+      if (winners.status !== 'ready') winnerHtml = huddleCard('Working roster · ' + winnerDay, esc(winners.reason || 'PERQ Report Pending'), esc(winners.detail || ''), 'pending');
+      else if (!winners.people.length) winnerHtml = '<p class="sub">' + esc(winners.reason) + '</p>';
+      else winnerHtml = winners.people.map(function (person, index) {
+        var waiting = pending(person.written);
+        var parts = [];
+        if (person.source === 'staffing') parts.push('Confirmed in CC_Staffing');
+        else if (pending(person.opportunities)) parts.push('Individual PERQ: opportunities conflict between exports');
+        else parts.push('Individual PERQ: ' + person.opportunities + (Number(person.opportunities) === 1 ? ' opportunity' : ' opportunities'));
+        if (waiting) parts.push('SNAP Written not on file yet');
+        else if (Number(person.written) === 0) parts.push('No sales on the complete SNAP report');
+        if (!pending(person.share)) parts.push('Individual share ' + money(person.share) + (pending(person.above) ? '' : ' · EXCEEDED BY ' + money(person.above)));
+        var tone = waiting ? 'pending' : (Number(person.written) > 0 && (index === 0 || !pending(person.above)) ? 'good' : '');
+        return huddleCard((waiting ? '' : '#' + (index + 1) + ' ') + person.name, waiting ? 'Pending' : money(person.written), esc(parts.join(' · ')), tone);
       }).join('');
+      var winnerTitle = winners.date && yesterday.date && winners.date !== yesterday.date ? 'Sales winners · ' + winnerDay : 'Yesterday\'s sales winners';
+      var winnerIntro = '<p class="sub">Business date ' + esc(winners.date || '') + ' · working salespeople from the individual PERQ report, ranked by SNAP Written, highest first.' +
+        (winners.status === 'ready' && winners.people.length && !winners.snapReported ? ' ' + esc(winners.reason) : '') + '</p>';
+      var winnerPicker = '<div class="summary-actions noprint" style="align-items:center;margin:8px 0 12px"><input id="winners-day" type="date" aria-label="Business day" max="' + esc(yesterday.date || '') + '" value="' + esc(winners.date || '') + '" style="max-width:220px" />' +
+        '<button type="button" id="winners-show" class="secondary">Show this business day</button><span id="winners-error" class="error"></span></div>';
       var promo = data.promotion;
       var promoHtml = '<p class="sub">No approved promotion is on the calendar.</p>';
       if (promo) {
@@ -1481,7 +1496,7 @@
           '<label><input id="promo-approved" type="checkbox" ' + (promoSource.approved === 'yes' ? 'checked' : '') + ' /> Approved for the team</label>' +
           '<p id="promo-error" class="error"></p><button id="promo-save" type="button">Save promotion</button></article>';
       }
-      var staffNote = data.staffingNote ? '<p class="sub">' + esc(data.staffingNote) + '</p>' : '';
+      var staffNote = (data.rosterNotes || []).map(function (line) { return '<p class="sub">' + esc(line) + '</p>'; }).join('');
       document.getElementById('screen').innerHTML =
         '<div class="morning">' +
         '<h2 class="section-title">Results</h2><div class="morning-five">' +
@@ -1498,7 +1513,7 @@
         huddleCard('Closing target', percent(today.closingGoal), 'Net Written customers divided by PERQ.', '') +
         huddleCard('Per salesperson', huddleMoney(today.personalShare), pending(today.personalShare) ? 'Today\'s working roster is not on file.' : 'Today\'s written goal divided by associates working today.', pending(today.personalShare) ? 'pending' : '') +
         '</div>' +
-        '<h2 class="section-title">Yesterday\'s sales winners</h2>' + staffNote + '<div class="morning-grid">' + winnerHtml + '</div>' +
+        '<h2 class="section-title" id="winners-title">' + esc(winnerTitle) + '</h2>' + winnerIntro + winnerPicker + '<div class="morning-grid">' + winnerHtml + '</div>' + staffNote +
         '<h2 class="section-title">Today\'s promotion</h2>' + promoHtml +
         '<h2 class="section-title">Sales reminders</h2><ul class="list">' + reminders + '</ul>' +
         '<div class="morning-finance"><h2 class="section-title">Financing options</h2><div class="morning-grid">' + finance + '</div>' +
@@ -1508,6 +1523,22 @@
         editor +
         '</div>';
       document.getElementById('print-morning').addEventListener('click', function () { window.print(); });
+      document.getElementById('winners-show').addEventListener('click', function () {
+        var button = this;
+        var day = document.getElementById('winners-day').value;
+        button.disabled = true;
+        document.getElementById('winners-error').textContent = '';
+        api('morning', day ? { day: day } : {}).then(function (next) {
+          if (screen !== 'morning') return;
+          renderMorning(next);
+          var title = document.getElementById('winners-title');
+          if (title && title.scrollIntoView) title.scrollIntoView({ block: 'start' });
+        }).catch(function (error) {
+          button.disabled = false;
+          if (/sign in/i.test(error.message)) showLogin(error.message);
+          else document.getElementById('winners-error').textContent = error.message;
+        });
+      });
       var save = document.getElementById('promo-save');
       if (save) save.addEventListener('click', function () {
         api('savePromotion', {
