@@ -103,6 +103,19 @@ test('drafts are prepared on the 3rd, labeled Pending Verification when reports 
   assert.equal(at(tabs, '2026-11-08', services).prepareDueEvaluations_('2026-11-08'), 0, 'outside the delivery window nothing is prepared automatically');
 });
 
+test('a manager prepares drafts only after confirming, with a warning once the delivery window has passed', () => {
+  const tabs = store();
+  const { gs } = boot(tabs, '2026-10-16');
+  const preview = plain(gs.prepareEvals_({ session: manager, cycle: '2026-10' }));
+  assert.equal(preview.confirmed, false);
+  assert.match(preview.summary, /^Prepare 4 October 2026 drafts \(Renzo Del Solar, Prakash Gandhi, Eric Montes Rodriguez, Ricky Nassif\) covering July 2026 through September 2026\./);
+  assert.match(preview.summary, /delivery window for this month ended on 2026-10-06.*upload that workbook instead/);
+  assert.ok(!('CC_Evaluations' in tabs), 'nothing is written before confirmation');
+  const done = plain(gs.prepareEvals_({ session: manager, cycle: '2026-10', confirm: true }));
+  assert.equal(done.saved, '4 drafts prepared.');
+  assert.equal(tabs.CC_Evaluations!.length, 5);
+});
+
 test('coaching text uses verified figures, the two largest gaps, tenure, and stays editable until approval', () => {
   const tabs = store();
   record(tabs, '2026-08', 'Ricky Nassif', fullMonth({ fabric: 0.6, finance: 0.3 }));

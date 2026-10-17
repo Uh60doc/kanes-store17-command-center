@@ -654,7 +654,16 @@ function evals_(payload) {
 
 function prepareEvals_(payload) {
   var today = todayNy_();
-  var made = prepareCycle_(String(payload.cycle || ''), today, payload.session.role);
+  var cycle = String(payload.cycle || '');
+  if (payload.confirm !== true) {
+    var info = evalCycleInfo_(cycle);
+    if (today < info.prepare) throw new Error('Drafts for ' + info.label + ' are prepared on ' + info.prepare + ', after ' + info.months[2].label + ' is complete.');
+    var waiting = evalContext_(cycle, today).evaluations.filter(function (entry) { return entry.status === 'Not prepared'; });
+    var summary = 'Prepare ' + waiting.length + ' ' + info.label + ' draft' + (waiting.length === 1 ? '' : 's') + ' (' + waiting.map(function (entry) { return entry.name; }).join(', ') + ') covering ' + info.months[0].label + ' through ' + info.months[2].label + '.';
+    if (today > info.deliverBy) summary += ' The delivery window for this month ended on ' + info.deliverBy + '. If these evaluations were already given from a workbook, an admin should upload that workbook instead: a draft here would block the upload.';
+    return { confirmed: false, summary: summary };
+  }
+  var made = prepareCycle_(cycle, today, payload.session.role);
   var result = evals_({ session: payload.session, cycle: payload.cycle });
   result.saved = made ? made + ' draft' + (made === 1 ? '' : 's') + ' prepared.' : 'Every associate already has a draft.';
   return result;

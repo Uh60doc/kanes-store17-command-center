@@ -55,6 +55,8 @@ test('adding the roster columns keeps the Sales Team, SNAP totals and every repo
   assert.equal(ricky[header.indexOf('full_name')], 'Tarik Nassif');
   const caroline = tabs.CC_People!.find((row) => row[0] === 'Caroline Amaro')!;
   assert.equal(caroline[header.indexOf('status')], 'Terminated');
+  const listed = plain(gs.roster_({ session: { role: 'admin' } })).associates.find((person: any) => person.name === 'Caroline Amaro');
+  assert.deepEqual([listed.currentStatus, listed.startsLater, listed.onSalesTeam], ['Terminated', false, false], 'a terminated person is not shown as starting later');
   assert.ok(tabs.CC_People!.some((row) => row[0] === 'Kelly Meyers' && row[1] === 'management'));
   assert.ok(tabs.CC_RosterHistory!.length > 1, 'the migration is logged');
 });

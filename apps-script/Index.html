@@ -1028,7 +1028,15 @@
       document.getElementById('ev-print').addEventListener('click', printEvals);
       var prepare = document.getElementById('ev-prepare');
       if (prepare) prepare.addEventListener('click', function () {
-        api('prepareEvals', { cycle: data.cycle }).then(function (result) { renderEvals(result, result.saved); }).catch(function (error) { evalFailed(error); });
+        document.getElementById('eval-error').textContent = '';
+        api('prepareEvals', { cycle: data.cycle }).then(function (result) {
+          var host = document.getElementById('eval-confirm');
+          host.innerHTML = '<div class="roster-preview"><p><strong>' + esc(result.summary) + '</strong></p><p class="summary-actions"><button type="button" id="ev-prepare-confirm">Confirm and prepare</button> <button type="button" class="secondary" id="ev-prepare-cancel">Cancel</button></p></div>';
+          document.getElementById('ev-prepare-cancel').addEventListener('click', function () { host.innerHTML = ''; });
+          document.getElementById('ev-prepare-confirm').addEventListener('click', function () {
+            api('prepareEvals', { cycle: data.cycle, confirm: true }).then(function (done) { renderEvals(done, done.saved); }).catch(function (error) { evalFailed(error); });
+          });
+        }).catch(function (error) { evalFailed(error); });
       });
       document.querySelectorAll('[data-eval-edit]').forEach(function (button) {
         button.addEventListener('click', function () { evalPick = button.getAttribute('data-eval-edit'); evalEditing = evalPick; renderEvals(evalCache, ''); var host = document.getElementById('eval-editor'); if (host && host.scrollIntoView) host.scrollIntoView({ block: 'start' }); });

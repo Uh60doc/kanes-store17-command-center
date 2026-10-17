@@ -230,7 +230,7 @@ function rosterRecord_(row, today) {
     priorStatus: rosterStatus_(row.prior_status),
     currentStatus: current,
     scheduled: effective && today < effective ? status + ' on ' + effective : '',
-    startsLater: !!(hired && today < hired),
+    startsLater: !!(hired && today < hired && statusRole_(current) === 'associate'),
     onSalesTeam: role === 'associate',
     aliases: String(row.aliases || ''),
     note: String(row.roster_note || ''),
