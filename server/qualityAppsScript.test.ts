@@ -108,6 +108,19 @@ test('dates stored by Sheets read back as the business date on Home, System heal
   assert.equal(new Set(alerts(tabs).map((row) => row.alert_key)).size, alerts(tabs).length, 'no alert is raised twice');
 });
 
+test('alert dates saved as timestamps by an earlier version read back as the business date and are rewritten', () => {
+  const { gs, tabs } = harness();
+  gs.runQualityChecks_('first run');
+  const head = tabs.CC_Alerts![0] as string[];
+  const column = head.indexOf('business_date');
+  for (const row of tabs.CC_Alerts!.slice(1)) if (row[column]) row[column] = `${row[column]}T04:00:00.000Z`;
+  const attention = plain(gs.home_({ session })).attention as string[];
+  assert.ok(attention.some((item) => /^Not yet arrived for 2026-10-16: SNAP Written/.test(item)), attention.join('\n'));
+  gs.runQualityChecks_('next run');
+  assert.ok(alerts(tabs).every((row) => !/T04/.test(row.business_date)));
+  assert.equal(alerts(tabs).find((row) => row.alert_key === 'report|2026-10-16|snapWritten')!.business_date, '2026-10-16');
+});
+
 test('obsolete missing-report warnings from before alert tracking are resolved and not shown', () => {
   const { gs, tabs } = harness();
   assert.ok(table(tabs, 'CC_Exceptions').some((row) => row.severity === 'Report Missing' && /2026-10-15 is missing/.test(row.message)));

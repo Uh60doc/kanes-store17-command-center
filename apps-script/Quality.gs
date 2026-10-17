@@ -842,7 +842,8 @@ function alertRows_() {
     var record = {};
     ALERT_HEADERS_.forEach(function (key) {
       var i = header.indexOf(key);
-      record[key] = qualityCell_(i === -1 ? '' : row[i]);
+      var cell = i === -1 ? '' : row[i];
+      record[key] = key === 'business_date' ? isoDate_(cell) : qualityCell_(cell);
     });
     return record;
   });
