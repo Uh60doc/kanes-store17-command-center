@@ -751,9 +751,10 @@ function evalSheet_(styles, evaluation, used) {
     ['Status', evaluation.status + (evaluation.verification === 'Verified' ? '' : ' · Pending Verification'), 'Template', evaluation.template === 'newHire' ? 'New hire (under 90 days)' : 'Standard'],
   ];
   info.forEach(function (line) {
-    sheet.height(row, 19);
+    var flagged = line[0] === 'Status' && evaluation.verification !== 'Verified';
+    sheet.height(row, flagged ? 28 : 19);
     sheet.set(row, 1, line[0], label);
-    sheet.merge(row, 2, row, 3, line[1], line[0] === 'Status' && evaluation.verification !== 'Verified' ? { size: 9, bold: true, color: c.amberText, fill: c.amber, border: box, indent: 1 } : value);
+    sheet.merge(row, 2, row, 3, line[1], flagged ? { size: 9, bold: true, color: c.amberText, fill: c.amber, border: box, indent: 1, wrap: true, valign: 'center' } : value);
     sheet.set(row, 4, line[2], label);
     sheet.merge(row, 5, row, 7, line[3], value);
     row += 1;
