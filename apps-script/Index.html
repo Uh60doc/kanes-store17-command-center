@@ -191,6 +191,69 @@
     .ep-signs { display: grid; grid-template-columns: 2fr 1fr; gap: 28px 24px; margin: 34px 0 18px; }
     .ep-signs span { display: block; border-bottom: 1px solid #1b2833; height: 26px; }
     .ep-signs p { margin: 3px 0 0; font-size: 9.5pt; color: #5b6b78; }
+    .doc-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 12px 16px; border: 1px solid #1d5c66; border-radius: 14px; background: linear-gradient(90deg, #0f2a3a, #10161c 70%); }
+    .doc-hero .doc-kanes { display: block; height: 48px; width: auto; background: white; border-radius: 8px; padding: 5px 8px; }
+    .doc-hero .doc-s17 { display: block; height: 60px; width: auto; }
+    .doc-hero h2 { margin: 0; color: #f3f6f8; font-size: 19px; letter-spacing: 0.05em; }
+    .doc-hero .sub { font-size: 14px; }
+    .doc-tools { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 12px 0 10px; }
+    #doc-search { flex: 1 1 260px; max-width: 460px; min-height: 42px; }
+    .doc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .doc-chips button { min-height: 34px; padding: 0 11px; font-size: 14px; font-weight: 600; }
+    details.doc-upload { margin: 0 0 12px; border: 1px dashed #1d5c66; border-radius: 12px; padding: 4px 12px; background: #0b1117; }
+    details.doc-upload summary { cursor: pointer; color: #7ee7f0; font-weight: 700; font-size: 14px; padding: 6px 0; }
+    details.doc-upload label { margin: 8px 0 4px; font-size: 14px; }
+    details.doc-upload input, details.doc-upload select { min-height: 40px; width: 100%; }
+    .doc-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0 12px; }
+    .doc-form .doc-wide { grid-column: 1 / -1; }
+    .doc-form .upload-confirm { font-size: 14px; }
+    .doc-form .upload-confirm input { min-height: 22px; width: 22px; }
+    .doc-notice { margin: 0 0 12px; padding: 8px 12px; border: 1px solid #3dde8a; border-radius: 10px; color: #c8f5dc; overflow-wrap: anywhere; }
+    .doc-notice.bad { border-color: #ff8ea3; color: #ffb4c0; }
+    .doc-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-bottom: 12px; }
+    .doc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 12px; align-items: start; }
+    .doc-cat { padding: 0; overflow: hidden; }
+    .doc-cat > header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 14px; background: #0f2a3a; border-bottom: 3px solid #14c4d4; }
+    .doc-cat > header h2 { margin: 0; color: #f3f6f8; }
+    .doc-cat > header span { color: #9eb0c9; font-size: 13px; }
+    .doc-body { padding: 2px 14px 12px; }
+    .doc-body h3, .doc-strip h3 { margin: 12px 0 2px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0c9; }
+    .doc-links { list-style: none; margin: 0; padding: 0; }
+    .doc-links li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 5px 0; border-bottom: 1px solid rgba(29, 92, 102, 0.45); }
+    .doc-links li:last-child { border-bottom: 0; }
+    .doc-links button.doc-open { text-align: left; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
+    .doc-meta { font-size: 12px; color: #9eb0c9; }
+    .doc-acts { display: inline-flex; gap: 12px; margin-left: auto; }
+    .doc-acts button.linkish { font-size: 13px; font-weight: 600; color: #9eb0c9; }
+    .doc-acts button.linkish:hover, .doc-links button.doc-open:hover { text-decoration: underline; }
+    .doc-tag { display: inline-block; font-size: 11px; border: 1px solid #1d5c66; border-radius: 999px; padding: 0 6px; color: #f3d48a; }
+    .doc-empty { font-size: 13px; color: #75879f; margin: 10px 0 0; }
+    button.doc-packet-btn { width: 100%; margin: 10px 0 0; background: #f3d48a; color: #1b1404; font-size: 16px; letter-spacing: 0.05em; }
+    .doc-flash { animation: docflash 2.4s ease-out; }
+    @keyframes docflash { from { background: rgba(20, 196, 212, 0.35); } to { background: transparent; } }
+    .doc-viewer { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; background: rgba(2, 5, 8, 0.94); }
+    .doc-viewer-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-start; justify-content: space-between; padding: 10px 16px; background: #10161c; border-bottom: 1px solid #1d5c66; }
+    .doc-viewer-head h2 { margin: 0; color: #f3f6f8; font-size: 17px; letter-spacing: 0.02em; text-transform: none; overflow-wrap: anywhere; }
+    .doc-viewer-head .sub { font-size: 13px; }
+    .doc-viewer-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .doc-viewer-actions button { min-height: 38px; padding: 0 12px; }
+    .doc-viewer-status { margin: 0; padding: 6px 16px; background: #0b1117; border-bottom: 1px solid #1d5c66; color: #c9d4e3; font-size: 14px; }
+    .doc-viewer-status:empty { display: none; }
+    .doc-viewer-body { flex: 1; overflow: auto; padding: 16px; }
+    .doc-pages canvas, .doc-pages img { display: block; max-width: 100%; height: auto; margin: 0 auto 12px; background: white; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5); }
+    .doc-panel { max-width: 760px; margin: 0 auto; }
+    .doc-panel .doc-form { margin-bottom: 8px; }
+    .doc-panel input, .doc-panel select { min-height: 40px; width: 100%; }
+    .doc-order li { align-items: center; }
+    .doc-order input[type=checkbox] { width: 20px; min-height: 20px; height: 20px; margin: 0; }
+    .doc-order button { min-height: 32px; padding: 0 10px; }
+    .doc-print { display: none; }
+    @media (max-width: 560px) {
+      .doc-grid, .doc-strip { grid-template-columns: 1fr; }
+      .doc-acts { margin-left: 0; }
+      .doc-viewer-head { padding: 8px 10px; }
+      .doc-viewer-body { padding: 8px; }
+    }
     @media (max-width: 980px) {
       .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .summary-tables { grid-template-columns: 1fr; }
@@ -227,6 +290,11 @@
       body.print-eval .ep-page { padding: 0; margin: 0; max-width: none; break-after: page; }
       body.print-eval .ep-page:last-child { break-after: auto; }
       body.print-eval .ep-page, body.print-eval .ep-page * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html:has(body.print-doc), body.print-doc { background: white !important; }
+      body.print-doc > :not(#doc-print) { display: none !important; }
+      body.print-doc #doc-print { display: block; }
+      #doc-print img { display: block; width: auto; height: auto; max-width: 100%; max-height: 10.2in; margin: 0 auto; break-after: page; }
+      #doc-print img:last-child { break-after: auto; }
       body { background: white; color: black; }
       .nav, .noprint, .login { display: none !important; }
       .card { break-inside: avoid; border-color: #ccc; background: white; }
@@ -270,6 +338,7 @@
       <div id="screen"></div>
     </section>
   </main>
+  <div id="doc-print" class="doc-print"></div>
   <script>
     var token = '';
     var role = '';
@@ -322,12 +391,15 @@
       role = '';
       sessionStorage.removeItem('cc-token');
       sessionStorage.removeItem('cc-role');
+      closeDocViewer();
+      docBlobs = {};
+      docCache = null;
       document.getElementById('app').classList.add('hidden');
       document.getElementById('login').classList.remove('hidden');
       document.getElementById('login-error').textContent = message || '';
     }
     function navItems() {
-      var items = [['home', 'Home'], ['daily', 'Daily'], ['closing', 'Closing'], ['written', 'Written'], ['delivered', 'Delivered'], ['people', 'Sales Team'], ['morning', 'Morning meeting']];
+      var items = [['home', 'Home'], ['daily', 'Daily'], ['closing', 'Closing'], ['written', 'Written'], ['delivered', 'Delivered'], ['people', 'Sales Team'], ['morning', 'Morning meeting'], ['documents', 'Documents']];
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['orders', 'Open orders'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
@@ -943,11 +1015,17 @@
         setTimeout(function () { window.print(); }, 50);
       });
     }
-    function saveBase64(fileName, base64) {
+    function base64Bytes(base64) {
       var binary = atob(base64);
       var bytes = new Uint8Array(binary.length);
       for (var i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-      var blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      return bytes;
+    }
+    function saveBase64(fileName, base64, mime) {
+      saveBytes(fileName, base64Bytes(base64), mime || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    }
+    function saveBytes(fileName, bytes, mime) {
+      var blob = new Blob([bytes], { type: mime });
       var link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = fileName;
@@ -1879,12 +1957,795 @@
         uploadFailed(error);
       });
     }
+    var DOC_LIB_URLS = {
+      pdf: ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', 'sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e'],
+      worker: ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js', 'sha384-SnzOobpRMLXZ52iJvZm/C0fYw0OQemTXzTjIsdsfMcrCtCEe9qgzxTd3RSklO5x2'],
+      merge: ['https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js', 'sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI'],
+    };
+    var docCache = null;
+    var docQuery = '';
+    var docFilter = '';
+    var docNotice = null;
+    var docBlobs = {};
+    var docLibs = {};
+    var docViewerToken = 0;
+    var docFlash = '';
+    var docUploadOpen = false;
+    function docScript(spec) {
+      return new Promise(function (resolve, reject) {
+        var tag = document.createElement('script');
+        tag.src = spec[0];
+        tag.integrity = spec[1];
+        tag.crossOrigin = 'anonymous';
+        tag.onload = resolve;
+        tag.onerror = function () { tag.remove(); reject(new Error('The document viewer could not be loaded. Check the internet connection and try again.')); };
+        document.head.appendChild(tag);
+      });
+    }
+    function docPdfjs() {
+      if (!docLibs.pdf) {
+        docLibs.pdf = (window.pdfjsLib ? Promise.resolve() : docScript(DOC_LIB_URLS.pdf)).then(function () {
+          return fetch(DOC_LIB_URLS.worker[0], { integrity: DOC_LIB_URLS.worker[1], mode: 'cors' });
+        }).then(function (response) {
+          if (!response.ok) throw new Error('worker');
+          return response.text();
+        }).then(function (source) {
+          // A worker cannot be started from another origin, so it runs from a local copy of the checked file.
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+          return window.pdfjsLib;
+        }).catch(function () {
+          docLibs.pdf = null;
+          throw new Error('The PDF viewer could not be loaded. Check the internet connection and try again, or use Download.');
+        });
+      }
+      return docLibs.pdf;
+    }
+    function docMerger() {
+      if (!docLibs.merge) {
+        docLibs.merge = (window.PDFLib ? Promise.resolve() : docScript(DOC_LIB_URLS.merge)).then(function () { return window.PDFLib; }).catch(function (error) {
+          docLibs.merge = null;
+          throw error;
+        });
+      }
+      return docLibs.merge;
+    }
+    function docFind(id) {
+      if (!docCache) return null;
+      var found = docCache.docs.filter(function (doc) { return doc.id === id; })[0];
+      if (!found && docCache.removed) found = docCache.removed.filter(function (doc) { return doc.id === id; })[0];
+      if (!found && docCache.versions) {
+        Object.keys(docCache.versions).forEach(function (family) {
+          docCache.versions[family].forEach(function (doc) { if (doc.id === id) found = doc; });
+        });
+      }
+      return found || null;
+    }
+    function docOffice(doc) {
+      return doc.type === 'Word' || doc.type === 'Excel';
+    }
+    function docMeta(doc) {
+      var ext = (String(doc.fileName).match(/\.([A-Za-z0-9]+)$/) || ['', ''])[1].toUpperCase();
+      var parts = [doc.type === 'Image' ? 'Image ' + ext : doc.type, uploadSize(doc.size)];
+      if (doc.revision) parts.push(doc.revision);
+      if (doc.documentDate) parts.push('updated ' + dayText(doc.documentDate));
+      if (doc.version > 1) parts.push('library v' + doc.version);
+      return parts.join(' · ');
+    }
+    function docDetails(doc) {
+      var lines = [
+        doc.category + (doc.subcategory ? ' › ' + doc.subcategory : ''),
+        'Issued by ' + doc.source,
+        'Visible to ' + (doc.audience === 'all' ? 'all staff' : 'Managers and Admin only'),
+        docMeta(doc),
+        'Uploaded ' + nyDay(doc.uploadedAt) + ' by ' + doc.uploadedBy,
+        'Original file ' + doc.fileName,
+      ];
+      if (doc.status === 'replaced') lines.unshift('Earlier version ' + doc.version + ' (replaced)');
+      if (doc.status === 'removed') lines.unshift('Removed from the library');
+      return esc(lines.join(' · '));
+    }
+    function docMatches(doc) {
+      if (docFilter && doc.category !== docFilter) return false;
+      if (!docQuery) return true;
+      var hay = [doc.title, doc.category, doc.subcategory, doc.fileName, doc.source, doc.revision, doc.type].join(' ').toLowerCase();
+      var squashed = hay.replace(/[^a-z0-9]+/g, '');
+      return docQuery.toLowerCase().split(/\s+/).filter(Boolean).every(function (term) {
+        var bare = term.replace(/[^a-z0-9]+/g, '');
+        return hay.indexOf(term) !== -1 || (bare && squashed.indexOf(bare) !== -1);
+      });
+    }
+    function docLink(doc, withCategory, uses) {
+      var id = esc(doc.id);
+      return '<li data-doc-row="' + id + '"' + (docFlash === doc.id ? ' class="doc-flash"' : '') + '><button type="button" class="linkish doc-open" data-doc-view="' + id + '">' + esc(doc.title) + '</button>' +
+        '<span class="doc-meta">' + esc(docMeta(doc)) + (withCategory ? ' · ' + esc(doc.category) : '') + (uses ? ' · opened ' + uses + (uses === 1 ? ' time' : ' times') : '') + '</span>' +
+        (doc.audience === 'managers' ? '<span class="doc-tag">Managers only</span>' : '') +
+        (doc.source !== 'Store 17' ? '<span class="doc-tag">' + esc(doc.source) + '</span>' : '') +
+        '<span class="doc-acts"><button type="button" class="linkish" data-doc-view="' + id + '">View</button><button type="button" class="linkish" data-doc-download="' + id + '">Download</button>' +
+        (doc.printable ? '<button type="button" class="linkish" data-doc-print="' + id + '">Print</button>' : '<span class="doc-meta">Print from ' + esc(doc.type) + '</span>') + '</span></li>';
+    }
+    function docToday() {
+      return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    }
+    function docSubOptions(category, current) {
+      var found = docCache.categories.filter(function (item) { return item.name === category; })[0];
+      var names = found ? found.subcategories.slice() : [];
+      docCache.docs.forEach(function (doc) { if (doc.category === category && doc.subcategory && names.indexOf(doc.subcategory) === -1) names.push(doc.subcategory); });
+      if (current && names.indexOf(current) === -1) names.push(current);
+      return names.map(function (name) { return '<option value="' + esc(name) + '"></option>'; }).join('');
+    }
+    function docFieldsHtml(prefix, doc) {
+      var d = docCache;
+      var pick = function (value, chosen, label) { return '<option value="' + esc(value) + '"' + (value === chosen ? ' selected' : '') + '>' + esc(label || value) + '</option>'; };
+      return '<div><label for="' + prefix + '-title">Document title</label><input id="' + prefix + '-title" maxlength="140" value="' + esc(doc ? doc.title : '') + '" /></div>' +
+        '<div><label for="' + prefix + '-category">Category (required)</label><select id="' + prefix + '-category">' + (doc ? '' : '<option value="">Choose…</option>') + d.categories.map(function (item) { return pick(item.name, doc ? doc.category : ''); }).join('') + '</select></div>' +
+        '<div><label for="' + prefix + '-subcategory">Subcategory (optional)</label><input id="' + prefix + '-subcategory" list="' + prefix + '-subs" maxlength="80" value="' + esc(doc ? doc.subcategory : '') + '" /><datalist id="' + prefix + '-subs">' + (doc ? docSubOptions(doc.category, doc.subcategory) : '') + '</datalist></div>' +
+        '<div><label for="' + prefix + '-source">Issued by</label><select id="' + prefix + '-source">' + (doc ? '' : '<option value="">Choose…</option>') + d.sources.map(function (value) { return pick(value, doc ? doc.source : '', value === 'Store 17' ? 'Store 17 (store procedure or resource)' : value + ' (company document, unchanged)'); }).join('') + '</select></div>' +
+        '<div><label for="' + prefix + '-audience">Who can see it</label><select id="' + prefix + '-audience">' + pick('managers', doc ? doc.audience : 'managers', d.audiences.managers) + pick('all', doc ? doc.audience : 'managers', d.audiences.all) + '</select></div>' +
+        '<div><label for="' + prefix + '-date">Document\'s own last-updated date (optional)</label><input id="' + prefix + '-date" type="date" max="' + esc(docToday()) + '" value="' + esc(doc ? doc.documentDate : '') + '" /></div>' +
+        '<div><label for="' + prefix + '-revision">Document\'s own version or revision (optional)</label><input id="' + prefix + '-revision" maxlength="40" value="' + esc(doc ? doc.revision : '') + '" /></div>';
+    }
+    function docFieldValues(prefix) {
+      var value = function (key) { return document.getElementById(prefix + '-' + key).value; };
+      return { title: value('title').trim(), category: value('category'), subcategory: value('subcategory').trim(), source: value('source'), audience: value('audience'), documentDate: value('date'), revision: value('revision').trim() };
+    }
+    function bindDocCategory(prefix) {
+      var select = document.getElementById(prefix + '-category');
+      select.addEventListener('change', function () { document.getElementById(prefix + '-subs').innerHTML = docSubOptions(select.value, ''); });
+    }
+    function docUploadForm() {
+      return '<details class="doc-upload" id="doc-upload"' + (docUploadOpen ? ' open' : '') + '><summary>Upload a document</summary><div class="doc-form">' +
+        '<div class="doc-wide"><label for="du-file">File · PDF, Word, Excel or image, up to 15 MB</label><input id="du-file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,application/pdf,image/*" /></div>' +
+        docFieldsHtml('du', null) +
+        '<div><label for="du-uploader">Your name (optional)</label><input id="du-uploader" maxlength="60" /></div>' +
+        '<label class="upload-confirm doc-wide"><input id="du-confirm" type="checkbox" /> <span>This is a blank form or a general resource, not a completed HR form or a personal employee or customer record.</span></label>' +
+        '<p class="doc-wide summary-actions"><button id="du-go" type="button">Upload Document</button></p><p id="du-status" class="error doc-wide"></p></div></details>';
+    }
+    function docAdminPanel() {
+      var removed = docCache.removed || [];
+      return '<details class="doc-upload" style="margin-top:12px"><summary>Removed documents (' + removed.length + ') · Admin</summary>' +
+        (removed.length ? '<ul class="doc-links">' + removed.map(function (doc) {
+          return '<li><button type="button" class="linkish doc-open" data-doc-view="' + esc(doc.id) + '">' + esc(doc.title) + '</button><span class="doc-meta">' + esc(doc.category + ' · ' + docMeta(doc) + ' · removed ' + nyDay(doc.updatedAt) + ' by ' + doc.updatedBy) + '</span>' +
+            '<span class="doc-acts"><button type="button" class="linkish" data-doc-restore="' + esc(doc.id) + '">Restore</button><button type="button" class="linkish" data-doc-delete="' + esc(doc.id) + '">Delete permanently</button></span></li>';
+        }).join('') + '</ul>' : '<p class="doc-empty">No removed documents.</p>') + '</details>';
+    }
+    function renderDocs(data, notice) {
+      if (data) docCache = data;
+      if (notice !== undefined) docNotice = notice;
+      if (screen !== 'documents' || !docCache) return;
+      var d = docCache;
+      document.getElementById('header-note').textContent = 'Documents · ' + d.docs.length + (d.docs.length === 1 ? ' document' : ' documents') + ' in the library';
+      var storeLogo = document.querySelector('img.logo') ? document.querySelector('img.logo').src : '';
+      var chips = [['', 'All']].concat(d.categories.map(function (item) { return [item.name, item.name]; })).map(function (item) {
+        return '<button type="button" class="' + (docFilter === item[0] ? '' : 'secondary') + '" data-doc-filter="' + esc(item[0]) + '">' + esc(item[1]) + '</button>';
+      }).join('');
+      document.getElementById('screen').innerHTML =
+        '<section class="doc-hero"><img class="doc-kanes" alt="Kane\'s Furniture" src="' + esc(d.kanesLogo) + '" /><img class="doc-s17" alt="Store 17" src="' + esc(storeLogo) + '" />' +
+        '<div><h2>Store 17 Resource Center</h2><p class="sub">Tools, training, new hire, store policy and customer service documents' + (role === 'sales' ? ' shared with all staff' : '') + '. Files stay in the Command Center\'s private Google Drive.</p></div></section>' +
+        '<div class="doc-tools"><input id="doc-search" type="search" placeholder="Search titles, subcategories, file names…" aria-label="Search documents" value="' + esc(docQuery) + '" /><div class="doc-chips" id="doc-chips">' + chips + '</div></div>' +
+        (d.canUpload ? docUploadForm() : '') +
+        '<div id="doc-notice"></div><div id="doc-library"></div>' + (d.isAdmin ? docAdminPanel() : '');
+      document.getElementById('doc-search').addEventListener('input', function (event) { docQuery = event.target.value.trim(); drawDocLibrary(); });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-doc-filter]'), function (button) {
+        button.addEventListener('click', function () {
+          docFilter = button.getAttribute('data-doc-filter');
+          Array.prototype.forEach.call(document.querySelectorAll('[data-doc-filter]'), function (other) { other.className = other === button ? '' : 'secondary'; });
+          drawDocLibrary();
+        });
+      });
+      if (d.canUpload) bindDocUpload();
+      document.getElementById('screen').querySelectorAll('[data-doc-restore], [data-doc-delete], .doc-upload [data-doc-view]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          if (button.hasAttribute('data-doc-view')) { openDoc(button.getAttribute('data-doc-view')); return; }
+          var restore = button.hasAttribute('data-doc-restore');
+          var doc = docFind(button.getAttribute(restore ? 'data-doc-restore' : 'data-doc-delete'));
+          if (!restore && !window.confirm('Delete "' + doc.title + '" permanently? Its file goes to the Command Center Drive trash, which Google empties after 30 days.')) return;
+          docAdminCall('removeDocument', { id: doc.id, action: restore ? 'restore' : 'delete' }, restore ? doc.id : '');
+        });
+      });
+      document.getElementById('doc-library').addEventListener('click', docLibraryClick);
+      drawDocNotice();
+      drawDocLibrary();
+      if (docFlash) {
+        var row = document.querySelector('.doc-grid [data-doc-row="' + docFlash + '"]');
+        if (row) row.scrollIntoView({ block: 'center' });
+        setTimeout(function () { docFlash = ''; }, 2500);
+      }
+    }
+    function drawDocNotice() {
+      var box = document.getElementById('doc-notice');
+      if (!box) return;
+      box.innerHTML = docNotice ? '<p class="doc-notice' + (docNotice.bad ? ' bad' : '') + '" role="status">' + esc(docNotice.text) + '</p>' : '';
+    }
+    function docSay(text, bad) {
+      var status = document.getElementById('doc-viewer-status');
+      if (status) { status.textContent = text; status.className = 'doc-viewer-status' + (bad ? ' error' : ''); return; }
+      docNotice = text ? { text: text, bad: !!bad } : null;
+      drawDocNotice();
+    }
+    function drawDocLibrary() {
+      var holder = document.getElementById('doc-library');
+      if (!holder || !docCache) return;
+      var d = docCache;
+      var list = d.docs.filter(docMatches);
+      var html = '';
+      if (!docQuery && !docFilter) {
+        var recent = d.recent.map(docFind).filter(Boolean);
+        var frequent = d.frequent.filter(function (item) { return docFind(item.id); });
+        html += '<div class="doc-strip"><article class="card"><h2>Recently added</h2>' +
+          (recent.length ? '<ul class="doc-links">' + recent.map(function (doc) { return docLink(doc, true); }).join('') + '</ul>' : '<p class="doc-empty">No documents have been added yet.</p>') + '</article>' +
+          '<article class="card"><h2>Frequently used</h2>' +
+          (frequent.length ? '<p class="doc-meta">Times opened here (view, download or print) since ' + uploadWhen(d.trackingSince) + '.</p><ul class="doc-links">' + frequent.map(function (item) { return docLink(docFind(item.id), true, item.uses); }).join('') + '</ul>'
+            : '<p class="doc-empty">Nothing has been opened yet. Counts start with the first view, download or print here; none are estimated.</p>') + '</article></div>';
+      }
+      if (docQuery) html += '<p class="sub" style="margin:0 0 10px">' + list.length + (list.length === 1 ? ' document matches' : ' documents match') + ' “' + esc(docQuery) + '”' + (docFilter ? ' in ' + esc(docFilter) : '') + '.</p>';
+      var cards = d.categories.filter(function (item) { return !docFilter || item.name === docFilter; }).map(function (category) {
+        var docs = list.filter(function (doc) { return doc.category === category.name; });
+        if (docQuery && !docs.length) return '';
+        return docCategoryCard(category, docs);
+      }).join('');
+      html += cards ? '<div class="doc-grid">' + cards + '</div>' : '<p class="doc-empty">No document matches. Try fewer or different words.</p>';
+      holder.innerHTML = html;
+    }
+    function docCategoryCard(category, docs) {
+      var groups = {};
+      docs.forEach(function (doc) { (groups[doc.subcategory] = groups[doc.subcategory] || []).push(doc); });
+      var names = category.subcategories.filter(function (name) { return groups[name]; })
+        .concat(Object.keys(groups).filter(function (name) { return name && category.subcategories.indexOf(name) === -1; }).sort());
+      if (groups['']) names.push('');
+      var byTitle = function (left, right) { return left.title.localeCompare(right.title); };
+      var body = names.map(function (name) {
+        return '<h3>' + esc(name || 'General') + '</h3><ul class="doc-links">' + groups[name].sort(byTitle).map(function (doc) { return docLink(doc, false); }).join('') + '</ul>';
+      }).join('');
+      var empty = docQuery ? [] : category.subcategories.filter(function (name) { return !groups[name]; });
+      var packet = '';
+      if (category.name === 'New Hire' && docCache.canUpload) {
+        var approved = (docCache.packet || []).length;
+        packet = '<button type="button" class="doc-packet-btn" data-doc-packet>PRINT NEW HIRE PACKET</button>' +
+          '<p class="doc-meta">' + (approved ? approved + ' approved ' + (approved === 1 ? 'document' : 'documents') + ' for the associate packet.' : 'No documents are approved for the packet yet.') +
+          (docCache.isAdmin ? ' <button type="button" class="linkish" data-doc-packet-setup>Set up packet</button>' : '') + '</p>';
+      }
+      return '<article class="card doc-cat" data-doc-cat="' + esc(category.name) + '"><header><h2>' + esc(category.name) + '</h2><span>' + docs.length + (docs.length === 1 ? ' document' : ' documents') + '</span></header><div class="doc-body">' + packet +
+        (body || (docQuery ? '' : '<p class="doc-empty">No documents yet.</p>')) +
+        (empty.length && docs.length ? '<p class="doc-empty">Not added yet: ' + esc(empty.join(' · ')) + '</p>' : '') +
+        (empty.length && !docs.length ? '<p class="doc-empty">Sections: ' + esc(empty.join(' · ')) + '</p>' : '') + '</div></article>';
+    }
+    function docLibraryClick(event) {
+      var target = event.target.closest('button');
+      if (!target) return;
+      if (target.hasAttribute('data-doc-view')) openDoc(target.getAttribute('data-doc-view'));
+      else if (target.hasAttribute('data-doc-download')) docDownload(docFind(target.getAttribute('data-doc-download')));
+      else if (target.hasAttribute('data-doc-print')) docPrint(docFind(target.getAttribute('data-doc-print')));
+      else if (target.hasAttribute('data-doc-packet')) openPacket();
+      else if (target.hasAttribute('data-doc-packet-setup')) openPacketSetup();
+    }
+    function bindDocUpload() {
+      var details = document.getElementById('doc-upload');
+      details.addEventListener('toggle', function () { docUploadOpen = details.open; });
+      bindDocCategory('du');
+      document.getElementById('du-file').addEventListener('change', function (event) {
+        var file = event.target.files && event.target.files[0];
+        var title = document.getElementById('du-title');
+        if (file && !title.value.trim()) title.value = file.name.replace(/\.[A-Za-z0-9]+$/, '').replace(/[_]+/g, ' ').trim();
+      });
+      document.getElementById('du-go').addEventListener('click', runDocUpload);
+    }
+    function runDocUpload() {
+      var file = (document.getElementById('du-file').files || [])[0];
+      var status = document.getElementById('du-status');
+      var button = document.getElementById('du-go');
+      var fields = docFieldValues('du');
+      var problem = !file ? 'Choose a file.' : !fields.category ? 'Choose the category first.' : !fields.title ? 'Enter the document title.' : !fields.source ? 'Choose who issued it.'
+        : !document.getElementById('du-confirm').checked ? 'Confirm the file is not a completed HR form or a personal record.' : file.size > docCache.maxBytes ? file.name + ' is larger than 15 MB.' : '';
+      status.className = 'error doc-wide';
+      status.textContent = problem;
+      if (problem) return;
+      button.disabled = true;
+      status.className = 'sub doc-wide';
+      status.textContent = 'Uploading ' + file.name + ' (' + uploadSize(file.size) + ')…';
+      readBase64(file).then(function (base64) {
+        return api('uploadDocument', Object.assign(fields, { fileName: file.name, base64: base64, uploaderName: document.getElementById('du-uploader').value.trim(), noPersonalInfo: true }));
+      }).then(function (result) {
+        docUploadOpen = false;
+        docQuery = '';
+        docFilter = '';
+        docFlash = result.id;
+        renderDocs(result.library, { text: result.message });
+      }).catch(function (error) {
+        if (/sign in/i.test(error.message)) { showLogin(error.message); return; }
+        button.disabled = false;
+        status.className = 'error doc-wide';
+        status.textContent = error.message;
+      });
+    }
+    function docFailed(error) {
+      if (/sign in/i.test(error.message)) { showLogin(error.message); return; }
+      if (screen !== 'documents') return;
+      if (document.getElementById('doc-library')) docSay(error.message, true);
+      else document.getElementById('screen').innerHTML = '<p class="error">' + esc(error.message) + '</p>';
+    }
+    function docFetch(id, purpose, action) {
+      var key = id + '|' + purpose;
+      if (docBlobs[key]) return Promise.resolve(docBlobs[key]);
+      var parts = [];
+      var meta = null;
+      var step = function (offset) {
+        return api('docFile', { id: id, purpose: purpose, action: action, offset: offset }).then(function (part) {
+          meta = meta || part;
+          var bytes = base64Bytes(part.base64);
+          parts.push(bytes);
+          if (part.done || !bytes.length) return null;
+          return step(offset + bytes.length);
+        });
+      };
+      return step(0).then(function () {
+        var total = parts.reduce(function (sum, part) { return sum + part.length; }, 0);
+        var bytes = new Uint8Array(total);
+        var at = 0;
+        parts.forEach(function (part) { bytes.set(part, at); at += part.length; });
+        if (total !== meta.size) throw new Error('The file did not arrive complete. Try again.');
+        var file = { bytes: bytes, mime: meta.mime, fileName: meta.fileName, sharing: meta.sharing || '' };
+        var keys = Object.keys(docBlobs);
+        if (keys.length >= 8) delete docBlobs[keys[0]];
+        docBlobs[key] = file;
+        return file;
+      });
+    }
+    function docRenderPdf(bytes, container, token) {
+      return docPdfjs().then(function (lib) {
+        return lib.getDocument({ data: bytes.slice() }).promise;
+      }).then(function (pdf) {
+        var chain = Promise.resolve();
+        var ratio = window.devicePixelRatio || 1;
+        var width = Math.max(280, Math.min(container.clientWidth || 900, 980));
+        var draw = function (number) {
+          return function () {
+            if (token !== docViewerToken) return null;
+            return pdf.getPage(number).then(function (page) {
+              var scale = width / page.getViewport({ scale: 1 }).width;
+              var viewport = page.getViewport({ scale: scale * ratio });
+              var canvas = document.createElement('canvas');
+              canvas.width = Math.floor(viewport.width);
+              canvas.height = Math.floor(viewport.height);
+              canvas.style.width = Math.floor(viewport.width / ratio) + 'px';
+              canvas.setAttribute('aria-label', 'Page ' + number);
+              container.appendChild(canvas);
+              return page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+            });
+          };
+        };
+        for (var number = 1; number <= pdf.numPages; number += 1) chain = chain.then(draw(number));
+        return chain.then(function () { return pdf.numPages; });
+      });
+    }
+    function docPageImages(bytes) {
+      return docPdfjs().then(function (lib) {
+        return lib.getDocument({ data: bytes.slice() }).promise;
+      }).then(function (pdf) {
+        var images = [];
+        var chain = Promise.resolve();
+        var draw = function (number) {
+          return function () {
+            return pdf.getPage(number).then(function (page) {
+              var viewport = page.getViewport({ scale: 2 });
+              var canvas = document.createElement('canvas');
+              canvas.width = Math.floor(viewport.width);
+              canvas.height = Math.floor(viewport.height);
+              var context = canvas.getContext('2d');
+              context.fillStyle = 'white';
+              context.fillRect(0, 0, canvas.width, canvas.height);
+              return page.render({ canvasContext: context, viewport: viewport }).promise.then(function () {
+                return new Promise(function (resolve) { canvas.toBlob(function (blob) { images.push(URL.createObjectURL(blob)); resolve(); }, 'image/jpeg', 0.92); });
+              });
+            });
+          };
+        };
+        for (var number = 1; number <= pdf.numPages; number += 1) chain = chain.then(draw(number));
+        return chain.then(function () { return images; });
+      });
+    }
+    function docOpenPrint(images) {
+      var holder = document.getElementById('doc-print');
+      holder.innerHTML = images.map(function (src, index) { return '<img alt="Page ' + (index + 1) + '" src="' + esc(src) + '" />'; }).join('');
+      var tags = Array.prototype.slice.call(holder.querySelectorAll('img'));
+      return Promise.all(tags.map(function (img) { return img.complete ? null : new Promise(function (done) { img.onload = done; img.onerror = done; }); })).then(function () {
+        document.body.classList.add('print-doc');
+        return new Promise(function (resolve) { setTimeout(function () { window.print(); resolve(); }, 50); });
+      });
+    }
+    window.addEventListener('afterprint', function () {
+      if (!document.body.classList.contains('print-doc')) return;
+      document.body.classList.remove('print-doc');
+      var holder = document.getElementById('doc-print');
+      Array.prototype.forEach.call(holder.querySelectorAll('img'), function (img) { URL.revokeObjectURL(img.src); });
+      holder.innerHTML = '';
+    });
+    function docPrint(doc) {
+      if (!doc) return;
+      var copy = docOffice(doc);
+      docSay('Preparing the print view of "' + doc.title + '"…');
+      docFetch(doc.id, copy ? 'print' : 'original', 'print').then(function (file) {
+        if (doc.type === 'Image') return [URL.createObjectURL(new Blob([file.bytes], { type: file.mime }))];
+        return docPageImages(file.bytes);
+      }).then(docOpenPrint).then(function () {
+        docSay('The print window was opened for "' + doc.title + '"' + (copy ? ' using Google\'s print copy of the ' + doc.type + ' file' : '') + '. Nothing is printed until a printer is chosen and Print is pressed in that window.');
+      }).catch(function (error) {
+        if (/sign in/i.test(error.message)) { showLogin(error.message); return; }
+        docSay(error.message, true);
+      });
+    }
+    function docDownload(doc) {
+      if (!doc) return;
+      docSay('Downloading ' + doc.fileName + '…');
+      docFetch(doc.id, 'original', 'download').then(function (file) {
+        saveBytes(file.fileName, file.bytes, file.mime);
+        docSay('Downloaded ' + file.fileName + ' (' + uploadSize(file.bytes.length) + '), the original file as uploaded.');
+      }).catch(function (error) {
+        if (/sign in/i.test(error.message)) { showLogin(error.message); return; }
+        docSay(error.message, true);
+      });
+    }
+    function docViewerShell(title, sub, actions) {
+      closeDocViewer();
+      var shell = document.createElement('div');
+      shell.id = 'doc-viewer';
+      shell.className = 'doc-viewer noprint';
+      shell.setAttribute('role', 'dialog');
+      shell.setAttribute('aria-modal', 'true');
+      shell.setAttribute('aria-label', title);
+      shell.innerHTML = '<div class="doc-viewer-head"><div><h2>' + esc(title) + '</h2><p class="sub">' + sub + '</p></div><div class="doc-viewer-actions">' + actions + '<button type="button" class="secondary" data-doc-close>Close</button></div></div>' +
+        '<p class="doc-viewer-status" id="doc-viewer-status" role="status"></p><div class="doc-viewer-body" id="doc-viewer-body"></div>';
+      document.body.appendChild(shell);
+      document.body.style.overflow = 'hidden';
+      shell.querySelector('[data-doc-close]').addEventListener('click', closeDocViewer);
+      docViewerToken += 1;
+      return docViewerToken;
+    }
+    function closeDocViewer() {
+      var shell = document.getElementById('doc-viewer');
+      if (shell) shell.remove();
+      document.body.style.overflow = '';
+      docViewerToken += 1;
+    }
+    document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && document.getElementById('doc-viewer')) closeDocViewer(); });
+    function openDoc(id) {
+      var doc = docFind(id);
+      if (!doc) return;
+      var admin = docCache.isAdmin && doc.status === 'active';
+      var versions = docCache.versions && docCache.versions[doc.familyId] ? docCache.versions[doc.familyId] : [];
+      var actions = '<button type="button" data-v="download">Download original</button>' +
+        (doc.printable ? '<button type="button" class="secondary" data-v="print">Print</button>' : '') +
+        (admin ? '<button type="button" class="secondary" data-v="edit">Edit</button><button type="button" class="secondary" data-v="replace">Replace</button><button type="button" class="secondary" data-v="remove">Remove</button>' : '') +
+        (admin && versions.length ? '<button type="button" class="secondary" data-v="versions">Versions (' + (versions.length + 1) + ')</button>' : '');
+      var token = docViewerShell(doc.title, docDetails(doc), actions);
+      Array.prototype.forEach.call(document.querySelectorAll('#doc-viewer [data-v]'), function (button) {
+        button.addEventListener('click', function () {
+          var what = button.getAttribute('data-v');
+          if (what === 'download') docDownload(doc);
+          else if (what === 'print') docPrint(doc);
+          else if (what === 'edit') docEditPanel(doc);
+          else if (what === 'replace') docReplacePanel(doc);
+          else if (what === 'versions') docVersionsPanel(doc, versions);
+          else if (what === 'remove' && window.confirm('Remove "' + doc.title + '" from the library? Admin can restore it from Removed documents.')) docAdminCall('removeDocument', { id: doc.id, action: 'remove' }, '');
+        });
+      });
+      docPreview(doc, token);
+    }
+    function docPreview(doc, token) {
+      var body = document.getElementById('doc-viewer-body');
+      if (docOffice(doc) && !doc.hasPrintCopy) {
+        body.innerHTML = '<div class="doc-panel card"><p>This ' + esc(doc.type) + ' file cannot be shown in the browser. Use Download original and open it in ' + esc(doc.type) + ' to read or print it.</p>' + (doc.printNote ? '<p class="sub">' + esc(doc.printNote) + '</p>' : '') + '</div>';
+        return;
+      }
+      var copy = docOffice(doc);
+      docSay('Loading the preview…');
+      docFetch(doc.id, copy ? 'print' : 'original', 'view').then(function (file) {
+        if (token !== docViewerToken) return null;
+        var sharing = file.sharing ? (file.sharing === 'PRIVATE' ? ' The Drive file is private to the Command Center account; it has no sharing link.' : ' Drive sharing: ' + file.sharing + '.') : '';
+        if (doc.type === 'Image') {
+          body.innerHTML = '<div class="doc-pages"><img alt="' + esc(doc.title) + '" src="' + esc(URL.createObjectURL(new Blob([file.bytes], { type: file.mime }))) + '" /></div>';
+          docSay('Image preview.' + sharing);
+          return null;
+        }
+        body.innerHTML = '<div class="doc-pages" id="doc-pages"></div>';
+        return docRenderPdf(file.bytes, document.getElementById('doc-pages'), token).then(function (pages) {
+          if (token !== docViewerToken) return;
+          docSay(pages + (pages === 1 ? ' page.' : ' pages.') + (copy ? ' This preview is Google\'s PDF print copy of the ' + doc.type + ' file; the layout can differ slightly. Download original gives the file as uploaded.' : '') + sharing);
+        });
+      }).catch(function (error) {
+        if (/sign in/i.test(error.message)) { showLogin(error.message); return; }
+        if (token === docViewerToken) docSay(error.message, true);
+      });
+    }
+    function docAdminCall(name, request, flash) {
+      docSay('Saving…');
+      return api(name, request).then(function (result) {
+        closeDocViewer();
+        docFlash = flash || '';
+        renderDocs(result.library, { text: result.message });
+      }).catch(function (error) {
+        if (/sign in/i.test(error.message)) { showLogin(error.message); return; }
+        docSay(error.message, true);
+      });
+    }
+    // A preview still loading must not draw over a panel opened after it.
+    function docPanel() {
+      docViewerToken += 1;
+      docSay('');
+      return docViewerToken;
+    }
+    function docEditPanel(doc) {
+      var token = docPanel();
+      var body = document.getElementById('doc-viewer-body');
+      body.innerHTML = '<div class="doc-panel card"><h2>Edit document details</h2><div class="doc-form">' + docFieldsHtml('de', doc) + '</div>' +
+        '<p class="sub">The file itself is not changed; use Replace for a new version. A New Hire document set to Managers only leaves the associate packet.</p>' +
+        '<p class="summary-actions"><button type="button" id="de-save">Save details</button> <button type="button" class="secondary" id="de-cancel">Back to preview</button></p></div>';
+      bindDocCategory('de');
+      document.getElementById('de-cancel').addEventListener('click', function () { docPreview(doc, token); });
+      document.getElementById('de-save').addEventListener('click', function () {
+        docAdminCall('editDocument', Object.assign(docFieldValues('de'), { id: doc.id }), doc.id);
+      });
+    }
+    function docReplacePanel(doc) {
+      var token = docPanel();
+      var body = document.getElementById('doc-viewer-body');
+      body.innerHTML = '<div class="doc-panel card"><h2>Replace with a new version</h2><p class="sub">The current file becomes version ' + doc.version + ' in this document\'s history; the new file becomes version ' + (doc.version + 1) + ' with the same title, category and visibility.</p><div class="doc-form">' +
+        '<div class="doc-wide"><label for="dr-file">New file</label><input id="dr-file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,application/pdf,image/*" /></div>' +
+        '<div><label for="dr-date">Document\'s own last-updated date (optional)</label><input id="dr-date" type="date" max="' + esc(docToday()) + '" value="' + esc(doc.documentDate) + '" /></div>' +
+        '<div><label for="dr-revision">Document\'s own version or revision (optional)</label><input id="dr-revision" maxlength="40" value="' + esc(doc.revision) + '" /></div>' +
+        '<div><label for="dr-uploader">Your name (optional)</label><input id="dr-uploader" maxlength="60" /></div>' +
+        '<label class="upload-confirm doc-wide"><input id="dr-confirm" type="checkbox" /> <span>This is a blank form or a general resource, not a completed HR form or a personal employee or customer record.</span></label></div>' +
+        '<p class="summary-actions"><button type="button" id="dr-go">Upload new version</button> <button type="button" class="secondary" id="dr-cancel">Back to preview</button></p></div>';
+      document.getElementById('dr-cancel').addEventListener('click', function () { docPreview(doc, token); });
+      document.getElementById('dr-go').addEventListener('click', function () {
+        var file = (document.getElementById('dr-file').files || [])[0];
+        if (!file) { docSay('Choose the new file.', true); return; }
+        if (!document.getElementById('dr-confirm').checked) { docSay('Confirm the file is not a completed HR form or a personal record.', true); return; }
+        if (file.size > docCache.maxBytes) { docSay(file.name + ' is larger than 15 MB.', true); return; }
+        document.getElementById('dr-go').disabled = true;
+        docSay('Uploading ' + file.name + '…');
+        readBase64(file).then(function (base64) {
+          return api('uploadDocument', { replaceId: doc.id, fileName: file.name, base64: base64, documentDate: document.getElementById('dr-date').value, revision: document.getElementById('dr-revision').value.trim(), uploaderName: document.getElementById('dr-uploader').value.trim(), noPersonalInfo: true });
+        }).then(function (result) {
+          closeDocViewer();
+          docFlash = result.id;
+          renderDocs(result.library, { text: result.message });
+        }).catch(function (error) {
+          if (/sign in/i.test(error.message)) { showLogin(error.message); return; }
+          var go = document.getElementById('dr-go');
+          if (go) go.disabled = false;
+          docSay(error.message, true);
+        });
+      });
+    }
+    function docVersionsPanel(doc, versions) {
+      docPanel();
+      var all = [doc].concat(versions.slice().sort(function (left, right) { return right.version - left.version; }));
+      document.getElementById('doc-viewer-body').innerHTML = '<div class="doc-panel card"><h2>Version history</h2><ul class="doc-links">' + all.map(function (item) {
+        return '<li><strong>Version ' + item.version + (item.id === doc.id ? ' · current' : ' · replaced ' + esc(nyDay(item.updatedAt))) + '</strong><span class="doc-meta">' + esc(item.fileName + ' · ' + docMeta(item) + ' · uploaded ' + nyDay(item.uploadedAt) + ' by ' + item.uploadedBy) + '</span>' +
+          '<span class="doc-acts">' + (item.id === doc.id ? '' : '<button type="button" class="linkish" data-ver-view="' + esc(item.id) + '">View</button>') + '<button type="button" class="linkish" data-ver-download="' + esc(item.id) + '">Download</button></span></li>';
+      }).join('') + '</ul></div>';
+      Array.prototype.forEach.call(document.querySelectorAll('[data-ver-view], [data-ver-download]'), function (button) {
+        button.addEventListener('click', function () {
+          if (button.hasAttribute('data-ver-view')) openDoc(button.getAttribute('data-ver-view'));
+          else docDownload(docFind(button.getAttribute('data-ver-download')));
+        });
+      });
+    }
+    function openPacket() {
+      var docs = (docCache.packet || []).map(docFind).filter(Boolean);
+      var token = docViewerShell('Print New Hire packet', 'Only New Hire documents Admin approved for the associate packet are listed, in Admin\'s order. Managers-only documents such as quiz answer keys are never included.', '');
+      var body = document.getElementById('doc-viewer-body');
+      if (!docs.length) {
+        body.innerHTML = '<div class="doc-panel card"><p>No New Hire documents are approved for the packet yet.</p><p class="sub">' + (docCache.isAdmin ? 'Use Set up packet in the New Hire section to approve documents that are visible to all staff.' : 'Admin chooses which New Hire documents can go in the packet.') + '</p></div>';
+        return;
+      }
+      body.innerHTML = '<div class="doc-panel card"><h2>Choose the documents</h2><ul class="doc-links doc-order">' + docs.map(function (doc, index) {
+        return '<li><label class="upload-confirm" style="margin:0"><input type="checkbox" data-packet-pick="' + esc(doc.id) + '" checked /> <span>' + (index + 1) + '. ' + esc(doc.title) + ' <span class="doc-meta">' + esc(docMeta(doc)) + (docOffice(doc) ? ' · uses Google\'s print copy' : '') + '</span></span></label></li>';
+      }).join('') + '</ul><p class="summary-actions"><button type="button" id="packet-build">Build packet PDF</button></p></div>';
+      document.getElementById('packet-build').addEventListener('click', function () {
+        var ids = Array.prototype.filter.call(document.querySelectorAll('[data-packet-pick]'), function (box) { return box.checked; }).map(function (box) { return box.getAttribute('data-packet-pick'); });
+        if (!ids.length) { docSay('Tick at least one document.', true); return; }
+        document.getElementById('packet-build').disabled = true;
+        buildPacket(ids.map(docFind), token);
+      });
+    }
+    function docAscii(text) {
+      return String(text || '').replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[\u2013\u2014]/g, '-').replace(/\u2026/g, '...').replace(/[^\x20-\x7e]/g, '?');
+    }
+    function docImageBytes(file) {
+      if (file.mime === 'image/png' || file.mime === 'image/jpeg') return Promise.resolve({ bytes: file.bytes, png: file.mime === 'image/png' });
+      return new Promise(function (resolve, reject) {
+        var img = new Image();
+        img.onload = function () {
+          var canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          canvas.toBlob(function (blob) { blob.arrayBuffer().then(function (buffer) { resolve({ bytes: new Uint8Array(buffer), png: true }); }); }, 'image/png');
+        };
+        img.onerror = function () { reject(new Error('the image could not be read')); };
+        img.src = URL.createObjectURL(new Blob([file.bytes], { type: file.mime }));
+      });
+    }
+    function buildPacket(docs, token) {
+      var items = [];
+      var skipped = [];
+      var lib = null;
+      var chain = docMerger().then(function (loaded) { lib = loaded; });
+      docs.forEach(function (doc, index) {
+        chain = chain.then(function () {
+          if (token !== docViewerToken) return null;
+          docSay('Collecting ' + (index + 1) + ' of ' + docs.length + ': ' + doc.title + '…');
+          return docFetch(doc.id, 'packet', 'packet').then(function (file) {
+            if (doc.type === 'Image') return docImageBytes(file).then(function (image) { items.push({ doc: doc, image: image }); });
+            return lib.PDFDocument.load(file.bytes, { ignoreEncryption: true }).then(function (pdf) { items.push({ doc: doc, pdf: pdf }); });
+          }).catch(function (error) {
+            if (/sign in/i.test(error.message)) throw error;
+            skipped.push(doc.title + ' (' + error.message.replace(/\.$/, '') + ')');
+          });
+        });
+      });
+      chain.then(function () {
+        if (token !== docViewerToken) return null;
+        if (!items.length) throw new Error('None of the chosen documents could be added. ' + skipped.join('; '));
+        docSay('Building the packet…');
+        return lib.PDFDocument.create().then(function (out) {
+          return Promise.all([out.embedFont(lib.StandardFonts.Helvetica), out.embedFont(lib.StandardFonts.HelveticaBold), out.embedJpg(base64Bytes(docCache.kanesLogo.split(',')[1])), docStoreLogo(out)]).then(function (embedded) {
+            return docPacketPdf(lib, out, items, embedded);
+          });
+        });
+      }).then(function (bytes) {
+        if (!bytes || token !== docViewerToken) return;
+        docShowPacket(bytes, items, skipped, token);
+      }).catch(function (error) {
+        if (/sign in/i.test(error.message)) { showLogin(error.message); return; }
+        if (token !== docViewerToken) return;
+        var again = document.getElementById('packet-build');
+        if (again) again.disabled = false;
+        docSay(error.message, true);
+      });
+    }
+    function docStoreLogo(out) {
+      var img = document.querySelector('img.logo');
+      if (!img || !/^data:image\/png;base64,/.test(img.src)) return Promise.resolve(null);
+      return out.embedPng(base64Bytes(img.src.split(',')[1]));
+    }
+    function docPacketPdf(lib, out, items, embedded) {
+      var font = embedded[0];
+      var bold = embedded[1];
+      var kanes = embedded[2];
+      var store = embedded[3];
+      var cover = out.addPage([612, 792]);
+      var navy = lib.rgb(0.06, 0.16, 0.23);
+      var teal = lib.rgb(0.05, 0.49, 0.53);
+      var grey = lib.rgb(0.36, 0.42, 0.47);
+      cover.drawRectangle({ x: 0, y: 662, width: 612, height: 130, color: navy });
+      cover.drawRectangle({ x: 0, y: 656, width: 612, height: 6, color: teal });
+      var kanesWidth = 150;
+      var kanesHeight = kanes.height * kanesWidth / kanes.width;
+      cover.drawRectangle({ x: 30, y: 727 - kanesHeight / 2 - 6, width: kanesWidth + 12, height: kanesHeight + 12, color: lib.rgb(1, 1, 1) });
+      cover.drawImage(kanes, { x: 36, y: 727 - kanesHeight / 2, width: kanesWidth, height: kanesHeight });
+      if (store) cover.drawImage(store, { x: 612 - 36 - 100, y: 677, width: 100, height: 100 });
+      var center = function (page, text, y, size, face, color) {
+        page.drawText(text, { x: (612 - face.widthOfTextAtSize(text, size)) / 2, y: y, size: size, font: face, color: color });
+      };
+      center(cover, 'NEW HIRE TRAINING PACKET', 616, 22, bold, navy);
+      center(cover, "Kane's Furniture - Store 17", 594, 13, font, grey);
+      center(cover, 'Prepared ' + docAscii(dayText(docToday())), 576, 11, font, grey);
+      cover.drawText('CONTENTS', { x: 54, y: 536, size: 12, font: bold, color: teal });
+      var page = 2;
+      var y = 512;
+      var size = items.length > 24 ? 9 : 11;
+      var step = items.length > 24 ? 14 : 19;
+      items.forEach(function (item, index) {
+        var count = item.pdf ? item.pdf.getPageCount() : 1;
+        var label = docAscii((index + 1) + '. ' + item.doc.title);
+        var right = 'page ' + page;
+        while (label.length > 4 && font.widthOfTextAtSize(label, size) > 420) label = label.slice(0, -2);
+        if (label !== docAscii((index + 1) + '. ' + item.doc.title)) label += '...';
+        if (y > 60) {
+          cover.drawText(label, { x: 54, y: y, size: size, font: font, color: navy });
+          cover.drawText(right, { x: 558 - font.widthOfTextAtSize(right, size), y: y, size: size, font: font, color: grey });
+        }
+        y -= step;
+        page += count;
+      });
+      cover.drawText(docAscii('Built in the Store 17 Resource Center from documents Admin approved for the associate packet. Manager answer keys are kept separately.'), { x: 54, y: 34, size: 8, font: font, color: grey });
+      var chain = Promise.resolve();
+      items.forEach(function (item) {
+        chain = chain.then(function () {
+          if (item.pdf) {
+            return out.copyPages(item.pdf, item.pdf.getPageIndices()).then(function (pages) { pages.forEach(function (copied) { out.addPage(copied); }); });
+          }
+          return (item.image.png ? out.embedPng(item.image.bytes) : out.embedJpg(item.image.bytes)).then(function (image) {
+            var wide = image.width > image.height;
+            var sheet = out.addPage(wide ? [792, 612] : [612, 792]);
+            var room = { w: sheet.getWidth() - 72, h: sheet.getHeight() - 72 };
+            var scale = Math.min(room.w / image.width, room.h / image.height, 1.5);
+            sheet.drawImage(image, { x: (sheet.getWidth() - image.width * scale) / 2, y: (sheet.getHeight() - image.height * scale) / 2, width: image.width * scale, height: image.height * scale });
+          });
+        });
+      });
+      return chain.then(function () {
+        out.setTitle('Store 17 New Hire Training Packet');
+        out.setProducer('Store 17 Command Center');
+        return out.save();
+      });
+    }
+    function docShowPacket(bytes, items, skipped, token) {
+      var head = document.querySelector('#doc-viewer .doc-viewer-actions');
+      var fileName = 'Store 17 New Hire Packet ' + docToday() + '.pdf';
+      head.insertAdjacentHTML('afterbegin', '<button type="button" id="packet-print">Print packet</button><button type="button" class="secondary" id="packet-download">Download packet PDF</button>');
+      document.getElementById('packet-download').addEventListener('click', function () {
+        saveBytes(fileName, bytes, 'application/pdf');
+        docSay('Downloaded ' + fileName + '.');
+      });
+      document.getElementById('packet-print').addEventListener('click', function () {
+        docSay('Preparing the print view…');
+        docPageImages(bytes).then(docOpenPrint).then(function () {
+          docSay('The print window was opened for the New Hire packet. Nothing is printed until a printer is chosen and Print is pressed in that window.');
+        }).catch(function (error) { docSay(error.message, true); });
+      });
+      var body = document.getElementById('doc-viewer-body');
+      body.innerHTML = '<div class="doc-pages" id="doc-pages"></div>';
+      var included = items.map(function (item) { return item.doc.title; });
+      docRenderPdf(bytes, document.getElementById('doc-pages'), token).then(function (pages) {
+        if (token !== docViewerToken) return;
+        docSay('Packet ready: ' + pages + ' pages, a contents page and ' + included.length + (included.length === 1 ? ' document: ' : ' documents: ') + included.join(', ') + '.' + (skipped.length ? ' Not included: ' + skipped.join('; ') + '.' : ''), skipped.length > 0);
+      }).catch(function (error) { docSay(error.message, true); });
+    }
+    function openPacketSetup() {
+      var candidates = (docCache.packetCandidates || []).map(docFind).filter(Boolean);
+      var order = (docCache.packet || []).slice();
+      docViewerShell('Set up the New Hire packet', 'Admin only. Tick the documents managers may print for a new associate and set their order. Only New Hire documents visible to all staff that can be printed are listed; Managers-only documents such as answer keys never appear here.', '');
+      var body = document.getElementById('doc-viewer-body');
+      var draw = function () {
+        var approved = order.map(docFind).filter(Boolean);
+        var others = candidates.filter(function (doc) { return order.indexOf(doc.id) === -1; });
+        body.innerHTML = '<div class="doc-panel card"><h2>Approved, in print order</h2>' +
+          (approved.length ? '<ul class="doc-links doc-order">' + approved.map(function (doc, index) {
+            return '<li><input type="checkbox" checked data-setup-toggle="' + esc(doc.id) + '" aria-label="Approved: ' + esc(doc.title) + '" /><span style="flex:1">' + (index + 1) + '. ' + esc(doc.title) + ' <span class="doc-meta">' + esc(docMeta(doc)) + '</span></span>' +
+              '<button type="button" class="secondary" data-setup-move="-1" data-id="' + esc(doc.id) + '"' + (index === 0 ? ' disabled' : '') + ' aria-label="Move up">↑</button><button type="button" class="secondary" data-setup-move="1" data-id="' + esc(doc.id) + '"' + (index === approved.length - 1 ? ' disabled' : '') + ' aria-label="Move down">↓</button></li>';
+          }).join('') + '</ul>' : '<p class="doc-empty">None approved yet.</p>') +
+          '<h2 style="margin-top:14px">Not in the packet</h2>' +
+          (others.length ? '<ul class="doc-links doc-order">' + others.map(function (doc) {
+            return '<li><input type="checkbox" data-setup-toggle="' + esc(doc.id) + '" aria-label="Approve: ' + esc(doc.title) + '" /><span style="flex:1">' + esc(doc.title) + ' <span class="doc-meta">' + esc(docMeta(doc)) + '</span></span></li>';
+          }).join('') + '</ul>' : '<p class="doc-empty">No other printable New Hire documents are visible to all staff.</p>') +
+          '<p class="summary-actions"><button type="button" id="setup-save">Save packet</button></p></div>';
+        Array.prototype.forEach.call(body.querySelectorAll('[data-setup-toggle]'), function (box) {
+          box.addEventListener('change', function () {
+            var id = box.getAttribute('data-setup-toggle');
+            if (box.checked && order.indexOf(id) === -1) order.push(id);
+            if (!box.checked) order = order.filter(function (other) { return other !== id; });
+            draw();
+          });
+        });
+        Array.prototype.forEach.call(body.querySelectorAll('[data-setup-move]'), function (button) {
+          button.addEventListener('click', function () {
+            var at = order.indexOf(button.getAttribute('data-id'));
+            var to = at + Number(button.getAttribute('data-setup-move'));
+            if (at < 0 || to < 0 || to >= order.length) return;
+            order.splice(to, 0, order.splice(at, 1)[0]);
+            draw();
+          });
+        });
+        document.getElementById('setup-save').addEventListener('click', function () { docAdminCall('saveDocPacket', { ids: order }, ''); });
+      };
+      draw();
+    }
     function openScreen(name) {
       screen = name;
-      document.body.classList.remove('print-summary', 'print-eval');
+      document.body.classList.remove('print-summary', 'print-eval', 'print-doc');
+      closeDocViewer();
       drawNav();
       var request = name === 'written' || name === 'delivered' || name === 'orders' ? 'home' : name;
       if (name === 'admin') { renderAdmin(); return; }
+      if (name === 'documents') {
+        docNotice = null;
+        document.getElementById('screen').innerHTML = '<p class="sub">Loading documents…</p>';
+        api('documents').then(function (data) { renderDocs(data); }).catch(docFailed);
+        return;
+      }
       if (name === 'upload') {
         uploadFiles = [];
         uploadResults = [];
