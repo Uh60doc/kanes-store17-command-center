@@ -1561,7 +1561,7 @@
         '<p class="sub">A missing-report alert resolves itself when the report arrives and passes validation. Resolved alerts stay here as a record. One consolidated email a day goes to the admin when a new problem appears.</p></article>' +
         '<article class="card"><h2>Automated quality checks</h2><p class="sub">' + (last ? 'Last run ' + esc(String(last.at).slice(0, 16).replace('T', ' ')) + ' UTC after ' + esc(last.trigger) + ': ' + esc(last.passed) + ' PASS, ' + esc(last.flagged) + ' FLAG, ' + esc(last.noted) + ' NOTE in ' + esc(last.seconds) + ' s.' : 'Not run yet.') + ' NOTE is a legitimate, explained difference (for example SNAP vs NWDSR). Checks never change a reported figure.</p>' +
         '<table><tr><th>Check</th><th>Result</th><th>Finding</th></tr>' + checks + '</table>' +
-        (role === 'admin' ? '<p class="noprint"><button id="run-checks" type="button">Run checks now</button></p>' : '') + '</article>';
+        (role === 'admin' ? '<p class="noprint"><button id="run-checks" type="button">Run checks now</button></p><p id="checks-error" class="error"></p>' : '') + '</article>';
     }
     function backupCard(backups) {
       if (!backups) return '';
@@ -1580,18 +1580,24 @@
       var imports = data.imports.map(function (row) { return '<li>' + esc(row.status) + ' · ' + esc(row.file) + ' · ' + esc(row.note) + '</li>'; }).join('');
       var exceptions = (data.exceptions || []).map(function (row) { return '<li>' + esc(row.severity) + ' · ' + esc(row.message) + '</li>'; }).join('');
       document.getElementById('screen').innerHTML = qualityCards(data.quality) + backupCard(data.backups) + '<article class="card"><h2>System health · version ' + data.version + '</h2><table>' + rows + '</table><h2>Exceptions</h2>' + (exceptions ? '<ul class="list">' + exceptions + '</ul>' : '<p class="sub">No open technical exceptions.</p>') + '<p class="sub">A negative written day is an order cancellation. It stays in the sales total and is not emailed as an error.</p><h2>Imports</h2><ul class="list">' + imports + '</ul></article>';
-      var busy = function (button, text) { button.disabled = true; button.textContent = text; };
-      var failed = function (error) {
-        if (/sign in/i.test(error.message)) return showLogin(error.message);
-        var box = document.getElementById('backup-error');
-        if (box) box.textContent = error.message;
+      var act = function (button, text, route, params, errorId) {
+        var label = button.textContent;
+        button.disabled = true;
+        button.textContent = text;
+        document.getElementById(errorId).textContent = '';
+        api(route, params).then(function (reply) { renderHealth(reply.health); }).catch(function (error) {
+          if (/sign in/i.test(error.message)) return showLogin(error.message);
+          button.disabled = false;
+          button.textContent = label;
+          document.getElementById(errorId).textContent = error.message;
+        });
       };
       var checks = document.getElementById('run-checks');
-      if (checks) checks.addEventListener('click', function () { busy(checks, 'Checking…'); api('runChecks').then(function (reply) { renderHealth(reply.health); }).catch(failed); });
+      if (checks) checks.addEventListener('click', function () { act(checks, 'Checking…', 'runChecks', {}, 'checks-error'); });
       var backup = document.getElementById('backup-now');
-      if (backup) backup.addEventListener('click', function () { busy(backup, 'Backing up…'); api('runBackup', { mode: 'backup' }).then(function (reply) { renderHealth(reply.health); }).catch(failed); });
+      if (backup) backup.addEventListener('click', function () { act(backup, 'Backing up…', 'runBackup', { mode: 'backup' }, 'backup-error'); });
       var drill = document.getElementById('restore-drill');
-      if (drill) drill.addEventListener('click', function () { busy(drill, 'Testing restore…'); api('runBackup', { mode: 'drill' }).then(function (reply) { renderHealth(reply.health); }).catch(failed); });
+      if (drill) drill.addEventListener('click', function () { act(drill, 'Testing restore…', 'runBackup', { mode: 'drill' }, 'backup-error'); });
     }
     var rosterCache = null;
     var rosterMode = '';
