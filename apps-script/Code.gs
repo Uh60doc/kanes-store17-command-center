@@ -9,6 +9,12 @@ var ROUTES_ = {
   people: ['sales', 'manager', 'admin'],
   summary: ['manager', 'admin'],
   morning: ['sales', 'manager', 'admin'],
+  brief: ['manager', 'admin'],
+  saveBriefPlan: ['manager', 'admin'],
+  previewBriefEmail: ['manager', 'admin'],
+  sendBriefTest: ['admin'],
+  saveBriefMailSettings: ['admin'],
+  resendBriefEmail: ['manager', 'admin'],
   savePromotion: ['admin'],
   health: ['manager', 'admin'],
   bedding: ['manager', 'admin'],
@@ -39,12 +45,12 @@ var ROUTES_ = {
 };
 
 // Routes that only read. Every other route can change figures, so the cached pages are dropped after it runs.
-var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, health: true, bedding: true, coverage: true, roster: true, evals: true, evalWorkbook: true, uploads: true, documents: true, docFile: true };
+var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, previewBriefEmail: true, health: true, bedding: true, coverage: true, roster: true, evals: true, evalWorkbook: true, uploads: true, documents: true, docFile: true };
 // Backups and restore drills write only their own logs, which no cached page reads; a problem they record moves the version itself.
 var LOG_ONLY_ROUTES_ = { runBackup: true };
 // Pages whose reply is reused until the data changes. Each reads every tab once while it is built.
-var CACHED_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, bedding: true };
-var MEMO_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, bedding: true, health: true, coverage: true };
+var CACHED_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true };
+var MEMO_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true, health: true, coverage: true };
 var PAGE_CACHE_SECONDS_ = 1800;
 var PAGE_CACHE_MAX_CHARS_ = 95000;
 
@@ -170,6 +176,12 @@ function route_(name, payload) {
   if (name === 'people') return people_(payload);
   if (name === 'summary') return summary_(payload);
   if (name === 'morning') return morning_(payload);
+  if (name === 'brief') return brief_(payload);
+  if (name === 'saveBriefPlan') return saveBriefPlan_(payload);
+  if (name === 'previewBriefEmail') return previewBriefEmail_(payload);
+  if (name === 'sendBriefTest') return sendBriefTest_(payload);
+  if (name === 'saveBriefMailSettings') return saveBriefMailSettings_(payload);
+  if (name === 'resendBriefEmail') return resendBriefEmail_(payload);
   if (name === 'savePromotion') return savePromotion_(payload);
   if (name === 'health') return health_(payload);
   if (name === 'bedding') return bedding_(payload);

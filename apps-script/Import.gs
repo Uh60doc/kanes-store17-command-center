@@ -35,6 +35,7 @@ function scheduledImport_() {
   try { ensureChangeTrigger_(); } catch (error) { appendException_('Update Failed', 'The workbook edit trigger could not be installed, so cached pages expire after 30 minutes instead of on each hand edit. ' + String(error && error.message ? error.message : error)); }
   try { if (typeof ensureBackupTrigger_ === 'function') ensureBackupTrigger_(); } catch (error) { appendException_('Update Failed', 'The nightly backup trigger could not be installed. ' + String(error && error.message ? error.message : error)); }
   warmPages_();
+  try { if (typeof maybeSendBriefEmails_ === 'function') maybeSendBriefEmails_(); } catch (error) { appendException_('Update Failed', 'Morning management emails could not be sent. Last verified figures were left in place. ' + String(error && error.message ? error.message : error)); }
 }
 
 function ensureDailyTrigger_() {
