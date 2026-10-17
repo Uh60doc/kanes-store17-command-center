@@ -53,13 +53,19 @@ function ensureDevLogTab_() {
 }
 
 function devLogNowEt_() {
-  var now = new Date();
-  if (typeof Utilities !== 'undefined' && Utilities.formatDate) {
-    try {
-      return Utilities.formatDate(now, 'America/New_York', 'M/d/yyyy h:mm a');
-    } catch (ignore) {}
+  return formatDevLogUpdated_(new Date());
+}
+
+function formatDevLogUpdated_(value) {
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    if (typeof Utilities !== 'undefined' && Utilities.formatDate) {
+      try {
+        return Utilities.formatDate(value, 'America/New_York', 'M/d/yyyy h:mm a');
+      } catch (ignore) {}
+    }
+    return value.toISOString();
   }
-  return now.toISOString();
+  return String(value || '').trim();
 }
 
 function parseDevPatch_(version) {
@@ -94,7 +100,7 @@ function devLogRecords_() {
       taskNumber: Number(row['Task Number'] || row.taskNumber || 0),
       description: String(row['Task Description'] || row.description || '').trim(),
       status: String(row.Status || row.status || '').trim().toUpperCase(),
-      updated: String(row['Last Updated (Eastern Time)'] || row.updated || ''),
+      updated: formatDevLogUpdated_(row['Last Updated (Eastern Time)'] || row.updated || ''),
       notes: String(row.Notes || row.notes || ''),
     };
   }).filter(function (row) { return row.version || row.taskNumber; });
@@ -108,7 +114,9 @@ function rewriteDevLog_(records) {
   var tab = ensureDevLogTab_();
   var grid = [DEVLOG_HEADERS_].concat((records || []).map(devLogLine_));
   tab.clearContents();
-  tab.getRange(1, 1, grid.length, DEVLOG_HEADERS_.length).setValues(grid);
+  var range = tab.getRange(1, 1, grid.length, DEVLOG_HEADERS_.length);
+  try { range.setNumberFormat('@'); } catch (ignore) {}
+  range.setValues(grid);
   forgetRead_(DEVLOG_TAB_);
 }
 

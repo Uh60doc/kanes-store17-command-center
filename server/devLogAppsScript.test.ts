@@ -116,6 +116,17 @@ test('Admin can read the log; sales and managers cannot open the route', () => {
   assert.equal(manager.role, 'manager');
 });
 
+test('sheet date cells are shown as Eastern text, not a GMT dump', () => {
+  const { gs, tabs } = harness();
+  gs.startDevTask('Version Tracking');
+  const stamp = new Date('2026-10-17T23:15:00-04:00');
+  tabs.CC_DevLog![1]![4] = stamp;
+  const status = plain(gs.devLogStatus_());
+  assert.equal(status.lastStarted.status, 'STARTED');
+  assert.ok(!/GMT|UTC|Eastern Daylight/i.test(String(status.lastUpdated)));
+  assert.match(String(status.lastUpdated), /2026/);
+});
+
 test('a failed description does not invent a completion row', () => {
   const { gs, tabs } = harness();
   assert.throws(() => gs.startDevTask(''), /short task description/);
