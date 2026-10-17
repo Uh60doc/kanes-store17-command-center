@@ -54,7 +54,7 @@ function importKpiAttachment_(sha, attachment) {
   }
   upsertKpiRecords_(records);
   records.forEach(function (record) {
-    if (record[0] === 'BEDDING_STORE' && record[16] !== '') upsertDailyBedding_(start, side, record[16], name);
+    if (record[0] === 'BEDDING_STORE' && record[14] !== '') upsertDailyBedding_(start, side, record[14], name);
   });
   var grain = start === end ? 'daily' : 'cumulative';
   recordImport_(sha, name, grain === 'daily' ? 'imported' : 'cumulative-not-added', side + ' ' + start + ' through ' + end + '. Store NWDSR totals were not changed.');
@@ -75,7 +75,9 @@ function kpiIdentity_(name) {
   if (!key || key === 'TOTAL' || key === 'ASL TOTAL' || /^\d+$/.test(key)) return null;
   var known = KPI_ALIASES_[key];
   if (known) return { code: known[0], display: known[1] };
-  return { code: '', display: String(name).trim().replace(/\s+/g, ' ') };
+  var match = typeof rosterMatch_ === 'function' ? rosterMatch_('', name) : null;
+  if (match) return { code: match.employeeId, display: match.name, roster: true };
+  return { code: '', display: String(name).trim().replace(/\s+/g, ' '), unmatched: true };
 }
 
 function kpiBlankZero_(qualified, sold, dollars) {
@@ -219,10 +221,12 @@ function kpiRecords_(source, family, side, start, end, filename) {
     if (family === 'asl' && storeLine) {
       var pillows = kpiQty_(row, columns.groups.PILLOWS);
       var bases = kpiQty_(row, columns.groups.ADJ);
+      var protection = kpiQty_(row, columns.groups['FURNITURE PROTECTION']);
       var rugsQty = columns.groups.RUGS ? kpiNumber_(kpiCell_(row, columns.groups.RUGS['SOLD QTY'])) : null;
       var rugsDollars = columns.groups.RUGS ? kpiMoney_(kpiCell_(row, columns.groups.RUGS['SOLD $'])) : null;
       if (pillows) records.push(kpiRecord_(daily, start, end, 'PILLOWS_STORE', '', '', side, pillows.dollars, pillows.sold, pillows.qual, pillows.sold, pillows.percent, filename));
       if (bases) records.push(kpiRecord_(daily, start, end, 'BASES_STORE', '', '', side, bases.dollars, bases.sold, bases.qual, bases.sold, bases.percent, filename));
+      if (protection) records.push(kpiRecord_(daily, start, end, 'FP_STORE', '', '', side, protection.dollars, protection.sold, protection.qual, protection.sold, protection.percent, filename));
       if (rugsQty !== null || rugsDollars !== null) records.push(kpiRecord_(daily, start, end, 'RUGS_STORE', '', '', side, rugsDollars, rugsQty, null, rugsQty, null, filename));
     }
   }
@@ -274,10 +278,13 @@ function upsertDailyBedding_(date, side, percent, filename) {
   tab.appendRow(row);
 }
 
+/** Returns how many rows were added, already on file with the same figures, held back, or replaced. */
 function upsertKpiRecords_(records) {
   var tab = ledgerSheet_();
   var values = tab.getDataRange().getValues();
   var index = {};
+  var outcome = { added: 0, same: 0, heldBack: [], replaced: 0, addedKeys: [] };
+  var appends = [];
   var r;
   for (r = 1; r < values.length; r += 1) index[String(values[r][17] || '')] = r + 1;
   records.forEach(function (record) {
@@ -285,16 +292,27 @@ function upsertKpiRecords_(records) {
     if (index[key]) {
       var previous = values[index[key] - 1];
       if (previous && record[1] === 'daily') {
-        if (!sameLedgerFigures_(previous, record)) holdBackDay_('CC_Ledger', key, previous, ledgerFigureText_(record), record[15]);
+        if (sameLedgerFigures_(previous, record)) outcome.same += 1;
+        else {
+          holdBackDay_('CC_Ledger', key, previous, ledgerFigureText_(record), record[15]);
+          outcome.heldBack.push(key);
+        }
         return;
       }
       // Columns A–P are the report figures; Q is the import time.
-      if (previous && sameRowValues_(previous, record, 16)) return;
+      if (previous && sameRowValues_(previous, record, 16)) { outcome.same += 1; return; }
       if (previous) archiveReplaced_('CC_Ledger', key, previous, record[15], 'A newer store-period snapshot replaced this row.');
       tab.getRange(index[key], 1, 1, record.length).setValues([record]);
+      values[index[key] - 1] = record;
+      outcome.replaced += 1;
       return;
     }
-    tab.appendRow(record);
-    index[key] = tab.getLastRow();
+    appends.push(record);
+    values.push(record);
+    index[key] = values.length;
+    outcome.added += 1;
+    outcome.addedKeys.push(key);
   });
+  if (appends.length) tab.getRange(values.length - appends.length + 1, 1, appends.length, appends[0].length).setValues(appends);
+  return outcome;
 }

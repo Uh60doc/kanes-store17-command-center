@@ -88,20 +88,25 @@ function importAttachment_(messageId, attachment) {
     }
     return true;
   }
+  var decision = applyCloudReport_(parsed, text, sha);
+  recordImport_(sha, attachment.getName(), decision, parsed.singleDay ? parsed.reportType + ' ' + parsed.start : parsed.reportType + ' ' + parsed.start + ' through ' + parsed.end + ' was recorded and was not added to the daily table.');
+  return true;
+}
+
+/** Writes one parsed SNAP Written, NWDSR Written or NWDSR Delivered report. Returns imported, conflict or cumulative-not-added. */
+function applyCloudReport_(parsed, text, sha) {
   if (!parsed.singleDay) {
-    recordImport_(sha, attachment.getName(), 'cumulative-not-added', parsed.reportType + ' ' + parsed.start + ' through ' + parsed.end + ' was recorded and was not added to the daily table.');
     if (parsed.reportType === 'NWDSR Written' && parsed.purchasingCustomers !== null) {
       upsertClosing_({ date: parsed.end, scope: 'store', code: '', name: '', customers: parsed.purchasingCustomers, opportunities: '', start: parsed.start, end: parsed.end, through: parsed.end, source: 'NWDSR Net Written # OF CUST', final: 'yes', note: 'Cumulative Net Written purchasing customers for the printed period. Dollars were not added again.' });
     }
-    return true;
+    return 'cumulative-not-added';
   }
   var decision = writeDailyAmount_(parsed);
   if (decision !== 'conflict' && parsed.reportType === 'SNAP Written') writeSnapAssociates_(parsed, text, sha);
   if (decision !== 'conflict' && parsed.reportType === 'NWDSR Written' && parsed.purchasingCustomers !== null) {
     upsertClosing_({ date: parsed.start, scope: 'store', code: '', name: '', customers: parsed.purchasingCustomers, opportunities: '', start: parsed.start, end: parsed.end, source: 'NWDSR Net Written # OF CUST', final: 'yes', note: 'Net Written # OF CUST for the report date.' });
   }
-  recordImport_(sha, attachment.getName(), decision, parsed.reportType + ' ' + parsed.start);
-  return true;
+  return decision;
 }
 
 function pdfText_(blob) {
@@ -194,6 +199,11 @@ function writeSnapAssociates_(parsed, text, sha) {
   var known = {};
   var r;
   for (r = 1; r < values.length; r += 1) known[String(values[r][1]).toUpperCase()] = values[r];
+  var mirror = [];
+  var addMirror = function (display, amount) {
+    var key = ['SNAP_PERSON', 'daily', parsed.start, parsed.start, parsed.start, 'written', display].join('|');
+    mirror.push(['SNAP_PERSON', 'daily', parsed.start, parsed.start, parsed.start, parsed.start, '17', '', display, 'written', amount, '', '', '', '', 'CC_AssociateDays', new Date().toISOString(), key]);
+  };
   lines.forEach(function (line) {
     var prior = known[line.sourceName.toUpperCase()];
     var match = prior ? null : rosterMatch_('', line.sourceName);
@@ -206,10 +216,14 @@ function writeSnapAssociates_(parsed, text, sha) {
     if (existing) {
       var current = numberOrNull_(tab.getRange(existing, 5).getValue());
       if (current !== line.amount) holdBackDay_('CC_AssociateDays', parsed.start + '|' + line.sourceName, values[existing - 1], String(line.amount), 'sha256 ' + sha);
+      else addMirror(String(values[existing - 1][2] || display), current);
       return;
     }
     tab.appendRow([parsed.start, line.sourceName, display, role, line.amount, sha]);
+    addMirror(display, line.amount);
   });
+  // SNAP_PERSON is a copy of these same lines, so the ledger matches CC_AssociateDays.
+  if (mirror.length) upsertKpiRecords_(mirror);
   var period = individualPeriodContaining_(parsed.start);
   refreshPeopleWritten_(period.start, period.end);
 }
@@ -310,6 +324,8 @@ function appendException_(severity, message) {
 }
 
 function notifyOnce_(message) {
+  // A manual upload shows its result on screen, so it does not also email the admin.
+  if (typeof UPLOAD_QUIET_ !== 'undefined' && UPLOAD_QUIET_) return;
   var props = PropertiesService.getScriptProperties();
   var key = 'mail_' + message.slice(0, 90);
   if (props.getProperty(key)) return;
