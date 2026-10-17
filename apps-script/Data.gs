@@ -57,15 +57,25 @@ function sumField_(rows, field, start, end) {
   return seen ? Math.round(total * 100) / 100 : null;
 }
 
+/** The store-month written and delivered budgets: a month-specific CC_Config key, else the configured store month. */
+function storeSalesGoals_(config, store) {
+  var writtenGoal = goalForMonth_(config, store, 'written_goal');
+  var deliveredGoal = goalForMonth_(config, store, 'delivered_goal');
+  if (writtenGoal === null && store.start === '2026-10-02' && store.end === '2026-11-01') writtenGoal = 400000;
+  if (deliveredGoal === null && store.start === '2026-10-02' && store.end === '2026-11-01') deliveredGoal = 320000;
+  return { written: writtenGoal, delivered: deliveredGoal };
+}
+
 function refreshRollup_() {
   var config = config_();
-  var start = isoDate_(config.store_period_start) || '2026-10-02';
-  var end = isoDate_(config.store_period_end) || '2026-11-01';
+  var store = storePeriodContaining_(todayNy_());
+  var start = store.start;
+  var end = store.end;
   var facts = dailyFacts_();
-  var writtenGoal = numberOrNull_(config.written_goal);
-  var deliveredGoal = numberOrNull_(config.delivered_goal);
-  if (writtenGoal === null) writtenGoal = 400000;
-  if (deliveredGoal === null) deliveredGoal = 320000;
+  var budgets = storeSalesGoals_(config, store);
+  var writtenGoal = budgets.written;
+  var deliveredGoal = budgets.delivered;
+  var daysLeft = operatingDaysRemaining_(store, todayNy_(), closedDates_());
   var nwdsrWritten = sumField_(facts, 'nwdsrWritten', start, end);
   var snapWritten = sumField_(facts, 'snapWritten', start, end);
   var nwdsrDelivered = sumField_(facts, 'nwdsrDelivered', start, end);
@@ -74,14 +84,19 @@ function refreshRollup_() {
     if (row.date < start || row.date > end || row.nwdsrWritten === null) return;
     if (row.date > latest) latest = row.date;
   });
-  var writtenRemaining = nwdsrWritten === null ? '' : Math.round((writtenGoal - nwdsrWritten) * 100) / 100;
-  var deliveredRemaining = nwdsrDelivered === null ? '' : Math.round((deliveredGoal - nwdsrDelivered) * 100) / 100;
+  var writtenPace = pace_(writtenGoal, nwdsrWritten, daysLeft);
+  var deliveredPace = pace_(deliveredGoal, nwdsrDelivered, daysLeft);
+  var blankIfNull = function (value) { return value === null ? '' : value; };
+  var writtenRemaining = blankIfNull(writtenPace.remaining);
+  var deliveredRemaining = blankIfNull(deliveredPace.remaining);
   var metrics = {
-    nwdsr_written: [nwdsrWritten === null ? '' : nwdsrWritten, 'Primary written total. Sum of CC_Daily nwdsr_written for the store period. Blank cells are skipped.'],
-    snap_written: [snapWritten === null ? '' : snapWritten, 'SNAP Written reconciliation only. Not used for written remaining.'],
-    nwdsr_delivered: [nwdsrDelivered === null ? '' : nwdsrDelivered, 'Sum of CC_Daily nwdsr_delivered for the store period. Blank cells are skipped.'],
+    nwdsr_written: [blankIfNull(nwdsrWritten), 'Primary written total (' + metricSource_('store_written') + '). Sum of CC_Daily nwdsr_written for the store period ' + start + ' through ' + end + '. Blank cells are skipped.'],
+    snap_written: [blankIfNull(snapWritten), 'SNAP Written reconciliation only. Not used for written remaining.'],
+    nwdsr_delivered: [blankIfNull(nwdsrDelivered), 'Sum of CC_Daily nwdsr_delivered for the store period ' + start + ' through ' + end + '. Blank cells are skipped.'],
     written_remaining: [writtenRemaining, 'Written goal minus NWDSR written. The goal itself is not changed.'],
     delivered_remaining: [deliveredRemaining, 'Delivered goal minus NWDSR delivered. The goal itself is not changed.'],
+    written_pace: [blankIfNull(writtenPace.pace), 'Today\'s written goal on Home: written remaining ÷ ' + (daysLeft === null ? 'open days left' : daysLeft + ' open days left') + ' including today.'],
+    delivered_pace: [blankIfNull(deliveredPace.pace), 'Today\'s delivered goal on Home: delivered remaining ÷ ' + (daysLeft === null ? 'open days left' : daysLeft + ' open days left') + ' including today.'],
     verified_through: [latest, 'Latest store-period date with NWDSR written on CC_Daily.'],
   };
   var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
@@ -258,24 +273,22 @@ function closingGoal_(config) {
 
 function approvedGoals_(config) {
   return {
-    bedding: goalOr_(config, 'bedding_minimum', 0.2),
-    mattress: protectorGoal_(config),
-    fabric: goalOr_(config, 'fabric_maintenance_goal', 0.8),
-    leather: goalOr_(config, 'leather_maintenance_goal', 0.8),
-    power: goalOr_(config, 'power_maintenance_goal', 0.8),
-    wood: goalOr_(config, 'wood_maintenance_goal', 0.5),
-    maintenance: goalOr_(config, 'overall_maintenance_goal', null),
-    rugs: goalOr_(config, 'rugs_goal', 12),
-    averageTicket: goalOr_(config, 'average_ticket_goal', 2500),
-    closing: closingGoal_(config),
-    opportunities: goalOr_(config, 'opportunities_goal', null),
-    adjustableBase: goalOr_(config, 'adjustable_base_goal', 0.35),
-    pillow: goalOr_(config, 'pillow_goal', 0.65),
-    powerBase: goalOr_(config, 'power_base_goal', 0.35),
-    finance: goalOr_(config, 'finance_goal', 0.5),
-    warranty: goalOr_(config, 'warranty_sales_goal', 0.055),
-    individualVolume: goalOr_(config, 'individual_volume_goal', 65000),
-    attachment: goalOr_(config, 'attachment_goal', null),
+    bedding: metricGoal_('kpi_bedding', config),
+    mattress: metricGoal_('kpi_protectors', config),
+    fabric: metricGoal_('kpi_fabric', config),
+    leather: metricGoal_('kpi_leather', config),
+    power: metricGoal_('kpi_power', config),
+    wood: metricGoal_('kpi_wood', config),
+    rugs: metricGoal_('kpi_rugs', config),
+    averageTicket: metricGoal_('kpi_average_ticket', config),
+    closing: metricGoal_('store_closing', config),
+    adjustableBase: metricGoal_('kpi_adjustable_base', config),
+    pillow: metricGoal_('kpi_pillows', config),
+    powerBase: metricGoal_('kpi_power_base', config),
+    finance: metricGoal_('kpi_finance', config),
+    warranty: metricGoal_('kpi_warranty', config),
+    individualVolume: metricGoal_('person_written', config),
+    attachment: metricGoal_('kpi_total_attachment', config),
   };
 }
 
@@ -284,52 +297,8 @@ function ratio_(actual, goal) {
   return Math.round((actual / Number(goal)) * 1000) / 1000;
 }
 
-function scoreboard_(config, snap, delivered, writtenGoal, deliveredGoal, writtenPace, deliveredPace, daysLeft, yesterdayRow, yesterday, missing) {
-  return {
-    daysLeft: daysLeft,
-    provisional: missing.length > 0,
-    missingDays: missing.length,
-    written: {
-      yesterday: yesterdayRow ? yesterdayRow.snapWritten : null,
-      month: snap,
-      goal: writtenGoal,
-      achieved: ratio_(snap, writtenGoal),
-      today: writtenPace.pace,
-      remaining: writtenPace.remaining,
-    },
-    delivered: {
-      yesterday: yesterdayRow ? yesterdayRow.nwdsrDelivered : null,
-      month: delivered,
-      goal: deliveredGoal,
-      achieved: ratio_(delivered, deliveredGoal),
-      today: deliveredPace.pace,
-      remaining: deliveredPace.remaining,
-    },
-  };
-}
-
 function kpiRow_(name, written, delivered, goal, unit, note, reconcile) {
   return { name: name, written: written, delivered: delivered, goal: goal, unit: unit, note: note || '', reconcile: !!reconcile };
-}
-
-function storeKpis_(config, metrics, bedding, closing) {
-  var goals = approvedGoals_(config);
-  var beddingNote = metrics.bedding_percent ? String(metrics.bedding_percent.note || '') : '';
-  closing = closing || { customers: null, opportunities: null, ratio: null, reconcile: false, note: '' };
-  return [
-    kpiRow_('Bedding', bedding, null, goals.bedding, 'percent', beddingNote),
-    kpiRow_('Mattress Protectors', null, null, goals.mattress, 'percent', 'Eligible-opportunity attachment is not on file.'),
-    kpiRow_('Fabric Maintenance', null, null, goals.fabric, 'percent', ''),
-    kpiRow_('Leather Maintenance', null, null, goals.leather, 'percent', ''),
-    kpiRow_('Power Maintenance', null, null, goals.power, 'percent', ''),
-    kpiRow_('Wood Maintenance', null, null, goals.wood, 'percent', ''),
-    kpiRow_('Overall Maintenance', null, null, goals.maintenance, 'percent', ''),
-    kpiRow_('Rugs', null, null, goals.rugs, 'count', ''),
-    kpiRow_('Average Ticket', null, null, goals.averageTicket, 'dollars', 'Written goal. Delivered average ticket is not on file.'),
-    kpiRow_('Closing Ratio', closing.ratio, null, goals.closing, 'percent', closing.note, closing.reconcile),
-    kpiRow_('Customer Opportunities', closing.opportunities, null, goals.opportunities, 'count', 'Location Ups + Be Backs for the same store dates.'),
-    kpiRow_('Purchasing Customers', closing.customers, null, null, 'count', 'Net Written # OF CUST for the same store dates.'),
-  ];
 }
 
 function activePerson_(row) {
@@ -666,8 +635,9 @@ function attention_(facts, config, role) {
   var items = [];
   var yesterday = shiftDate_(todayNy_(), -1);
   var written = facts.filter(function (row) { return row.date === yesterday; })[0];
-  if (!written || written.snapWritten === null) items.push('SNAP Written for ' + yesterday + ' has not arrived. Last verified figures stay in place.');
+  if (!written || written.nwdsrWritten === null) items.push('NWDSR Net Written for ' + yesterday + ' has not arrived. Last verified figures stay in place.');
   if (!written || written.nwdsrDelivered === null) items.push('NWDSR Delivered for ' + yesterday + ' has not arrived.');
+  if (!written || written.snapWritten === null) items.push('SNAP Written for ' + yesterday + ' has not arrived. Salesperson written sales and the SNAP reconciliation wait for it.');
   sheet_('CC_Exceptions').slice(-8).forEach(function (row) {
     if (role === 'sales' && /management|password|credential/i.test(String(row.message))) return;
     items.push(String(row.message));
@@ -1491,37 +1461,52 @@ function homeKpiStrip_(goals, actuals, closing) {
   });
 }
 
+var DAILY_GOAL_HEADERS_ = ['date', 'written_goal', 'delivered_goal', 'days_left', 'written_basis'];
+
 function dailyGoalSheet_() {
   var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
   var tab = spreadsheet.getSheetByName('CC_DailyGoals');
-  if (tab) return tab;
-  tab = spreadsheet.insertSheet('CC_DailyGoals');
-  tab.getRange(1, 1, 1, 4).setValues([['date', 'written_goal', 'delivered_goal', 'days_left']]);
+  if (!tab) tab = spreadsheet.insertSheet('CC_DailyGoals');
+  if (String(tab.getRange(1, 5).getValue() || '') !== DAILY_GOAL_HEADERS_[4]) tab.getRange(1, 1, 1, DAILY_GOAL_HEADERS_.length).setValues([DAILY_GOAL_HEADERS_]);
   return tab;
 }
 
+/** A saved written goal counts only when it was worked out from the approved store written source. */
 function readSavedDailyGoals_() {
   var map = {};
+  var basis = metricSource_('store_written_daily_goal');
   sheet_('CC_DailyGoals').forEach(function (row) {
     var date = isoDate_(row.date);
     if (!date) return;
-    map[date] = { written: fineNumber_(row.written_goal), delivered: fineNumber_(row.delivered_goal) };
+    map[date] = { written: String(row.written_basis || '') === basis ? fineNumber_(row.written_goal) : null, delivered: fineNumber_(row.delivered_goal) };
   });
   return map;
 }
 
+/**
+ * Saves a past day's goal once. A written goal saved on another basis (the older SNAP Written goals) is recalculated
+ * from NWDSR Net Written; the row it replaces is kept on CC_History.
+ */
 function upsertDailyGoal_(date, written, delivered, daysLeft) {
   if (written === null && delivered === null) return;
+  var basis = metricSource_('store_written_daily_goal');
   var tab = dailyGoalSheet_();
   var values = tab.getDataRange().getValues();
   var r;
   for (r = 1; r < values.length; r += 1) {
     if (isoDate_(values[r][0]) !== date) continue;
-    if ((values[r][1] === '' || values[r][1] === null) && written !== null) tab.getRange(r + 1, 2).setValue(written);
+    var savedBlank = values[r][1] === '' || values[r][1] === null;
+    if (written !== null && (savedBlank || String(values[r][4] || '') !== basis)) {
+      if (!savedBlank && fineNumber_(values[r][1]) !== written) {
+        archiveReplaced_('CC_DailyGoals', date, values[r], 'written_goal ' + written + ' (' + basis + ')', 'Store written is ' + basis + '. This written goal was worked out from SNAP Written and was recalculated from ' + basis + '.');
+      }
+      tab.getRange(r + 1, 2).setValue(written);
+      tab.getRange(r + 1, 5).setValue(basis);
+    }
     if ((values[r][2] === '' || values[r][2] === null) && delivered !== null) tab.getRange(r + 1, 3).setValue(delivered);
     return;
   }
-  tab.appendRow([date, written === null ? '' : written, delivered === null ? '' : delivered, daysLeft]);
+  tab.appendRow([date, written === null ? '' : written, delivered === null ? '' : delivered, daysLeft, written === null ? '' : basis]);
 }
 
 function ensureSavedDailyGoals_(period, today, closed, facts, writtenBudget, deliveredBudget) {
@@ -1530,7 +1515,7 @@ function ensureSavedDailyGoals_(period, today, closed, facts, writtenBudget, del
     var daysLeft = operatingDaysRemaining_(period, date, closed);
     upsertDailyGoal_(
       date,
-      savedPace_(writtenBudget, sumBefore_(facts, 'snapWritten', period.start, date), daysLeft),
+      savedPace_(writtenBudget, sumBefore_(facts, 'nwdsrWritten', period.start, date), daysLeft),
       savedPace_(deliveredBudget, sumBefore_(facts, 'nwdsrDelivered', period.start, date), daysLeft),
       daysLeft
     );
@@ -1550,27 +1535,24 @@ function home_(payload) {
   var end = store.end;
   var yesterday = shiftDate_(today, -1);
   var days = storeCalendar_(facts, store, closed);
+  var written = sumField_(facts, 'nwdsrWritten', start, end);
   var snap = sumField_(facts, 'snapWritten', start, end);
   var delivered = sumField_(facts, 'nwdsrDelivered', start, end);
-  var writtenGoal = goalForMonth_(config, store, 'written_goal');
-  var deliveredGoal = goalForMonth_(config, store, 'delivered_goal');
-  if (writtenGoal === null && start === '2026-10-02' && end === '2026-11-01') writtenGoal = 400000;
-  if (deliveredGoal === null && start === '2026-10-02' && end === '2026-11-01') deliveredGoal = 320000;
+  var budgets = storeSalesGoals_(config, store);
+  var writtenGoal = budgets.written;
+  var deliveredGoal = budgets.delivered;
   var daysLeft = operatingDaysRemaining_(store, today, closed);
-  var writtenPace = pace_(writtenGoal, snap, daysLeft);
+  var writtenPace = pace_(writtenGoal, written, daysLeft);
   var deliveredPace = pace_(deliveredGoal, delivered, daysLeft);
   var yesterdayRow = facts.filter(function (row) { return row.date === yesterday; })[0] || null;
-  var latest = facts.filter(function (row) { return row.snapWritten !== null && row.date >= start && row.date <= end; }).map(function (row) { return row.date; }).sort().pop() || '';
-  var metrics = {};
-  sheet_('CC_Metrics').forEach(function (row) { metrics[String(row.key)] = row; });
-  var bedding = metrics.bedding_percent ? numberOrNull_(metrics.bedding_percent.value) : null;
+  var yesterdayWritten = yesterdayRow ? yesterdayRow.nwdsrWritten : null;
+  var yesterdaySnap = yesterdayRow ? yesterdayRow.snapWritten : null;
+  var latest = facts.filter(function (row) { return row.nwdsrWritten !== null && row.date >= start && row.date <= end; }).map(function (row) { return row.date; }).sort().pop() || '';
   var closingView = loadClosingView_();
   var closingGoal = closingGoal_(config);
   var monthClosing = storeMonthClosing_(closingView, store, closingGoal);
   var yesterdayClosing = viewDayClosing_(closingView, yesterday);
-  // Written actuals are SNAP. Delivered actuals are NWDSR Delivered.
-  // NWDSR Written stays on the daily row and is not the written total: it may be unpaid or cancelled.
-  // SNAP Delivered is not a required report.
+  var labels = { written: metricSource_('store_written'), delivered: metricSource_('store_delivered'), snap: metricSource_('store_snap_written') };
   var missing = days.filter(function (day) {
     return day.date < today && !closed[day.date] && (day.snapWritten === null || day.nwdsrWritten === null || day.nwdsrDelivered === null);
   });
@@ -1589,7 +1571,7 @@ function home_(payload) {
   }
   var yesterdaySaved = savedGoals[yesterday] || {};
   var yesterdayDays = operatingDaysRemaining_(store, yesterday, closed);
-  var yesterdayWrittenGoal = yesterdaySaved.written !== undefined && yesterdaySaved.written !== null ? yesterdaySaved.written : savedPace_(writtenGoal, sumBefore_(facts, 'snapWritten', start, yesterday), yesterdayDays);
+  var yesterdayWrittenGoal = yesterdaySaved.written !== undefined && yesterdaySaved.written !== null ? yesterdaySaved.written : savedPace_(writtenGoal, sumBefore_(facts, 'nwdsrWritten', start, yesterday), yesterdayDays);
   var yesterdayDeliveredGoal = yesterdaySaved.delivered !== undefined && yesterdaySaved.delivered !== null ? yesterdaySaved.delivered : savedPace_(deliveredGoal, sumBefore_(facts, 'nwdsrDelivered', start, yesterday), yesterdayDays);
   var kpiActuals = {};
   try {
@@ -1603,9 +1585,12 @@ function home_(payload) {
   var goals = approvedGoals_(config);
   var evenWritten = evenPace_(writtenGoal, totalDays);
   var evenDelivered = evenPace_(deliveredGoal, totalDays);
+  var snapVariance = function (snapValue, writtenValue) {
+    return snapValue === null || writtenValue === null ? null : Math.round((snapValue - writtenValue) * 100) / 100;
+  };
   var board = {
     yesterday: {
-      written: goalPerformance_(yesterdayRow ? yesterdayRow.snapWritten : null, yesterdayWrittenGoal),
+      written: goalPerformance_(yesterdayWritten, yesterdayWrittenGoal),
       delivered: goalPerformance_(yesterdayRow ? yesterdayRow.nwdsrDelivered : null, yesterdayDeliveredGoal),
     },
     today: {
@@ -1616,15 +1601,17 @@ function home_(payload) {
       deliveredAdjustment: deliveredPace.pace === null || evenDelivered === null ? null : Math.round((deliveredPace.pace - evenDelivered) * 100) / 100,
     },
     month: {
-      written: snap,
+      written: written,
       delivered: delivered,
+      snapWritten: snap,
+      snapVariance: snapVariance(snap, written),
       writtenGoal: writtenGoal,
       deliveredGoal: deliveredGoal,
-      writtenAchieved: ratio_(snap, writtenGoal),
+      writtenAchieved: ratio_(written, writtenGoal),
       deliveredAchieved: ratio_(delivered, deliveredGoal),
       writtenLeft: writtenPace.remaining,
       deliveredLeft: deliveredPace.remaining,
-      writtenForecast: verifiedRunRate_(days, 'snapWritten', closed),
+      writtenForecast: verifiedRunRate_(days, 'nwdsrWritten', closed),
       deliveredForecast: verifiedRunRate_(days, 'nwdsrDelivered', closed),
       provisional: missing.length > 0,
     },
@@ -1637,11 +1624,15 @@ function home_(payload) {
     period: start + ' through ' + end,
     individualPeriod: individual.start + ' through ' + individual.end,
     today: today,
+    labels: labels,
+    standard: salesStandardText_(),
     yesterday: {
       date: yesterday,
-      written: yesterdayRow ? yesterdayRow.snapWritten : null,
+      written: yesterdayWritten,
       delivered: yesterdayRow ? yesterdayRow.nwdsrDelivered : null,
-      missing: !yesterdayRow || yesterdayRow.snapWritten === null,
+      missing: yesterdayWritten === null,
+      snapWritten: yesterdaySnap,
+      snapVariance: snapVariance(yesterdaySnap, yesterdayWritten),
       customers: yesterdayClosing.customers,
       opportunities: yesterdayClosing.opportunities,
       closingRatio: yesterdayClosing.ratio,
@@ -1650,8 +1641,9 @@ function home_(payload) {
     },
     latest: latest,
     month: {
-      written: snap,
+      written: written,
       delivered: delivered,
+      snapWritten: snap,
       writtenGoal: writtenGoal,
       deliveredGoal: deliveredGoal,
       writtenLeft: writtenPace.remaining,
@@ -1664,24 +1656,16 @@ function home_(payload) {
       goalOnFile: writtenGoal !== null,
     },
     projection: {
-      written: verifiedRunRate_(days, 'snapWritten', closed),
+      written: verifiedRunRate_(days, 'nwdsrWritten', closed),
       delivered: verifiedRunRate_(days, 'nwdsrDelivered', closed),
       provisional: missing.length > 0,
       note: missing.length
         ? 'Provisional. Built only from days that have a verified figure. ' + missing.length + ' store days are incomplete and were not counted as zero.'
         : 'From verified store days only. The official monthly budget is unchanged.',
     },
-    bedding: {
-      value: bedding,
-      note: metrics.bedding_percent ? String(metrics.bedding_percent.note || '') : '',
-      goal: Number(config.bedding_minimum || 0.2),
-    },
     closing: { goal: closingGoal, mtd: monthClosing, yesterday: yesterdayClosing },
     goals: goals,
     board: board,
-    scoreboard: scoreboard_(config, snap, delivered, writtenGoal, deliveredGoal, writtenPace, deliveredPace, daysLeft, yesterdayRow, yesterday, missing),
-    kpis: storeKpis_(config, metrics, bedding, monthClosing),
-    attachment: { value: null, goal: Number(config.attachment_goal || 0.9) },
     attention: attention.slice(0, 8),
     people: peopleRows_(individual.start, individual.end).slice(0, 8),
   };
@@ -1697,6 +1681,7 @@ function daily_(payload) {
     role: payload.session.role,
     period: store.start + ' through ' + store.end,
     updated: healthValue_('last_calculation') || 'Not Available',
+    standard: salesStandardText_(),
     goal: goal,
     closing: storeMonthClosing_(view, store, goal),
     days: withDayClosing_(storeCalendar_(dailyFacts_(), store, closed), view),
@@ -1735,9 +1720,34 @@ function closing_(payload) {
   };
 }
 
-function metricCovers_(note, start, end) {
-  var text = String(note || '');
-  return text.indexOf(start) !== -1 && text.indexOf(end) !== -1;
+/**
+ * Store bedding figures for one side. Percentages are the CC_Kpi store-month figures the Home tiles show; dollars and
+ * units are the matching store-month cumulative rows on CC_Ledger.
+ */
+function storeBeddingSide_(side, actuals, periodStart) {
+  function pick(metric) {
+    var row = actuals[metric];
+    return row && row[side] !== null && row[side] !== undefined ? row[side] : null;
+  }
+  var bedding = latestStoreLedger_('BEDDING_STORE', side, periodStart);
+  var pads = latestStoreLedger_('MPPA_STORE', side, periodStart);
+  var pillows = latestStoreLedger_('PILLOWS_STORE', side, periodStart);
+  var bases = latestStoreLedger_('BASES_STORE', side, periodStart);
+  return {
+    beddingPercent: pick('Bedding'),
+    beddingDollars: bedding ? bedding.sales : null,
+    protectors: pick('Mattress Protectors'),
+    protectorUnits: pads ? pads.units : null,
+    protectorDollars: pads ? pads.sales : null,
+    pillows: pick('Pillows'),
+    pillowUnits: pillows ? pillows.units : null,
+    pillowDollars: pillows ? pillows.sales : null,
+    bases: pick('Adjustable Base Attachment'),
+    baseUnits: bases ? bases.units : null,
+    baseDollars: bases ? bases.sales : null,
+    through: actuals.Bedding && actuals.Bedding.through ? actuals.Bedding.through : '',
+    ledgerThrough: bedding ? bedding.verifiedThrough : '',
+  };
 }
 
 function bedding_(payload) {
@@ -1746,12 +1756,14 @@ function bedding_(payload) {
   var today = todayNy_();
   var store = storePeriodContaining_(today);
   var individual = individualPeriodContaining_(today);
-  var metrics = {};
-  sheet_('CC_Metrics').forEach(function (row) { metrics[String(row.key)] = row; });
-  var beddingRow = metrics.bedding_percent;
-  var beddingValue = beddingRow ? numberOrNull_(beddingRow.value) : null;
-  var beddingNote = beddingRow ? String(beddingRow.note || '') : '';
-  var covers = beddingValue !== null && metricCovers_(beddingNote, store.start, store.end);
+  var actuals = {};
+  try { actuals = readKpiActuals_(); } catch (error) { actuals = {}; }
+  var storeSides = { written: storeBeddingSide_('written', actuals, store.start), delivered: storeBeddingSide_('delivered', actuals, store.start) };
+  function percentNote(side) {
+    var figure = storeSides[side];
+    if (figure.beddingPercent === null) return 'No verified ' + side + ' bedding figure covers store month ' + store.start + ' through ' + store.end + '.';
+    return 'Bedding dollars ÷ Group 17 ' + side + ' sales, ' + store.start + ' through ' + (figure.through || 'the latest verified date') + '. Same figure as the Home Bedding tile.';
+  }
   var people = peopleRows_(individual.start, individual.end).map(function (person) {
     var written = person.analysis.written;
     var delivered = person.analysis.delivered;
@@ -1776,14 +1788,16 @@ function bedding_(payload) {
     storePeriod: store.start + ' through ' + store.end,
     individualPeriod: individual.start + ' through ' + individual.end,
     updated: healthValue_('last_calculation') || 'Not Available',
-    writtenPercent: covers ? beddingValue : null,
-    writtenPercentNote: covers ? beddingNote : (beddingValue !== null ? 'A written bedding figure is on file for ' + beddingNote + '. It does not cover this store month, so it is not shown as the store bedding percentage.' : 'No bedding report covers this store month.'),
-    deliveredPercent: null,
-    beddingGoal: goalOr_(config, 'bedding_minimum', 0.2),
-    protectorGoal: protectorGoal_(config),
-    pillowGoal: goalOr_(config, 'pillow_goal', 0.65),
+    writtenPercent: storeSides.written.beddingPercent,
+    writtenPercentNote: percentNote('written'),
+    deliveredPercent: storeSides.delivered.beddingPercent,
+    deliveredPercentNote: percentNote('delivered'),
+    store: storeSides,
+    beddingGoal: metricGoal_('kpi_bedding', config),
+    protectorGoal: metricGoal_('kpi_protectors', config),
+    pillowGoal: metricGoal_('kpi_pillows', config),
     pillowUnit: String(config.pillow_goal_unit || 'percent'),
-    baseGoal: goalOr_(config, 'adjustable_base_goal', 0.35),
+    baseGoal: metricGoal_('kpi_adjustable_base', config),
     baseUnit: String(config.adjustable_base_goal_unit || 'percent'),
     people: people,
   };
@@ -2242,11 +2256,11 @@ function morning_(payload) {
   if (!promotion) promotion = anniversaryPromotion_();
   var yesterday = home.yesterday.date;
   var closingFigure = { value: null, scope: 'none', date: '', period: '', goal: home.closing.goal, customers: null, opportunities: null, reconcile: false };
-  var homeBedding = { written: null, delivered: null, goal: 0.2 };
+  var beddingGoal = home.goals.bedding;
+  var homeBedding = { written: null, delivered: null, goal: beddingGoal };
   (home.board && home.board.kpis ? home.board.kpis : []).forEach(function (row) {
     if (row.name === 'Bedding') homeBedding = row;
   });
-  var beddingGoal = homeBedding.goal === null || homeBedding.goal === undefined ? 0.2 : homeBedding.goal;
   var beddingWritten = { value: null, scope: 'none', date: '', period: '', goal: beddingGoal };
   var beddingDelivered = { value: null, scope: 'none', date: '', period: '', goal: beddingGoal };
   try {
@@ -2273,7 +2287,7 @@ function morning_(payload) {
   var workedToday = workedCount_(todayStaffing);
   var personalShare = workedToday === null || home.board.today.written === null ? null : Math.round((home.board.today.written / workedToday) * 100) / 100;
   var gaps = [];
-  if (home.yesterday.written === null) gaps.push('SNAP written');
+  if (home.yesterday.written === null) gaps.push(home.labels.written);
   if (home.yesterday.delivered === null) gaps.push('NWDSR delivered');
   if (closingFigure.scope === 'none') gaps.push('closing ratio');
   if (beddingWritten.scope === 'none') gaps.push('written bedding');
@@ -2288,9 +2302,12 @@ function morning_(payload) {
     title: 'Morning meeting',
     date: home.today,
     updated: home.updated,
+    labels: home.labels,
     yesterday: {
       date: yesterday,
       written: writtenPerf,
+      snapWritten: home.yesterday.snapWritten,
+      snapVariance: home.yesterday.snapVariance,
       delivered: home.board.yesterday.delivered,
       closing: closingFigure,
       beddingWritten: beddingWritten,
@@ -2299,7 +2316,7 @@ function morning_(payload) {
     today: {
       written: home.board.today.written,
       delivered: home.board.today.delivered,
-      beddingGoal: 0.2,
+      beddingGoal: beddingGoal,
       closingGoal: home.closing.goal,
       personalShare: personalShare,
     },
@@ -2383,7 +2400,7 @@ function health_(payload) {
   var facts = dailyFacts_();
   var yesterday = shiftDate_(todayNy_(), -1);
   var row = facts.filter(function (item) { return item.date === yesterday; })[0];
-  var current = row && row.snapWritten !== null && row.nwdsrDelivered !== null;
+  var current = row && row.snapWritten !== null && row.nwdsrWritten !== null && row.nwdsrDelivered !== null;
   var rows = sheet_('CC_Health').map(function (item) {
     var key = String(item.key);
     var value = key === 'status' ? (current ? 'Current' : 'Report Missing') : String(item.value);

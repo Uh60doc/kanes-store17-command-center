@@ -349,7 +349,13 @@
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
       });
     }
-    var salesStandard = 'SNAP written is the actual written sales. NWDSR delivered is the delivered standard. NWDSR written is what was written and may be unpaid or cancelled. SNAP delivered is not used.';
+    var salesStandard = 'Store written is NWDSR Net Written. Store delivered is NWDSR Delivered. SNAP Written is a separate reconciliation figure: it can legitimately differ from NWDSR, both are kept, and the variance is shown. Salesperson written sales and goal progress use SNAP Written by salesperson.';
+    function standardText(data) { return esc(data && data.standard ? data.standard : salesStandard); }
+    function snapReconcile(snapValue, variance) {
+      if (snapValue === null || snapValue === undefined) return 'SNAP Written reconciliation Pending.';
+      var gap = variance === null || variance === undefined ? 'Pending' : (Number(variance) > 0 ? '+' : '') + money(variance);
+      return 'SNAP Written ' + money(snapValue) + ', variance ' + gap + ' vs NWDSR (reconciliation only).';
+    }
     function money(value) {
       if (value === null || value === undefined || value === '') return 'Not Available';
       var number = Number(value);
@@ -509,7 +515,8 @@
       function forecast(value, provisional) {
         return (provisional ? 'Provisional forecast ' : 'Forecast ') + boardMoney(value);
       }
-      var focusNote = focus === 'written' ? 'Written page uses SNAP.' : focus === 'delivered' ? 'Delivered page uses NWDSR.' : '';
+      var labels = data.labels || { written: 'NWDSR Net Written', delivered: 'NWDSR Delivered', snap: 'SNAP Written' };
+      var focusNote = focus === 'written' ? 'Written page uses ' + labels.written + '; ' + labels.snap + ' is shown for reconciliation.' : focus === 'delivered' ? 'Delivered page uses ' + labels.delivered + '.' : '';
       document.getElementById('header-note').textContent = 'Store ' + data.period + (focusNote ? ' · ' + focusNote : '') + ' · Updated ' + data.updated;
       function kpiTile(row) {
         var hasWritten = !(row.written === null || row.written === undefined || row.written === '');
@@ -537,8 +544,8 @@
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Yesterday\'s results</h2>' +
         '<div class="score-row">' +
-        boardCard('Yesterday written', data.yesterday && data.yesterday.missing ? 'Data Pending' : boardMoney(data.yesterday.written), 'SNAP written. Actual written sales. ' + esc(data.yesterday.date), data.yesterday && data.yesterday.missing ? 'pending' : '') +
-        boardCard('Yesterday delivered', data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'Data Pending' : boardMoney(data.yesterday.delivered), 'NWDSR delivered. ' + esc(data.yesterday.date), data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'pending' : '') +
+        boardCard('Yesterday written', data.yesterday && data.yesterday.missing ? 'Data Pending' : boardMoney(data.yesterday.written), esc(labels.written) + '. ' + esc(data.yesterday.date) + '. ' + snapReconcile(data.yesterday.snapWritten, data.yesterday.snapVariance), data.yesterday && data.yesterday.missing ? 'pending' : '') +
+        boardCard('Yesterday delivered', data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'Data Pending' : boardMoney(data.yesterday.delivered), esc(labels.delivered) + '. ' + esc(data.yesterday.date), data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'pending' : '') +
         performanceCard('Written goal performance', data.yesterday ? data.yesterday.written : null, yesterdayBoard.written) +
         performanceCard('Delivered goal performance', data.yesterday ? data.yesterday.delivered : null, yesterdayBoard.delivered) +
         '</div>' +
@@ -551,15 +558,15 @@
         '</div>' +
         '<h2 class="section-title">Month-to-date store performance</h2>' +
         '<div class="score-row">' +
-        boardCard('Written month to date', boardMoney(monthBoard.written), percent(monthBoard.writtenAchieved) + ' of ' + boardMoney(monthBoard.writtenGoal) + '. SNAP written.', '') +
-        boardCard('Delivered month to date', boardMoney(monthBoard.delivered), percent(monthBoard.deliveredAchieved) + ' of ' + boardMoney(monthBoard.deliveredGoal) + '. NWDSR delivered.', '') +
+        boardCard('Written month to date', boardMoney(monthBoard.written), percent(monthBoard.writtenAchieved) + ' of ' + boardMoney(monthBoard.writtenGoal) + '. ' + esc(labels.written) + '. ' + snapReconcile(monthBoard.snapWritten, monthBoard.snapVariance), '') +
+        boardCard('Delivered month to date', boardMoney(monthBoard.delivered), percent(monthBoard.deliveredAchieved) + ' of ' + boardMoney(monthBoard.deliveredGoal) + '. ' + esc(labels.delivered) + '.', '') +
         boardCard('Remaining written', boardMoney(monthBoard.writtenLeft), forecast(monthBoard.writtenForecast, monthBoard.provisional), '') +
         boardCard('Remaining delivered', boardMoney(monthBoard.deliveredLeft), forecast(monthBoard.deliveredForecast, monthBoard.provisional), '') +
         '</div>' +
         '<h2 class="section-title">Month-to-date store KPIs</h2>' +
         '<div class="kpi-primary" id="kpi-primary">' + primaryKpis + '</div>' +
         '<div class="kpi-secondary" id="kpi-secondary">' + secondaryKpis + '</div>' +
-        '<p class="sub">Store month ' + esc(data.period) + ' only. ' + salesStandard + '</p>';
+        '<p class="sub">Store month ' + esc(data.period) + ' only. ' + standardText(data) + '</p>';
     }
 
     function renderDaily(data) {
@@ -569,7 +576,7 @@
         var ratioTone = day.closingReconcile ? 'warn' : '';
         return '<tr><td>' + esc(day.date) + '</td><td>' + money(day.snapWritten) + '</td><td>' + money(day.nwdsrWritten) + '</td><td>' + money(day.nwdsrDelivered) + '</td><td>' + count(day.purchasingCustomers) + '</td><td>' + count(day.opportunities) + '</td><td class="' + ratioTone + '">' + percent(day.closingRatio) + '</td><td class="' + ratioTone + '">' + esc(day.closingVersus || day.closingStatus || 'Pending') + '</td></tr>';
       }).join('');
-      document.getElementById('screen').innerHTML = '<article class="card"><h2>Daily performance</h2><p class="sub">' + salesStandard + ' Month to date purchasing customers ' + count(mtd.customers) + ' · opportunities ' + count(mtd.opportunities) + ' · closing ratio ' + percent(mtd.ratio) + ' · ' + versusText(mtd) + '. Goal ' + percent(data.goal) + '.</p><table><tr><th>Date</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR delivered</th><th>Purchasing customers</th><th>Opportunities</th><th>Closing ratio</th><th>Versus goal</th></tr>' + rows + '</table><p class="sub">Store month, the 2nd through the 1st. A day uses Net Written # OF CUST and PERQ Ups + Be Backs printed for that same date, from CC_ClosingDaily. Month to date is on CC_ClosingMTD. A missing report is Pending, not zero. ' + esc(mtd.note || '') + '</p></article>';
+      document.getElementById('screen').innerHTML = '<article class="card"><h2>Daily performance</h2><p class="sub">' + standardText(data) + ' Month to date purchasing customers ' + count(mtd.customers) + ' · opportunities ' + count(mtd.opportunities) + ' · closing ratio ' + percent(mtd.ratio) + ' · ' + versusText(mtd) + '. Goal ' + percent(data.goal) + '.</p><table><tr><th>Date</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR delivered</th><th>Purchasing customers</th><th>Opportunities</th><th>Closing ratio</th><th>Versus goal</th></tr>' + rows + '</table><p class="sub">Store month, the 2nd through the 1st. A day uses Net Written # OF CUST and PERQ Ups + Be Backs printed for that same date, from CC_ClosingDaily. Month to date is on CC_ClosingMTD. A missing report is Pending, not zero. ' + esc(mtd.note || '') + '</p></article>';
     }
     function statusTone(status) {
       if (status === 'Above Goal') return 'good';
@@ -1478,8 +1485,8 @@
       document.getElementById('screen').innerHTML =
         '<div class="morning">' +
         '<h2 class="section-title">Results</h2><div class="morning-five">' +
-        resultCard('Yesterday written', yesterday.written, 'SNAP written. Actual written sales.') +
-        resultCard('Yesterday delivered', yesterday.delivered, 'NWDSR delivered.') +
+        resultCard('Yesterday written', yesterday.written, esc((data.labels && data.labels.written) || 'NWDSR Net Written') + '. ' + snapReconcile(yesterday.snapWritten, yesterday.snapVariance)) +
+        resultCard('Yesterday delivered', yesterday.delivered, esc((data.labels && data.labels.delivered) || 'NWDSR Delivered') + '.') +
         figureCard('Closing ratio', closingFigure, closingDetail) +
         figureCard('Bedding written', yesterday.beddingWritten, '') +
         figureCard('Bedding delivered', yesterday.beddingDelivered, '') +
@@ -1706,8 +1713,24 @@
       var rows = people.map(function (person) {
         return '<tr><td><button class="linkish" type="button" data-bed="' + esc(person.name) + '">' + esc(person.name) + '</button></td><td>' + money(person.beddingWritten) + '</td><td>' + money(person.beddingDelivered) + '</td><td>' + percent(person.writtenPercent) + '</td><td>' + percent(person.deliveredPercent) + '</td><td>' + na(person.units) + '</td><td>' + percent(person.protectorPercent) + '</td><td>' + na(person.protectorUnits) + '</td><td>' + na(person.pillowUnits) + '</td><td>' + money(person.pillowDollars) + '</td><td>' + na(person.baseUnits) + '</td><td>' + money(person.baseDollars) + '</td><td>' + percent(person.basePercent) + '</td></tr>';
       }).join('');
+      var storeSides = data.store || {};
+      var sw = storeSides.written || {};
+      var sd = storeSides.delivered || {};
+      function unitsAndDollars(units, dollars) {
+        if (units === null || units === undefined) return 'Not Available';
+        return count(units) + ' units · ' + money(dollars);
+      }
+      function ledgerNote(figure, side) {
+        return figure.ledgerThrough ? 'Group 17 Data Analysis ' + side + ', store month through ' + esc(figure.ledgerThrough) + '.' : 'No ' + side + ' store-month figure is on file.';
+      }
+      function attachmentNote(written, delivered, goal) {
+        return 'Written. Delivered ' + percent(delivered) + '. Goal ' + goal + '.' + (sw.through ? ' Store month through ' + esc(sw.through) + ', same figure as the Home tile.' : '');
+      }
+      function goalTone(actual, goal, unit) {
+        return unit && unit !== 'percent' ? '' : toneFor(actual, goal);
+      }
       var admin = data.role === 'admin'
-        ? '<article class="card noprint" style="margin-top:12px"><h2>Pillow and adjustable-base goals</h2><p class="sub">Official goals are pillows 65% and adjustable bases 35%. An admin can replace them. Enter a percent as 65 for 65%. Bedding stays 20% and protectors stay 80%.</p><label>Pillow goal</label><input id="pillow-goal" value="" /><label>Pillow unit</label><input id="pillow-unit" value="' + esc(data.pillowUnit || 'percent') + '" /><label>Adjustable base goal</label><input id="base-goal" value="" /><label>Adjustable base unit</label><input id="base-unit" value="' + esc(data.baseUnit || 'percent') + '" /><p id="bed-goal-note" class="error"></p><button id="save-bed-goals" type="button">Save goals</button></article>'
+        ? '<article class="card noprint" style="margin-top:12px"><h2>Pillow and adjustable-base goals</h2><p class="sub">Current goals are pillows ' + goalLabel(data.pillowGoal, data.pillowUnit) + ' and adjustable bases ' + goalLabel(data.baseGoal, data.baseUnit) + '. An admin can replace them. Enter a percent as 65 for 65%. Bedding stays ' + percent(data.beddingGoal) + ' and protectors stay ' + percent(data.protectorGoal) + '.</p><label>Pillow goal</label><input id="pillow-goal" value="" /><label>Pillow unit</label><input id="pillow-unit" value="' + esc(data.pillowUnit || 'percent') + '" /><label>Adjustable base goal</label><input id="base-goal" value="" /><label>Adjustable base unit</label><input id="base-unit" value="' + esc(data.baseUnit || 'percent') + '" /><p id="bed-goal-note" class="error"></p><button id="save-bed-goals" type="button">Save goals</button></article>'
         : '';
       document.getElementById('screen').innerHTML =
         '<div class="bedding-page" id="bedding-dashboard">' +
@@ -1715,8 +1738,8 @@
         '<div class="grid bedding-band">' +
         card('Mattress sales written', 'Not Available', 'Mattress dollars are not on a verified store-month report.') +
         card('Mattress sales delivered', 'Not Available', 'Delivered mattress dollars are not on file.') +
-        card('Bedding written %', percent(data.writtenPercent), data.writtenPercentNote || 'Goal 20%. Written bedding dollars divided by written sales for this store month.', toneFor(data.writtenPercent, data.beddingGoal)) +
-        card('Bedding delivered %', 'Not Available', 'Delivered bedding is not copied from the written figure. Goal 20%.') +
+        card('Bedding written %', percent(data.writtenPercent), esc(data.writtenPercentNote || 'Written bedding dollars divided by written sales for this store month.') + ' Goal ' + percent(data.beddingGoal) + '.', toneFor(data.writtenPercent, data.beddingGoal)) +
+        card('Bedding delivered %', percent(data.deliveredPercent), esc(data.deliveredPercentNote || 'Delivered bedding is not copied from the written figure.') + ' Goal ' + percent(data.beddingGoal) + '.', toneFor(data.deliveredPercent, data.beddingGoal)) +
         card('Bedding goal', percent(data.beddingGoal), 'Official bedding minimum.') +
         card('Written mattress units', 'Not Available', 'Unit counts are not on the daily sales reports.') +
         card('Delivered mattress units', 'Not Available', 'Unit counts are not on the daily sales reports.') +
@@ -1725,23 +1748,23 @@
         '</div>' +
         '<h2 class="section-title">Store bedding attachments</h2>' +
         '<div class="grid bedding-band">' +
-        card('Protectors written', 'Not Available', 'Units and dollars. Goal ' + percent(data.protectorGoal) + ' attachment. Not divided by store sales.') +
-        card('Protectors delivered', 'Not Available', 'Delivered protector units and dollars are not on file.') +
-        card('Protector attachment', 'Not Available', 'Needs eligible mattress opportunities and actual attachments for the store month.') +
-        card('Pillows written', 'Not Available', 'Units and dollars. Pillows are not included in the bedding percentage. Goal ' + goalLabel(data.pillowGoal, data.pillowUnit) + '.') +
-        card('Pillows delivered', 'Not Available', 'Delivered pillow units and dollars are not on file.') +
+        card('Protectors written', unitsAndDollars(sw.protectorUnits, sw.protectorDollars), 'Units and dollars. ' + ledgerNote(sw, 'written') + ' Goal ' + percent(data.protectorGoal) + ' attachment. Not divided by store sales.') +
+        card('Protectors delivered', unitsAndDollars(sd.protectorUnits, sd.protectorDollars), 'Units and dollars. ' + ledgerNote(sd, 'delivered')) +
+        card('Protector attachment', percent(sw.protectors), attachmentNote(sw.protectors, sd.protectors, percent(data.protectorGoal)), toneFor(sw.protectors, data.protectorGoal)) +
+        card('Pillows written', unitsAndDollars(sw.pillowUnits, sw.pillowDollars), 'Units and dollars. ' + ledgerNote(sw, 'written') + ' Pillows are not included in the bedding percentage. Goal ' + goalLabel(data.pillowGoal, data.pillowUnit) + '.') +
+        card('Pillows delivered', unitsAndDollars(sd.pillowUnits, sd.pillowDollars), 'Units and dollars. ' + ledgerNote(sd, 'delivered')) +
         card('Pillows per mattress', 'Not Available', 'Needs pillow units and mattress sales for the same side.') +
-        card('Adjustable bases written', 'Not Available', 'Units and dollars. Goal ' + goalLabel(data.baseGoal, data.baseUnit) + '.') +
-        card('Adjustable bases delivered', 'Not Available', 'Delivered adjustable-base units and dollars are not on file.') +
-        card('Adjustable base attachment', 'Not Available', 'Needs eligible opportunities. Packaged bases are not counted twice.') +
+        card('Adjustable bases written', unitsAndDollars(sw.baseUnits, sw.baseDollars), 'Units and dollars. ' + ledgerNote(sw, 'written') + ' Goal ' + goalLabel(data.baseGoal, data.baseUnit) + '.') +
+        card('Adjustable bases delivered', unitsAndDollars(sd.baseUnits, sd.baseDollars), 'Units and dollars. ' + ledgerNote(sd, 'delivered')) +
+        card('Adjustable base attachment', percent(sw.bases), attachmentNote(sw.bases, sd.bases, goalLabel(data.baseGoal, data.baseUnit)) + ' Packaged bases are not counted twice.', goalTone(sw.bases, data.baseGoal, data.baseUnit)) +
         '</div>' +
         '<article class="card kpi-wrap" style="margin-top:12px"><h2>Store KPI scoreboard</h2><table class="kpi"><tr><th>KPI</th><th>Written</th><th>Delivered</th><th>Goal</th></tr>' +
-        '<tr><td>Bedding sales $</td><td>Not Available</td><td>Not Available</td><td>—</td></tr>' +
-        '<tr><td>Bedding %</td><td class="' + toneFor(data.writtenPercent, data.beddingGoal) + '">' + percent(data.writtenPercent) + '</td><td>Not Available</td><td>' + percent(data.beddingGoal) + '</td></tr>' +
+        '<tr><td>Bedding sales $</td><td>' + money(sw.beddingDollars) + '</td><td>' + money(sd.beddingDollars) + '</td><td>—</td></tr>' +
+        '<tr><td>Bedding %</td><td class="' + toneFor(data.writtenPercent, data.beddingGoal) + '">' + percent(data.writtenPercent) + '</td><td class="' + toneFor(data.deliveredPercent, data.beddingGoal) + '">' + percent(data.deliveredPercent) + '</td><td>' + percent(data.beddingGoal) + '</td></tr>' +
         '<tr><td>Mattress units</td><td>Not Available</td><td>Not Available</td><td>—</td></tr>' +
-        '<tr><td>Mattress protectors</td><td>Not Available</td><td>Not Available</td><td>' + percent(data.protectorGoal) + ' attachment</td></tr>' +
-        '<tr><td>Pillows</td><td>Not Available</td><td>Not Available</td><td>' + goalLabel(data.pillowGoal, data.pillowUnit) + '</td></tr>' +
-        '<tr><td>Adjustable bases</td><td>Not Available</td><td>Not Available</td><td>' + goalLabel(data.baseGoal, data.baseUnit) + '</td></tr>' +
+        '<tr><td>Mattress protectors</td><td class="' + toneFor(sw.protectors, data.protectorGoal) + '">' + percent(sw.protectors) + '</td><td class="' + toneFor(sd.protectors, data.protectorGoal) + '">' + percent(sd.protectors) + '</td><td>' + percent(data.protectorGoal) + ' attachment</td></tr>' +
+        '<tr><td>Pillows</td><td class="' + goalTone(sw.pillows, data.pillowGoal, data.pillowUnit) + '">' + percent(sw.pillows) + '</td><td class="' + goalTone(sd.pillows, data.pillowGoal, data.pillowUnit) + '">' + percent(sd.pillows) + '</td><td>' + goalLabel(data.pillowGoal, data.pillowUnit) + '</td></tr>' +
+        '<tr><td>Adjustable bases</td><td class="' + goalTone(sw.bases, data.baseGoal, data.baseUnit) + '">' + percent(sw.bases) + '</td><td class="' + goalTone(sd.bases, data.baseGoal, data.baseUnit) + '">' + percent(sd.bases) + '</td><td>' + goalLabel(data.baseGoal, data.baseUnit) + '</td></tr>' +
         '</table><p class="sub">Green is at or above a confirmed goal. Amber is approaching. Red is below a confirmed figure. A missing source stays Not Available.</p>' +
         '<p class="noprint"><button id="print-bedding" type="button">Print store bedding report</button></p></article>' +
         '<h2 class="section-title">Salesperson bedding performance</h2><p class="sub">Salesperson reporting period ' + esc(data.individualPeriod) + '. These dates are not the store month, so the rows are not expected to add up to the store total.</p>' +
@@ -1800,9 +1823,9 @@
       var rows = (data.rows || []).map(function (row) {
         return '<tr><td>' + esc(row.report) + '</td><td>' + esc(row.earliest || '—') + '</td><td>' + esc(row.latest || '—') + '</td><td>' + esc(row.dailyRecords) + '</td><td>' + esc(row.missing) + '</td><td>' + esc(row.sheets) + '</td></tr>';
       }).join('');
-      document.getElementById('header-note').textContent = 'Data coverage · store days October 2 through October 13';
+      document.getElementById('header-note').textContent = 'Data coverage · store month ' + (data.period || 'Pending') + (data.through ? ' · store days verified through ' + data.through : '');
       document.getElementById('screen').innerHTML =
-        '<article class="card kpi-wrap"><h2>Historical report coverage</h2><p class="sub">' + salesStandard + ' A cumulative snapshot is not counted as a daily result. October 14 is still open, so it is not listed as missing.</p><table class="kpi"><tr><th>Report</th><th>Earliest</th><th>Latest</th><th>Daily records</th><th>Missing daily dates</th><th>In Google Sheets</th></tr>' + rows + '</table></article>';
+        '<article class="card kpi-wrap"><h2>Historical report coverage</h2><p class="sub">' + standardText(data) + ' A cumulative snapshot is not counted as a daily result. ' + (data.today ? 'Today, ' + esc(data.today) + ', is still open, so it is not listed as missing.' : '') + '</p><table class="kpi"><tr><th>Report</th><th>Earliest</th><th>Latest</th><th>Daily records</th><th>Missing daily dates</th><th>In Google Sheets</th></tr>' + rows + '</table></article>';
     }
     var uploadCache = null;
     var uploadFiles = [];

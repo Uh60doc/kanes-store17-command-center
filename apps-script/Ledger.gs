@@ -187,8 +187,21 @@ function ledgerSources_() {
 }
 
 function coverage_(payload) {
+  var today = todayNy_();
+  var store = storePeriodContaining_(today);
+  var through = '';
+  sheet_('CC_Daily').forEach(function (row) {
+    var date = isoDate_(row.date);
+    if (!date || date < store.start || date > store.end || date >= today) return;
+    if (fineNumber_(row.nwdsr_written) === null && fineNumber_(row.snap_written) === null && fineNumber_(row.nwdsr_delivered) === null) return;
+    if (date > through) through = date;
+  });
   return {
     role: payload.session.role,
+    period: store.start + ' through ' + store.end,
+    through: through,
+    today: today,
+    standard: salesStandardText_(),
     rows: sheet_('CC_Coverage').map(function (row) {
       return {
         report: String(row.report || ''),
