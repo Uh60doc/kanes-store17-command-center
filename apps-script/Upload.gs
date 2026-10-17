@@ -903,6 +903,7 @@ function uploads_(payload) {
         try { refreshHistory_(); } catch (error) { appendException_('Update Failed', 'Permanent history could not be refreshed after an upload. Nothing already recorded was changed. ' + String(error && error.message ? error.message : error)); }
         try { refreshMetricRegistry_(); } catch (error) { appendException_('Update Failed', 'CC_MetricDefinitions could not be refreshed after an upload. ' + String(error && error.message ? error.message : error)); }
         noteHealth_('last_calculation', new Date().toISOString());
+        if (typeof qualityAfterUpdate_ === 'function') qualityAfterUpdate_('upload by ' + payload.session.role, false);
       } finally {
         lock.releaseLock();
       }

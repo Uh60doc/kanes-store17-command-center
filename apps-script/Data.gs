@@ -8,7 +8,7 @@ function book_() {
 
 var READ_MEMO_ = null;
 // Pages write these while they draw (saved daily goals, replaced rows, the log, alerts), so they are always read fresh.
-var READ_MEMO_SKIP_ = { CC_DailyGoals: true, CC_History: true, CC_Exceptions: true, CC_Health: true, CC_Alerts: true };
+var READ_MEMO_SKIP_ = { CC_DailyGoals: true, CC_History: true, CC_Exceptions: true, CC_Health: true };
 
 /** A read-only request reads each tab once. Off by default, so imports and saves always read what they just wrote. */
 function beginPageRead_() {
@@ -666,12 +666,19 @@ function closingKpi_(closing, goal) {
 
 function attention_(facts, config, role) {
   var items = [];
-  var yesterday = shiftDate_(todayNy_(), -1);
-  var written = facts.filter(function (row) { return row.date === yesterday; })[0];
-  if (!written || written.nwdsrWritten === null) items.push('NWDSR Net Written for ' + yesterday + ' has not arrived. Last verified figures stay in place.');
-  if (!written || written.nwdsrDelivered === null) items.push('NWDSR Delivered for ' + yesterday + ' has not arrived.');
-  if (!written || written.snapWritten === null) items.push('SNAP Written for ' + yesterday + ' has not arrived. Salesperson written sales and the SNAP reconciliation wait for it.');
+  // Once the quality checks run, missing reports come from the active alerts, which resolve when the report arrives.
+  var tracked = typeof alertsTracked_ === 'function' && alertsTracked_();
+  if (tracked) {
+    items = alertAttention_(activeAlerts_(), role);
+  } else {
+    var yesterday = shiftDate_(todayNy_(), -1);
+    var written = facts.filter(function (row) { return row.date === yesterday; })[0];
+    if (!written || written.nwdsrWritten === null) items.push('NWDSR Net Written for ' + yesterday + ' has not arrived. Last verified figures stay in place.');
+    if (!written || written.nwdsrDelivered === null) items.push('NWDSR Delivered for ' + yesterday + ' has not arrived.');
+    if (!written || written.snapWritten === null) items.push('SNAP Written for ' + yesterday + ' has not arrived. Salesperson written sales and the SNAP reconciliation wait for it.');
+  }
   sheet_('CC_Exceptions').slice(-8).forEach(function (row) {
+    if (tracked && String(row.severity) === 'Report Missing') return;
     if (role === 'sales' && /management|password|credential/i.test(String(row.message))) return;
     items.push(String(row.message));
   });
@@ -2467,13 +2474,17 @@ function health_(payload) {
   var yesterday = shiftDate_(todayNy_(), -1);
   var row = facts.filter(function (item) { return item.date === yesterday; })[0];
   var current = row && row.snapWritten !== null && row.nwdsrWritten !== null && row.nwdsrDelivered !== null;
+  var tracked = typeof alertsTracked_ === 'function' && alertsTracked_();
+  var quality = tracked ? qualityHealth_() : null;
+  var status = tracked ? alertStatus_(activeAlerts_()) : current ? 'Current' : 'Report Missing';
   var rows = sheet_('CC_Health').map(function (item) {
     var key = String(item.key);
-    var value = key === 'status' ? (current ? 'Current' : 'Report Missing') : String(item.value);
+    var value = key === 'status' ? status : String(item.value);
     return { key: key, value: value };
   });
-  if (!rows.some(function (item) { return item.key === 'status'; })) rows.unshift({ key: 'status', value: current ? 'Current' : 'Report Missing' });
+  if (!rows.some(function (item) { return item.key === 'status'; })) rows.unshift({ key: 'status', value: status });
   var exceptions = sheet_('CC_Exceptions').filter(function (item) {
+    if (tracked && String(item.severity) === 'Report Missing') return false;
     return !/flagged for review/i.test(String(item.message || ''));
   }).slice(-12).map(function (item) {
     return { at: String(item.at || ''), severity: String(item.severity || ''), message: String(item.message || '') };
@@ -2486,6 +2497,7 @@ function health_(payload) {
     imports: sheet_('CC_Imports').slice(-12).map(function (item) {
       return { file: String(item.file_name || item.sha256 || ''), status: String(item.status || ''), note: String(item.note || '') };
     }),
+    quality: quality,
   };
 }
 

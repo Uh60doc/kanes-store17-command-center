@@ -28,6 +28,7 @@ function scheduledImport_() {
     appendException_('Update Failed', String(error && error.message ? error.message : error));
     notifyOnce_('Command Center import failed. Last verified figures were left in place. ' + String(error && error.message ? error.message : error));
   } finally {
+    if (typeof qualityAfterUpdate_ === 'function') qualityAfterUpdate_('scheduled import', true);
     markDataChanged_('scheduled import');
     lock.releaseLock();
   }
@@ -342,6 +343,9 @@ function markMissingReports_() {
   if (!row || row.nwdsrDelivered === null) missing.push('NWDSR Delivered');
   if (missing.length) {
     noteHealth_('status', 'Report Missing');
+    // The quality checks raise the alert once the report is due and resolve it when it arrives, and email it in the
+    // one consolidated message. Before they run for the first time, the warning is logged here as it always was.
+    if (typeof alertsTracked_ === 'function' && alertsTracked_()) return;
     var message = yesterday + ' is missing ' + missing.join(', ') + '. Older verified totals were not replaced.';
     appendException_('Report Missing', message);
     notifyOnce_('Command Center is missing ' + missing.join(', ') + ' for ' + yesterday + '. The last verified totals are still on the board.');
@@ -380,6 +384,11 @@ function appendException_(severity, message) {
 function notifyOnce_(message) {
   // A manual upload shows its result on screen, so it does not also email the admin.
   if (typeof UPLOAD_QUIET_ !== 'undefined' && UPLOAD_QUIET_) return;
+  // Each problem joins the one consolidated email the scheduled import sends, instead of an email of its own.
+  if (typeof queueNotice_ === 'function') {
+    queueNotice_(message);
+    return;
+  }
   var props = PropertiesService.getScriptProperties();
   var key = 'mail_' + message.slice(0, 90);
   if (props.getProperty(key)) return;

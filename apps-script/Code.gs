@@ -15,6 +15,7 @@ var ROUTES_ = {
   saveBeddingGoals: ['admin'],
   changePassword: ['admin'],
   retry: ['admin'],
+  runChecks: ['admin'],
   coverage: ['admin'],
   roster: ['admin'],
   saveAssociate: ['admin'],
@@ -172,6 +173,7 @@ function route_(name, payload) {
   if (name === 'saveBeddingGoals') return saveBeddingGoals_(payload);
   if (name === 'changePassword') return changePassword_(payload);
   if (name === 'retry') return retry_(payload);
+  if (name === 'runChecks') return runChecks_(payload);
   if (name === 'coverage') return coverage_(payload);
   if (name === 'roster') return roster_(payload);
   if (name === 'saveAssociate') return saveAssociate_(payload);
