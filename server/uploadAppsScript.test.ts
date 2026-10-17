@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { crc32 } from 'node:zlib';
 import { appsScriptServices } from './appsScriptServices.ts';
@@ -247,6 +248,25 @@ test('wrong dates, month-to-date files, unknown files and unconfirmed PERQ expor
   assert.equal(JSON.stringify([tabs.CC_Daily, tabs.CC_Ledger, tabs.CC_Closing]), before);
 });
 
+test('a file refused only for the chosen date stays usable, and a file the mailbox held can be confirmed here', () => {
+  const { send, tabs } = boot();
+  const report = nwdsrPdf('written', '2026-10-14', '2026-10-14', 1000);
+  assert.equal(send('2026-10-15', 'nw.pdf', report).status, 'Failed');
+  const location = perqLocation(7);
+  assert.equal(send('2026-10-14', 'loc.xlsx', location).status, 'Needs Review');
+  assert.equal(tabs.CC_Imports!.length, 1, 'neither file is marked as seen, so the mailbox import would still read it');
+  assert.equal(send('2026-10-14', 'nw.pdf', report).status, 'Imported');
+  assert.equal(send('2026-10-14', 'loc.xlsx', location, true).status, 'Imported');
+
+  const held = perqLocation(9, 'mailbox');
+  const sha = createHash('sha256').update(held).digest('hex');
+  tabs.CC_Imports!.push([sha, 'Performance Stats by Location (10).xlsx', 'PERQ Performance Stats by Location', 'held: date unconfirmed', '2026-10-16T18:52:00Z', 'Store 17 9.']);
+  const confirmed = send('2026-10-13', 'Performance Stats by Location (10).xlsx', held, true);
+  assert.equal(confirmed.status, 'Imported');
+  assert.equal(tabs.CC_Imports!.find((row) => row[0] === sha)![3], 'imported');
+  assert.deepEqual(tabs.CC_Closing!.filter((row) => row[1] === 'store' && row[8] === 'PERQ Ups + Be Backs').map((row) => [row[0], row[5]]), [['2026-10-14', 7], ['2026-10-13', 9]]);
+});
+
 test('Group 17 must agree with NWDSR for the day; PERQ salespeople may not exceed the store count', () => {
   const { send, tabs } = boot();
   send('2026-10-14', 'nw.pdf', nwdsrPdf('written', '2026-10-14', '2026-10-14', 1500));
@@ -302,7 +322,7 @@ test('a KPI whose snapshot line is missing is left as recorded, not rebuilt from
 });
 
 test('the checklist shows Imported, Missing, Failed and Needs Review for the chosen day', () => {
-  const { send, gs } = boot();
+  const { send, gs, tabs } = boot();
   send('2026-10-14', 'nw.pdf', nwdsrPdf('written', '2026-10-14', '2026-10-14', 1500));
   send('2026-10-14', 'g17.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]]), true);
   send('2026-10-14', 'nwd.pdf', nwdsrPdf('delivered', '2026-10-15', '2026-10-15', 10));
@@ -318,7 +338,16 @@ test('the checklist shows Imported, Missing, Failed and Needs Review for the cho
   assert.match(view.checklist.find((item: any) => item.label === 'NWDSR Delivered').message, /is for 2026-10-15, not the business date 2026-10-14/);
   assert.equal(view.history.length, 4);
   assert.equal(view.lastSuccess.report, 'ASL Written');
+  assert.equal(view.lastSuccess.via, 'upload');
   assert.equal(plain(gs.uploads_({ session: manager })).date, '2026-10-16', 'the page opens on yesterday');
+
+  tabs.CC_Imports!.push(
+    ['m1', 'DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-15_2026-10-15.xlsx', 'Data Analysis KPI 17 Delivered', 'imported', '2099-01-01T07:00:00Z', ''],
+    ['m2', 'FABW.pdf', 'FABW Written', 'imported', '2099-01-02T07:00:00Z', ''],
+    ['m3', 'Performance Stats by Location (10).xlsx', 'PERQ Performance Stats by Location', 'held: date unconfirmed', '2099-01-03T07:00:00Z', ''],
+  );
+  const mailbox = plain(gs.uploads_({ date: '2026-10-14', session: manager })).lastSuccess;
+  assert.deepEqual([mailbox.report, mailbox.via, mailbox.at], ['Group 17 Delivered', 'mailbox', '2099-01-01T07:00:00Z'], 'a newer mailbox import of one of the nine reports counts; other reports and held files do not');
 });
 
 test('only a manager or admin can open the page or import', () => {

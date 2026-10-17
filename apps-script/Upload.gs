@@ -171,7 +171,7 @@ function uploadReport_(payload) {
 function processUpload_(context) {
   var prior = importRecordFor_(context.sha);
   var priorStatus = prior ? String(prior.status || '') : '';
-  if (prior && priorStatus !== 'needs-review' && priorStatus !== 'failed') {
+  if (prior && priorStatus !== 'needs-review' && priorStatus !== 'failed' && priorStatus.indexOf('held') !== 0) {
     return {
       status: 'Already on file',
       key: '',
@@ -183,6 +183,8 @@ function processUpload_(context) {
   return { status: 'Failed', key: '', message: 'This is not a PDF or an Excel .xlsx file, so it is not one of the nine daily reports. Nothing was changed.' };
 }
 
+// An answer that depends only on the business date chosen on screen (wrong date, date not confirmed)
+// returns without this, so the file is not marked as seen and the mailbox import can still use it.
 function finishImport_(context, result, importStatus, note) {
   recordImport_(context.sha, context.fileName, importStatus, note || result.message);
   var tab = SpreadsheetApp.openById(SPREADSHEET_ID_).getSheetByName('CC_Imports');
@@ -219,7 +221,7 @@ function uploadPdf_(context) {
     return finishImport_(context, uploadOutcome_(base, 'Needs Review', 'This ' + parsed.reportType + ' report covers ' + parsed.start + ' through ' + parsed.end + '. Month-to-date reports are not added to daily figures. Upload the single-day report for ' + context.date + '. Nothing was changed.'), 'needs-review');
   }
   if (parsed.start !== context.date) {
-    return finishImport_(context, uploadOutcome_(base, 'Failed', 'This ' + parsed.reportType + ' report is for ' + parsed.start + ', not the business date ' + context.date + '. Choose ' + parsed.start + ' as the business date to import it. Nothing was changed.'), 'failed');
+    return uploadOutcome_(base, 'Failed', 'This ' + parsed.reportType + ' report is for ' + parsed.start + ', not the business date ' + context.date + '. Choose ' + parsed.start + ' as the business date to import it. Nothing was changed.');
   }
   var field = key === 'snapWritten' ? 'snapWritten' : key === 'nwdsrWritten' ? 'nwdsrWritten' : 'nwdsrDelivered';
   var before = dailyFacts_().filter(function (row) { return row.date === context.date; })[0];
@@ -276,10 +278,10 @@ function uploadKpiWorkbook_(context, info) {
       return finishImport_(context, uploadOutcome_(base, 'Needs Review', label + ' covers ' + period[1] + ' through ' + period[2] + '. Month-to-date reports are not added to the daily figures, so nothing was changed. Upload the single-day report for ' + context.date + '.'), 'needs-review');
     }
     if (period[1] !== context.date) {
-      return finishImport_(context, uploadOutcome_(base, 'Failed', label + ' is for ' + period[1] + ', not the business date ' + context.date + '. Choose ' + period[1] + ' as the business date to import it. Nothing was changed.'), 'failed');
+      return uploadOutcome_(base, 'Failed', label + ' is for ' + period[1] + ', not the business date ' + context.date + '. Choose ' + period[1] + ' as the business date to import it. Nothing was changed.');
     }
   } else if (!context.confirmed) {
-    return finishImport_(context, uploadOutcome_(base, 'Needs Review', 'This ' + label + ' file name has no report date and the workbook does not print one. Tick "These Excel files are for ' + context.date + '" and import it again. Nothing was changed.'), 'needs-review');
+    return uploadOutcome_(base, 'Needs Review', 'This ' + label + ' file name has no report date and the workbook does not print one. Tick "These Excel files are for ' + context.date + '" and import it again. Nothing was changed.');
   }
   var date = context.date;
   var source = canonicalKpiName_(info.family, info.side, date);
@@ -429,12 +431,12 @@ function uploadPerq_(context, info) {
   var date = context.date;
   var base = { key: info.key, start: date, end: date };
   if (!context.confirmed) {
-    return finishImport_(context, uploadOutcome_(base, 'Needs Review', 'PERQ exports do not print the day they cover, so the business date must be confirmed. Tick "These Excel files are for ' + date + '" and import again. Nothing was changed.'), 'needs-review');
+    return uploadOutcome_(base, 'Needs Review', 'PERQ exports do not print the day they cover, so the business date must be confirmed. Tick "These Excel files are for ' + date + '" and import again. Nothing was changed.');
   }
   var parsed = parsePerqGrid_(info.key, info.grid);
   if (parsed.problem) return finishImport_(context, uploadOutcome_(base, 'Failed', parsed.problem + ' Nothing was changed.'), 'failed');
   if (parsed.exported && parsed.exported < date) {
-    return finishImport_(context, uploadOutcome_(base, 'Failed', 'This export was saved ' + parsed.exportedText + ', before the business date ' + date + ', so it cannot hold that day. Nothing was changed.'), 'failed');
+    return uploadOutcome_(base, 'Failed', 'This export was saved ' + parsed.exportedText + ', before the business date ' + date + ', so it cannot hold that day. Nothing was changed.');
   }
   var onFile = perqOnFile_(date);
   var stamp = ' Uploaded as ' + context.fileName + ' (sha256 ' + context.sha.slice(0, 12) + '); business date confirmed by ' + context.role + '.';
@@ -847,6 +849,28 @@ function uploadChecklist_(evidence, date) {
   });
 }
 
+var MAILBOX_REPORT_LABELS_ = {
+  'Data Analysis KPI 17 Written': 'Group 17 Written',
+  'Data Analysis KPI 17 Delivered': 'Group 17 Delivered',
+  'Data Analysis KPI ASL Written': 'ASL Written',
+  'Data Analysis KPI ASL Delivered': 'ASL Delivered',
+};
+
+/** The newest of the nine reports the mailbox import brought in. Files uploaded here are already in CC_Uploads. */
+function lastMailboxImport_(uploads) {
+  var uploaded = {};
+  uploads.forEach(function (row) { uploaded[row.sha256] = true; });
+  var labels = UPLOAD_REPORTS_.map(function (item) { return item.label; });
+  var found = null;
+  sheet_('CC_Imports').forEach(function (row) {
+    var report = MAILBOX_REPORT_LABELS_[String(row.report_type)] || String(row.report_type || '');
+    var at = row.imported_at instanceof Date ? row.imported_at.toISOString() : String(row.imported_at || '');
+    if (String(row.status) !== 'imported' || labels.indexOf(report) === -1 || uploaded[String(row.sha256)] || !at) return;
+    if (!found || at > found.at) found = { at: at, date: '', file: String(row.file_name || ''), report: report, via: 'mailbox' };
+  });
+  return found;
+}
+
 function uploads_(payload) {
   var today = todayNy_();
   var date = isoDate_(payload.date) || shiftDate_(today, -1);
@@ -879,6 +903,9 @@ function uploads_(payload) {
   recent.forEach(function (day) { if (!complete && day.imported === UPLOAD_REPORTS_.length) complete = day.date; });
   var successes = evidence.uploads.filter(function (row) { return row.status === 'Imported'; });
   var last = successes.length ? successes[successes.length - 1] : null;
+  if (last) last = { at: last.at, date: last.date, file: last.file, report: last.report, via: 'upload' };
+  var mailbox = lastMailboxImport_(evidence.uploads);
+  if (mailbox && (!last || mailbox.at > last.at)) last = mailbox;
   var storeKpi = sheet_('CC_Kpi').filter(function (row) { return String(row.metric) === 'Bedding' && isoDate_(row.period_start) === storePeriodContaining_(date).start; })[0];
   return {
     role: payload.session.role,
@@ -891,7 +918,7 @@ function uploads_(payload) {
     total: UPLOAD_REPORTS_.length,
     recent: recent,
     latestComplete: complete,
-    lastSuccess: last ? { at: last.at, date: last.date, file: last.file, report: last.report } : null,
+    lastSuccess: last,
     kpiThrough: storeKpi ? isoDate_(storeKpi.verified_through) : '',
     refreshed: refreshed ? { issues: refreshed.issues, updated: refreshed.kpiUpdated.length + refreshed.kpiAppended.length } : null,
     history: evidence.uploads.slice(-40).reverse(),
