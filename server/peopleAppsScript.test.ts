@@ -100,20 +100,23 @@ test('the salesperson record uses SNAP for written and the goal, Data Analysis f
   assert.equal(kpi('Closing Ratio').written, null);
 });
 
-test('morning winners compare yesterday\'s SNAP Written line, and a missing SNAP report is Pending', () => {
+test('morning winners rank the whole working roster by that day\'s SNAP Written, and a missing SNAP report is Pending', () => {
   const gs = load(october(), '2026-10-15');
-  const staffing = [
-    { name: 'Ricky Nassif', role: 'associate', worked: true, onLeave: false },
-    { name: 'Eric Montes Rodriguez', role: 'associate', worked: true, onLeave: false },
-    { name: 'Prakash Gandhi', role: 'associate', worked: true, onLeave: false },
-  ];
-  const ready = gs.morningWinners_(staffing, 3000, gs.snapWrittenOn_('2026-10-14'));
+  const roster = (date: string) => ({
+    date, status: 'ready', reason: '', people: ['Prakash Gandhi', 'Eric Montes Rodriguez', 'Ricky Nassif'].map((name) => ({ name, opportunities: 1, source: 'perq' })),
+  });
+  const ready = gs.morningWinners_(roster('2026-10-14'), 3000, gs.snapWrittenOn_('2026-10-14'));
   assert.equal(ready.status, 'ready');
   assert.equal(ready.share, 1000);
-  assert.deepEqual(plain(ready.people.map((item: { name: string; written: number }) => [item.name, item.written])), [['Ricky Nassif', 2795]]);
-  const pending = gs.morningWinners_(staffing, 3000, gs.snapWrittenOn_('2026-10-12'));
-  assert.equal(pending.status, 'pending');
-  assert.match(pending.reason, /SNAP Written by salesperson is not on file/);
+  assert.deepEqual(plain(ready.people.map((item: { name: string; written: number; above: number | null }) => [item.name, item.written, item.above])),
+    [['Ricky Nassif', 2795, 1795], ['Eric Montes Rodriguez', 410, null], ['Prakash Gandhi', 0, null]], 'no line on a reported day is $0, not left out');
+  const pending = gs.morningWinners_(roster('2026-10-12'), 3000, gs.snapWrittenOn_('2026-10-12'));
+  assert.equal(pending.status, 'ready');
+  assert.equal(pending.snapReported, false);
+  assert.ok(pending.people.every((item: { written: number | null }) => item.written === null));
+  assert.match(pending.reason, /SNAP Written for 2026-10-12 is not on file yet/);
+  const noRoster = gs.morningWinners_({ date: '2026-10-12', status: 'pending', reason: 'PERQ Report Pending', people: [] }, 3000, gs.snapWrittenOn_('2026-10-14'));
+  assert.equal(noRoster.reason, 'PERQ Report Pending');
 });
 
 test('the mailbox import keeps Group 17 sales and orders for the store and each salesperson', () => {

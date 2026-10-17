@@ -2188,6 +2188,7 @@ function readStaffing_(date) {
   return sheet_('CC_Staffing').filter(function (row) { return isoDate_(row.date) === date; }).map(function (row) {
     var worked = String(row.worked || '').trim().toLowerCase();
     return {
+      code: String(row.employee_code || '').trim(),
       name: String(row.display_name || row.name || ''),
       role: staffRole_(row.role),
       worked: worked === 'yes' ? true : (worked === 'no' ? false : null),
@@ -2197,33 +2198,189 @@ function readStaffing_(date) {
   });
 }
 
-function staffingNote_(date, lines) {
-  var working = lines.filter(function (line) { return line.worked === true && line.role === 'associate' && !line.onLeave; });
-  var off = lines.filter(function (line) { return line.worked === false && line.role === 'associate' && !line.onLeave; });
-  if (!working.length) return '';
-  var note = 'Confirmed staff working ' + date + ': ' + working.map(function (line) { return line.name; }).join(', ') + (working.length === 1 ? ' only.' : '.');
-  if (off.length === 1) note += ' ' + off[0].name + ' was confirmed not working.';
-  else if (off.length > 1) note += ' ' + off.slice(0, -1).map(function (line) { return line.name; }).join(', ') + ', and ' + off[off.length - 1].name + ' were confirmed not working.';
-  var handled = working.filter(function (line) { return line.perqOpportunities !== null && line.perqOpportunities > 0; });
-  if (handled.length) {
-    note += ' Daily PERQ shows ' + handled.map(function (line) {
-      return line.name + ' handled ' + line.perqOpportunities + (line.perqOpportunities === 1 ? ' opportunity' : ' opportunities');
-    }).join(', ') + '.';
+/** The last business day before today. Days CC_SellingDays marks closed are skipped. */
+function priorBusinessDay_(today) {
+  var closed = closedDates_();
+  var date = shiftDate_(today, -1);
+  var steps = 0;
+  while (closed[date] && steps < 31) {
+    date = shiftDate_(date, -1);
+    steps += 1;
   }
-  note += ' A missing daily PERQ count is not zero and is not an absence.';
-  note += ' Recorded sales activity is separate from confirmed staffing.';
-  note += ' Store purchasing customers were not assigned to a salesperson.';
-  return note;
+  return date;
+}
+
+/** Store and salesperson PERQ opportunities exported for exactly this business date. Multi-day snapshots are never used. */
+function perqDay_(date) {
+  var store = null;
+  var storeConflict = false;
+  var people = [];
+  loadClosing_().forEach(function (fact) {
+    if (fact.start !== date || fact.end !== date || fact.opportunities === null) return;
+    if (fact.scope === 'store' && !fact.code) {
+      if (fact.opportunityConflict || (store !== null && store !== fact.opportunities)) storeConflict = true;
+      store = fact.opportunities;
+    } else if (fact.scope === 'person') {
+      people.push(fact);
+    }
+  });
+  return { store: storeConflict ? null : store, people: people };
+}
+
+/** associate, management, leave, nonsales, former or unknown on a date, from the effective-dated roster. */
+function salesRoleOn_(entry, name, date) {
+  if (managementName_(name)) return 'management';
+  if (!entry) return 'unknown';
+  var role = rosterRole_(entry.raw, date);
+  if (role !== 'associate') return role === 'management' || role === 'former' ? role : 'unknown';
+  if (rosterStatusOn_(entry.raw, date) === 'Leave') return 'leave';
+  var position = String(entry.raw.position || '').trim();
+  if (position && !/\bsales/i.test(position)) return 'nonsales';
+  return 'associate';
+}
+
+function notCountedWhy_(role, date) {
+  if (role === 'management') return 'management';
+  if (role === 'leave') return 'on leave on ' + date;
+  if (role === 'nonsales') return 'not in a sales position';
+  if (role === 'former') return 'not employed as a salesperson on ' + date;
+  return 'not on the roster';
+}
+
+function nameList_(names) {
+  if (names.length <= 1) return names.join('');
+  return names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+}
+
+function opportunityText_(count) {
+  return count + (count === 1 ? ' opportunity' : ' opportunities');
+}
+
+/**
+ * Who worked the sales floor on one business date. The General Manager confirmed that the named, non-management
+ * associates on that day's individual PERQ report are the working salespeople, including anyone listed with 0
+ * opportunities. CC_Staffing rows are manual confirmations and exceptions and take precedence over PERQ. A missing
+ * sale never marks anyone absent, and store opportunities PERQ did not assign to a salesperson are never given to anyone.
+ */
+function workingRoster_(date) {
+  var perq = perqDay_(date);
+  var manual = {};
+  readStaffing_(date).forEach(function (line) {
+    var entry = rosterMatch_(line.code, line.name);
+    var name = entry ? entry.name : line.name;
+    if (name) manual[name.toLowerCase()] = { line: line, entry: entry, name: name };
+  });
+  var listed = [];
+  var seen = {};
+  var listedTotal = 0;
+  perq.people.forEach(function (fact) {
+    var entry = rosterMatch_(fact.code, fact.name);
+    var name = entry ? entry.name : String(fact.name || fact.code);
+    var key = name.toLowerCase();
+    if (seen[key]) {
+      if (seen[key].opportunities !== fact.opportunities) seen[key].conflict = true;
+      return;
+    }
+    seen[key] = { name: name, opportunities: fact.opportunities, conflict: !!fact.opportunityConflict, role: salesRoleOn_(entry, name, date) };
+    listed.push(seen[key]);
+    listedTotal += fact.opportunities;
+  });
+
+  var people = [];
+  var notCounted = [];
+  var exceptions = [];
+  listed.forEach(function (person) {
+    var confirm = manual[person.name.toLowerCase()];
+    if (confirm && (confirm.line.worked === false || confirm.line.onLeave)) {
+      exceptions.push(person.name + ' is on the PERQ report, but CC_Staffing confirms ' + (confirm.line.onLeave ? 'leave' : 'not working') + ' on ' + date + ', so is not counted.');
+      return;
+    }
+    var role = confirm && (confirm.line.role === 'management' || confirm.line.role === 'former') ? confirm.line.role : person.role;
+    if (role !== 'associate') {
+      notCounted.push(person.name + ' (' + notCountedWhy_(role, date) + ')');
+      return;
+    }
+    people.push({ name: person.name, opportunities: person.conflict ? null : person.opportunities, source: confirm && confirm.line.worked === true ? 'perq+staffing' : 'perq' });
+  });
+  Object.keys(manual).forEach(function (key) {
+    var confirm = manual[key];
+    if (confirm.line.worked !== true || confirm.line.onLeave || seen[key]) return;
+    var role = confirm.line.role === 'management' || confirm.line.role === 'former' ? confirm.line.role : salesRoleOn_(confirm.entry, confirm.name, date);
+    if (role === 'leave' || (role === 'unknown' && confirm.line.role === 'associate')) role = 'associate';
+    if (role !== 'associate') {
+      notCounted.push(confirm.name + ' (' + notCountedWhy_(role, date) + ')');
+      return;
+    }
+    people.push({ name: confirm.name, opportunities: confirm.line.perqOpportunities, source: 'staffing' });
+  });
+
+  if (!perq.people.length && !people.length) {
+    return {
+      date: date, status: 'pending', source: '', reason: 'PERQ Report Pending',
+      detail: 'The individual PERQ report for ' + date + ' is not on file yet. Nobody is marked absent while it is missing.',
+      people: [], notes: [], store: perq.store, listedTotal: null,
+    };
+  }
+
+  // A daily export that names every active salesperson and shows zeros may be the employee list, not who worked.
+  var active = rosterRows_().filter(function (entry) { return salesRoleOn_(entry, entry.name, date) === 'associate'; });
+  var everyone = active.length > 1 && active.every(function (entry) { return !!seen[entry.name.toLowerCase()]; });
+  var unconfirmed = [];
+  if (everyone) {
+    people = people.filter(function (person) {
+      if (person.source !== 'perq' || person.opportunities !== 0) return true;
+      unconfirmed.push(person.name);
+      return false;
+    });
+  }
+
+  var notes = [];
+  var fromPerq = people.filter(function (person) { return person.source !== 'staffing'; });
+  var fromStaffing = people.filter(function (person) { return person.source === 'staffing'; });
+  if (fromPerq.length) {
+    notes.push('Working salespeople on ' + date + ' from the individual PERQ report: ' + nameList_(fromPerq.map(function (person) {
+      return person.name + (person.opportunities === null ? ' (opportunities conflict between exports)' : ' (' + opportunityText_(person.opportunities) + ')');
+    })) + '.');
+  } else if (perq.people.length) {
+    notes.push('No sales associate is on the individual PERQ report for ' + date + '.');
+  } else {
+    notes.push('The individual PERQ report for ' + date + ' is not on file. The working roster is the CC_Staffing confirmation.');
+  }
+  var confirmed = people.filter(function (person) { return person.source === 'perq+staffing'; });
+  if (confirmed.length) notes.push('CC_Staffing also confirms ' + nameList_(confirmed.map(function (person) { return person.name; })) + '.');
+  if (fromStaffing.length) notes.push('Confirmed in CC_Staffing without a PERQ line: ' + nameList_(fromStaffing.map(function (person) { return person.name; })) + '.');
+  exceptions.forEach(function (line) { notes.push(line); });
+  if (unconfirmed.length) {
+    notes.push('The PERQ salesperson export lists every active salesperson, so it may be the employee list rather than who worked. ' +
+      nameList_(unconfirmed) + ' with 0 opportunities ' + (unconfirmed.length === 1 ? 'is' : 'are') + ' not counted until confirmed in CC_Staffing.');
+  }
+  if (notCounted.length) notes.push('On the PERQ report but not counted as salespeople: ' + nameList_(notCounted) + '.');
+  if (perq.store !== null && perq.people.length) {
+    var gap = Math.round((perq.store - listedTotal) * 100) / 100;
+    if (gap > 0) {
+      notes.push('Store PERQ shows ' + perq.store + ' opportunities but the salesperson report adds to ' + listedTotal + '. ' +
+        opportunityText_(gap) + (gap === 1 ? ' is' : ' are') + ' not assigned to any salesperson and ' + (gap === 1 ? 'was' : 'were') + ' not given to anyone.');
+    } else if (gap < 0) {
+      notes.push('The salesperson report adds to ' + listedTotal + ' opportunities, more than the store PERQ of ' + perq.store + '. Check the two exports.');
+    }
+  }
+  notes.push('Nobody is marked absent because of a missing sale.');
+  return { date: date, status: 'ready', source: perq.people.length ? 'perq' : 'staffing', reason: '', detail: '', people: people, notes: notes, store: perq.store, listedTotal: perq.people.length ? listedTotal : null };
 }
 
 function eligibleAssociate_(line) {
   return line.worked === true && line.role === 'associate' && !line.onLeave && !managementName_(line.name);
 }
 
-/** One day's SNAP Written by salesperson. With the day's SNAP report on file, a salesperson without a line wrote 0. */
+/**
+ * One day's SNAP Written by salesperson. With that day's salesperson lines on file, a salesperson without a line wrote
+ * 0. A store SNAP total without salesperson lines is complete only when the store wrote nothing.
+ */
 function snapWrittenOn_(date) {
   var lines = snapAssociateLines_(date, date);
-  var reported = lines.order.length > 0 || dailyFacts_().some(function (row) { return row.date === date && row.snapWritten !== null; });
+  var storeTotal = null;
+  dailyFacts_().forEach(function (row) { if (row.date === date && row.snapWritten !== null) storeTotal = row.snapWritten; });
+  var reported = lines.order.length > 0 || storeTotal === 0;
   return {
     reported: reported,
     amountFor: function (name) {
@@ -2238,33 +2395,40 @@ function snapWrittenOn_(date) {
   };
 }
 
-function morningWinners_(lines, goal, snap) {
-  if (!lines.length) return { status: 'pending', reason: 'Yesterday\'s working roster is not on file.', share: null, people: [] };
-  if (goal === null) return { status: 'pending', reason: 'Yesterday\'s saved written goal is not on file.', share: null, people: [] };
-  if (lines.some(function (line) { return line.worked === null; })) {
-    return { status: 'pending', reason: 'Yesterday\'s working roster is incomplete.', share: null, people: [] };
+/**
+ * Every salesperson on the working roster, ranked by SNAP Written for the same business date. Without that day's
+ * SNAP salesperson lines each amount is Pending, never 0. The goal share is context only and ranks nobody.
+ */
+function morningWinners_(roster, goal, snap) {
+  var result = { date: roster.date, status: 'pending', reason: roster.reason, detail: roster.detail || '', share: null, snapReported: false, people: [] };
+  if (roster.status !== 'ready') return result;
+  result.status = 'ready';
+  result.reason = '';
+  if (!roster.people.length) {
+    result.reason = 'No sales associate is on the working roster for ' + roster.date + '.';
+    return result;
   }
-  if (lines.some(function (line) { return line.worked === true && (line.role === '' || line.role === 'unknown'); })) {
-    return { status: 'pending', reason: 'Yesterday\'s staffing roles are incomplete.', share: null, people: [] };
-  }
-  var eligible = lines.filter(eligibleAssociate_);
-  if (!eligible.length) return { status: 'pending', reason: 'No eligible salesperson is marked as worked.', share: null, people: [] };
-  if (!snap || !snap.reported) {
-    return { status: 'pending', reason: 'Yesterday\'s SNAP Written by salesperson is not on file.', share: null, people: [] };
-  }
-  var share = Math.round((goal / eligible.length) * 100) / 100;
-  var people = [];
-  eligible.forEach(function (line) {
-    var written = snap.amountFor(line.name);
-    if (written <= share) return;
-    people.push({
-      name: line.name,
+  var reported = !!(snap && snap.reported);
+  var share = goal === null || goal === undefined ? null : Math.round((goal / roster.people.length) * 100) / 100;
+  result.snapReported = reported;
+  result.share = share;
+  result.people = roster.people.map(function (person) {
+    var written = reported ? snap.amountFor(person.name) : null;
+    return {
+      name: person.name,
       written: written,
+      opportunities: person.opportunities,
+      source: person.source,
       share: share,
-      above: Math.round((written - share) * 100) / 100,
-    });
+      above: written !== null && share !== null && written > share ? Math.round((written - share) * 100) / 100 : null,
+    };
   });
-  return { status: 'ready', reason: '', share: share, people: people };
+  result.people.sort(function (a, b) {
+    if (a.written !== null && b.written !== null && a.written !== b.written) return b.written - a.written;
+    return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0);
+  });
+  if (!reported) result.reason = 'SNAP Written for ' + roster.date + ' is not on file yet, so each salesperson shows Pending.';
+  return result;
 }
 
 function workedCount_(lines) {
@@ -2346,17 +2510,29 @@ function morning_(payload) {
   } catch (error) {
     try { appendException_('Update Failed', 'Morning meeting figures could not be read. Last verified totals were left in place.'); } catch (ignore) {}
   }
-  var staffing = [];
+  var winnersDay = priorBusinessDay_(home.today);
+  var chosenDay = false;
+  if (payload.day) {
+    var asked = validDate_(payload.day);
+    if (asked >= home.today) throw new Error('Choose a business day before today.');
+    chosenDay = asked !== winnersDay;
+    winnersDay = asked;
+  }
   var todayStaffing = [];
   try {
-    staffing = readStaffing_(yesterday);
     todayStaffing = readStaffing_(home.today);
   } catch (error) {
-    staffing = [];
     todayStaffing = [];
   }
+  var roster;
+  try {
+    roster = workingRoster_(winnersDay);
+  } catch (error) {
+    try { appendException_('Update Failed', 'The working roster for ' + winnersDay + ' could not be read. ' + String(error && error.message ? error.message : error)); } catch (ignore) {}
+    roster = { date: winnersDay, status: 'pending', reason: 'PERQ Report Pending', detail: 'The working roster for ' + winnersDay + ' could not be read.', people: [], notes: [] };
+  }
   var writtenPerf = home.board.yesterday.written;
-  var winners = morningWinners_(staffing, writtenPerf.goal, snapWrittenOn_(yesterday));
+  var winners = morningWinners_(roster, winnersDay === yesterday ? writtenPerf.goal : null, snapWrittenOn_(winnersDay));
   var workedToday = workedCount_(todayStaffing);
   var personalShare = workedToday === null || home.board.today.written === null ? null : Math.round((home.board.today.written / workedToday) * 100) / 100;
   var gaps = [];
@@ -2365,7 +2541,8 @@ function morning_(payload) {
   if (closingFigure.scope === 'none') gaps.push('closing ratio');
   if (beddingWritten.scope === 'none') gaps.push('written bedding');
   if (beddingDelivered.scope === 'none') gaps.push('delivered bedding');
-  if (winners.status === 'pending') gaps.push(winners.reason);
+  if (!chosenDay && winners.status === 'pending') gaps.push('individual PERQ for ' + winnersDay);
+  if (!chosenDay && winners.status === 'ready' && winners.people.length && !winners.snapReported) gaps.push('SNAP Written by salesperson for ' + winnersDay);
   if (personalShare === null) gaps.push('today\'s working roster');
   if (gaps.length) {
     try { notifyOnce_('Morning meeting for ' + yesterday + ' is waiting on: ' + gaps.join('; ') + '.'); } catch (ignore) {}
@@ -2394,7 +2571,7 @@ function morning_(payload) {
       personalShare: personalShare,
     },
     winners: winners,
-    staffingNote: staffingNote_(yesterday, staffing),
+    rosterNotes: roster.notes || [],
     promotion: saleOnDate_(promotion, home.today),
     financing: financeOnDate_(promotion, home.today),
     beddingFinance: promotion.beddingFinance || 'Size-based qualifying amounts are not in the approved promotion.',
