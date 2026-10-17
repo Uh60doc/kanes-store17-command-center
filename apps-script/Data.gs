@@ -899,6 +899,8 @@ function personAliases_(name) {
     'renzo del solar': ['rdelso', 'renzo del solar', 'renzo delsolar'],
     'brenda sanchez': ['brenda sanchez'],
     'caroline amaro': ['caroline amaro'],
+    'mukhtar junaid': ['mukhtar junaid', 'mukhtar, junaid', 'junaid, mukhtar', 'jimmy'],
+    'filepe chaves': ['filepe chaves', 'felipe chaves', 'chaves felipe', 'chaves, felipe', 'chaves, filepe'],
   };
   var aliases = (table[key] || [key]).slice();
   rosterAliases_(name).forEach(function (alias) { if (aliases.indexOf(alias) === -1) aliases.push(alias); });
@@ -1965,6 +1967,9 @@ function snapPendingDates_(individualStart, individualEnd, through) {
 
 function people_(payload) {
   var today = todayNy_();
+  // Seed GM-confirmed former identities, then rematch AssociateDays display/role (source amounts untouched).
+  if (typeof rematchAssociateDays_ === 'function') rematchAssociateDays_();
+  else if (typeof ensureRosterColumns_ === 'function') ensureRosterColumns_();
   var individual = individualPeriodContaining_(today);
   var snapThrough = refreshPeopleWritten_(individual.start, individual.end);
   var people = peopleRows_(individual.start, individual.end);
@@ -1976,9 +1981,39 @@ function people_(payload) {
     snapLabel: 'SNAP written',
     analysisThrough: { written: (people[0] && people[0].analysisWrittenThrough) || null, delivered: (people[0] && people[0].deliveredThrough) || null },
     people: people,
+    deliveredVariance: salesTeamDeliveredVariance_(people, individual, today),
     today: today,
     evaluation: evaluationCycle_(today),
     updated: healthValue_('last_calculation') || 'Not Available',
+  };
+}
+
+/**
+ * Labels why active Sales Team Delivered need not equal official Store Delivered.
+ * Never adjusts either figure. Former-employee and unmatched dollars stay in store totals.
+ */
+function salesTeamDeliveredVariance_(people, individual, today) {
+  var activeSum = 0;
+  var counted = 0;
+  (people || []).forEach(function (person) {
+    if (person.deliveredSales === null || person.deliveredSales === undefined) return;
+    activeSum += Number(person.deliveredSales);
+    counted += 1;
+  });
+  activeSum = Math.round(activeSum * 100) / 100;
+  var store = storePeriodContaining_(today);
+  var storeDelivered = sumField_(dailyFacts_(), 'nwdsrDelivered', store.start, store.end);
+  var through = (people[0] && people[0].deliveredThrough) || '';
+  var differs = counted > 0 && storeDelivered !== null && Math.abs(activeSum - storeDelivered) > 0.009;
+  return {
+    activeAssociateDelivered: counted ? activeSum : null,
+    activeAssociateCount: counted,
+    storeDelivered: storeDelivered,
+    storePeriod: store.start + ' through ' + store.end,
+    salespersonPeriod: individual.start + ' through ' + individual.end,
+    deliveredThrough: through || null,
+    differs: differs,
+    note: 'Official Store Delivered is NWDSR Delivered for the store month (' + store.start + ' through ' + store.end + ') and remains the authoritative store measure. Current Sales Team Delivered is the sum of active associates from Group 17 Delivered for the salesperson month (' + individual.start + ' through ' + individual.end + '). It does not include former employees, unmatched names, or management, and those dollars are never reassigned to another associate. The calendars also differ (store 2nd–1st vs salesperson 1st–last day). The two figures are not forced to match.',
   };
 }
 

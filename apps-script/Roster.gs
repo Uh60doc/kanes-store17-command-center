@@ -21,6 +21,9 @@ var ROSTER_SEED_EXTRA_ = [
   { name: 'Kelly Meyers', role: 'management', employee_id: 'JMEYERS', full_name: 'James Meyers', preferred_name: 'Kelly', position: 'General Manager', status: 'Management', aliases: 'JAMES MEYERS; MEYERS, JAMES', roster_note: '' },
   { name: 'Elizabeth Perez', role: 'management', employee_id: 'EPEREZ', full_name: 'Elizabeth Perez', preferred_name: 'Elizabeth', position: 'Operations Manager', status: 'Management', aliases: 'PEREZ, ELIZABETH', roster_note: '' },
   { name: 'Valentina Lopez', role: 'former', employee_id: '', full_name: 'Valentina Lopez', preferred_name: 'Valentina', position: 'Sales Associate', status: 'Terminated', aliases: 'LOPEZ, VALENTINA', roster_note: 'Former associate. Termination date not on file.' },
+  /** GM-confirmed former identities. Maria Rafalik stays unmatched and is intentionally not seeded. */
+  { name: 'Mukhtar Junaid', role: 'former', employee_id: '', full_name: 'Mukhtar Junaid', preferred_name: 'Jimmy', position: 'Sales Associate', status: 'Terminated', aliases: 'MUKHTAR JUNAID; MUKHTAR, JUNAID; JUNAID, MUKHTAR; JIMMY', roster_note: 'Former associate. Went by Jimmy. GM confirmed Mukhtar Junaid / Jimmy only — no other alias or employee ID. Termination date not on file.' },
+  { name: 'Filepe Chaves', role: 'former', employee_id: '', full_name: 'Filepe Chaves', preferred_name: 'Filepe', position: 'Sales Associate', status: 'Terminated', aliases: 'CHAVES FELIPE; FELIPE CHAVES; CHAVES, FELIPE; FILEPE CHAVES; CHAVES, FILEPE', roster_note: 'Former associate. GM confirmed first name Filepe and last name Chaves. Report aliases CHAVES FELIPE and FELIPE CHAVES. Preserve original report spellings. Termination date not on file.' },
 ];
 
 var rosterCache_ = null;
@@ -158,47 +161,85 @@ function rosterHistoryTab_() {
   return tab;
 }
 
+/**
+ * Roster seeds and AssociateDays rematches write only when not building quiet production pages.
+ * Restore drills may still write on a scratch copy (BOOK_ is not production).
+ */
+function rosterWritesAllowed_() {
+  if (typeof UPLOAD_QUIET_ === 'undefined' || !UPLOAD_QUIET_) return true;
+  try {
+    return book_().getId() !== SPREADSHEET_ID_;
+  } catch (error) {
+    return false;
+  }
+}
+
 /** Adds the roster columns and fills them once from the verified roster. Existing cells are never overwritten. */
 function ensureRosterColumns_() {
   var tab = rosterTab_();
   var values = tab.getDataRange().getValues();
   var header = values[0].map(function (cell) { return String(cell || '').trim(); });
   var missing = ROSTER_COLUMNS_.filter(function (column) { return header.indexOf(column) === -1; });
-  if (!missing.length) return false;
-  var start = header.length + 1;
-  tab.getRange(1, start, 1, missing.length).setValues([missing]);
-  header = header.concat(missing);
-  var col = function (name) { return header.indexOf(name); };
   var stamp = new Date().toISOString();
   var history = rosterHistoryTab_();
+  var changed = false;
   var r;
   var present = {};
   for (r = 1; r < values.length; r += 1) {
-    var name = String(values[r][0] || '');
-    if (!name) continue;
-    present[name] = true;
-    var seed = ROSTER_SEED_[name] || {};
-    var role = String(values[r][1] || 'associate');
-    var fill = {
-      employee_id: seed.employee_id || '',
-      full_name: seed.full_name || name,
-      preferred_name: seed.preferred_name || name.split(' ')[0],
-      hire_date: seed.hire_date || '',
-      store: '17',
-      position: seed.position || (role === 'management' ? 'Management' : 'Sales Associate'),
-      status: seed.status || (role === 'management' ? 'Management' : role === 'former' ? 'Terminated' : 'Active'),
-      status_effective: seed.status_effective || '',
-      prior_status: seed.prior_status || '',
-      aliases: seed.aliases || '',
-      roster_note: seed.roster_note || '',
-      updated_at: stamp,
-    };
-    var line = missing.map(function (column) { return fill[column]; });
-    tab.getRange(r + 1, start, 1, missing.length).setValues([line]);
-    history.appendRow([stamp, 'roster columns added', fill.employee_id, name, 'all', '', JSON.stringify(fill), fill.status_effective, 'system', 'Filled from the verified roster. No sales, KPI or evaluation rows were changed.']);
+    var listed = String(values[r][0] || '');
+    if (listed) present[listed] = true;
   }
+  if (!rosterWritesAllowed_()) return false;
+  if (missing.length) {
+    var start = header.length + 1;
+    tab.getRange(1, start, 1, missing.length).setValues([missing]);
+    header = header.concat(missing);
+    for (r = 1; r < values.length; r += 1) {
+      var name = String(values[r][0] || '');
+      if (!name) continue;
+      var seed = ROSTER_SEED_[name] || {};
+      var role = String(values[r][1] || 'associate');
+      var fill = {
+        employee_id: seed.employee_id || '',
+        full_name: seed.full_name || name,
+        preferred_name: seed.preferred_name || name.split(' ')[0],
+        hire_date: seed.hire_date || '',
+        store: '17',
+        position: seed.position || (role === 'management' ? 'Management' : 'Sales Associate'),
+        status: seed.status || (role === 'management' ? 'Management' : role === 'former' ? 'Terminated' : 'Active'),
+        status_effective: seed.status_effective || '',
+        prior_status: seed.prior_status || '',
+        aliases: seed.aliases || '',
+        roster_note: seed.roster_note || '',
+        updated_at: stamp,
+      };
+      var line = missing.map(function (column) { return fill[column]; });
+      tab.getRange(r + 1, start, 1, missing.length).setValues([line]);
+      history.appendRow([stamp, 'roster columns added', fill.employee_id, name, 'all', '', JSON.stringify(fill), fill.status_effective, 'system', 'Filled from the verified roster. No sales, KPI or evaluation rows were changed.']);
+    }
+    changed = true;
+  }
+  // Seed only — rematch AssociateDays from Sales Team / rematchAssociateDays_, never as a side effect here.
+  if (ensureKnownFormerEmployees_(tab, header, present, stamp, history)) changed = true;
+  if (changed) rosterCache_ = null;
+  return changed;
+}
+
+/** Appends GM-confirmed former (and management) seed rows that are still missing. Never overwrites an existing row. */
+function ensureKnownFormerEmployees_(tab, header, present, stamp, history) {
+  present = present || {};
+  stamp = stamp || new Date().toISOString();
+  history = history || rosterHistoryTab_();
+  if (!header || !header.length) header = tab.getRange(1, 1, 1, tab.getLastColumn()).getValues()[0].map(function (cell) { return String(cell || '').trim(); });
+  var added = false;
   ROSTER_SEED_EXTRA_.forEach(function (extra) {
     if (present[extra.name]) return;
+    var already = false;
+    Object.keys(present).forEach(function (name) {
+      if (already) return;
+      if (aliasKey_(name) === aliasKey_(extra.name) || sameNameTokens_(name, extra.name)) already = true;
+    });
+    if (already) return;
     var line = header.map(function (column) {
       if (column === 'name') return extra.name;
       if (column === 'role') return extra.role;
@@ -207,10 +248,44 @@ function ensureRosterColumns_() {
       return extra[column] !== undefined ? extra[column] : '';
     });
     tab.appendRow(line);
-    history.appendRow([stamp, 'roster record added', extra.employee_id, extra.name, 'all', '', JSON.stringify(extra), '', 'system', 'Existing staff member added to the roster so report names match. Not a salesperson card.']);
+    history.appendRow([stamp, 'roster record added', extra.employee_id || '', extra.name, 'all', '', JSON.stringify(extra), '', 'system', 'GM-confirmed identity added so report names match. Historical sales stay on file; not an active salesperson card.']);
+    present[extra.name] = true;
+    added = true;
   });
-  rosterCache_ = null;
-  return true;
+  if (added) rosterCache_ = null;
+  return added;
+}
+
+/**
+ * Updates CC_AssociateDays display name and role when a printed source now matches the roster.
+ * Never changes the source name, amount, date, or SHA. Store totals are untouched.
+ */
+function rematchAssociateDays_() {
+  ensureRosterColumns_();
+  if (!rosterWritesAllowed_()) return 0;
+  forgetRead_('CC_AssociateDays');
+  var spreadsheet = book_();
+  var tab = spreadsheet.getSheetByName('CC_AssociateDays');
+  if (!tab) return 0;
+  var values = tab.getDataRange().getValues();
+  if (values.length < 2) return 0;
+  var updated = 0;
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    var date = isoDate_(values[r][0]);
+    var source = String(values[r][1] || '');
+    var display = String(values[r][2] || '');
+    var role = String(values[r][3] || '');
+    var match = rosterMatch_('', source) || rosterMatch_('', display);
+    if (!match) continue;
+    var nextDisplay = match.name;
+    var nextRole = rosterRole_(match.raw, date || todayNy_());
+    if (display === nextDisplay && role === nextRole) continue;
+    tab.getRange(r + 1, 3, 1, 2).setValues([[nextDisplay, nextRole]]);
+    updated += 1;
+  }
+  if (updated) forgetRead_('CC_AssociateDays');
+  return updated;
 }
 
 function rosterRecord_(row, today) {

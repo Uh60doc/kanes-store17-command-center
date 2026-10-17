@@ -765,11 +765,13 @@
     var peopleSnapThrough = '';
     var peopleSnapPending = [];
     var peopleAnalysisThrough = {};
+    var peopleDeliveredVariance = null;
     function renderPeople(data) {
       peopleCache = data.people || [];
       peopleSnapThrough = data.snapThrough || '';
       peopleSnapPending = data.snapPending || [];
       peopleAnalysisThrough = data.analysisThrough || {};
+      peopleDeliveredVariance = data.deliveredVariance || null;
       peopleEvaluation = data.evaluation || null;
       peopleToday = data.today || '';
       if (!peopleSort) peopleSort = 'snapWritten';
@@ -813,7 +815,9 @@
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Sales Team leaderboard</h2>' +
         teamNav('board') +
-        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Sales Team</th><th>SNAP written</th><th>Monthly goal</th><th>% to goal</th><th>Delivered</th><th>Written orders</th><th>Opportunities</th><th>Closing ratio</th></tr>' + rows + '</table><p class="sub">Salesperson month, the 1st through the last day. SNAP written through ' + esc(peopleSnapThrough || 'Not Available') + ' is the only source for individual written sales and % to the monthly goal. ' + (peopleSnapPending.length ? 'Salesperson SNAP for ' + esc(peopleSnapPending.join(', ')) + ' is Pending: no report on file, so those dates are not in the total and are not zero. ' : '') + 'Delivered sales are from the Data Analysis Group 17 Delivered report (through ' + esc(peopleAnalysisThrough.delivered || 'Not Available') + '). Data Analysis written (through ' + esc(peopleAnalysisThrough.written || 'Not Available') + ') is kept for KPIs and reconciliation and is never used for the goal. There is no individual NWDSR: the NWDSR reports are store-level ranking reports. Closing ratio = Group 17 Written orders ÷ PERQ Ups + Be Backs × 100, both from the 1st through the date shown, with points from the ' + percent((peopleCache[0] && peopleCache[0].closing && peopleCache[0].closing.goal) || 0.5) + ' goal. The store customer count is never divided among associates. Managers and former associates are not listed as active.</p></article>' +
+        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Sales Team</th><th>SNAP written</th><th>Monthly goal</th><th>% to goal</th><th>Delivered</th><th>Written orders</th><th>Opportunities</th><th>Closing ratio</th></tr>' + rows + '</table><p class="sub">Salesperson month, the 1st through the last day. SNAP written through ' + esc(peopleSnapThrough || 'Not Available') + ' is the only source for individual written sales and % to the monthly goal. ' + (peopleSnapPending.length ? 'Salesperson SNAP for ' + esc(peopleSnapPending.join(', ')) + ' is Pending: no report on file, so those dates are not in the total and are not zero. ' : '') + 'Delivered sales are from the Data Analysis Group 17 Delivered report (through ' + esc(peopleAnalysisThrough.delivered || 'Not Available') + '). Data Analysis written (through ' + esc(peopleAnalysisThrough.written || 'Not Available') + ') is kept for KPIs and reconciliation and is never used for the goal. There is no individual NWDSR: the NWDSR reports are store-level ranking reports. Closing ratio = Group 17 Written orders ÷ PERQ Ups + Be Backs × 100, both from the 1st through the date shown, with points from the ' + percent((peopleCache[0] && peopleCache[0].closing && peopleCache[0].closing.goal) || 0.5) + ' goal. The store customer count is never divided among associates. Managers and former associates are not listed as active.</p>' +
+        (peopleDeliveredVariance ? '<p class="sub"><strong>Store Delivered vs Sales Team Delivered.</strong> Official Store Delivered (NWDSR, store month ' + esc(peopleDeliveredVariance.storePeriod || '') + ') is ' + money(peopleDeliveredVariance.storeDelivered) + '. Active Sales Team Delivered sum (Group 17, salesperson month) is ' + (peopleDeliveredVariance.activeAssociateDelivered === null || peopleDeliveredVariance.activeAssociateDelivered === undefined ? 'Pending' : money(peopleDeliveredVariance.activeAssociateDelivered)) + '. ' + esc(peopleDeliveredVariance.note || '') + '</p>' : '') +
+        '</article>' +
         '<h2 class="section-title">Individual KPI scorecard</h2><div id="kpi-scorecard"></div>' +
         '<h2 class="section-title">KPI comparison</h2>' +
         '<article class="card kpi-wrap"><table class="kpi"><tr><th>KPI</th>' + heads + '</tr>' + compare + '</table><p class="sub">Written results from Data Analysis Group 17 Written through ' + esc(peopleAnalysisThrough.written || 'Not Available') + '. Delivered results are on each scorecard. Not in report means the Group 17 report has no salesperson column for that KPI.</p></article>';
@@ -1439,7 +1443,7 @@
         (data.partial ? '<article class="card"><p class="sub"><strong>Partial report — not final.</strong></p><ul class="list">' + (missing || '<li>Missing sources are listed on the email.</li>') + '</ul></article>' : '') +
         '<div class="brief-mail" id="brief-startup"><div class="brief-mail-inner">' + (data.startup && data.startup.html ? data.startup.html : '') + '</div></div>' +
         '<h2 class="section-title">MTD Performance</h2>' +
-        '<p class="sub">Sent separately after Morning Start-Up. Same verified Home and Sales Team figures. Last-year comparison is Pending until a verified CC_LastYear figure is on file.</p>' +
+        '<p class="sub">Sent separately after Morning Start-Up. Same verified Home and Sales Team figures. Last-year comparison is store-level only and stays Pending until a verified store CC_LastYear figure is on file. Individual prior-year salesperson comparisons are not required.</p>' +
         '<div class="brief-mail" id="brief-mtd"><div class="brief-mail-inner">' + (data.mtd && data.mtd.html ? data.mtd.html : '') + '</div></div>' +
         '<h2 class="section-title noprint">Today\'s management plan</h2>' +
         '<article class="card noprint"><p class="sub">These three actions print on the Start-Up email. Notes never change sales figures. Coaching is taken only from verified shortfalls.</p>' +
