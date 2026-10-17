@@ -827,6 +827,13 @@ function closedPeriodStatus_(ctx, label, key, track, period) {
 
 /* ---------- alerts ---------- */
 
+/** Sheets turns a written yyyy-MM-dd into a date at midnight New York time; it reads back as the text that was written. */
+function qualityCell_(cell) {
+  if (Object.prototype.toString.call(cell) !== '[object Date]') return String(cell === null || cell === undefined ? '' : cell);
+  if (Utilities.formatDate(cell, 'America/New_York', 'HH:mm:ss') === '00:00:00') return Utilities.formatDate(cell, 'America/New_York', 'yyyy-MM-dd');
+  return cell.toISOString();
+}
+
 function alertRows_() {
   var values = sheetValues_(ALERTS_TAB_);
   if (!values || values.length < 2) return [];
@@ -835,8 +842,7 @@ function alertRows_() {
     var record = {};
     ALERT_HEADERS_.forEach(function (key) {
       var i = header.indexOf(key);
-      var cell = i === -1 ? '' : row[i];
-      record[key] = Object.prototype.toString.call(cell) === '[object Date]' ? cell.toISOString() : String(cell === null || cell === undefined ? '' : cell);
+      record[key] = qualityCell_(i === -1 ? '' : row[i]);
     });
     return record;
   });
@@ -1153,7 +1159,7 @@ function qualityHealth_() {
   var resolved = alerts.filter(function (row) { return row.status === 'Resolved' || row.status === 'Closed' || row.status === 'Withdrawn'; }).sort(function (a, b) { return a.resolved_at < b.resolved_at ? 1 : -1; });
   var runs = sheet_(QUALITY_RUNS_TAB_);
   var last = runs.length ? runs[runs.length - 1] : null;
-  var text = function (value) { return value instanceof Date ? value.toISOString() : String(value === null || value === undefined ? '' : value); };
+  var text = qualityCell_;
   return {
     lastRun: last ? { at: text(last.run_at), trigger: text(last.trigger), checks: text(last.checks), passed: text(last.passed), flagged: text(last.flagged), noted: text(last.noted), seconds: text(last.seconds) } : null,
     checks: sheet_(QUALITY_TAB_).map(function (row) { return { id: text(row.check_id), area: text(row.area), status: text(row.status), subject: text(row.subject), explanation: text(row.explanation) }; }),

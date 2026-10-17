@@ -22,8 +22,8 @@ const unsigned = (bytes: ArrayLike<number>) => Uint8Array.from(Array.from(bytes,
 const signed = (bytes: Uint8Array) => Array.from(bytes, (b) => (b > 127 ? b - 256 : b));
 
 function formatDate(date: Date, timeZone = 'America/New_York', format = 'yyyy-MM-dd') {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date).map((p) => [p.type, p.value]));
-  return format.replace('yyyy', parts.year!).replace('MM', parts.month!).replace('dd', parts.day!).replace('HH', parts.hour!).replace('mm', parts.minute!).replace(/\bH\b/, String(Number(parts.hour)));
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(date).map((p) => [p.type, p.value]));
+  return format.replace('yyyy', parts.year!).replace('MM', parts.month!).replace('dd', parts.day!).replace('HH', parts.hour!).replace('mm', parts.minute!).replace('ss', parts.second!).replace(/\bH\b/, String(Number(parts.hour)));
 }
 
 export interface DriveFile { name: string; folder: string; tabs?: Record<string, Grid>; content?: string; trashed?: boolean }

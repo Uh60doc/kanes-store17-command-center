@@ -105,7 +105,7 @@ function backupLog_(row) {
 }
 
 function backupRows_() {
-  var text = function (value) { return value instanceof Date ? value.toISOString() : String(value === null || value === undefined ? '' : value); };
+  var text = qualityCell_;
   return sheet_(BACKUPS_TAB_).map(function (row, i) {
     var record = { sheetRow: i + 2 };
     BACKUP_HEADERS_.forEach(function (key) { record[key] = text(row[key]); });

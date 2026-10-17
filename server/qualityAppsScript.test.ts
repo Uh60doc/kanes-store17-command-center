@@ -78,6 +78,36 @@ test('a missing-report alert resolves itself when the report arrives, and the re
   assert.ok(!health.quality.active.some((row: { report: string; date: string }) => row.report === 'NWDSR Delivered' && row.date === '2026-10-16'));
 });
 
+/** Sheets stores a written yyyy-MM-dd as a date at midnight New York time (EDT in October). */
+function asSheetsStores(tabs: ReturnType<typeof verifiedOctober>) {
+  for (const name of ['CC_Alerts', 'CC_DataStatus']) {
+    for (const row of tabs[name]!) row.forEach((cell, i) => { if (typeof cell === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(cell)) row[i] = new Date(`${cell}T04:00:00Z`); });
+  }
+}
+
+test('dates stored by Sheets read back as the business date on Home, System health and in resolutions', () => {
+  const { gs, tabs } = harness();
+  gs.runQualityChecks_('first run');
+  asSheetsStores(tabs);
+  const attention = plain(gs.home_({ session })).attention as string[];
+  assert.ok(attention.some((item) => /^Not yet arrived for 2026-10-16: SNAP Written/.test(item)), attention.join('\n'));
+  assert.ok(!attention.some((item) => /T04:00/.test(item)));
+  const health = plain(gs.health_({ session }));
+  assert.ok(health.quality.active.some((row: { date: string }) => row.date === '2026-10-16'));
+  const day = health.quality.status.find((row: { kind: string; key: string }) => row.kind === 'Day' && row.key === '2026-10-15');
+  assert.equal(day.periodDates, '2026-10-15');
+  assert.equal(health.quality.status.find((row: { key: string }) => row.key === 'store_written').through, '2026-10-15');
+  assert.ok(!JSON.stringify(health.quality).includes('T04:00:00'));
+  gs.writeDailyAmount_({ reportType: 'NWDSR Delivered', start: '2026-10-16', storeTotal: 8800 });
+  gs.runQualityChecks_('report arrived');
+  asSheetsStores(tabs);
+  const record = plain(gs.alertRows_()).find((row: { alert_key: string }) => row.alert_key === 'report|2026-10-16|nwdsrDelivered');
+  assert.equal(record.status, 'Resolved');
+  assert.equal(record.business_date, '2026-10-16');
+  assert.match(record.resolution, /^NWDSR Delivered for 2026-10-16 arrived and passed validation/);
+  assert.equal(new Set(alerts(tabs).map((row) => row.alert_key)).size, alerts(tabs).length, 'no alert is raised twice');
+});
+
 test('obsolete missing-report warnings from before alert tracking are resolved and not shown', () => {
   const { gs, tabs } = harness();
   assert.ok(table(tabs, 'CC_Exceptions').some((row) => row.severity === 'Report Missing' && /2026-10-15 is missing/.test(row.message)));
