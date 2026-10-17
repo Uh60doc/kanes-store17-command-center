@@ -244,10 +244,10 @@ test('wrong dates, month-to-date files, unknown files and unconfirmed PERQ expor
   assert.equal(mislabeled.status, 'Needs Review');
   assert.match(mislabeled.message, /file name says ASL written, but the contents are Group 17 Written/);
   const renamed = send('2026-10-14', 'report.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]]));
-  assert.equal(renamed.status, 'Needs Review');
+  assert.equal(renamed.status, 'Failed');
   assert.match(renamed.message, /Tick "These Excel files are for 2026-10-14"/);
   const perq = send('2026-10-14', 'loc.xlsx', perqLocation(7));
-  assert.equal(perq.status, 'Needs Review');
+  assert.equal(perq.status, 'Failed');
   assert.match(perq.message, /business date must be confirmed/);
   const stale = send('2026-10-15', 'people.xlsx', perqSalesperson([['TNASSI', 'Tarik', 'Nassif', 4]], '10/14/26 08:00pm'), true);
   assert.equal(stale.status, 'Failed');
@@ -261,7 +261,7 @@ test('a file refused only for the chosen date stays usable, and a file the mailb
   const report = nwdsrPdf('written', '2026-10-14', '2026-10-14', 1000);
   assert.equal(send('2026-10-15', 'nw.pdf', report).status, 'Failed');
   const location = perqLocation(7);
-  assert.equal(send('2026-10-14', 'loc.xlsx', location).status, 'Needs Review');
+  assert.equal(send('2026-10-14', 'loc.xlsx', location).status, 'Failed');
   assert.equal(tabs.CC_Imports!.length, 1, 'neither file is marked as seen, so the mailbox import would still read it');
   assert.equal(send('2026-10-14', 'nw.pdf', report).status, 'Imported');
   assert.equal(send('2026-10-14', 'loc.xlsx', location, true).status, 'Imported');
@@ -335,6 +335,7 @@ test('the checklist shows Imported, Missing, Failed and Needs Review for the cho
   send('2026-10-14', 'g17.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]]), true);
   send('2026-10-14', 'nwd.pdf', nwdsrPdf('delivered', '2026-10-15', '2026-10-15', 10));
   send('2026-10-14', 'aslw.xlsx', asl('WRITTEN'), true);
+  assert.equal(send('2026-10-14', 'aslw unconfirmed.xlsx', asl('WRITTEN', 'again')).status, 'Failed');
   const view = plain(gs.uploads_({ date: '2026-10-14', session: manager }));
   const status = Object.fromEntries(view.checklist.map((item: any) => [item.label, item.status]));
   assert.deepEqual(status, {
@@ -344,7 +345,7 @@ test('the checklist shows Imported, Missing, Failed and Needs Review for the cho
   assert.equal(view.imported, 2);
   assert.equal(view.total, 9);
   assert.match(view.checklist.find((item: any) => item.label === 'NWDSR Delivered').message, /is for 2026-10-15, not the business date 2026-10-14/);
-  assert.equal(view.history.length, 4);
+  assert.equal(view.history.length, 5);
   assert.equal(view.lastSuccess.report, 'ASL Written');
   assert.equal(view.lastSuccess.via, 'upload');
   assert.equal(plain(gs.uploads_({ session: manager })).date, '2026-10-16', 'the page opens on yesterday');

@@ -183,8 +183,9 @@ function processUpload_(context) {
   return { status: 'Failed', key: '', message: 'This is not a PDF or an Excel .xlsx file, so it is not one of the nine daily reports. Nothing was changed.' };
 }
 
-// An answer that depends only on the business date chosen on screen (wrong date, date not confirmed)
-// returns without this, so the file is not marked as seen and the mailbox import can still use it.
+// An answer that depends only on the business date chosen on screen (wrong date, date not confirmed) is
+// Failed and returns without this: the file is not marked as seen, so the mailbox import can still use it,
+// and a report already on file for that day keeps its Imported status.
 function finishImport_(context, result, importStatus, note) {
   recordImport_(context.sha, context.fileName, importStatus, note || result.message);
   var tab = SpreadsheetApp.openById(SPREADSHEET_ID_).getSheetByName('CC_Imports');
@@ -281,7 +282,7 @@ function uploadKpiWorkbook_(context, info) {
       return uploadOutcome_(base, 'Failed', label + ' is for ' + period[1] + ', not the business date ' + context.date + '. Choose ' + period[1] + ' as the business date to import it. Nothing was changed.');
     }
   } else if (!context.confirmed) {
-    return uploadOutcome_(base, 'Needs Review', 'This ' + label + ' file name has no report date and the workbook does not print one. Tick "These Excel files are for ' + context.date + '" and import it again. Nothing was changed.');
+    return uploadOutcome_(base, 'Failed', 'This ' + label + ' file name has no report date and the workbook does not print one. Tick "These Excel files are for ' + context.date + '" and import it again. Nothing was changed.');
   }
   var date = context.date;
   var source = canonicalKpiName_(info.family, info.side, date);
@@ -431,7 +432,7 @@ function uploadPerq_(context, info) {
   var date = context.date;
   var base = { key: info.key, start: date, end: date };
   if (!context.confirmed) {
-    return uploadOutcome_(base, 'Needs Review', 'PERQ exports do not print the day they cover, so the business date must be confirmed. Tick "These Excel files are for ' + date + '" and import again. Nothing was changed.');
+    return uploadOutcome_(base, 'Failed', 'PERQ exports do not print the day they cover, so the business date must be confirmed. Tick "These Excel files are for ' + date + '" and import again. Nothing was changed.');
   }
   var parsed = parsePerqGrid_(info.key, info.grid);
   if (parsed.problem) return finishImport_(context, uploadOutcome_(base, 'Failed', parsed.problem + ' Nothing was changed.'), 'failed');
