@@ -103,7 +103,7 @@ function loadPages(book: Workbook, today: string) {
     LockService: { getScriptLock: () => ({ tryLock: () => true, waitLock: () => undefined, releaseLock: () => undefined }) },
   };
   vm.createContext(sandbox);
-  const files = ['Code', 'Data', 'Ledger', 'Import', 'KpiImport', 'Auth', 'Roster', 'MonthEnd', 'Metrics'];
+  const files = ['Code', 'Data', 'Ledger', 'Import', 'KpiImport', 'Auth', 'Roster', 'Upload', 'Evaluations', 'MonthEnd', 'Metrics', 'History'];
   for (const file of files) {
     let source = '';
     try { source = readFileSync(path.join(codeDir, file + codeExt), 'utf8'); } catch { continue; }
@@ -253,7 +253,9 @@ const home = pages.home ?? {};
 const board = home.board ?? {};
 const rollup = Object.fromEntries(rowsOf(book, 'CC_Rollup').map((row) => [row.metric!, row.value!]));
 const monthEnd = rowsOf(book, 'CC_MonthEnd');
-const monthEndValue = (track: string, metric: string, personName = '') => num(monthEnd.find((row) => row.track === track && row.metric === metric && row.person === personName && row.period_start === (track === 'Store' ? store.start : person.start))?.daily_tracked);
+const monthEndRow = (track: string, metric: string, personName = '') => monthEnd.find((row) => row.track === track && row.metric === metric && row.person === personName && row.period_start === (track === 'Store' ? store.start : person.start));
+// verified_mtd since the month-end reconciliation; daily_tracked on a tab written by the earlier code.
+const monthEndValue = (track: string, metric: string, personName = '') => { const row = monthEndRow(track, metric, personName); return num(row?.verified_mtd ?? row?.daily_tracked); };
 const homeWrittenIsNwdsr = home.month?.writtenSource ? /NWDSR/.test(home.month.writtenSource) : null;
 same('Home', 'Written month to date', 'NWDSR Net Written (CC_Daily)', storeDates, nwdsrWritten, board.month?.written, 'dollars');
 same('Home', 'Written % of goal', `NWDSR Net Written ÷ written_goal ${money(writtenGoal)}`, storeDates, nwdsrWritten !== null && writtenGoal ? Math.round(nwdsrWritten / writtenGoal * 1000) / 1000 : null, board.month?.writtenAchieved, 'percent', 'tenth-pct');
@@ -275,10 +277,15 @@ same('CC_Rollup', 'snap_written', 'SNAP Written (CC_Daily)', storeDates, snapWri
 same('CC_Rollup', 'written_remaining', 'written_goal − NWDSR Net Written', storeDates, writtenGoal !== null && nwdsrWritten !== null ? cents(writtenGoal - nwdsrWritten) : null, num(rollup.written_remaining), 'dollars');
 same('CC_Rollup', 'delivered_remaining', 'delivered_goal − NWDSR Delivered', storeDates, deliveredGoal !== null && nwdsrDelivered !== null ? cents(deliveredGoal - nwdsrDelivered) : null, num(rollup.delivered_remaining), 'dollars');
 same('Home vs CC_Rollup', 'Remaining written', 'Both: written_goal − NWDSR Net Written', storeDates, num(rollup.written_remaining), board.month?.writtenLeft, 'dollars');
-same('Month-End', 'NWDSR Written daily tracked', 'CC_MonthEnd vs CC_Daily', storeDates, nwdsrWritten, monthEndValue('Store', 'NWDSR Written'), 'dollars');
-same('Month-End', 'NWDSR Delivered daily tracked', 'CC_MonthEnd vs CC_Daily', storeDates, nwdsrDelivered, monthEndValue('Store', 'NWDSR Delivered'), 'dollars');
-same('Month-End', 'SNAP Written daily tracked', 'CC_MonthEnd vs CC_Daily', storeDates, snapWritten, monthEndValue('Store', 'SNAP Written'), 'dollars');
-same('Month-End', 'Purchasing customers daily tracked', 'CC_MonthEnd vs CC_Closing daily rows', storeDates, customers, monthEndValue('Store', 'Purchasing customers'), 'count');
+same('Month-End', 'NWDSR Written verified month to date', 'CC_MonthEnd vs CC_Daily', storeDates, nwdsrWritten, monthEndValue('Store', 'NWDSR Written'), 'dollars');
+same('Month-End', 'NWDSR Delivered verified month to date', 'CC_MonthEnd vs CC_Daily', storeDates, nwdsrDelivered, monthEndValue('Store', 'NWDSR Delivered'), 'dollars');
+same('Month-End', 'SNAP Written verified month to date', 'CC_MonthEnd vs CC_Daily', storeDates, snapWritten, monthEndValue('Store', 'SNAP Written'), 'dollars');
+same('Month-End', 'Purchasing customers verified month to date', 'CC_MonthEnd vs CC_Closing daily rows', storeDates, customers, monthEndValue('Store', 'Purchasing customers'), 'count');
+if (monthEndRow('Store', 'PERQ opportunities')?.verified_mtd !== undefined) {
+  const perqDailyOnly = perqRows.filter((row) => row.period_start === row.period_end && between(row.period_start!, store.start, store.end));
+  same('Month-End', 'PERQ opportunities verified month to date', `Snapshot ${perqSnapshot?.period_start}–${perqSnapshot?.verified_through} (${perqSnapshot?.opportunities}) + later daily exports`, `${store.start} to ${perqAfter.map((row) => row.period_start).sort().pop() ?? perqSnapshot?.verified_through}`, opportunities, monthEndValue('Store', 'PERQ opportunities'), 'count');
+  same('Month-End', 'PERQ daily records only (partial coverage)', 'Sum of the single-day PERQ Location exports in the store month', perqDailyOnly.map((row) => row.period_start).sort().join(', '), perqDailyOnly.reduce((total, row) => total + Number(row.opportunities), 0), num(monthEndRow('Store', 'PERQ opportunities')?.daily_records_total), 'count');
+}
 
 const dailyPage = pages.daily ?? {};
 const dailyDays: any[] = dailyPage.days ?? [];
@@ -406,7 +413,14 @@ for (const name of active) {
   const snap = lines.length ? cents(lines.reduce((t, row) => t + Number(row.amount), 0)) : null;
   const pageRow = (peoplePage.people ?? []).find((row: any) => row.name === name);
   same('Sales Team', `${name} SNAP written`, 'CC_AssociateDays (SNAP Written by salesperson)', personDates, snap, pageRow?.snapWritten ?? null, 'dollars');
-  same('Month-End', `${name} SNAP written`, 'CC_MonthEnd Person vs CC_AssociateDays', personDates, snap, monthEndValue('Person', 'SNAP Written', name), 'dollars');
+  const snapMonthEnd = monthEndRow('Person', 'SNAP Written', name);
+  same('Month-End', `${name} SNAP written daily records`, 'CC_MonthEnd Person daily records vs CC_AssociateDays', personDates, snap, num(snapMonthEnd?.daily_records_total ?? snapMonthEnd?.daily_tracked), 'dollars');
+  const snapGaps: string[] = peoplePage.snapPending ?? [];
+  if (snapMonthEnd?.verified_mtd !== undefined && snapGaps.length) {
+    note('Month-End', `${name} SNAP written verified month to date`, 'CC_MonthEnd verified_mtd', personDates, `Pending: SNAP Written not on file for ${snapGaps.join(', ')}`, snapMonthEnd.verified_mtd || 'blank', snapMonthEnd.verified_mtd === 'Pending' ? 'Match' : 'MISMATCH');
+  } else if (snapMonthEnd?.verified_mtd !== undefined) {
+    same('Month-End', `${name} SNAP written verified month to date`, 'CC_MonthEnd verified_mtd vs CC_AssociateDays', personDates, snap, num(snapMonthEnd.verified_mtd), 'dollars');
+  }
   let summary: any = null;
   try { summary = plain(gs.summary_!({ session, name })); } catch (error) { summary = { error: String((error as Error).message) }; }
   same('Associate summary', `${name} SNAP written`, 'Same figure as Sales Team', personDates, pageRow?.snapWritten ?? null, summary?.person?.snapWritten ?? null, 'dollars');
@@ -481,6 +495,35 @@ if (registry) {
   for (const [key, goal] of [['kpi_fabric', 0.8], ['kpi_leather', 0.8], ['kpi_power', 0.8], ['store_closing', 0.5]] as const) {
     same('Registry', `${key} goal`, 'CC_MetricDefinitions vs CC_Config', 'Current', goal, byKey[key]?.goal ?? null, 'percent');
   }
+}
+
+// ===== Permanent history (present once History.gs has run) =====
+const register = rowsOf(book, 'CC_DailyHistory');
+if (register.length) {
+  const registerKeys = register.map((row) => row.record_key);
+  note('History', 'CC_DailyHistory record keys', 'CC_DailyHistory', 'All', '0 duplicates', `${registerKeys.length - new Set(registerKeys).size} duplicates in ${registerKeys.length} rows`, registerKeys.length === new Set(registerKeys).size ? 'Match' : 'MISMATCH');
+  const byKey = new Map(register.map((row) => [row.record_key, row]));
+  const dailyLedger = ledger.filter((row) => row.grain === 'daily' && /_(STORE|PERSON)$/.test(String(row.view)) && !/\.(xlsx|pdf|csv)\s\+\s/i.test(String(row.source_report)));
+  const unregistered = dailyLedger.filter((row) => {
+    const key = [row.view, row.report_date, row.side, String(row.employee_code || row.employee_name || 'STORE').toUpperCase()].join('|');
+    const kept = byKey.get(key);
+    return !kept || (num(kept.sales_dollars) !== num(row.sales_dollars) && !kept.later_report_note);
+  });
+  note('History', 'Every CC_Ledger daily row is in the register with its figures', 'CC_Ledger daily rows vs CC_DailyHistory', 'All', `${dailyLedger.length} rows`, unregistered.length ? `${unregistered.length} missing or different, e.g. ${unregistered[0]!.record_key}` : 'All present', unregistered.length ? 'MISMATCH' : 'Match');
+  const negatives = register.filter((row) => num(row.reported_negative) !== null);
+  note('History', 'Reported negative days kept on their own date', 'CC_DailyHistory reported_negative', 'All', 'Kept as reported', negatives.map((row) => `${row.business_date} ${row.view} ${row.employee_name || 'Store'} ${row.reported_negative}`).join('; ') || 'None', 'Match');
+}
+const monthlyHistory = rowsOf(book, 'CC_MonthlyHistory');
+if (monthlyHistory.length) {
+  const historyKeys = monthlyHistory.map((row) => row.history_key);
+  note('History', 'CC_MonthlyHistory keys', 'CC_MonthlyHistory', 'All', '0 duplicates', `${historyKeys.length - new Set(historyKeys).size} duplicates in ${historyKeys.length} rows`, historyKeys.length === new Set(historyKeys).size ? 'Match' : 'MISMATCH');
+}
+const calendar = rowsOf(book, 'CC_PeriodCalendar');
+const octoberStore = calendar.find((row) => row.period_key === 'STORE-2026-10');
+if (octoberStore) {
+  const expected = '2026-10-02–2026-11-01 vs 2025-10-01–2025-10-31';
+  const actual = `${octoberStore.period_start}–${octoberStore.period_end} vs ${octoberStore.ly_start}–${octoberStore.ly_end}`;
+  note('History', 'October 2026 store month and its last-year period', 'CC_PeriodCalendar vs CC_Config prior_year_start / prior_year_end', 'STORE-2026-10', expected, actual, expected === actual ? 'Match' : 'MISMATCH');
 }
 
 for (const [name, page] of Object.entries(pages)) if (page?.error) note('Pages', `${name}_ ran`, 'Apps Script page function', today, 'No error', page.error, 'MISMATCH');
