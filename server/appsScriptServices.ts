@@ -31,29 +31,42 @@ export function unzipEntries(data: Uint8Array): Record<string, Uint8Array> {
 
 export function blob(bytes: ArrayLike<number>, type = '', name = '') {
   const data = unsigned(bytes);
-  return {
+  const self = {
     getBytes: () => signed(data),
     getName: () => name,
     getContentType: () => type,
     getDataAsString: () => new TextDecoder().decode(data),
+    setName: (next: string) => { name = next; return self; },
   };
+  return self;
 }
 
 /** Utilities, DriveApp and PropertiesService with the calls the evaluation code makes. */
 export function appsScriptServices() {
-  const files: Record<string, { name: string; bytes: Uint8Array }> = {};
+  const files: Record<string, { name: string; bytes: Uint8Array; folder: string; description?: string }> = {};
+  const folders: Record<string, { name: string; parent: string }> = {};
   const props: Record<string, string> = {};
   let nextId = 1;
   const folder = (id: string) => ({
     getId: () => id,
+    createFolder: (name: string) => {
+      const childId = `folder-${++nextId}`;
+      folders[childId] = { name, parent: id };
+      return folder(childId);
+    },
     createFile: (input: ReturnType<typeof blob>) => {
       const fileId = `file-${nextId++}`;
-      files[fileId] = { name: input.getName(), bytes: unsigned(input.getBytes()) };
-      return { getId: () => fileId };
+      files[fileId] = { name: input.getName(), bytes: unsigned(input.getBytes()), folder: id };
+      const file = { getId: () => fileId, setDescription: (text: string) => { files[fileId]!.description = text; return file; } };
+      return file;
     },
   });
+  /** "Root/2026/2026-10/2026-10-14" for a folder id. */
+  const pathOf = (id: string): string => (folders[id] ? (folders[id]!.parent ? `${pathOf(folders[id]!.parent)}/` : '') + folders[id]!.name : id);
   return {
     files,
+    folders,
+    pathOf,
     props,
     services: {
       Utilities: {
@@ -68,7 +81,7 @@ export function appsScriptServices() {
       },
       PropertiesService: { getScriptProperties: () => ({ getProperty: (key: string) => props[key] ?? null, setProperty: (key: string, value: string) => { props[key] = value; } }) },
       DriveApp: {
-        createFolder: () => folder('folder-1'),
+        createFolder: (name = '') => { folders['folder-1'] = { name, parent: '' }; return folder('folder-1'); },
         getFolderById: (id: string) => folder(id),
         getFileById: (id: string) => {
           if (!files[id]) throw new Error('no such file');

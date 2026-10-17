@@ -156,10 +156,18 @@ function uploadReport_(payload) {
   try {
     UPLOAD_QUIET_ = true;
     rosterCache_ = null;
-    result = processUpload_(context);
-  } catch (error) {
-    result = { status: 'Failed', key: '', message: 'The import stopped: ' + String(error && error.message ? error.message : error) + ' Figures already on file were left in place.' };
-    appendException_('Update Failed', fileName + ' (upload for ' + date + '): ' + result.message);
+    try {
+      result = processUpload_(context);
+    } catch (error) {
+      result = { status: 'Failed', key: '', message: 'The import stopped: ' + String(error && error.message ? error.message : error) + ' Figures already on file were left in place.' };
+      appendException_('Update Failed', fileName + ' (upload for ' + date + '): ' + result.message);
+    }
+    // Only a file a record came from is archived (CC_Imports says so); archiving never changes the upload's result.
+    try {
+      archiveRecordedOriginal_(Utilities.newBlob(context.bytes, bytesStartWith_(context.bytes, [37, 80, 68, 70]) ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fileName), sha, fileName, 'upload');
+    } catch (error) {
+      appendException_('Update Failed', fileName + ' (upload for ' + date + '): the original could not be archived. ' + String(error && error.message ? error.message : error));
+    }
   } finally {
     UPLOAD_QUIET_ = false;
     lock.releaseLock();
@@ -219,6 +227,10 @@ function uploadPdf_(context) {
   var key = parsed.reportType === 'SNAP Written' ? 'snapWritten' : parsed.reportType === 'NWDSR Written' ? 'nwdsrWritten' : 'nwdsrDelivered';
   var base = { key: key, start: parsed.start, end: parsed.end };
   if (!parsed.singleDay) {
+    var final = recordPdfFinal_(parsed, text, context.fileName);
+    if (final) {
+      return finishImport_(context, uploadOutcome_(base, 'Imported', parsed.reportType + ' ' + parsed.start + ' through ' + parsed.end + ' is the official month-end final for the ' + (final.track === 'STORE' ? 'store' : 'salesperson') + ' month. It was recorded beside the daily record on CC_MonthEnd and was not added to the daily figures.'), 'official-final');
+    }
     return finishImport_(context, uploadOutcome_(base, 'Needs Review', 'This ' + parsed.reportType + ' report covers ' + parsed.start + ' through ' + parsed.end + '. Month-to-date reports are not added to daily figures. Upload the single-day report for ' + context.date + '. Nothing was changed.'), 'needs-review');
   }
   if (parsed.start !== context.date) {
@@ -276,6 +288,10 @@ function uploadKpiWorkbook_(context, info) {
     base.start = period[1];
     base.end = period[2];
     if (period[1] !== period[2]) {
+      var final = recordKpiFinal_(info.grid, info.family, info.side, period[1], period[2], 'DATA_ANALYSIS_KPI_' + (info.family === 'asl' ? 'ASL' : '17') + '_' + info.side.toUpperCase() + '_' + period[1] + '_' + period[2] + '.xlsx');
+      if (final) {
+        return finishImport_(context, uploadOutcome_(base, 'Imported', label + ' ' + period[1] + ' through ' + period[2] + ' is the official month-end final for the ' + (final.track === 'STORE' ? 'store' : 'salesperson') + ' month: ' + final.rows + ' figures recorded beside the daily record on CC_MonthEnd. The daily figures were not changed.'), 'official-final');
+      }
       return finishImport_(context, uploadOutcome_(base, 'Needs Review', label + ' covers ' + period[1] + ' through ' + period[2] + '. Month-to-date reports are not added to the daily figures, so nothing was changed. Upload the single-day report for ' + context.date + '.'), 'needs-review');
     }
     if (period[1] !== context.date) {
@@ -884,6 +900,7 @@ function uploads_(payload) {
         refreshRollup_();
         refreshed = refreshStoreKpiQuietly_(date);
         try { refreshMonthEnd_(); } catch (error) { appendException_('Update Failed', 'CC_MonthEnd could not be refreshed after an upload. The daily record was not changed.'); }
+        try { refreshHistory_(); } catch (error) { appendException_('Update Failed', 'Permanent history could not be refreshed after an upload. Nothing already recorded was changed. ' + String(error && error.message ? error.message : error)); }
         try { refreshMetricRegistry_(); } catch (error) { appendException_('Update Failed', 'CC_MetricDefinitions could not be refreshed after an upload. ' + String(error && error.message ? error.message : error)); }
         noteHealth_('last_calculation', new Date().toISOString());
       } finally {

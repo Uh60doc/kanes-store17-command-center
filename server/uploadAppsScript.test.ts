@@ -5,7 +5,7 @@ import { crc32 } from 'node:zlib';
 import { appsScriptServices } from './appsScriptServices.ts';
 import { type Grid, loadAppsScript, plain } from './fakeSpreadsheet.ts';
 
-const FILES = ['Code.gs', 'Data.gs', 'Metrics.gs', 'Roster.gs', 'Ledger.gs', 'Import.gs', 'KpiImport.gs', 'EvalImport.gs', 'Evaluations.gs', 'Upload.gs'];
+const FILES = ['Code.gs', 'Data.gs', 'Metrics.gs', 'Roster.gs', 'Ledger.gs', 'Import.gs', 'KpiImport.gs', 'EvalImport.gs', 'Evaluations.gs', 'Upload.gs', 'MonthEnd.gs', 'History.gs'];
 const manager = { role: 'manager' };
 const SNAPSHOT_17 = 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-11-01.xlsx';
 const LEDGER_HEADER = ['view', 'grain', 'report_date', 'period_start', 'period_end', 'verified_through', 'store', 'employee_code', 'employee_name', 'side', 'sales_dollars', 'unit_count', 'eligible', 'attachments', 'kpi_percent', 'source_report', 'imported_at', 'record_key'];
@@ -139,7 +139,7 @@ function boot(tabs = store(), today = '2026-10-17') {
   gs.appendException_ = (severity: string, message: string) => { exceptions.push(`${severity}: ${message}`); };
   const send = (date: string, fileName: string, bytes: Buffer, confirm = false) =>
     plain(gs.uploadReport_({ date, fileName, base64: bytes.toString('base64'), confirmDate: confirm ? date : '', session: manager }));
-  return { gs, tabs, send, mail, exceptions };
+  return { gs, tabs, send, mail, exceptions, drive: services };
 }
 
 const ledger = (tabs: Record<string, Grid>, view: string, reportDate = '') => tabs.CC_Ledger!.filter((row) => row[0] === view && (!reportDate || row[2] === reportDate));
@@ -366,4 +366,75 @@ test('only a manager or admin can open the page or import', () => {
   assert.throws(() => gs.dispatch('uploadReport', { token: 'sales', date: '2026-10-14', fileName: 'x.pdf', base64: '' }), /not available for this login/);
   assert.throws(() => gs.dispatch('uploads', { token: 'sales' }), /not available for this login/);
   assert.equal(plain(gs.dispatch('uploads', { token: 'manager', date: '2026-10-14' })).role, 'manager');
+});
+
+const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
+const archived = (drive: ReturnType<typeof appsScriptServices>) =>
+  Object.values(drive.files).filter((file) => drive.pathOf(file.folder).startsWith('Store 17 Command Center Report Archive')).map((file) => `${drive.pathOf(file.folder)}/${file.name}`);
+
+test('a report printed for exactly a finished month is its official final, recorded beside the daily record and never added to it', () => {
+  const { send, tabs, drive } = boot(store(), '2026-11-03');
+  const daily = JSON.stringify(tabs.CC_Daily);
+  const storeMonth = send('2026-11-01', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-11-01.xlsx', group17('WRITTEN', [['TARIK NASSIF', 5000], ['ERIC MONTES', 3000]]));
+  assert.equal(storeMonth.status, 'Imported');
+  assert.match(storeMonth.message, /official month-end final for the store month/);
+  const finals = tabs.CC_Ledger!.filter((row) => row[1] === 'cumulative' && row[3] === '2026-10-02' && row[4] === '2026-11-01');
+  assert.deepEqual(finals.find((row) => row[0] === 'DA_SALES_STORE')!.slice(10, 12), [8000, 4]);
+  assert.equal(finals.some((row) => String(row[0]).endsWith('_PERSON')), false, 'a store-month file keeps only its Store 17 lines');
+
+  const nwdsr = send('2026-11-01', 'output (7).pdf', nwdsrPdf('written', '2026-10-02', '2026-11-01', 402500, 160));
+  assert.equal(nwdsr.status, 'Imported');
+  assert.deepEqual(tabs.CC_Ledger!.filter((row) => row[0] === 'NWDSR_WRITTEN_STORE' && row[1] === 'cumulative').map((row) => [row[3], row[4], row[10], row[15]]), [['2026-10-02', '2026-11-01', 402500, 'output (7).pdf']]);
+  assert.deepEqual(tabs.CC_Closing!.filter((row) => row[6] === '2026-10-02' && row[7] === '2026-11-01').map((row) => [row[4], row[9]]), [[160, 'yes']]);
+
+  const personMonth = send('2026-10-31', 'snap-october.pdf', pdf('SNAP - WRITTEN\nFROM 01-OCT-2026 TO 31-OCT-2026\nNASSIF, TARIK    5000\nMONTES, ERIC    -250\n17 - ORLANDO Totals: 54.0 4,750 500'));
+  assert.equal(personMonth.status, 'Imported');
+  assert.match(personMonth.message, /official month-end final for the salesperson month/);
+  assert.deepEqual(tabs.CC_Ledger!.filter((row) => row[0] === 'SNAP_PERSON' && row[1] === 'cumulative').map((row) => [row[3], row[4], row[8], row[10]]), [['2026-10-01', '2026-10-31', 'Ricky Nassif', 5000], ['2026-10-01', '2026-10-31', 'Eric Montes Rodriguez', -250]]);
+  assert.equal(tabs.CC_Ledger!.some((row) => row[0] === 'SNAP_STORE' && row[1] === 'cumulative'), false, 'a salesperson-month SNAP is not a store-month figure');
+  assert.equal(JSON.stringify(tabs.CC_Daily), daily, 'no daily figure changed');
+  assert.deepEqual(tabs.CC_Imports!.slice(1).map((row) => row[3]), ['official-final', 'official-final', 'official-final']);
+
+  const partial = send('2026-11-01', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-10-31.xlsx', group17('WRITTEN', [['TARIK NASSIF', 4000]]));
+  assert.equal(partial.status, 'Needs Review', 'October 2-31 is not the whole store month, so it is not a final');
+  assert.deepEqual(archived(drive).sort(), [
+    'Store 17 Command Center Report Archive/2026/2026-10/Period reports/DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-11-01.xlsx',
+    'Store 17 Command Center Report Archive/2026/2026-10/Period reports/output (7).pdf',
+    'Store 17 Command Center Report Archive/2026/2026-10/Period reports/snap-october.pdf',
+  ], 'each recorded original is archived once; the file sent for review is not');
+});
+
+test('the report still running is not a final: the month must have ended before the report was imported', () => {
+  const { send, tabs } = boot(store(), '2026-11-01');
+  const early = send('2026-11-01', 'mtd.pdf', nwdsrPdf('written', '2026-10-02', '2026-11-01', 400000));
+  assert.equal(early.status, 'Needs Review');
+  assert.equal(tabs.CC_Ledger!.some((row) => row[0] === 'NWDSR_WRITTEN_STORE' && row[1] === 'cumulative'), false);
+});
+
+test('originals are archived once, privately, by business date; a file no record came from is refused', () => {
+  const { send, gs, tabs, drive } = boot();
+  const report = nwdsrPdf('written', '2026-10-14', '2026-10-14', 1000);
+  assert.equal(send('2026-10-15', 'wrong day.pdf', report).status, 'Failed');
+  assert.deepEqual(archived(drive), [], 'a file refused for the chosen date is not archived');
+  assert.equal(send('2026-10-14', 'nw.pdf', report).status, 'Imported');
+  assert.equal(send('2026-10-14', 'nw copy.pdf', report).status, 'Already on file');
+  assert.deepEqual(archived(drive), ['Store 17 Command Center Report Archive/2026/2026-10/2026-10-14/nw.pdf']);
+  assert.deepEqual(tabs.CC_SourceArchive!.slice(1).map((row) => [row[1], row[2], row[3], row[4], row[6], row[8]]), [[sha256(report), 'nw.pdf', 'NWDSR Written', '2026-10-14', '2026/2026-10/2026-10-14', 'upload']]);
+  assert.match(String(Object.values(drive.files)[0]!.description), /do not edit/);
+
+  const admin = (fileName: string, bytes: Buffer) => plain(gs.archiveOriginal_({ fileName, base64: bytes.toString('base64'), session: { role: 'admin' } }));
+  const mailbox = snapPdf('2026-10-13', 900, [['NASSIF, TARIK', 900]], 'mailbox');
+  tabs.CC_Imports!.push([sha256(mailbox), 'SNAP_WRITTEN__40.pdf', 'SNAP Written', 'imported', '2026-10-14T13:00:00Z', '2026-10-13 through 2026-10-13. Seeded from the verified archive.']);
+  assert.deepEqual([admin('SNAP_WRITTEN__40.pdf', mailbox).status, admin('again.pdf', mailbox).status], ['Archived', 'Already archived']);
+  const g17 = group17('WRITTEN', [['TARIK NASSIF', 900]], 'old');
+  assert.equal(admin('DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-11-01.xlsx', g17).status, 'Archived', 'a file the ledger names is kept with the period it covers');
+  const unknown = admin('notes.pdf', pdf('nothing on record'));
+  assert.equal(unknown.status, 'Not archived');
+  assert.match(unknown.message, /No record on file came from this file/);
+  assert.deepEqual(archived(drive).sort(), [
+    'Store 17 Command Center Report Archive/2026/2026-10/2026-10-13/SNAP_WRITTEN__40.pdf',
+    'Store 17 Command Center Report Archive/2026/2026-10/2026-10-14/nw.pdf',
+    'Store 17 Command Center Report Archive/2026/2026-10/Period reports/DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-11-01.xlsx',
+  ]);
+  assert.deepEqual(plain(gs.ROUTES_.archiveOriginal), ['admin']);
 });

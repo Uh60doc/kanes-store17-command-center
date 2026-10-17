@@ -27,6 +27,7 @@ var ROUTES_ = {
   importEvalWorkbook: ['admin'],
   uploads: ['manager', 'admin'],
   uploadReport: ['manager', 'admin'],
+  archiveOriginal: ['admin'],
   documents: ['sales', 'manager', 'admin'],
   docFile: ['sales', 'manager', 'admin'],
   uploadDocument: ['manager', 'admin'],
@@ -81,6 +82,7 @@ function dispatch(name, payload) {
   if (name === 'importEvalWorkbook') return importEvalWorkbook_(payload);
   if (name === 'uploads') return uploads_(payload);
   if (name === 'uploadReport') return uploadReport_(payload);
+  if (name === 'archiveOriginal') return archiveOriginal_(payload);
   if (name === 'documents') return documents_(payload);
   if (name === 'docFile') return docFile_(payload);
   if (name === 'uploadDocument') return uploadDocument_(payload);

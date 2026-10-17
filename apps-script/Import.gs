@@ -17,6 +17,7 @@ function scheduledImport_() {
     importMailbox_();
     refreshRollup_();
     try { refreshMonthEnd_(); } catch (error) { appendException_('Update Failed', 'CC_MonthEnd could not be refreshed. The daily record was not changed.'); }
+    try { refreshHistory_(); } catch (error) { appendException_('Update Failed', 'Permanent history could not be refreshed. Nothing already recorded was changed. ' + String(error && error.message ? error.message : error)); }
     try { refreshMetricRegistry_(); } catch (error) { appendException_('Update Failed', 'CC_MetricDefinitions could not be refreshed. ' + String(error && error.message ? error.message : error)); }
     try { prepareDueEvaluations_(todayNy_()); } catch (error) { appendException_('Update Failed', 'Evaluation drafts could not be prepared. ' + String(error && error.message ? error.message : error)); }
     markMissingReports_();
@@ -64,7 +65,18 @@ function importAttachment_(messageId, attachment) {
     var value = (part + 256) % 256;
     return (value < 16 ? '0' : '') + value.toString(16);
   }).join('');
-  if (knownSha_(sha)) return false;
+  var known = knownSha_(sha);
+  var accepted = known ? false : importNewAttachment_(sha, attachment);
+  // The original is kept even when it was imported before the archive existed. Archiving never blocks an import.
+  try {
+    archiveRecordedOriginal_(attachment.copyBlob(), sha, attachment.getName(), 'mailbox');
+  } catch (error) {
+    appendException_('Update Failed', attachment.getName() + ' was imported but its original could not be archived. ' + String(error && error.message ? error.message : error));
+  }
+  return accepted;
+}
+
+function importNewAttachment_(sha, attachment) {
   if (/\.xlsx$/i.test(attachment.getName())) return importKpiAttachment_(sha, attachment);
   var text = '';
   try {
@@ -89,18 +101,52 @@ function importAttachment_(messageId, attachment) {
     }
     return true;
   }
-  var decision = applyCloudReport_(parsed, text, sha);
-  recordImport_(sha, attachment.getName(), decision, parsed.singleDay ? parsed.reportType + ' ' + parsed.start : parsed.reportType + ' ' + parsed.start + ' through ' + parsed.end + ' was recorded and was not added to the daily table.');
+  var decision = applyCloudReport_(parsed, text, sha, attachment.getName());
+  var note = parsed.singleDay ? parsed.reportType + ' ' + parsed.start : parsed.reportType + ' ' + parsed.start + ' through ' + parsed.end + ' was recorded and was not added to the daily table.';
+  if (decision === 'official-final') note = parsed.reportType + ' ' + parsed.start + ' through ' + parsed.end + ': official month-end final recorded beside the daily record (CC_MonthEnd). It was not added to the daily table.';
+  recordImport_(sha, attachment.getName(), decision, note);
   return true;
 }
 
-/** Writes one parsed SNAP Written, NWDSR Written or NWDSR Delivered report. Returns imported, conflict or cumulative-not-added. */
-function applyCloudReport_(parsed, text, sha) {
+/**
+ * The official month-end final in a full-period SNAP Written, NWDSR Written or NWDSR Delivered report. A store month
+ * keeps the Store 17 total; a salesperson month keeps each SNAP salesperson line. NWDSR is a store report, so a
+ * salesperson-month NWDSR is not a final. Returns null when the printed period is not exactly one finished month.
+ */
+function recordPdfFinal_(parsed, text, source) {
+  var track = officialFinalTrack_(parsed.start, parsed.end, todayNy_());
+  if (!track) return null;
+  var rows = [];
+  var side = parsed.reportType === 'NWDSR Delivered' ? 'delivered' : 'written';
+  if (track === 'STORE') {
+    var view = parsed.reportType === 'SNAP Written' ? 'SNAP_STORE' : parsed.reportType === 'NWDSR Written' ? 'NWDSR_WRITTEN_STORE' : 'NWDSR_DELIVERED_STORE';
+    rows.push(officialFinalRow_(view, parsed.start, parsed.end, '', '', side, { sales: parsed.storeTotal }, source));
+    if (parsed.reportType === 'NWDSR Written' && parsed.purchasingCustomers !== null) {
+      upsertClosing_({ date: parsed.end, scope: 'store', code: '', name: '', customers: parsed.purchasingCustomers, opportunities: '', start: parsed.start, end: parsed.end, through: parsed.end, source: 'NWDSR Net Written # OF CUST', final: 'yes', note: 'Official month-end final purchasing customers. Not added to the daily counts.' });
+    }
+  } else if (parsed.reportType === 'SNAP Written') {
+    var byName = {};
+    var order = [];
+    snapAssociates_(text).forEach(function (line) {
+      var match = rosterMatch_('', line.sourceName);
+      var display = match ? match.name : line.sourceName;
+      if (!Object.prototype.hasOwnProperty.call(byName, display)) { byName[display] = 0; order.push(display); }
+      byName[display] = Math.round((byName[display] + line.amount) * 100) / 100;
+    });
+    order.forEach(function (display) { rows.push(officialFinalRow_('SNAP_PERSON', parsed.start, parsed.end, '', display, 'written', { sales: byName[display] }, source)); });
+  }
+  if (!rows.length) return null;
+  var outcome = upsertKpiRecords_(rows);
+  return { track: track, rows: rows.length, outcome: outcome };
+}
+
+/** Writes one parsed SNAP Written, NWDSR Written or NWDSR Delivered report. Returns imported, conflict, official-final or cumulative-not-added. */
+function applyCloudReport_(parsed, text, sha, fileName) {
   if (!parsed.singleDay) {
     if (parsed.reportType === 'NWDSR Written' && parsed.purchasingCustomers !== null) {
       upsertClosing_({ date: parsed.end, scope: 'store', code: '', name: '', customers: parsed.purchasingCustomers, opportunities: '', start: parsed.start, end: parsed.end, through: parsed.end, source: 'NWDSR Net Written # OF CUST', final: 'yes', note: 'Cumulative Net Written purchasing customers for the printed period. Dollars were not added again.' });
     }
-    return 'cumulative-not-added';
+    return recordPdfFinal_(parsed, text, fileName || parsed.reportType + ' ' + parsed.start + ' through ' + parsed.end) ? 'official-final' : 'cumulative-not-added';
   }
   var decision = writeDailyAmount_(parsed);
   if (decision !== 'conflict' && parsed.reportType === 'SNAP Written') writeSnapAssociates_(parsed, text, sha);
