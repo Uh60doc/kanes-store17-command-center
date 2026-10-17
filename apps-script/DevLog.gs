@@ -13,11 +13,12 @@
  *   finishDevTask(started.taskNumber, 'Tested successfully');
  *   blockDevTask(started.taskNumber, 'Brief reason');
  *
- * clasp (from apps-script/):
- *   clasp run startDevTask --params '["Short description","optional note"]'
- *   clasp run finishDevTask --params '[1,"Tested successfully"]'
- *   clasp run blockDevTask --params '[1,"Brief reason"]'
+ * Preferred write path (admin session on the deployed web app):
+ *   google.script.run.dispatch('recordDevLog', { action: 'start', description: '...', notes: '...' });
+ *   google.script.run.dispatch('recordDevLog', { action: 'finish', taskNumber: 1, notes: '...' });
+ *   google.script.run.dispatch('recordDevLog', { action: 'block', taskNumber: 1, notes: 'Brief reason' });
  *
+ * clasp Execution API (`clasp run`) is not enabled on this project. Do not treat a failed run as a sheet update.
  * If a write fails, the function throws. Report that problem instead of claiming the log was updated.
  * Do not store credentials in this tab.
  */
@@ -253,4 +254,14 @@ function devLogStatus_() {
 
 function devLog_(payload) {
   return { role: payload.session.role, development: devLogStatus_() };
+}
+
+/** Admin-only write path for Cursor. The Admin page does not expose these actions. */
+function recordDevLog_(payload) {
+  var action = String(payload && payload.action || '').trim().toLowerCase();
+  if (action === 'start') return startDevTask(payload.description, payload.notes);
+  if (action === 'finish' || action === 'complete') return finishDevTask(payload.taskNumber, payload.notes);
+  if (action === 'block') return blockDevTask(payload.taskNumber, payload.notes);
+  if (action === 'queue') return queueDevTask(payload.description, payload.notes);
+  throw new Error('Choose start, finish, block, or queue.');
 }

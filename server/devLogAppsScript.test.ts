@@ -100,14 +100,19 @@ test('routine import and quality checks do not create software versions', () => 
 
 test('Admin can read the log; sales and managers cannot open the route', () => {
   const { gs } = harness();
-  gs.startDevTask('Version Tracking');
+  const written = Number(plain(gs.home_({ session: admin })).month.written);
+  const started = plain(gs.recordDevLog_({ session: admin, action: 'start', description: 'Version Tracking', notes: 'via recordDevLog' }));
+  assert.equal(started.status, 'STARTED');
   const page = plain(gs.devLog_({ session: admin }));
   assert.equal(page.development.latestVersion, '1.0.1');
   const routes = plain(gs.ROUTES_) as Record<string, string[]>;
   assert.deepEqual(routes.devLog, ['admin']);
+  assert.deepEqual(routes.recordDevLog, ['admin']);
   assert.ok(!routes.devLog.includes('sales'));
-  assert.ok(!routes.devLog.includes('manager'));
+  assert.ok(!routes.recordDevLog.includes('manager'));
   assert.equal(plain(gs.READ_ONLY_ROUTES_).devLog, true);
+  assert.equal(plain(gs.READ_ONLY_ROUTES_).recordDevLog, undefined);
+  assert.equal(Number(plain(gs.home_({ session: admin })).month.written), written);
   assert.equal(manager.role, 'manager');
 });
 

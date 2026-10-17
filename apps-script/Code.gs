@@ -43,6 +43,7 @@ var ROUTES_ = {
   removeDocument: ['admin'],
   saveDocPacket: ['admin'],
   devLog: ['admin'],
+  recordDevLog: ['admin'],
 };
 
 // Routes that only read. Every other route can change figures, so the cached pages are dropped after it runs.
@@ -211,5 +212,6 @@ function route_(name, payload) {
   if (name === 'removeDocument') return removeDocument_(payload);
   if (name === 'saveDocPacket') return saveDocPacket_(payload);
   if (name === 'devLog') return devLog_(payload);
+  if (name === 'recordDevLog') return recordDevLog_(payload);
   throw new Error('That request is not available.');
 }
