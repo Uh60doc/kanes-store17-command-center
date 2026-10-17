@@ -300,7 +300,7 @@ function archiveEvidence_(sha, fileName, allowDuplicate) {
     ledgerRows_().forEach(function (row) {
       if (!row.source || byFile[row.source] || DERIVED_LEDGER_SOURCE_.test(row.source)) return;
       var start = row.grain === 'daily' ? row.reportDate : row.periodStart;
-      byFile[row.source] = { report: canonicalReportType_(row.source) || row.view, start: start, end: row.grain === 'daily' ? row.reportDate : row.periodEnd, basis: 'CC_Ledger rows name this file (matched by file name)' };
+      byFile[row.source] = { report: canonicalReportType_(row.source) || row.view, start: start, end: row.grain === 'daily' ? row.reportDate : row.periodEnd, basis: 'CC_Ledger rows name this file (matched by file name)', byName: true };
     });
     archiveEvidenceCache_ = { bySha: bySha, byFile: byFile };
   }
@@ -336,6 +336,8 @@ function archiveOriginal_(payload) {
     if (index[sha]) return { file: fileName, sha256: sha, status: 'Already archived', path: index[sha].path, message: 'This exact file is already in the archive as ' + index[sha].file + '.' };
     var evidence = archiveEvidence_(sha, fileName, true);
     if (!evidence) return { file: fileName, sha256: sha, status: 'Not archived', path: '', message: 'No record on file came from this file (CC_Uploads, CC_Imports, CC_AssociateDays or CC_Ledger), so it was not archived. Import it through Upload Reports first.' };
+    var sameName = evidence.byName ? Object.keys(index).filter(function (key) { return index[key].file === fileName; })[0] : '';
+    if (sameName) return { file: fileName, sha256: sha, status: 'Not archived', path: index[sameName].path, message: 'A different file named ' + fileName + ' is already archived, and the records name the file only, so this copy was not archived.' };
     var mime = bytesStartWith_(bytes, [37, 80, 68, 70]) ? 'application/pdf' : bytesStartWith_(bytes, [80, 75]) ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/octet-stream';
     var saved = archiveSource_(Utilities.newBlob(bytes, mime, fileName), sha, fileName, evidence.report, evidence.start, evidence.end, 'backfill', 'Recorded: ' + evidence.basis);
     return { file: fileName, sha256: sha, status: saved.created ? 'Archived' : 'Already archived', path: saved.path, message: evidence.report + ' ' + evidence.start + (evidence.end && evidence.end !== evidence.start ? ' to ' + evidence.end : '') + ' (' + evidence.basis + ').' };

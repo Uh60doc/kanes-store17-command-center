@@ -428,6 +428,9 @@ test('originals are archived once, privately, by business date; a file no record
   assert.deepEqual([admin('SNAP_WRITTEN__40.pdf', mailbox).status, admin('again.pdf', mailbox).status], ['Archived', 'Already archived']);
   const g17 = group17('WRITTEN', [['TARIK NASSIF', 900]], 'old');
   assert.equal(admin('DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-11-01.xlsx', g17).status, 'Archived', 'a file the ledger names is kept with the period it covers');
+  const otherVersion = admin('DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-11-01.xlsx', group17('WRITTEN', [['TARIK NASSIF', 950]], 'later run'));
+  assert.equal(otherVersion.status, 'Not archived', 'a second version under the same name cannot be told apart by name alone');
+  assert.match(otherVersion.message, /A different file named .* is already archived/);
   const unknown = admin('notes.pdf', pdf('nothing on record'));
   assert.equal(unknown.status, 'Not archived');
   assert.match(unknown.message, /No record on file came from this file/);
