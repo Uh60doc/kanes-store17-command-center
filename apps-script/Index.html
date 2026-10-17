@@ -53,20 +53,22 @@
     .score-row .card h2 { min-height: 2.4em; }
     .score-row .figure { font-size: 32px; margin: 6px 0; }
     .score-row .sub { font-size: 14px; }
-    .kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .kpi-head .section-title { margin: 0; }
-    .kpi-nav { display: flex; gap: 8px; }
-    .kpi-nav button { min-height: 40px; }
-    .kpi-strip { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 2px 2px 12px; }
-    .kpi-card { flex: 0 0 220px; scroll-snap-align: start; border: 1px solid #1d5c66; border-radius: 14px; background: #10161c; padding: 12px 14px; min-height: 158px; }
+    .kpi-primary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .kpi-secondary { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    .kpi-card { min-width: 0; border: 1px solid #1d5c66; border-radius: 14px; background: #10161c; padding: 12px 14px; overflow-wrap: anywhere; }
     .kpi-card h3 { margin: 0; min-height: 2.6em; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; color: #9eb0c9; }
-    .kpi-card .figure { font-size: 30px; font-weight: 750; line-height: 1; margin: 8px 0; }
+    .kpi-card .figure { font-size: 28px; font-weight: 750; line-height: 1; margin: 8px 0 2px; }
+    .kpi-primary-card { border-top: 3px solid #14c4d4; }
+    .kpi-primary-card .figure { font-size: 36px; }
+    .kpi-side { margin: 0 0 6px; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: #9eb0c9; }
+    .kpi-line { margin: 4px 0 0; font-size: 14px; line-height: 1.35; color: #c9d4e3; }
+    .kpi-line strong { font-weight: 750; }
+    .kpi-through { font-size: 12px; color: #9eb0c9; }
     @media (max-width: 980px) {
-      .score-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .score-row, .kpi-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 560px) {
-      .score-row { grid-template-columns: 1fr; }
-      .kpi-head { align-items: flex-start; flex-direction: column; }
+      .score-row, .kpi-primary, .kpi-secondary { grid-template-columns: 1fr; }
     }
     button.sort { background: #10161c; border: 1px solid #1d5c66; color: #f3f6f8; }
     button.sort.active { background: #14c4d4; color: #041014; }
@@ -423,18 +425,29 @@
       }
       var focusNote = focus === 'written' ? 'Written page uses SNAP.' : focus === 'delivered' ? 'Delivered page uses NWDSR.' : '';
       document.getElementById('header-note').textContent = 'Store ' + data.period + (focusNote ? ' · ' + focusNote : '') + ' · Updated ' + data.updated;
-      var kpis = (board.kpis || []).map(function (row) {
+      function kpiTile(row) {
         var hasWritten = !(row.written === null || row.written === undefined || row.written === '');
         var hasDelivered = !(row.delivered === null || row.delivered === undefined || row.delivered === '');
-        var mainTone = hasWritten ? kpiTone(row.written, row.goal, row.reconcile) : (hasDelivered ? kpiTone(row.delivered, row.goal, false) : 'pending');
-        var main = hasWritten ? kpiValue(row.written, row.unit) : (hasDelivered ? kpiValue(row.delivered, row.unit) : 'Data Pending');
-        var extra = '';
-        if (hasWritten && hasDelivered) extra = '<p class="sub">Delivered <span class="' + kpiTone(row.delivered, row.goal, false) + '">' + kpiValue(row.delivered, row.unit) + '</span></p>';
-        else if (!hasWritten && !hasDelivered && row.note) extra = '<p class="sub">' + esc(row.note) + '</p>';
-        var gap = hasWritten && hasDelivered ? 'W ' + sideGap(row, row.written) + ' · D ' + sideGap(row, row.delivered) : sideGap(row, hasWritten ? row.written : (hasDelivered ? row.delivered : null));
-        var through = row.through ? '<p class="sub">Verified through ' + esc(String(row.through)) + (row.detail ? ' · ' + esc(row.detail) : '') + '</p>' : (row.detail ? '<p class="sub">' + esc(row.detail) + '</p>' : '');
-        return '<article class="kpi-card"><h3>' + esc(row.name === 'Closing Ratio' ? 'Closing' : row.name) + '</h3><p class="figure ' + mainTone + '">' + main + '</p>' + extra + '<p class="sub">Goal ' + boardGoal(row.goal, row.unit) + ' · ' + gap + '</p>' + through + '</article>';
-      }).join('');
+        var closingTile = row.name === 'Closing Ratio';
+        var lines = [];
+        lines.push('<p class="figure ' + (hasWritten ? kpiTone(row.written, row.goal, row.reconcile) : 'pending') + '">' + (hasWritten ? kpiValue(row.written, row.unit) : 'Data Pending') + '</p>');
+        if (!closingTile) {
+          lines.push('<p class="kpi-side">Written</p>');
+          lines.push('<p class="kpi-line">Delivered <strong class="' + (hasDelivered ? kpiTone(row.delivered, row.goal, false) : 'pending') + '">' + (hasDelivered ? kpiValue(row.delivered, row.unit) : 'Data Pending') + '</strong></p>');
+        } else if (row.detail) {
+          lines.push('<p class="kpi-line">' + esc(row.detail) + '</p>');
+        }
+        lines.push('<p class="kpi-line">Goal ' + boardGoal(row.goal, row.unit) + '</p>');
+        if (closingTile) lines.push('<p class="kpi-line">' + sideGap(row, hasWritten ? row.written : null) + '</p>');
+        else lines.push('<p class="kpi-line">Written ' + sideGap(row, hasWritten ? row.written : null) + ' · Delivered ' + sideGap(row, hasDelivered ? row.delivered : null) + '</p>');
+        if (row.through) lines.push('<p class="kpi-line kpi-through">Verified through ' + esc(String(row.through)) + '</p>');
+        else if (row.note) lines.push('<p class="kpi-line kpi-through">' + esc(row.note) + '</p>');
+        if (!closingTile && row.detail) lines.push('<p class="kpi-line kpi-through">' + esc(row.detail) + '</p>');
+        return '<article class="kpi-card' + (row.tier === 'primary' ? ' kpi-primary-card' : '') + '"><h3>' + esc(row.name) + '</h3>' + lines.join('') + '</article>';
+      }
+      var kpiRows = board.kpis || [];
+      var primaryKpis = kpiRows.filter(function (row) { return row.tier === 'primary'; }).map(kpiTile).join('');
+      var secondaryKpis = kpiRows.filter(function (row) { return row.tier !== 'primary'; }).map(kpiTile).join('');
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Yesterday\'s results</h2>' +
         '<div class="score-row">' +
@@ -457,17 +470,10 @@
         boardCard('Remaining written', boardMoney(monthBoard.writtenLeft), forecast(monthBoard.writtenForecast, monthBoard.provisional), '') +
         boardCard('Remaining delivered', boardMoney(monthBoard.deliveredLeft), forecast(monthBoard.deliveredForecast, monthBoard.provisional), '') +
         '</div>' +
-        '<div class="kpi-head"><h2 class="section-title">Month-to-date store KPIs</h2><div class="kpi-nav"><button type="button" id="kpi-prev">Previous</button><button type="button" id="kpi-next">Next</button></div></div>' +
-        '<div class="kpi-strip" id="kpi-strip" tabindex="0">' + kpis + '</div>' +
-        '<p class="sub">Store month only. ' + salesStandard + ' Slide sideways for every KPI.</p>';
-      var strip = document.getElementById('kpi-strip');
-      function moveKpis(direction) { strip.scrollBy({ left: direction * 230, behavior: 'smooth' }); }
-      document.getElementById('kpi-prev').addEventListener('click', function () { moveKpis(-1); });
-      document.getElementById('kpi-next').addEventListener('click', function () { moveKpis(1); });
-      strip.addEventListener('keydown', function (event) {
-        if (event.key === 'ArrowRight') moveKpis(1);
-        if (event.key === 'ArrowLeft') moveKpis(-1);
-      });
+        '<h2 class="section-title">Month-to-date store KPIs</h2>' +
+        '<div class="kpi-primary" id="kpi-primary">' + primaryKpis + '</div>' +
+        '<div class="kpi-secondary" id="kpi-secondary">' + secondaryKpis + '</div>' +
+        '<p class="sub">Store month ' + esc(data.period) + ' only. ' + salesStandard + '</p>';
     }
 
     function renderDaily(data) {

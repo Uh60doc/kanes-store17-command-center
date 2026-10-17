@@ -1378,11 +1378,11 @@ function kpiActuals_() {
     ['Adjustable Base Attachment', 0.273, 0.25, ''],
     ['Pillows', null, null, 'Pillow Sold Qty is blank.'],
     ['Mattress Protectors', 0.3, 1, 'Source column is Mattress Pads.'],
-    ['Overall Warranty % of Sales', null, null, 'No warranty percent of sales column.'],
+    ['Overall Warranty % of Sales', null, null, 'NWDSR Written WARR PCT is printed per report, rounded to 0.1%. No verified store-period figure yet, so it is not shown on Home.'],
     ['Fabric Maintenance', 0.587, 0.941, ''],
     ['Leather Maintenance', 0.6, 0.765, ''],
     ['Power Upholstery', 0.75, 0.857, ''],
-    ['Power Adjustable Base', null, null, 'ADJ PWR percent is blank.'],
+    ['Power Adjustable Base', null, null, 'ASL ADJ PWR % is blank for Store 17. Kept with the Adjustable Base Attachment tile, not shown as its own tile.'],
     ['Wood Kits', null, null, 'No UVWL wood kits column.'],
     ['Finance', 0.233, 0.443, ''],
     ['Average Ticket', 2040.52, 1257.71, ''],
@@ -1429,32 +1429,48 @@ function readKpiActuals_() {
   return map;
 }
 
-function homeKpiStrip_(goals, actuals, closing) {
+/**
+ * Home MTD KPI tiles in display order: four primary tiles, then the secondary group.
+ * [display name, CC_Kpi metric, unit, goal, tier, detail]. Warranty % of Sales is listed only when CC_Kpi holds a
+ * verified store-period figure: a single day's NWDSR WARR PCT is not a month-to-date result.
+ * ADJ PWR % stays on the CC_Kpi 'Power Adjustable Base' row and is shown on the Adjustable Base tile when printed.
+ */
+function homeKpiSpecs_(goals, actuals) {
   var specs = [
-    ['Bedding', 'percent', goals.bedding],
-    ['Adjustable Base Attachment', 'percent', goals.adjustableBase],
-    ['Pillows', 'percent', goals.pillow],
-    ['Mattress Protectors', 'percent', goals.mattress],
-    ['Overall Warranty % of Sales', 'percent', goals.warranty],
-    ['Fabric Maintenance', 'percent', goals.fabric],
-    ['Leather Maintenance', 'percent', goals.leather],
-    ['Power Upholstery', 'percent', goals.power],
-    ['Power Adjustable Base', 'percent', goals.powerBase],
-    ['Wood Kits', 'percent', goals.wood],
-    ['Finance', 'percent', goals.finance],
-    ['Closing Ratio', 'percent', goals.closing],
-    ['Average Ticket', 'dollars', goals.averageTicket],
-    ['Rugs', 'count', goals.rugs],
+    ['Bedding', 'Bedding', 'percent', goals.bedding, 'primary', ''],
+    ['Closing Ratio', 'Closing Ratio', 'percent', goals.closing, 'primary', ''],
+    ['Average Ticket', 'Average Ticket', 'dollars', goals.averageTicket, 'primary', ''],
+    ['Rugs', 'Rugs', 'count', goals.rugs, 'primary', ''],
+    ['Fabric Maintenance', 'Fabric Maintenance', 'percent', goals.fabric, 'secondary', ''],
+    ['Leather Maintenance', 'Leather Maintenance', 'percent', goals.leather, 'secondary', ''],
+    ['Power Upholstery', 'Power Upholstery', 'percent', goals.power, 'secondary', ''],
+    ['Mattress Protectors', 'Mattress Protectors', 'percent', goals.mattress, 'secondary', ''],
+    ['Total Attachment', 'Total Attachment', 'percent', goals.attachment, 'secondary', ''],
+    ['Adjustable Base Attachment', 'Adjustable Base Attachment', 'percent', goals.adjustableBase, 'secondary', ''],
+    ['Pillows', 'Pillows', 'percent', goals.pillow, 'secondary', ''],
+    ['Wood / Furniture Protection', 'Wood / Furniture Protection', 'percent', goals.wood, 'secondary', 'ASL Furniture Protection, protected ÷ qualified items. UVWL wood and lacquer warranties count different items and are not added.'],
+    ['Financing', 'Finance', 'percent', goals.finance, 'secondary', ''],
   ];
-  return specs.map(function (spec) {
-    if (spec[0] === 'Closing Ratio') {
+  var warranty = actuals['Overall Warranty % of Sales'];
+  if (warranty && warranty.written !== null && warranty.written !== undefined && warranty.through) {
+    specs.push(['Warranty % of Sales', 'Overall Warranty % of Sales', 'percent', goals.warranty, 'secondary', '']);
+  }
+  return specs;
+}
+
+function homeKpiStrip_(goals, actuals, closing) {
+  return homeKpiSpecs_(goals, actuals).map(function (spec) {
+    var name = spec[0];
+    var tier = spec[4];
+    if (name === 'Closing Ratio') {
       var dailyDetail = closing.latest && closing.latest.ratio !== null
         ? closing.latest.date + ' daily: ' + closing.latest.customers + ' ÷ ' + closing.latest.opportunities + ' = ' + percentText_(closing.latest.ratio)
         : '';
       return {
-        name: spec[0],
-        unit: spec[1],
-        goal: spec[2],
+        name: name,
+        tier: tier,
+        unit: spec[2],
+        goal: spec[3],
         written: closing.ratio,
         delivered: null,
         through: closing.ratio !== null ? (closing.through || '') : '',
@@ -1465,8 +1481,13 @@ function homeKpiStrip_(goals, actuals, closing) {
         reconcile: !!closing.reconcile,
       };
     }
-    var row = actuals[spec[0]] || { written: null, delivered: null, note: '' };
-    return { name: spec[0], unit: spec[1], goal: spec[2], written: row.written, delivered: row.delivered, through: row.through || '', note: row.note || '', reconcile: false };
+    var row = actuals[spec[1]] || { written: null, delivered: null, note: '' };
+    var detail = spec[5];
+    var powerBase = actuals['Power Adjustable Base'];
+    if (name === 'Adjustable Base Attachment' && powerBase && (powerBase.written !== null || powerBase.delivered !== null)) {
+      detail = 'ADJ PWR % written ' + (powerBase.written === null ? 'Pending' : percentText_(powerBase.written)) + ', delivered ' + (powerBase.delivered === null ? 'Pending' : percentText_(powerBase.delivered));
+    }
+    return { name: name, tier: tier, unit: spec[2], goal: spec[3], written: row.written, delivered: row.delivered, through: row.through || '', detail: detail, note: row.note || '', reconcile: false };
   });
 }
 
