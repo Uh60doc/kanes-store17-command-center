@@ -1740,7 +1740,10 @@
       return '<span class="status-pill ' + uploadTone(status) + '">' + esc(status) + '</span>';
     }
     function uploadWhen(iso) {
-      return iso ? esc(String(iso).slice(0, 16).replace('T', ' ')) + ' UTC' : '';
+      if (!iso) return '';
+      var when = new Date(iso);
+      if (isNaN(when.getTime())) return esc(String(iso));
+      return esc(when.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) + ' ET';
     }
     function uploadSize(bytes) {
       return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB';
@@ -1800,7 +1803,7 @@
         '</div>' +
         '<div class="upload-grid" style="margin-top:12px">' +
         '<article class="card upload-card"><h2>Status</h2>' +
-        '<p><strong>Last successful import:</strong> ' + (last ? esc(last.report) + ' for ' + esc(last.date) + ' · ' + uploadWhen(last.at) : 'None yet') + '</p>' +
+        '<p><strong>Last successful import:</strong> ' + (last ? esc(last.report) + (last.date ? ' for ' + esc(last.date) : '') + ' · ' + uploadWhen(last.at) + (last.via === 'mailbox' ? ' · mailbox import' : ' · uploaded here') : 'None yet') + '</p>' +
         '<p><strong>Latest day with all nine reports:</strong> ' + esc(data.latestComplete || 'None in the last 10 days') + '</p>' +
         '<p><strong>Store month KPIs counted through:</strong> ' + esc(data.kpiThrough || 'Not Available') + '</p>' +
         (data.refreshed && data.refreshed.issues.length ? '<ul class="list warn">' + data.refreshed.issues.map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('') + '</ul>' : '') +
