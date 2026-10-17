@@ -133,6 +133,43 @@
     .roster-preview { margin-top: 10px; padding: 10px 12px; border: 1px solid #f3d48a; border-radius: 10px; }
     .roster-history { font-size: 13px; color: #9eb0c9; }
     .roster-card h3 { margin: 14px 0 4px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0c9; }
+    .eval-results td, .eval-results th { white-space: nowrap; }
+    .eval-results td:first-child { white-space: normal; min-width: 220px; }
+    .eval-results th .pending { display: block; font-size: 12px; font-weight: 400; }
+    .eval-text { white-space: pre-wrap; margin: 4px 0; }
+    .eval-h3 { margin: 12px 0 4px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0c9; }
+    .eval-fields .eval-wide { grid-column: 1 / -1; }
+    .eval-fields select { width: 100%; }
+    .eval-print { display: none; }
+    body.print-eval .eval-print { display: block; margin-top: 16px; }
+    .ep-page { background: white; color: #1b2833; font-family: Calibri, "Segoe UI", Arial, sans-serif; font-size: 11pt; line-height: 1.3; max-width: 8.5in; margin: 0 auto 16px; padding: 0.4in; }
+    .ep-band { display: flex; align-items: center; gap: 14px; background: #0f2a3a; color: white; padding: 8px 12px; border-bottom: 4px solid #0e7c86; }
+    .ep-band img { display: block; height: 58px; width: auto; }
+    .ep-band .ep-kanes { background: white; padding: 4px 6px; height: 50px; }
+    .ep-title { flex: 1; text-align: center; }
+    .ep-title h3 { margin: 2px 0; font-size: 16pt; color: white; text-transform: none; letter-spacing: 0; }
+    .ep-title p { margin: 0; font-size: 10pt; color: #e3f3f4; }
+    .ep-title .ep-kicker { font-size: 9.5pt; letter-spacing: 0.06em; text-transform: uppercase; }
+    .ep-compact img { height: 40px; }
+    .ep-compact .ep-kanes { height: 34px; }
+    .ep-compact .ep-title h3 { font-size: 13pt; }
+    .ep-page table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .ep-page th, .ep-page td { border: 1px solid #b7c3cc; padding: 3px 6px; color: #1b2833; font-size: 10pt; text-align: left; }
+    .ep-info th { background: #f2f5f7; width: 17%; }
+    .ep-results th { background: #0e7c86; color: white; text-align: center; }
+    .ep-results th span { font-weight: 400; font-size: 9pt; }
+    .ep-results td:not(:first-child) { text-align: center; }
+    .ep-results td.good { background: #e3f4ea; color: #0b6b3a; font-weight: 700; }
+    .ep-results td.bad { background: #fbe5e8; color: #9b1c33; font-weight: 700; }
+    .ep-results td.pending { background: #fff4d6; color: #7a5a00; font-size: 9pt; }
+    .ep-head { margin: 12px 0 4px; padding: 3px 8px; background: #e3f3f4; border-left: 5px solid #0e7c86; color: #0f2a3a; font-size: 11pt; text-transform: uppercase; letter-spacing: 0.04em; }
+    .ep-note, .ep-meta { margin: 4px 0; font-size: 9.5pt; color: #5b6b78; }
+    .ep-box { border: 1px solid #b7c3cc; padding: 6px 10px; margin-top: 6px; break-inside: avoid; }
+    .ep-box h4 { margin: 0; font-size: 11pt; color: #0f2a3a; }
+    .ep-plan { margin: 4px 0 0; white-space: pre-wrap; }
+    .ep-signs { display: grid; grid-template-columns: 2fr 1fr; gap: 28px 24px; margin: 34px 0 18px; }
+    .ep-signs span { display: block; border-bottom: 1px solid #1b2833; height: 26px; }
+    .ep-signs p { margin: 3px 0 0; font-size: 9.5pt; color: #5b6b78; }
     @media (max-width: 980px) {
       .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .summary-tables { grid-template-columns: 1fr; }
@@ -162,6 +199,13 @@
       body.print-summary .summary-flags { font-size: 8px; margin: 4px 0 0; color: #444; }
       body.print-summary .summary-foot { font-size: 7.5px; margin-top: 4px; }
       body.print-summary .summary-sheet { break-inside: avoid; }
+      html:has(body.print-eval), body.print-eval { background: white !important; }
+      body.print-eval .wrap { padding: 0; max-width: none; }
+      body.print-eval header.brand, body.print-eval .section-title, body.print-eval #screen > :not(#eval-print) { display: none !important; }
+      body.print-eval .eval-print { margin: 0; }
+      body.print-eval .ep-page { padding: 0; margin: 0; max-width: none; break-after: page; }
+      body.print-eval .ep-page:last-child { break-after: auto; }
+      body.print-eval .ep-page, body.print-eval .ep-page * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       body { background: white; color: black; }
       .nav, .noprint, .login { display: none !important; }
       .card { break-inside: avoid; border-color: #ccc; background: white; }
@@ -619,7 +663,7 @@
       });
     }
     function openTeam(name) {
-      document.body.classList.remove('print-summary');
+      document.body.classList.remove('print-summary', 'print-eval');
       if (name === 'reports') drawReports();
       else if (name === 'evals') drawEvals();
       else if (name === 'summary') drawSummary(scorePerson || (sortedPeople()[0] && sortedPeople()[0].name) || '', '', '');
@@ -725,22 +769,306 @@
         '</table></article>';
       bindTeamNav();
     }
-    function drawEvals() {
-      var cycle = peopleEvaluation;
-      var people = sortedPeople();
-      var months = cycle ? cycle.covers.map(function (period) { return monthName(period.start); }).join(', ') : 'Not Available';
-      var rows = people.map(function (person) {
-        return '<tr><td>' + esc(person.name) + '</td><td>Scheduled ' + esc(cycle ? cycle.prepare : '') + ' · not prepared</td><td>Waiting for preparation</td><td>Not delivered · due by ' + esc(cycle ? cycle.deliverBy : '') + '</td></tr>';
-      }).join('');
-      document.getElementById('screen').innerHTML =
-        '<h2 class="section-title">Evals</h2>' + teamNav('evals') +
-        '<article class="card"><h2>Rolling three-month evaluations · next build stage</h2>' +
-        '<p>Each evaluation covers the previous three completed salesperson months (the 1st through the last day). Preparation is scheduled for the 3rd of each month and the manager delivers before the 7th.</p>' +
-        '<p><strong>Next cycle:</strong> ' + esc(months) + ' · prepare ' + esc(cycle ? cycle.prepare : 'Not Available') + ' · deliver by ' + esc(cycle ? cycle.deliverBy : 'Not Available') + '</p>' +
-        '<p class="sub">Preparation, manager review and delivery are tracked as three separate statuses. Nothing is sent or marked delivered automatically: the manager records each step. The established evaluation format and goal rules will be used unchanged when evaluations are built.</p></article>' +
-        '<article class="card kpi-wrap" style="margin-top:12px"><h2>Status for the next cycle</h2><table class="kpi"><tr><th>Associate</th><th>Preparation</th><th>Manager review</th><th>Delivery</th></tr>' + rows + '</table></article>';
-      bindTeamNav();
+    var evalCache = null;
+    var evalCycle = '';
+    var evalPick = '';
+    var evalEditing = '';
+    function dayText(iso) {
+      if (!iso) return '';
+      var names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return names[Number(String(iso).slice(5, 7)) - 1] + ' ' + Number(String(iso).slice(8, 10)) + ', ' + String(iso).slice(0, 4);
     }
+    function evalRange(months) {
+      return months.map(function (month) { return month.name + ' ' + dayText(month.start).replace(/,.*$/, '') + '–' + Number(month.end.slice(8, 10)); }).join(' · ');
+    }
+    function evalFailed(error, target) {
+      if (/sign in/i.test(error.message)) { showLogin(error.message); return; }
+      var host = document.getElementById(target || 'eval-error');
+      if (host) host.textContent = error.message;
+    }
+    function drawEvals() {
+      document.body.classList.remove('print-eval');
+      document.getElementById('screen').innerHTML = '<h2 class="section-title">Evals</h2>' + teamNav('evals') + '<p class="sub">Loading evaluations…</p>';
+      bindTeamNav();
+      api('evals', { cycle: evalCycle }).then(function (data) { renderEvals(data, ''); }).catch(function (error) {
+        if (/sign in/i.test(error.message)) { showLogin(error.message); return; }
+        document.getElementById('screen').innerHTML = '<h2 class="section-title">Evals</h2>' + teamNav('evals') + '<p class="error">' + esc(error.message) + '</p>';
+        bindTeamNav();
+      });
+    }
+    function evalChosen() {
+      var list = (evalCache && evalCache.evaluations) || [];
+      return evalPick ? list.filter(function (entry) { return entry.name === evalPick; }) : list;
+    }
+    function evalStatusTone(status) {
+      if (status === 'Given to Associate') return 'good';
+      if (status === 'Approved') return 'on-target';
+      if (status === 'Ready for Review') return 'warn';
+      return 'pending';
+    }
+    function evalActions(entry) {
+      var out = [];
+      var name = esc(entry.name);
+      if (entry.status === 'Draft' || entry.status === 'Ready for Review') out.push('<button class="secondary" type="button" data-eval-edit="' + name + '">Review / edit</button>');
+      else if (entry.status !== 'Not prepared') out.push('<button class="secondary" type="button" data-eval-view="' + name + '">View</button>');
+      if (entry.status === 'Draft') out.push('<button class="secondary" type="button" data-eval-status="Ready for Review|' + name + '">Ready for Review</button>');
+      if (entry.status === 'Ready for Review') out.push('<button class="secondary" type="button" data-eval-status="Draft|' + name + '">Back to Draft</button>', '<button type="button" data-eval-status="Approved|' + name + '">Approve</button>');
+      if (entry.status === 'Approved') out.push('<button type="button" data-eval-status="Given to Associate|' + name + '">Given to Associate</button>');
+      if (entry.status === 'Approved' && evalCache.role === 'admin') out.push('<button class="secondary" type="button" data-eval-status="Reopen|' + name + '">Reopen</button>');
+      return out.join(' ');
+    }
+    function evalCellClass(value) {
+      if (value.met === true) return 'good';
+      if (value.met === false) return 'bad';
+      if (value.status === 'Verified') return '';
+      return 'pending';
+    }
+    function evalResultsTable(entry) {
+      var head = '<tr><th>Measure</th><th>Goal</th>' + entry.months.map(function (month) { return '<th>' + esc(month.name) + '<span class="pending">' + esc(dayText(month.start).replace(/,.*$/, '')) + '–' + Number(month.end.slice(8, 10)) + '</span></th>'; }).join('') + '<th>Goals met</th></tr>';
+      var rows = entry.metrics.map(function (metric) {
+        return '<tr><td>' + esc(metric.label) + '<span class="pending">' + esc(metric.source) + '</span></td><td>' + esc(metric.goalText) + '</td>' + metric.values.map(function (value) {
+          return '<td class="' + evalCellClass(value) + '" title="' + esc(value.source + (value.note ? ' · ' + value.note : '')) + '">' + esc(value.text) + '</td>';
+        }).join('') + '<td>' + esc(metric.metText) + '</td></tr>';
+      }).join('');
+      return '<div class="kpi-wrap"><table class="score eval-results">' + head + rows + '</table></div>';
+    }
+    function evalDetail(entry) {
+      var focus = entry.focus.map(function (item, i) {
+        return '<div class="summary-box"><h3>Coaching focus ' + (i + 1) + ': ' + esc(item.metric || 'Not set') + '</h3><p class="sub">Prior month ' + esc(item.prior || '—') + ' · Next month goal ' + esc(item.goal || '—') + '</p><p class="eval-text">' + esc(item.plan || 'No action plan yet.') + '</p></div>';
+      }).join('');
+      return '<article class="card" style="margin-top:12px"><h2>' + esc(entry.name) + ' · ' + esc(entry.templateLabel) + '</h2>' +
+        '<p class="sub">Employee ID ' + esc(entry.employeeId || '—') + ' · hired ' + esc(entry.hireDate ? dayText(entry.hireDate) : '—') + (entry.tenureDays !== null && entry.tenureDays !== undefined ? ' (' + entry.tenureDays + ' days at preparation)' : '') + ' · volume goal ' + esc(entry.volumeGoal === null || entry.volumeGoal === undefined ? 'Manager sets' : money(entry.volumeGoal)) + ' — ' + esc(entry.volumeGoalNote) + '</p>' +
+        (entry.verification !== 'Verified' ? '<p class="warn">Pending Verification: ' + esc(entry.pendingMonths.join(', ')) + '. A blank figure is not zero; it stays Pending until the report is verified.</p>' : '') +
+        (entry.frozen ? '<p class="sub">Frozen at approval (revision ' + esc(entry.revision) + '). Archived file ' + esc(entry.archiveFileName || '') + '.</p>' : '') +
+        evalResultsTable(entry) +
+        '<div class="summary-tables" style="margin-top:10px">' + focus + '</div>' +
+        '<h3 class="eval-h3">Recognition</h3><p class="eval-text">' + esc(entry.recognition || '—') + '</p>' +
+        '<h3 class="eval-h3">Overall comments</h3><p class="eval-text">' + esc(entry.comments || '—') + '</p>' +
+        (entry.note ? '<p class="sub">' + esc(entry.note) + '</p>' : '') + '</article>';
+    }
+    function evalField(id, label, value, wide) {
+      return '<div' + (wide ? ' class="eval-wide"' : '') + '><label for="' + id + '">' + label + '</label>' + (wide ? '<textarea id="' + id + '" rows="4">' + esc(value || '') + '</textarea>' : '<input id="' + id + '" value="' + esc(value || '') + '" />') + '</div>';
+    }
+    function evalEditor(entry) {
+      var metricOptions = function (selected) {
+        return '<option value=""' + (selected ? '' : ' selected') + '>Not set</option>' + entry.metrics.map(function (metric) { return '<option' + (metric.label === selected ? ' selected' : '') + '>' + esc(metric.label) + '</option>'; }).join('') +
+          (selected && !entry.metrics.some(function (metric) { return metric.label === selected; }) ? '<option selected>' + esc(selected) + '</option>' : '');
+      };
+      var focus = [0, 1].map(function (i) {
+        var item = entry.focus[i];
+        var n = i + 1;
+        return '<div class="eval-wide"><h3 class="eval-h3">Coaching focus ' + n + '</h3></div><div><label for="ev-f' + n + '-metric">Focus metric</label><select id="ev-f' + n + '-metric">' + metricOptions(item.metric) + '</select></div>' +
+          evalField('ev-f' + n + '-prior', 'Prior month performance', item.prior) + evalField('ev-f' + n + '-goal', 'Next month goal', item.goal) +
+          evalField('ev-f' + n + '-plan', 'Detailed action plan', item.plan, true);
+      }).join('');
+      var monthOptions = entry.months.filter(function (month) { return month.end < evalCache.today; }).map(function (month) { return '<option value="' + esc(month.key) + '">' + esc(month.label) + '</option>'; }).join('');
+      var metricPick = evalCache.metrics.map(function (metric) { return '<option value="' + esc(metric.key) + '">' + esc(metric.label) + '</option>'; }).join('');
+      return '<article class="card roster-card noprint" id="eval-editor" style="margin-top:12px"><h2>Manager review · ' + esc(entry.name) + ' · ' + esc(entry.status) + '</h2>' +
+        '<p class="sub">Drafted from verified figures only. Edit anything before approval; approved evaluations are locked and archived.</p>' +
+        '<div class="roster-fields eval-fields">' +
+        '<div><label for="ev-template">Template</label><select id="ev-template"><option value="standard"' + (entry.template === 'standard' ? ' selected' : '') + '>3-Month Performance and Coaching</option><option value="newHire"' + (entry.template === 'newHire' ? ' selected' : '') + '>New Hire (under 90 days)</option></select></div>' +
+        evalField('ev-volume', 'Sales volume goal for next month ($, goal ladder)', entry.volumeGoal === null || entry.volumeGoal === undefined ? '' : String(entry.volumeGoal)) +
+        evalField('ev-manager', 'Manager name for the signature line', entry.managerName) +
+        focus + evalField('ev-recognition', 'Recognition', entry.recognition, true) + evalField('ev-comments', 'Overall comments', entry.comments, true) + '</div>' +
+        '<p id="eval-edit-error" class="error"></p><p class="summary-actions"><button type="button" id="ev-save">Save review</button> <button type="button" class="secondary" id="ev-close">Close</button></p>' +
+        '<h3>Record a verified figure</h3><p class="sub">Enter the figure exactly as printed: Sales Volume from SPR TOTAL line 8, every other measure from the WDSRR for that calendar month. Percents may be typed as 21.5 or 21.5%. Use Not available when the report has no figure; nothing is estimated.</p>' +
+        (monthOptions ? '<div class="roster-fields"><div><label for="em-month">Month</label><select id="em-month">' + monthOptions + '</select></div><div><label for="em-metric">Measure</label><select id="em-metric">' + metricPick + '</select></div>' +
+          '<div><label for="em-status">Figure</label><select id="em-status"><option>Verified</option><option>Not Available</option></select></div>' + rosterInput('em-value', 'Value as printed', '') +
+          rosterInput('em-source', 'Source (report name and date)', '') + rosterInput('em-note', 'Note', '') + '</div><p id="eval-metric-error" class="error"></p><p><button type="button" class="secondary" id="em-save">Record figure</button></p>'
+          : '<p class="sub">None of these months is complete yet.</p>') + '</article>';
+    }
+    function evalPrintPage(entry, storeLogo) {
+      var data = evalCache;
+      var results = entry.metrics.map(function (metric) {
+        return '<tr><td>' + esc(metric.label) + '</td><td>' + esc(metric.goalText) + '</td>' + metric.values.map(function (value) { return '<td class="' + evalCellClass(value) + '">' + esc(value.text) + '</td>'; }).join('') + '<td>' + esc(metric.metText) + '</td></tr>';
+      }).join('');
+      var focus = entry.focus.map(function (item, i) {
+        return '<div class="ep-box"><h4>Coaching focus ' + (i + 1) + ': ' + esc(item.metric || '') + '</h4><p class="ep-meta">Prior month: <strong>' + esc(item.prior || '') + '</strong> · Next month goal: <strong>' + esc(item.goal || '') + '</strong></p><p class="ep-plan">' + esc(item.plan || '') + '</p></div>';
+      }).join('');
+      var band = function (compact) {
+        return '<header class="ep-band' + (compact ? ' ep-compact' : '') + '"><img src="' + data.logo + '" alt="Kane\'s Furniture" class="ep-kanes" /><div class="ep-title"><p class="ep-kicker">Kane\'s Furniture · Store 17 · South Orlando</p><h3>' + esc(entry.template === 'newHire' ? 'New Hire Coaching Evaluation' : '3-Month Performance & Coaching Evaluation') + '</h3>' +
+          '<p>Issued ' + esc(entry.cycleLabel) + ' · covers ' + esc(dayText(entry.months[0].start)) + ' – ' + esc(dayText(entry.months[2].end)) + ' (calendar months)</p></div><img src="' + storeLogo + '" alt="Store 17" class="ep-store" /></header>';
+      };
+      return '<section class="ep-page">' + band(false) +
+        '<table class="ep-info"><tr><th>Associate</th><td>' + esc(entry.name) + '</td><th>Employee ID</th><td>' + esc(entry.employeeId || '') + '</td></tr><tr><th>Hire date</th><td>' + esc(entry.hireDate ? dayText(entry.hireDate) : '') + '</td><th>Store</th><td>' + esc(entry.store) + '</td></tr>' +
+        '<tr><th>Status</th><td>' + esc(entry.status) + (entry.verification !== 'Verified' ? ' · Pending Verification' : '') + '</td><th>Volume goal</th><td>' + esc(entry.volumeGoal === null || entry.volumeGoal === undefined ? 'Manager sets' : money(entry.volumeGoal)) + '</td></tr></table>' +
+        '<h4 class="ep-head">Performance results</h4><table class="ep-results"><tr><th>Measure</th><th>Goal</th>' + entry.months.map(function (month) { return '<th>' + esc(month.name) + '<br><span>' + esc(dayText(month.start).replace(/,.*$/, '')) + '–' + Number(month.end.slice(8, 10)) + '</span></th>'; }).join('') + '<th>Goals met</th></tr>' + results + '</table>' +
+        '<p class="ep-note">Sales Volume from SPR TOTAL line 8; all other measures from the WDSRR for each calendar month. Pending Verification means the report is not verified yet; Not available means the report has no figure. Neither is zero.</p>' +
+        '<h4 class="ep-head">Coaching focus and action plans</h4>' + focus + '</section>' +
+        '<section class="ep-page">' + band(true) +
+        '<h4 class="ep-head">Recognition</h4><div class="ep-box"><p class="ep-plan">' + esc(entry.recognition || '') + '</p></div>' +
+        '<h4 class="ep-head">Overall comments</h4><div class="ep-box"><p class="ep-plan">' + esc(entry.comments || '') + '</p></div>' +
+        '<h4 class="ep-head">Acknowledgement</h4><p class="ep-meta">Signing confirms this evaluation was reviewed together; it does not mean agreement with every item.</p>' +
+        '<div class="ep-signs"><div><span></span><p>Salesperson signature · ' + esc(entry.name) + '</p></div><div><span></span><p>Date</p></div><div><span></span><p>Manager signature' + (entry.managerName ? ' · ' + esc(entry.managerName) : '') + '</p></div><div><span></span><p>Date</p></div></div>' +
+        '<p class="ep-meta">Prepared ' + esc(entry.preparedAt ? entry.preparedAt.slice(0, 10) : '—') + ' · Approved ' + esc(entry.approvedAt ? entry.approvedAt.slice(0, 10) : '—') + ' · Given ' + esc(entry.givenOn || '—') + '</p></section>';
+    }
+    function printEvals() {
+      var chosen = evalChosen().filter(function (entry) { return entry.status !== 'Not prepared'; });
+      if (!chosen.length) chosen = evalChosen();
+      var storeLogo = document.querySelector('img.logo') ? document.querySelector('img.logo').src : '';
+      document.getElementById('eval-print').innerHTML = chosen.map(function (entry) { return evalPrintPage(entry, storeLogo); }).join('');
+      document.body.classList.add('print-eval');
+      var images = Array.prototype.slice.call(document.querySelectorAll('#eval-print img'));
+      Promise.all(images.map(function (img) { return img.complete ? null : new Promise(function (done) { img.onload = done; img.onerror = done; }); })).then(function () {
+        setTimeout(function () { window.print(); }, 50);
+      });
+    }
+    function saveBase64(fileName, base64) {
+      var binary = atob(base64);
+      var bytes = new Uint8Array(binary.length);
+      for (var i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      var blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      var link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(function () { URL.revokeObjectURL(link.href); link.remove(); }, 1000);
+    }
+    function downloadEvals(archiveId) {
+      var note = document.getElementById('eval-error');
+      note.textContent = 'Building the workbook…';
+      var request = archiveId ? { archiveId: archiveId } : { cycle: evalCache.cycle, names: evalPick ? [evalPick] : [] };
+      api('evalWorkbook', request).then(function (file) {
+        saveBase64(file.fileName, file.base64);
+        note.textContent = 'Downloaded ' + file.fileName + (file.archived ? ' (archived copy, fingerprint checked)' : '') + '.';
+      }).catch(function (error) { evalFailed(error); });
+    }
+    function evalConfirm(request, preview) {
+      var given = request.status === 'Given to Associate';
+      var host = document.getElementById('eval-confirm');
+      host.innerHTML = '<div class="roster-preview"><p><strong>' + esc(preview) + '</strong></p>' +
+        (given ? '<label for="ev-given">Date the evaluation was given</label><input id="ev-given" type="date" value="' + esc(request.givenOn || evalCache.today) + '" max="' + esc(evalCache.today) + '" style="max-width:220px" />' : '') +
+        '<p class="summary-actions"><button type="button" id="ev-confirm">Confirm</button> <button type="button" class="secondary" id="ev-cancel">Cancel</button></p></div>';
+      if (host.scrollIntoView) host.scrollIntoView({ block: 'center' });
+      document.getElementById('ev-cancel').addEventListener('click', function () { host.innerHTML = ''; });
+      if (given) document.getElementById('ev-given').addEventListener('change', function (event) {
+        request.givenOn = event.target.value;
+        api('setEvalStatus', request).then(function (result) { evalConfirm(request, result.summary); }).catch(function (error) { evalFailed(error); });
+      });
+      document.getElementById('ev-confirm').addEventListener('click', function () {
+        var send = Object.assign({}, request, { confirm: true });
+        api('setEvalStatus', send).then(function (result) { renderEvals(result, result.saved); }).catch(function (error) { evalFailed(error); });
+      });
+    }
+    function evalImportCard() {
+      if (evalCache.role !== 'admin') return '';
+      return '<article class="card roster-card noprint" style="margin-top:12px"><h2>Historical evaluation workbook</h2>' +
+        '<p class="sub">Upload an approved monthly workbook (for example the October evaluations) to keep it as the reference record. The file is archived byte for byte and never rewritten; its associate worksheets are read into the history for ' + esc(evalCache.info.label) + ' (' + esc(evalRange(evalCache.info.months)) + '). Choose the matching cycle above first.</p>' +
+        '<input id="ev-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />' +
+        '<p id="eval-import-error" class="error"></p><div id="eval-import-preview"></div></article>';
+    }
+    function bindEvalImport() {
+      var input = document.getElementById('ev-file');
+      if (!input) return;
+      input.addEventListener('change', function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+          var request = { cycle: evalCache.cycle, fileName: file.name, base64: String(reader.result).split(',')[1] || '' };
+          document.getElementById('eval-import-error').textContent = 'Reading ' + file.name + '…';
+          api('importEvalWorkbook', request).then(function (result) {
+            var preview = result.preview;
+            document.getElementById('eval-import-error').textContent = '';
+            document.getElementById('eval-import-preview').innerHTML = '<div class="roster-preview"><p><strong>' + esc(preview.fileName) + ' → ' + esc(preview.label) + '</strong> · ' + esc(preview.covers.join(', ')) + '</p>' +
+              '<table class="score"><tr><th>Worksheet</th><th>Associate</th><th>Months</th><th>Figures</th><th>Blank / not available</th><th>Focus areas</th></tr>' + preview.sheets.map(function (sheet) {
+                return '<tr><td>' + esc(sheet.sheet) + '</td><td class="' + (sheet.onRoster ? '' : 'bad') + '">' + esc(sheet.name) + (sheet.onRoster ? '' : ' (not on roster)') + '</td><td>' + esc(sheet.months.join(', ')) + '</td><td>' + sheet.values + '</td><td>' + sheet.missing + '</td><td>' + esc(sheet.focus.filter(Boolean).join('; ')) + '</td></tr>';
+              }).join('') + '</table>' + (preview.warnings.length ? '<ul class="list warn">' + preview.warnings.map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('') + '</ul>' : '') +
+              (preview.canImport ? '<p class="summary-actions"><button type="button" id="ev-import-confirm">Confirm: archive and record</button></p>' : '<p class="warn">Fix the warnings before this workbook can be recorded.</p>') + '</div>';
+            var go = document.getElementById('ev-import-confirm');
+            if (go) go.addEventListener('click', function () {
+              request.confirm = true;
+              api('importEvalWorkbook', request).then(function (done) { renderEvals(done, done.saved); }).catch(function (error) { evalFailed(error, 'eval-import-error'); });
+            });
+          }).catch(function (error) { evalFailed(error, 'eval-import-error'); });
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    function renderEvals(data, message) {
+      evalCache = data;
+      evalCycle = data.cycle;
+      var list = data.evaluations || [];
+      if (evalPick && !list.some(function (entry) { return entry.name === evalPick; })) evalPick = '';
+      if (evalEditing && !list.some(function (entry) { return entry.name === evalEditing && (entry.status === 'Draft' || entry.status === 'Ready for Review'); })) evalEditing = '';
+      var info = data.info;
+      var cycles = data.cycles.map(function (item) { return '<option value="' + esc(item.cycle) + '"' + (item.cycle === data.cycle ? ' selected' : '') + '>' + esc(item.label) + ' · covers ' + esc(item.covers) + '</option>'; }).join('');
+      var people = '<option value="">All associates (' + list.length + ')</option>' + list.map(function (entry) { return '<option' + (entry.name === evalPick ? ' selected' : '') + '>' + esc(entry.name) + '</option>'; }).join('');
+      var unprepared = list.filter(function (entry) { return entry.status === 'Not prepared'; }).length;
+      var rows = list.map(function (entry) {
+        return '<tr><td><strong>' + esc(entry.name) + '</strong><span class="pending">' + esc(entry.template === 'newHire' ? 'New hire template' : 'Standard template') + (entry.hireDate ? ' · hired ' + esc(entry.hireDate) : '') + '</span></td>' +
+          '<td class="' + (entry.verification === 'Verified' ? 'good' : 'warn') + '">' + esc(entry.verification) + (entry.pendingMonths && entry.pendingMonths.length ? '<span class="pending">' + esc(entry.pendingMonths.join(', ')) + '</span>' : '') + '</td>' +
+          '<td><span class="status-pill ' + evalStatusTone(entry.status) + '">' + esc(entry.status) + '</span>' + (entry.revision > 1 ? '<span class="pending">revision ' + esc(entry.revision) + '</span>' : '') + '</td>' +
+          '<td>' + esc(entry.givenOn ? dayText(entry.givenOn) : '—') + '</td><td class="roster-actions">' + evalActions(entry) + '</td></tr>';
+      }).join('');
+      var archive = (data.archive || []).map(function (entry) {
+        return '<tr><td>' + esc(entry.archivedAt.slice(0, 10)) + '</td><td>' + esc(entry.kind) + '</td><td>' + esc(entry.name || 'All associates') + (entry.revision ? ' · r' + esc(entry.revision) : '') + '</td><td>' + esc(entry.fileName) + '</td><td><button class="secondary" type="button" data-eval-archive="' + esc(entry.id) + '">Download</button></td></tr>';
+      }).join('');
+      var single = evalPick ? list.filter(function (entry) { return entry.name === evalPick; })[0] : null;
+      var editing = evalEditing ? list.filter(function (entry) { return entry.name === evalEditing; })[0] : null;
+      document.getElementById('screen').innerHTML =
+        '<h2 class="section-title noprint">Evals</h2>' + teamNav('evals') +
+        '<div class="noprint">' +
+        '<article class="card"><div class="summary-controls"><div><label for="ev-cycle">Evaluation month</label><select id="ev-cycle">' + cycles + '</select></div>' +
+        '<div><label for="ev-person">Associate</label><select id="ev-person">' + people + '</select></div>' +
+        '<div class="summary-actions"><button type="button" id="ev-download">Download Excel</button><button type="button" id="ev-print">Print</button>' + (data.canPrepare && unprepared ? '<button type="button" class="secondary" id="ev-prepare">Prepare drafts (' + unprepared + ')</button>' : '') + '</div></div>' +
+        '<p><strong>' + esc(info.label) + ' evaluation</strong> covers ' + esc(evalRange(info.months)) + ' — calendar months, the 1st through the last day, never the store period. Drafts are prepared on ' + esc(dayText(info.prepare)) + ' and given by ' + esc(dayText(info.deliverBy)) + '.</p>' +
+        '<p class="sub">Status moves Draft → Ready for Review → Approved → Given to Associate, each confirmed by a manager. Nothing is marked given or signed automatically. An evaluation with any month Pending Verification cannot be approved; approval freezes it and archives the workbook unchanged.' + (!data.canPrepare ? ' Drafts for this month can be prepared from ' + esc(dayText(info.prepare)) + '.' : '') + '</p>' +
+        (message ? '<p class="good">' + esc(message) + '</p>' : '') + '<p id="eval-error" class="error"></p><div id="eval-confirm"></div></article>' +
+        '<article class="card kpi-wrap" style="margin-top:12px"><h2>' + esc(info.label) + ' status</h2>' + (list.length ? '<table class="kpi roster-table"><tr><th>Associate</th><th>Verification</th><th>Status</th><th>Given</th><th></th></tr>' + rows + '</table>' : '<p class="sub">No associate was on the Sales Team for this cycle.</p>') + '</article>' +
+        (editing ? evalEditor(editing) : '') + (single ? evalDetail(single) : '') +
+        '<article class="card kpi-wrap" style="margin-top:12px"><h2>Archive · ' + esc(info.label) + '</h2>' + (archive ? '<table class="kpi"><tr><th>Archived</th><th>Kind</th><th>For</th><th>File</th><th></th></tr>' + archive + '</table><p class="sub">Archived files are returned exactly as stored; the fingerprint is checked before download.</p>' : '<p class="sub">Nothing archived for this month yet. Each approved evaluation and the completed monthly workbook are archived automatically.</p>') + '</article>' +
+        evalImportCard() + '</div>' +
+        '<div id="eval-print" class="eval-print"></div>';
+      bindTeamNav();
+      document.getElementById('ev-cycle').addEventListener('change', function (event) { evalCycle = event.target.value; evalPick = ''; evalEditing = ''; drawEvals(); });
+      document.getElementById('ev-person').addEventListener('change', function (event) { evalPick = event.target.value; evalEditing = ''; renderEvals(evalCache, ''); });
+      document.getElementById('ev-download').addEventListener('click', function () { downloadEvals(''); });
+      document.getElementById('ev-print').addEventListener('click', printEvals);
+      var prepare = document.getElementById('ev-prepare');
+      if (prepare) prepare.addEventListener('click', function () {
+        api('prepareEvals', { cycle: data.cycle }).then(function (result) { renderEvals(result, result.saved); }).catch(function (error) { evalFailed(error); });
+      });
+      document.querySelectorAll('[data-eval-edit]').forEach(function (button) {
+        button.addEventListener('click', function () { evalPick = button.getAttribute('data-eval-edit'); evalEditing = evalPick; renderEvals(evalCache, ''); var host = document.getElementById('eval-editor'); if (host && host.scrollIntoView) host.scrollIntoView({ block: 'start' }); });
+      });
+      document.querySelectorAll('[data-eval-view]').forEach(function (button) {
+        button.addEventListener('click', function () { evalPick = button.getAttribute('data-eval-view'); evalEditing = ''; renderEvals(evalCache, ''); });
+      });
+      document.querySelectorAll('[data-eval-status]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var parts = button.getAttribute('data-eval-status').split('|');
+          var request = { cycle: data.cycle, name: parts[1], status: parts[0] };
+          if (parts[0] === 'Given to Associate') request.givenOn = data.today;
+          document.getElementById('eval-error').textContent = '';
+          api('setEvalStatus', request).then(function (result) { evalConfirm(request, result.summary); }).catch(function (error) { evalFailed(error); });
+        });
+      });
+      document.querySelectorAll('[data-eval-archive]').forEach(function (button) {
+        button.addEventListener('click', function () { downloadEvals(button.getAttribute('data-eval-archive')); });
+      });
+      var close = document.getElementById('ev-close');
+      if (close) close.addEventListener('click', function () { evalEditing = ''; renderEvals(evalCache, ''); });
+      var save = document.getElementById('ev-save');
+      if (save) save.addEventListener('click', function () {
+        var value = function (id) { return document.getElementById(id).value; };
+        api('saveEval', { cycle: data.cycle, name: evalEditing, fields: {
+          template: value('ev-template'), volume_goal: value('ev-volume'), manager_name: value('ev-manager'),
+          focus1_metric: value('ev-f1-metric'), focus1_prior: value('ev-f1-prior'), focus1_goal: value('ev-f1-goal'), focus1_plan: value('ev-f1-plan'),
+          focus2_metric: value('ev-f2-metric'), focus2_prior: value('ev-f2-prior'), focus2_goal: value('ev-f2-goal'), focus2_plan: value('ev-f2-plan'),
+          recognition: value('ev-recognition'), comments: value('ev-comments'),
+        } }).then(function (result) { renderEvals(result, 'Review saved for ' + evalEditing + '.'); }).catch(function (error) { evalFailed(error, 'eval-edit-error'); });
+      });
+      var record = document.getElementById('em-save');
+      if (record) record.addEventListener('click', function () {
+        var value = function (id) { return document.getElementById(id).value; };
+        api('saveEvalMetric', { cycle: data.cycle, name: evalEditing, month: value('em-month'), metric: value('em-metric'), status: value('em-status'), value: value('em-value'), source: value('em-source'), note: value('em-note') })
+          .then(function (result) { renderEvals(result, 'Figure recorded for ' + evalEditing + '.'); }).catch(function (error) { evalFailed(error, 'eval-metric-error'); });
+      });
+      bindEvalImport();
+    }
+    window.addEventListener('afterprint', function () { document.body.classList.remove('print-eval'); });
     var summaryCache = null;
     function drawSummary(name, start, end) {
       document.getElementById('screen').innerHTML = '<h2 class="section-title">Summary</h2>' + teamNav('summary') + '<p class="sub">Loading the associate summary…</p>';
@@ -1362,7 +1690,7 @@
     }
     function openScreen(name) {
       screen = name;
-      document.body.classList.remove('print-summary');
+      document.body.classList.remove('print-summary', 'print-eval');
       drawNav();
       var request = name === 'written' || name === 'delivered' || name === 'orders' ? 'home' : name;
       if (name === 'admin') { renderAdmin(); return; }

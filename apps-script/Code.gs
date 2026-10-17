@@ -18,6 +18,13 @@ var ROUTES_ = {
   coverage: ['admin'],
   roster: ['admin'],
   saveAssociate: ['admin'],
+  evals: ['manager', 'admin'],
+  saveEval: ['manager', 'admin'],
+  setEvalStatus: ['manager', 'admin'],
+  prepareEvals: ['manager', 'admin'],
+  evalWorkbook: ['manager', 'admin'],
+  saveEvalMetric: ['manager', 'admin'],
+  importEvalWorkbook: ['admin'],
 };
 
 function doGet() {
@@ -57,5 +64,12 @@ function dispatch(name, payload) {
   if (name === 'coverage') return coverage_(payload);
   if (name === 'roster') return roster_(payload);
   if (name === 'saveAssociate') return saveAssociate_(payload);
+  if (name === 'evals') return evals_(payload);
+  if (name === 'saveEval') return saveEvaluation_(payload);
+  if (name === 'setEvalStatus') return setEvalStatus_(payload);
+  if (name === 'prepareEvals') return prepareEvals_(payload);
+  if (name === 'evalWorkbook') return evalWorkbook_(payload);
+  if (name === 'saveEvalMetric') return saveEvalMetric_(payload);
+  if (name === 'importEvalWorkbook') return importEvalWorkbook_(payload);
   throw new Error('That request is not available.');
 }
