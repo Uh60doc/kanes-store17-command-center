@@ -178,13 +178,17 @@ function snapAssociates_(text) {
   var lines = String(text).split(/\r?\n/);
   var i;
   for (i = 0; i < lines.length; i += 1) {
-    var line = lines[i].trim();
-    if (/totals:/i.test(line)) continue;
-    var row = /^([A-Z][A-Z' .-]+,\s*[A-Z][A-Z' .-]+?)\s+(-?\d[\d,]*(?:\.\d+)?)\b/i.exec(line);
-    if (!row) continue;
-    var amount = moneyToken_(row[2]);
-    if (amount === null) continue;
-    found.push({ sourceName: row[1].replace(/\s+/g, ' ').trim(), amount: amount });
+    // The Google Docs PDF conversion can put several salesperson rows, and the store Totals row, on one line.
+    var line = lines[i];
+    var cut = line.search(/totals:/i);
+    if (cut !== -1) line = line.slice(0, cut);
+    var pattern = /([A-Z][A-Z' .-]+,\s*[A-Z][A-Z' .-]+?)\s+(-?\d[\d,]*(?:\.\d+)?)\b/gi;
+    var row;
+    while ((row = pattern.exec(line)) !== null) {
+      var amount = moneyToken_(row[2]);
+      if (amount === null) continue;
+      found.push({ sourceName: row[1].replace(/\s+/g, ' ').trim(), amount: amount });
+    }
   }
   return found;
 }

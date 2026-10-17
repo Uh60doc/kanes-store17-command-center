@@ -174,6 +174,14 @@ test('each of the nine reports is identified from its contents, whatever the fil
   assert.deepEqual(ledger(tabs, 'SNAP_PERSON', '2026-10-14').map((row) => [row[8], row[10]]), [['Ricky Nassif', 1000]], 'SNAP_PERSON mirrors CC_AssociateDays');
 });
 
+test('SNAP salesperson lines are read when the PDF conversion joins rows onto one line', () => {
+  const { gs } = boot();
+  const lines = (text: string) => plain(gs.snapAssociates_(text)).map((line: any) => [line.sourceName, line.amount]);
+  assert.deepEqual(lines('MONTES, ERIC 500 500 0.0 0.0 0.0 NASSIF, TARIK 910 910 0.0 12.1 0.0 \n17 - ORLANDO Totals: -75.1 1,410 705 0.0'), [['MONTES, ERIC', 500], ['NASSIF, TARIK', 910]]);
+  assert.deepEqual(lines('DELSOLAR, RENZO 2,476 1,238 0.0 6.0 41.8 0.0 17 - ORLANDO Totals: 54.0 2,476 1,238 0.0'), [['DELSOLAR, RENZO', 2476]]);
+  assert.deepEqual(lines('KANES FURNITURE, INC. \nMONTES, ERIC    -320\n17 - ORLANDO Totals: 54.0 -320'), [['MONTES, ERIC', -320]]);
+});
+
 test('the same file twice, or the same report with different bytes, adds nothing', () => {
   const { send, tabs } = boot();
   const first = send('2026-10-14', 'nw.pdf', nwdsrPdf('written', '2026-10-14', '2026-10-14', 1000));
