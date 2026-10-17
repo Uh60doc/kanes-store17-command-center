@@ -87,6 +87,12 @@ function evalCycleInfo_(cycle) {
   return { cycle: cycle, label: monthLabel_(cycle), months: months, prepare: cycle + '-03', deliverBy: cycle + '-06' };
 }
 
+/** The New York calendar day of a stored ISO timestamp. */
+function stampDay_(stamp) {
+  var when = new Date(String(stamp));
+  return isNaN(when.getTime()) ? String(stamp).slice(0, 10) : isoDate_(when);
+}
+
 function daysBetween_(start, end) {
   var a = isoParts_(start);
   var b = isoParts_(end);
@@ -868,7 +874,7 @@ function evalSheet_(styles, evaluation, used) {
   sign('Manager name (print)', '', evaluation.managerName);
   row += 1;
   sheet.height(row, 16);
-  sheet.merge(row, 1, row, 7, 'Prepared ' + (evaluation.preparedAt ? evaluation.preparedAt.slice(0, 10) : 'not yet') + (evaluation.approvedAt ? ' · approved ' + evaluation.approvedAt.slice(0, 10) : '') + (evaluation.givenOn ? ' · given to associate ' + evaluation.givenOn : ' · given to associate: record after the meeting') + '.', { size: 8, italic: true, color: c.muted, indent: 1 });
+  sheet.merge(row, 1, row, 7, 'Prepared ' + (evaluation.preparedAt ? stampDay_(evaluation.preparedAt) : 'not yet') + (evaluation.approvedAt ? ' · approved ' + stampDay_(evaluation.approvedAt) : '') + (evaluation.givenOn ? ' · given to associate ' + evaluation.givenOn : ' · given to associate: record after the meeting') + '.', { size: 8, italic: true, color: c.muted, indent: 1 });
   return sheet;
 }
 

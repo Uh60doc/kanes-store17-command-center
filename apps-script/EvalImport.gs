@@ -244,7 +244,7 @@ function importEvalWorkbook_(payload) {
   if (!/\.xlsx$/i.test(fileName)) throw new Error('Choose the .xlsx evaluation workbook.');
   var read = readEvalWorkbook_(String(payload.base64 || ''), fileName);
   var already = evalArchiveRows_().filter(function (entry) { return entry.sha256 === read.sha256; })[0];
-  if (already) throw new Error('This exact workbook was already archived on ' + already.archivedAt.slice(0, 10) + ' as ' + already.fileName + '. Nothing was changed.');
+  if (already) throw new Error('This exact workbook was already archived on ' + stampDay_(already.archivedAt) + ' as ' + already.fileName + '. Nothing was changed.');
   var plan = planEvalImport_(cycle, read);
   if (!plan.parsed.length) throw new Error('No associate evaluation worksheets were found in this workbook.');
   var saved = evalSavedRows_();

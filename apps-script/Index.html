@@ -157,6 +157,9 @@
     .ep-page th, .ep-page td { border: 1px solid #b7c3cc; padding: 3px 6px; color: #1b2833; font-size: 10pt; text-align: left; }
     .ep-info th { background: #f2f5f7; width: 17%; }
     .ep-results th { background: #0e7c86; color: white; text-align: center; }
+    .ep-results th:first-child { width: 38%; }
+    .ep-results th:nth-child(2) { width: 11%; }
+    .ep-results th:last-child { width: 9%; }
     .ep-results th span { font-weight: 400; font-size: 9pt; }
     .ep-results td:not(:first-child) { text-align: center; }
     .ep-results td.good { background: #e3f4ea; color: #0b6b3a; font-weight: 700; }
@@ -778,6 +781,11 @@
       var names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return names[Number(String(iso).slice(5, 7)) - 1] + ' ' + Number(String(iso).slice(8, 10)) + ', ' + String(iso).slice(0, 4);
     }
+    function nyDay(stamp) {
+      if (!stamp) return '';
+      var when = new Date(stamp);
+      return isNaN(when.getTime()) ? String(stamp).slice(0, 10) : when.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    }
     function evalRange(months) {
       return months.map(function (month) { return month.name + ' ' + dayText(month.start).replace(/,.*$/, '') + '–' + Number(month.end.slice(8, 10)); }).join(' · ');
     }
@@ -880,7 +888,7 @@
     function evalPrintPage(entry, storeLogo) {
       var data = evalCache;
       var results = entry.metrics.map(function (metric) {
-        return '<tr><td>' + esc(metric.label) + '</td><td>' + esc(metric.goalText) + '</td>' + metric.values.map(function (value) { return '<td class="' + evalCellClass(value) + '">' + esc(value.text) + '</td>'; }).join('') + '<td>' + esc(metric.metText) + '</td></tr>';
+        return '<tr><td>' + esc(metric.label) + '</td><td>' + esc(metric.goalText) + '</td>' + metric.values.map(function (value) { return '<td class="' + evalCellClass(value) + '">' + esc(value.status === 'Pending Verification' ? 'Pending' : value.text) + '</td>'; }).join('') + '<td>' + esc(metric.metText) + '</td></tr>';
       }).join('');
       var focus = entry.focus.map(function (item, i) {
         return '<div class="ep-box"><h4>Coaching focus ' + (i + 1) + ': ' + esc(item.metric || '') + '</h4><p class="ep-meta">Prior month: <strong>' + esc(item.prior || '') + '</strong> · Next month goal: <strong>' + esc(item.goal || '') + '</strong></p><p class="ep-plan">' + esc(item.plan || '') + '</p></div>';
@@ -893,14 +901,14 @@
         '<table class="ep-info"><tr><th>Associate</th><td>' + esc(entry.name) + '</td><th>Employee ID</th><td>' + esc(entry.employeeId || '') + '</td></tr><tr><th>Hire date</th><td>' + esc(entry.hireDate ? dayText(entry.hireDate) : '') + '</td><th>Store</th><td>' + esc(entry.store) + '</td></tr>' +
         '<tr><th>Status</th><td>' + esc(entry.status) + (entry.verification !== 'Verified' ? ' · Pending Verification' : '') + '</td><th>Volume goal</th><td>' + esc(entry.volumeGoal === null || entry.volumeGoal === undefined ? 'Manager sets' : money(entry.volumeGoal)) + '</td></tr></table>' +
         '<h4 class="ep-head">Performance results</h4><table class="ep-results"><tr><th>Measure</th><th>Goal</th>' + entry.months.map(function (month) { return '<th>' + esc(month.name) + '<br><span>' + esc(dayText(month.start).replace(/,.*$/, '')) + '–' + Number(month.end.slice(8, 10)) + '</span></th>'; }).join('') + '<th>Goals met</th></tr>' + results + '</table>' +
-        '<p class="ep-note">Sales Volume from SPR TOTAL line 8; all other measures from the WDSRR for each calendar month. Pending Verification means the report is not verified yet; Not available means the report has no figure. Neither is zero.</p>' +
+        '<p class="ep-note">Sales Volume from SPR TOTAL line 8; all other measures from the WDSRR for each calendar month. Pending = Pending Verification: the report is not verified yet. Not available: the report has no figure. Neither is zero.</p>' +
         '<h4 class="ep-head">Coaching focus and action plans</h4>' + focus + '</section>' +
         '<section class="ep-page">' + band(true) +
         '<h4 class="ep-head">Recognition</h4><div class="ep-box"><p class="ep-plan">' + esc(entry.recognition || '') + '</p></div>' +
         '<h4 class="ep-head">Overall comments</h4><div class="ep-box"><p class="ep-plan">' + esc(entry.comments || '') + '</p></div>' +
         '<h4 class="ep-head">Acknowledgement</h4><p class="ep-meta">Signing confirms this evaluation was reviewed together; it does not mean agreement with every item.</p>' +
         '<div class="ep-signs"><div><span></span><p>Salesperson signature · ' + esc(entry.name) + '</p></div><div><span></span><p>Date</p></div><div><span></span><p>Manager signature' + (entry.managerName ? ' · ' + esc(entry.managerName) : '') + '</p></div><div><span></span><p>Date</p></div></div>' +
-        '<p class="ep-meta">Prepared ' + esc(entry.preparedAt ? entry.preparedAt.slice(0, 10) : '—') + ' · Approved ' + esc(entry.approvedAt ? entry.approvedAt.slice(0, 10) : '—') + ' · Given ' + esc(entry.givenOn || '—') + '</p></section>';
+        '<p class="ep-meta">Prepared ' + esc(nyDay(entry.preparedAt) || '—') + ' · Approved ' + esc(nyDay(entry.approvedAt) || '—') + ' · Given ' + esc(entry.givenOn || '—') + '</p></section>';
     }
     function printEvals() {
       var chosen = evalChosen().filter(function (entry) { return entry.status !== 'Not prepared'; });
@@ -1003,7 +1011,7 @@
           '<td>' + esc(entry.givenOn ? dayText(entry.givenOn) : '—') + '</td><td class="roster-actions">' + evalActions(entry) + '</td></tr>';
       }).join('');
       var archive = (data.archive || []).map(function (entry) {
-        return '<tr><td>' + esc(entry.archivedAt.slice(0, 10)) + '</td><td>' + esc(entry.kind) + '</td><td>' + esc(entry.name || 'All associates') + (entry.revision ? ' · r' + esc(entry.revision) : '') + '</td><td>' + esc(entry.fileName) + '</td><td><button class="secondary" type="button" data-eval-archive="' + esc(entry.id) + '">Download</button></td></tr>';
+        return '<tr><td>' + esc(nyDay(entry.archivedAt)) + '</td><td>' + esc(entry.kind) + '</td><td>' + esc(entry.name || 'All associates') + (entry.revision ? ' · r' + esc(entry.revision) : '') + '</td><td>' + esc(entry.fileName) + '</td><td><button class="secondary" type="button" data-eval-archive="' + esc(entry.id) + '">Download</button></td></tr>';
       }).join('');
       var single = evalPick ? list.filter(function (entry) { return entry.name === evalPick; })[0] : null;
       var editing = evalEditing ? list.filter(function (entry) { return entry.name === evalEditing; })[0] : null;
