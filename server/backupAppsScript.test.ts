@@ -4,6 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import vm from 'node:vm';
 import { plain } from './fakeSpreadsheet.ts';
 import { harness, session, tabText } from './octoberVerified.ts';
 import { table } from './snapshotGrid.ts';
@@ -66,6 +67,37 @@ test('the restore drill rebuilds the dashboard from a scratch copy and never wri
   const health = plain(gs.health_({ session }));
   assert.equal(health.backups.drill.status, 'Passed');
   assert.equal(health.backups.latest.status, 'Verified');
+});
+
+test('Back up now then Test restore from System health compares every page with production', () => {
+  const { gs, tabs, props } = withArchive();
+  vm.runInContext("requireSession_ = function () { return { role: 'admin', username: 'test' }; };", gs as vm.Context);
+  props.data_version = 'before backup';
+  const production = tabText(tabs, LOG_TABS);
+  const backup = plain(gs.dispatch('runBackup', { token: 't', mode: 'backup' })).result;
+  assert.equal(backup.status, 'Verified');
+  assert.equal(props.data_version, 'before backup', 'a backup only writes its own log, so cached pages stay current');
+  const drill = plain(gs.dispatch('runBackup', { token: 't', mode: 'drill' })).result;
+  assert.equal(drill.status, 'Passed', drill.note);
+  assert.match(drill.note, /6 of 6 dashboard pages built from the restored copy are identical to production/);
+  assert.equal(tabText(tabs, LOG_TABS), production, 'production unchanged');
+  gs.dispatch('runChecks', { token: 't' });
+  assert.notEqual(props.data_version, 'before backup', 'quality checks change the alerts on Home, so the version moves');
+});
+
+test('a backup problem is recorded and retires the cached pages', () => {
+  const { gs, drive, props } = withArchive();
+  const raised: string[] = [];
+  gs.appendException_ = (_severity: string, message: string) => { raised.push(message); };
+  props.data_version = 'before backup';
+  const backup = plain(gs.runBackup_('test', 60000));
+  assert.ok(!raised.some((message) => /backup/i.test(message)), raised.join('\n'));
+  assert.equal(props.data_version, 'before backup');
+  drive.files[backup.file_id]!.tabs!.CC_Daily!.pop();
+  const drill = plain(gs.runRestoreDrill_('test'));
+  assert.equal(drill.status, 'Failed');
+  assert.ok(raised.some((message) => /^Restore drill failed: .*CC_Daily differs/.test(message)), raised.join('\n'));
+  assert.match(props.data_version, /backup problem$/);
 });
 
 test('a damaged backup fails the drill and names the tab', () => {

@@ -23,6 +23,12 @@ var BACKUP_DRILL_DAYS_ = 7;
 var BACKUP_SECRET_KEYS_ = /^(hash_|salt_|epoch_|BOOTSTRAP_|sessions$|mail_)/;
 var BACKUP_PAGES_ = ['home', 'daily', 'closing', 'people', 'morning', 'bedding'];
 
+/** CC_Exceptions shows on Home, so a recorded backup problem retires the cached pages. */
+function backupProblem_(message) {
+  appendException_('Update Failed', message);
+  if (typeof markDataChanged_ === 'function') markDataChanged_('backup problem');
+}
+
 function backupFolder_(name) {
   var props = PropertiesService.getScriptProperties();
   var open = function (key, folderName, parent) {
@@ -239,8 +245,8 @@ function runBackup_(trigger, budgetMs) {
   result.note = notes.join(' ');
   result.seconds = Math.round((Date.now() - started) / 100) / 10;
   backupLog_(result);
-  try { result.retired = pruneBackups_(); } catch (error) { appendException_('Update Failed', 'Old backups could not be retired. ' + String(error && error.message ? error.message : error)); }
-  if (result.status !== 'Verified') appendException_('Update Failed', 'Backup ' + result.file_name + ' needs review: ' + result.note);
+  try { result.retired = pruneBackups_(); } catch (error) { backupProblem_('Old backups could not be retired. ' + String(error && error.message ? error.message : error)); }
+  if (result.status !== 'Verified') backupProblem_('Backup ' + result.file_name + ' needs review: ' + result.note);
   if (files.failed.length && typeof queueNotice_ === 'function') queueNotice_('Backup could not copy ' + files.failed.length + ' archived file(s): ' + files.failed.slice(0, 3).join('; ') + '.');
   delete result.tab_digests;
   return result;
@@ -354,7 +360,7 @@ function runRestoreDrill_(trigger) {
     try { DriveApp.getFileById(item.file_id).setTrashed(true); } catch (error) { /* already removed */ }
     book_().getSheetByName(BACKUPS_TAB_).getRange(item.sheetRow, BACKUP_HEADERS_.indexOf('status') + 1).setValue('Retired');
   });
-  if (problems.length) appendException_('Update Failed', 'Restore drill failed: ' + row.note);
+  if (problems.length) backupProblem_('Restore drill failed: ' + row.note);
   return row;
 }
 
@@ -364,14 +370,14 @@ function scheduledBackup_() {
   try {
     runBackup_('nightly', 240000);
   } catch (error) {
-    appendException_('Update Failed', 'The nightly backup did not run. ' + String(error && error.message ? error.message : error));
+    backupProblem_('The nightly backup did not run. ' + String(error && error.message ? error.message : error));
     if (typeof queueNotice_ === 'function') queueNotice_('The nightly backup did not run: ' + String(error && error.message ? error.message : error));
     return;
   }
   var drills = backupRows_().filter(function (row) { return row.kind === 'Restore drill'; });
   var last = drills.length ? drills[drills.length - 1].run_at.slice(0, 10) : '';
   if ((!last || last <= shiftDate_(todayNy_(), -BACKUP_DRILL_DAYS_)) && Date.now() - started < 150000) {
-    try { runRestoreDrill_('weekly'); } catch (error) { appendException_('Update Failed', 'The weekly restore drill did not run. ' + String(error && error.message ? error.message : error)); }
+    try { runRestoreDrill_('weekly'); } catch (error) { backupProblem_('The weekly restore drill did not run. ' + String(error && error.message ? error.message : error)); }
   }
 }
 

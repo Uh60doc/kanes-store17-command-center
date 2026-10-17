@@ -40,6 +40,8 @@ var ROUTES_ = {
 
 // Routes that only read. Every other route can change figures, so the cached pages are dropped after it runs.
 var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, health: true, bedding: true, coverage: true, roster: true, evals: true, evalWorkbook: true, uploads: true, documents: true, docFile: true };
+// Backups and restore drills write only their own logs, which no cached page reads; a problem they record moves the version itself.
+var LOG_ONLY_ROUTES_ = { runBackup: true };
 // Pages whose reply is reused until the data changes. Each reads every tab once while it is built.
 var CACHED_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, bedding: true };
 var MEMO_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, bedding: true, health: true, coverage: true };
@@ -149,7 +151,7 @@ function dispatch(name, payload) {
   var session = requireSession_(payload.token);
   if (route.indexOf(session.role) === -1) throw new Error('That area is not available for this login.');
   payload.session = session;
-  var writes = !READ_ONLY_ROUTES_[name] || (name === 'uploads' && payload.refresh === true);
+  var writes = (!READ_ONLY_ROUTES_[name] && !LOG_ONLY_ROUTES_[name]) || (name === 'uploads' && payload.refresh === true);
   if (MEMO_PAGES_[name]) beginPageRead_();
   try {
     if (CACHED_PAGES_[name]) return cachedPage_(name, payload, function () { return route_(name, payload); });
