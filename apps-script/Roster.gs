@@ -138,7 +138,8 @@ function rosterMatch_(code, sourceName) {
 }
 
 function rosterTab_() {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  forgetRead_('CC_People');
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_People');
   if (!tab) {
     tab = spreadsheet.insertSheet('CC_People');
@@ -148,7 +149,8 @@ function rosterTab_() {
 }
 
 function rosterHistoryTab_() {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  forgetRead_('CC_RosterHistory');
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_RosterHistory');
   if (tab) return tab;
   tab = spreadsheet.insertSheet('CC_RosterHistory');

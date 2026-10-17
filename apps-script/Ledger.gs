@@ -12,7 +12,8 @@ var LEDGER_VIEWS_ = [
 var NOT_SUPPLIED_VIEWS_ = ['NWDSR_WRITTEN_PERSON', 'NWDSR_DELIVERED_PERSON'];
 
 function ledgerSheet_() {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  forgetRead_('CC_Ledger');
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_Ledger');
   if (tab) return tab;
   tab = spreadsheet.insertSheet('CC_Ledger');
@@ -130,7 +131,8 @@ function latestPersonLedger_(view, side, name, periodStart) {
 }
 
 function historySheet_() {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  forgetRead_('CC_History');
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_History');
   if (tab) return tab;
   tab = spreadsheet.insertSheet('CC_History');

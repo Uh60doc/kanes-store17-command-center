@@ -1,8 +1,40 @@
+var BOOK_ = null;
+
+/** One spreadsheet handle per server call: every openById is a round trip to Sheets. */
+function book_() {
+  if (!BOOK_) BOOK_ = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  return BOOK_;
+}
+
+var READ_MEMO_ = null;
+// Pages write these while they draw (saved daily goals, replaced rows, the log, alerts), so they are always read fresh.
+var READ_MEMO_SKIP_ = { CC_DailyGoals: true, CC_History: true, CC_Exceptions: true, CC_Health: true, CC_Alerts: true };
+
+/** A read-only request reads each tab once. Off by default, so imports and saves always read what they just wrote. */
+function beginPageRead_() {
+  READ_MEMO_ = {};
+}
+
+function endPageRead_() {
+  READ_MEMO_ = null;
+}
+
+/** Called by every function that writes a tab, so a read later in the same request sees the write. */
+function forgetRead_(name) {
+  if (READ_MEMO_) delete READ_MEMO_[name];
+}
+
+function sheetValues_(name) {
+  var memo = READ_MEMO_ && !READ_MEMO_SKIP_[name];
+  if (memo && Object.prototype.hasOwnProperty.call(READ_MEMO_, name)) return READ_MEMO_[name];
+  var tab = book_().getSheetByName(name);
+  var values = tab ? tab.getDataRange().getValues() : null;
+  if (memo) READ_MEMO_[name] = values;
+  return values;
+}
+
 function sheet_(name) {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
-  var tab = spreadsheet.getSheetByName(name);
-  if (!tab) return [];
-  var values = tab.getDataRange().getValues();
+  var values = sheetValues_(name);
   if (!values || values.length < 2) return [];
   var header = values[0].map(function (cell) { return String(cell || '').trim(); });
   var rows = [];
@@ -67,6 +99,7 @@ function storeSalesGoals_(config, store) {
 }
 
 function refreshRollup_() {
+  forgetRead_('CC_Rollup');
   var config = config_();
   var store = storePeriodContaining_(todayNy_());
   var start = store.start;
@@ -99,7 +132,7 @@ function refreshRollup_() {
     delivered_pace: [blankIfNull(deliveredPace.pace), 'Today\'s delivered goal on Home: delivered remaining ÷ ' + (daysLeft === null ? 'open days left' : daysLeft + ' open days left') + ' including today.'],
     verified_through: [latest, 'Latest store-period date with NWDSR written on CC_Daily.'],
   };
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_Rollup');
   if (!tab) {
     tab = spreadsheet.insertSheet('CC_Rollup');
@@ -697,7 +730,8 @@ function pointsFromGoal_(ratio, goal) {
 }
 
 function closingSheet_() {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  forgetRead_('CC_Closing');
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_Closing');
   if (tab) return tab;
   tab = spreadsheet.insertSheet('CC_Closing');
@@ -1108,11 +1142,9 @@ function viewText_(value) {
  * The dashboard shows their results and does not count again.
  */
 function closingView_() {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
-  var dailyTab = spreadsheet.getSheetByName('CC_ClosingDaily');
-  var mtdTab = spreadsheet.getSheetByName('CC_ClosingMTD');
-  if (!dailyTab || !mtdTab) return null;
-  var values = dailyTab.getDataRange().getValues();
+  var values = sheetValues_('CC_ClosingDaily');
+  var summaryValues = sheetValues_('CC_ClosingMTD');
+  if (!values || !summaryValues) return null;
   var header = (values[0] || []).map(function (cell) { return String(cell || '').trim(); });
   if (header.slice(0, CLOSING_DAILY_HEADERS_.length).join('|') !== CLOSING_DAILY_HEADERS_.join('|')) return null;
   var days = [];
@@ -1143,7 +1175,7 @@ function closingView_() {
     byDate[date] = day;
   });
   var summary = {};
-  mtdTab.getDataRange().getValues().slice(1).forEach(function (row) { summary[String(row[0] || '').trim()] = row[1]; });
+  summaryValues.slice(1).forEach(function (row) { summary[String(row[0] || '').trim()] = row[1]; });
   return { days: days, byDate: byDate, summary: summary, start: isoDate_(summary['Period start']), end: isoDate_(summary['Period end']) };
 }
 
@@ -1305,7 +1337,8 @@ function configBlank_(config, key) {
 }
 
 function putConfig_(key, value) {
-  var tab = SpreadsheetApp.openById(SPREADSHEET_ID_).getSheetByName('CC_Config');
+  forgetRead_('CC_Config');
+  var tab = book_().getSheetByName('CC_Config');
   if (!tab) return;
   var values = tab.getDataRange().getValues();
   var r;
@@ -1363,7 +1396,8 @@ function kpiActuals_() {
 }
 
 function kpiSheet_() {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  forgetRead_('CC_Kpi');
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_Kpi');
   if (tab) return tab;
   tab = spreadsheet.insertSheet('CC_Kpi');
@@ -1372,13 +1406,14 @@ function kpiSheet_() {
 }
 
 function ensureKpiActuals_() {
-  var tab = kpiSheet_();
-  var values = tab.getDataRange().getValues();
+  var values = sheetValues_('CC_Kpi') || [];
   var present = {};
   var r;
   for (r = 1; r < values.length; r += 1) present[String(values[r][0])] = true;
-  kpiActuals_().forEach(function (row) {
-    if (present[row[0]]) return;
+  var missing = kpiActuals_().filter(function (row) { return !present[row[0]]; });
+  if (!missing.length) return;
+  var tab = kpiSheet_();
+  missing.forEach(function (row) {
     tab.appendRow([row[0], row[1] === null ? '' : row[1], row[2] === null ? '' : row[2], row[3], '2026-10-02', '2026-11-01']);
   });
 }
@@ -1466,7 +1501,8 @@ function homeKpiStrip_(goals, actuals, closing) {
 var DAILY_GOAL_HEADERS_ = ['date', 'written_goal', 'delivered_goal', 'days_left', 'written_basis'];
 
 function dailyGoalSheet_() {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  forgetRead_('CC_DailyGoals');
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_DailyGoals');
   if (!tab) tab = spreadsheet.insertSheet('CC_DailyGoals');
   if (String(tab.getRange(1, 5).getValue() || '') !== DAILY_GOAL_HEADERS_[4]) tab.getRange(1, 1, 1, DAILY_GOAL_HEADERS_.length).setValues([DAILY_GOAL_HEADERS_]);
@@ -1511,21 +1547,38 @@ function upsertDailyGoal_(date, written, delivered, daysLeft) {
   tab.appendRow([date, written === null ? '' : written, delivered === null ? '' : delivered, daysLeft, written === null ? '' : basis]);
 }
 
-/** Pages load in parallel; the lock keeps two of them from re-basing (and archiving) the same saved row twice. */
+/** upsertDailyGoal_ would write: no saved row, a written goal blank or on another basis, or a blank delivered goal. */
+function dailyGoalNeedsSave_(saved, written, delivered, basis) {
+  if (written === null && delivered === null) return false;
+  if (!saved) return true;
+  if (written !== null && (saved[1] === '' || saved[1] === null || String(saved[4] || '') !== basis)) return true;
+  return delivered !== null && (saved[2] === '' || saved[2] === null);
+}
+
+/**
+ * Pages load in parallel; the lock keeps two of them from re-basing (and archiving) the same saved row twice. The
+ * saved goals are read once, and the lock is taken only when a day still has to be saved.
+ */
 function ensureSavedDailyGoals_(period, today, closed, facts, writtenBudget, deliveredBudget) {
+  var basis = metricSource_('store_written_daily_goal');
+  var saved = {};
+  (sheetValues_('CC_DailyGoals') || []).slice(1).forEach(function (row) {
+    var date = isoDate_(row[0]);
+    if (date && !saved[date]) saved[date] = row;
+  });
+  var due = [];
+  eachDate_(period.start, period.end).forEach(function (date) {
+    if (date >= today || closed[date]) return;
+    var daysLeft = operatingDaysRemaining_(period, date, closed);
+    var written = savedPace_(writtenBudget, sumBefore_(facts, 'nwdsrWritten', period.start, date), daysLeft);
+    var delivered = savedPace_(deliveredBudget, sumBefore_(facts, 'nwdsrDelivered', period.start, date), daysLeft);
+    if (dailyGoalNeedsSave_(saved[date], written, delivered, basis)) due.push([date, written, delivered, daysLeft]);
+  });
+  if (!due.length) return;
   var lock = typeof LockService !== 'undefined' ? LockService.getScriptLock() : null;
   if (lock && !lock.tryLock(10000)) return;
   try {
-    eachDate_(period.start, period.end).forEach(function (date) {
-      if (date >= today || closed[date]) return;
-      var daysLeft = operatingDaysRemaining_(period, date, closed);
-      upsertDailyGoal_(
-        date,
-        savedPace_(writtenBudget, sumBefore_(facts, 'nwdsrWritten', period.start, date), daysLeft),
-        savedPace_(deliveredBudget, sumBefore_(facts, 'nwdsrDelivered', period.start, date), daysLeft),
-        daysLeft
-      );
-    });
+    due.forEach(function (day) { upsertDailyGoal_(day[0], day[1], day[2], day[3]); });
   } finally {
     if (lock) lock.releaseLock();
   }
@@ -1823,7 +1876,8 @@ function normalizeGoal_(value, unit) {
 function writeConfig_(key, value) {
   var allowed = { pillow_goal: true, pillow_goal_unit: true, adjustable_base_goal: true, adjustable_base_goal_unit: true };
   if (!allowed[key]) throw new Error('That setting cannot be changed here.');
-  var tab = SpreadsheetApp.openById(SPREADSHEET_ID_).getSheetByName('CC_Config');
+  forgetRead_('CC_Config');
+  var tab = book_().getSheetByName('CC_Config');
   if (!tab) throw new Error('CC_Config is missing.');
   var values = tab.getDataRange().getValues();
   var r;
@@ -1854,6 +1908,7 @@ function peopleSnapCell_(row) {
 }
 
 function refreshPeopleWritten_(individualStart, individualEnd) {
+  forgetRead_('CC_People');
   var lines = snapAssociateLines_(individualStart, individualEnd);
   var totals = {};
   lines.order.forEach(function (key) {
@@ -1861,7 +1916,7 @@ function refreshPeopleWritten_(individualStart, individualEnd) {
     if (line.role === 'management' || line.role === 'unknown' || line.role === 'former') return;
     totals[line.name] = Math.round(((totals[line.name] || 0) + line.amount) * 100) / 100;
   });
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_People');
   if (!tab) return lines.latest;
   var values = tab.getDataRange().getValues();
@@ -2004,7 +2059,8 @@ function anniversaryPromotion_() {
 }
 
 function promoSheet_() {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  forgetRead_('CC_Promotions');
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_Promotions');
   if (tab) return tab;
   tab = spreadsheet.insertSheet('CC_Promotions');
@@ -2091,7 +2147,8 @@ function staffRole_(value) {
 }
 
 function staffingSheet_() {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  forgetRead_('CC_Staffing');
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_Staffing');
   if (tab) return tab;
   tab = spreadsheet.insertSheet('CC_Staffing');
@@ -2102,12 +2159,12 @@ function staffingSheet_() {
 }
 
 function ensureOctober14Staff_() {
-  var tab = staffingSheet_();
-  var values = tab.getDataRange().getValues();
+  var values = sheetValues_('CC_Staffing') || [];
   var r;
   for (r = 1; r < values.length; r += 1) {
     if (isoDate_(values[r][0]) === '2026-10-14') return;
   }
+  var tab = staffingSheet_();
   var confirmed = 'General Manager confirmation';
   var absent = 'Confirmed not working. No daily PERQ row. A missing opportunity count was not treated as zero and was not the reason for this status.';
   [

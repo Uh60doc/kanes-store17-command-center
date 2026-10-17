@@ -55,7 +55,7 @@ var archiveEvidenceCache_ = null;
 /* ---------- shared helpers ---------- */
 
 function historyTab_(name, headers) {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName(name);
   if (!tab) {
     tab = spreadsheet.insertSheet(name);

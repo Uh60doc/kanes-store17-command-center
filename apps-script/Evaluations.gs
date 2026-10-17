@@ -54,7 +54,7 @@ var EVAL_ADVICE_ = {
 };
 
 function evalTab_(name, headers) {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName(name);
   if (tab) return tab;
   tab = spreadsheet.insertSheet(name);

@@ -42,7 +42,7 @@ function docCategory_(name) {
 }
 
 function docTab_(name, headers) {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName(name);
   if (tab) return tab;
   tab = spreadsheet.insertSheet(name);
@@ -93,7 +93,7 @@ function docRemovedFolder_() {
 
 /** Every CC_Documents row with its sheet row number, newest last. */
 function docRows_() {
-  var tab = SpreadsheetApp.openById(SPREADSHEET_ID_).getSheetByName('CC_Documents');
+  var tab = book_().getSheetByName('CC_Documents');
   if (!tab) return [];
   var values = tab.getDataRange().getValues();
   if (!values || values.length < 2) return [];

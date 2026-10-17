@@ -28,8 +28,11 @@ function scheduledImport_() {
     appendException_('Update Failed', String(error && error.message ? error.message : error));
     notifyOnce_('Command Center import failed. Last verified figures were left in place. ' + String(error && error.message ? error.message : error));
   } finally {
+    markDataChanged_('scheduled import');
     lock.releaseLock();
   }
+  try { ensureChangeTrigger_(); } catch (error) { appendException_('Update Failed', 'The workbook edit trigger could not be installed, so cached pages expire after 30 minutes instead of on each hand edit. ' + String(error && error.message ? error.message : error)); }
+  warmPages_();
 }
 
 function ensureDailyTrigger_() {
@@ -243,7 +246,7 @@ function snapAssociates_(text) {
 function writeSnapAssociates_(parsed, text, sha) {
   var lines = snapAssociates_(text);
   if (!lines.length) return;
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_AssociateDays');
   if (!tab) return;
   var values = tab.getDataRange().getValues();
@@ -281,7 +284,7 @@ function writeSnapAssociates_(parsed, text, sha) {
 
 function writeDailyAmount_(parsed) {
   var field = parsed.reportType === 'SNAP Written' ? 1 : parsed.reportType === 'NWDSR Written' ? 2 : 3;
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_Daily');
   if (!tab) throw new Error('CC_Daily is missing.');
   var values = tab.getDataRange().getValues();
@@ -311,7 +314,7 @@ function writeDailyAmount_(parsed) {
 }
 
 function recordImport_(sha, fileName, status, note) {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_Imports');
   if (!tab) return;
   var existing = tab.getDataRange().getValues();
@@ -348,7 +351,7 @@ function markMissingReports_() {
 }
 
 function noteHealth_(key, value) {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_Health');
   if (!tab) return;
   var values = tab.getDataRange().getValues();
@@ -363,7 +366,7 @@ function noteHealth_(key, value) {
 }
 
 function appendException_(severity, message) {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_Exceptions');
   if (!tab) return;
   var values = tab.getDataRange().getValues();

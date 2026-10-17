@@ -50,7 +50,7 @@ export function loadAppsScript(files: string[], tabs: Record<string, Grid>, toda
     ...extra,
   };
   vm.createContext(sandbox);
-  for (const file of files) vm.runInContext(readFileSync(new URL(`../apps-script/${file}`, import.meta.url), 'utf8'), sandbox);
+  for (const file of files) vm.runInContext(readFileSync(file.startsWith('/') ? file : new URL(`../apps-script/${file}`, import.meta.url), 'utf8'), sandbox, { filename: file });
   vm.runInContext(`todayNy_ = function () { return '${today}'; }; appendException_ = function () {};`, sandbox);
   return sandbox as Record<string, (...args: any[]) => any>;
 }

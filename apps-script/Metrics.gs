@@ -225,10 +225,11 @@ function metricRegistry_(today) {
 }
 
 function refreshMetricRegistry_() {
+  forgetRead_('CC_MetricDefinitions');
   var rows = metricRegistry_(todayNy_()).map(function (row) {
     return [row.key, row.name, row.source, row.scope, row.side, row.method, row.period, row.periodDates, row.verifiedThrough, row.goal === null ? '' : row.goal, row.goalKey, row.goalEffective, row.pages];
   });
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName(METRIC_DEFINITIONS_TAB_) || spreadsheet.insertSheet(METRIC_DEFINITIONS_TAB_);
   var grid = [METRIC_DEFINITIONS_HEADERS_].concat(rows);
   tab.clearContents();

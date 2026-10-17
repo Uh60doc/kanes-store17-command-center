@@ -28,7 +28,7 @@ function uploadReportLabel_(key) {
 }
 
 function uploadTab_() {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName('CC_Uploads');
   if (tab) return tab;
   tab = spreadsheet.insertSheet('CC_Uploads');
@@ -196,7 +196,7 @@ function processUpload_(context) {
 // and a report already on file for that day keeps its Imported status.
 function finishImport_(context, result, importStatus, note) {
   recordImport_(context.sha, context.fileName, importStatus, note || result.message);
-  var tab = SpreadsheetApp.openById(SPREADSHEET_ID_).getSheetByName('CC_Imports');
+  var tab = book_().getSheetByName('CC_Imports');
   if (tab && result.key) {
     var values = tab.getDataRange().getValues();
     var r;

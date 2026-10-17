@@ -123,7 +123,7 @@ function monthEndNotes_() {
 }
 
 function ensureMonthEndNotes_() {
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var spreadsheet = book_();
   if (spreadsheet.getSheetByName(MONTH_END_NOTES_TAB_)) return;
   spreadsheet.insertSheet(MONTH_END_NOTES_TAB_).getRange(1, 1, 1, MONTH_END_NOTES_HEADERS_.length).setValues([MONTH_END_NOTES_HEADERS_]);
 }
@@ -579,7 +579,7 @@ function monthEndRows_(ctx) {
 function refreshMonthEnd_() {
   ensureMonthEndNotes_();
   var rows = monthEndRows_(monthEndContext_(todayNy_()));
-  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_);
+  var spreadsheet = book_();
   var tab = spreadsheet.getSheetByName(MONTH_END_TAB_) || spreadsheet.insertSheet(MONTH_END_TAB_);
   var grid = [MONTH_END_HEADERS_].concat(rows);
   tab.clearContents();
