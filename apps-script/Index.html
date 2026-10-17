@@ -1757,6 +1757,7 @@
     }
     function renderUpload(data) {
       uploadCache = data;
+      if (screen !== 'upload') return;
       document.getElementById('header-note').textContent = 'Upload reports · business date ' + data.dateText;
       var checklist = data.checklist.map(function (item) {
         return '<li>' + uploadPill(item.status) + '<strong>' + esc(item.label) + '</strong> <span class="pending">' + esc(item.format) + '</span>' +
@@ -1825,6 +1826,7 @@
     }
     function uploadFailed(error) {
       if (/sign in/i.test(error.message)) { showLogin(error.message); return; }
+      if (screen !== 'upload') return;
       var note = document.getElementById('upload-error');
       if (note) note.textContent = error.message;
       else document.getElementById('screen').innerHTML = '<p class="error">' + esc(error.message) + '</p>';
@@ -1888,6 +1890,8 @@
         return;
       }
       api(request).then(function (data) {
+        // A slow reply for a screen the user already left must not draw over the current one.
+        if (screen !== name) return;
         if (name === 'home' || name === 'written' || name === 'delivered') renderHome(data, name);
         else if (name === 'bedding') renderBedding(data);
         else if (name === 'orders') {
@@ -1901,7 +1905,7 @@
         else if (name === 'coverage') renderCoverage(data);
       }).catch(function (error) {
         if (/sign in/i.test(error.message)) showLogin(error.message);
-        else document.getElementById('screen').innerHTML = '<p class="error">' + error.message + '</p>';
+        else if (screen === name) document.getElementById('screen').innerHTML = '<p class="error">' + error.message + '</p>';
       });
     }
     document.getElementById('signin').addEventListener('click', function () {
