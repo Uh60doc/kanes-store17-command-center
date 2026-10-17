@@ -58,6 +58,7 @@ interface Totals {
   attach: Counted;
   pillows: Counted | null;
   bases: Counted | null;
+  protection: Counted | null;
   rugs: number | null;
   rugDollars: number | null;
 }
@@ -93,7 +94,7 @@ function totals(line: KpiLine | null, asl: KpiLine | null): Totals {
   const none: QtyMetric = { qual: 0, sold: 0, dollars: 0, percent: null, mismatch: false };
   const empty: KpiLine = {
     name: '', sales: 0, averageSale: null, finance: null, beddingDollars: 0, beddingPercent: null,
-    fabric: none, power: none, leather: none, pads: none, totalAttach: none, pillows: null, adjustable: null, powerBasePercent: null, rugsQty: null, rugsDollars: null,
+    fabric: none, power: none, leather: none, pads: none, totalAttach: none, pillows: null, adjustable: null, powerBasePercent: null, furnitureProtection: null, rugsQty: null, rugsDollars: null,
   };
   const row = line ?? empty;
   const sales = row.sales ?? 0;
@@ -109,6 +110,7 @@ function totals(line: KpiLine | null, asl: KpiLine | null): Totals {
     attach: counted(row.totalAttach),
     pillows: asl ? counted(asl.pillows) : null,
     bases: asl ? counted(asl.adjustable) : null,
+    protection: asl ? counted(asl.furnitureProtection) : null,
     rugs: asl ? asl.rugsQty ?? 0 : null,
     rugDollars: asl ? asl.rugsDollars ?? 0 : null,
   };
@@ -127,6 +129,7 @@ function combine(left: Totals, right: Totals): Totals {
     attach: addCounted(left.attach, right.attach),
     pillows: left.pillows && right.pillows ? addCounted(left.pillows, right.pillows) : null,
     bases: left.bases && right.bases ? addCounted(left.bases, right.bases) : null,
+    protection: left.protection && right.protection ? addCounted(left.protection, right.protection) : null,
     rugs: left.rugs === null || right.rugs === null ? null : left.rugs + right.rugs,
     rugDollars: left.rugDollars === null || right.rugDollars === null ? null : round(left.rugDollars + right.rugDollars, 2),
   };
@@ -376,6 +379,8 @@ async function main(): Promise<void> {
     ['Fabric Maintenance', pct(w.fabric.sold, w.fabric.qual), pct(d.fabric.sold, d.fabric.qual), countNote(`Fabric, ${through}`, w.fabric, d.fabric)],
     ['Leather Maintenance', pct(w.leather.sold, w.leather.qual), pct(d.leather.sold, d.leather.qual), countNote(`Leather, ${through}`, w.leather, d.leather)],
     ['Power Upholstery', pct(w.power.sold, w.power.qual), pct(d.power.sold, d.power.qual), countNote(`Power furniture, ${through}`, w.power, d.power)],
+    ['Total Attachment', pct(w.attach.sold, w.attach.qual), pct(d.attach.sold, d.attach.qual), countNote(`Group 17 TOTAL ATTACHMENTS, ${through}`, w.attach, d.attach)],
+    ['Wood / Furniture Protection', w.protection ? pct(w.protection.sold, w.protection.qual) : null, d.protection ? pct(d.protection.sold, d.protection.qual) : null, countNote(`ASL Store 17 FURNITURE PROTECTION, ${through}`, w.protection, d.protection)],
     ['Finance', w.financed === null ? null : pct(w.financed, w.sales), d.financed === null ? null : pct(d.financed, d.sales), `Financed dollars ÷ sales, ${through}. Financed dollars are each report's FIN % × its sales.`],
     ['Average Ticket', w.orders ? round(w.sales / w.orders, 2) : null, d.orders ? round(d.sales / d.orders, 2) : null, `Sales ÷ orders, ${through}. Written ${w.sales} ÷ ${w.orders}, delivered ${d.sales} ÷ ${d.orders}.`],
     ['Rugs', w.rugs, d.rugs, `ASL Store 17 rugs sold, ${through}.`],
@@ -409,7 +414,7 @@ async function main(): Promise<void> {
   const fileStatus = allDays.map((item) => {
     const already = known.has(item.sha256);
     const label = `Data Analysis KPI ${item.report.family === 'asl' ? 'ASL' : '17'} ${item.report.side === 'written' ? 'Written' : 'Delivered'}`;
-    const scope = item.report.family === 'asl' ? 'Only the Store 17 row was used (pillows, adjustable bases, rugs).' : 'Store 17 TOTAL and every salesperson line were used.';
+    const scope = item.report.family === 'asl' ? 'Only the Store 17 row was used (pillows, adjustable bases, furniture protection, rugs).' : 'Store 17 TOTAL and every salesperson line were used.';
     if (!already) {
       importAppends.push([item.sha256, item.name, label, 'imported', importedAt, `Daily report ${item.report.start}. ${scope} Saved to CC_Ledger and CC_Kpi. CC_Daily and CC_Rollup were not changed.`]);
     }

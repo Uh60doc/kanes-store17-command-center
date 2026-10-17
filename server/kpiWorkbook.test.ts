@@ -157,6 +157,10 @@ test('October store KPI files reconcile without adding the day snapshot', { skip
   assert.equal(aslDelivered.pillows?.sold, 0);
   assert.equal(aslWritten.rugsQty, 7);
   assert.equal(aslDelivered.rugsQty, 3);
+  const protection = (line: typeof aslWritten) => [line.furnitureProtection?.qual, line.furnitureProtection?.sold, line.furnitureProtection?.dollars, line.furnitureProtection?.percent];
+  assert.deepEqual(protection(aslWritten), [20, 3, 149.97, 0.15]);
+  assert.deepEqual(protection(aslDelivered), [28, 5, 299.94, 0.179]);
+  assert.equal(written.furnitureProtection, null, 'Group 17 has no furniture protection group');
   assert.equal(written.fabric.mismatch, false);
   assert.equal(delivered.power.mismatch, false);
 

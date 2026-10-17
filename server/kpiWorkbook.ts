@@ -25,6 +25,7 @@ export interface KpiLine {
   pillows: QtyMetric | null;
   adjustable: QtyMetric | null;
   powerBasePercent: number | null;
+  furnitureProtection: QtyMetric | null;
   rugsQty: number | null;
   rugsDollars: number | null;
 }
@@ -151,6 +152,7 @@ function lineFrom(row: readonly (string | null)[], columns: ColumnMap): KpiLine 
   const beddingDollars = cents(num(cell(row, beddingGroup.SALES)));
   const beddingPrinted = num(cell(row, beddingGroup['%']));
   const adjustable = columns.groups.ADJ;
+  const protection = columns.groups['FURNITURE PROTECTION'];
   const totalAttach = columns.groups['TOTAL ATTACHMENTS %'] ?? columns.groups['TOTAL ATTACHMENTS'];
   return {
     name,
@@ -178,6 +180,9 @@ function lineFrom(row: readonly (string | null)[], columns: ColumnMap): KpiLine 
       ? qtyMetric(cell(row, adjustable['QUAL QTY']), cell(row, adjustable['SOLD QTY']), cell(row, adjustable['SOLD $']), cell(row, adjustable['ATTACH %']))
       : null,
     powerBasePercent: adjustable ? percentFraction(num(cell(row, adjustable['PWR %']))) : null,
+    furnitureProtection: protection
+      ? qtyMetric(cell(row, protection['QUAL QTY']), cell(row, protection['SOLD QTY']), cell(row, protection['SOLD $']), cell(row, protection['ATTACH %']))
+      : null,
     rugsQty: columns.groups.RUGS ? num(cell(row, columns.groups.RUGS['SOLD QTY'])) : null,
     rugsDollars: columns.groups.RUGS ? cents(num(cell(row, columns.groups.RUGS['SOLD $']))) : null,
   };
