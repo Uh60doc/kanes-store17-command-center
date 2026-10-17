@@ -1509,17 +1509,24 @@ function upsertDailyGoal_(date, written, delivered, daysLeft) {
   tab.appendRow([date, written === null ? '' : written, delivered === null ? '' : delivered, daysLeft, written === null ? '' : basis]);
 }
 
+/** Pages load in parallel; the lock keeps two of them from re-basing (and archiving) the same saved row twice. */
 function ensureSavedDailyGoals_(period, today, closed, facts, writtenBudget, deliveredBudget) {
-  eachDate_(period.start, period.end).forEach(function (date) {
-    if (date >= today || closed[date]) return;
-    var daysLeft = operatingDaysRemaining_(period, date, closed);
-    upsertDailyGoal_(
-      date,
-      savedPace_(writtenBudget, sumBefore_(facts, 'nwdsrWritten', period.start, date), daysLeft),
-      savedPace_(deliveredBudget, sumBefore_(facts, 'nwdsrDelivered', period.start, date), daysLeft),
-      daysLeft
-    );
-  });
+  var lock = typeof LockService !== 'undefined' ? LockService.getScriptLock() : null;
+  if (lock && !lock.tryLock(10000)) return;
+  try {
+    eachDate_(period.start, period.end).forEach(function (date) {
+      if (date >= today || closed[date]) return;
+      var daysLeft = operatingDaysRemaining_(period, date, closed);
+      upsertDailyGoal_(
+        date,
+        savedPace_(writtenBudget, sumBefore_(facts, 'nwdsrWritten', period.start, date), daysLeft),
+        savedPace_(deliveredBudget, sumBefore_(facts, 'nwdsrDelivered', period.start, date), daysLeft),
+        daysLeft
+      );
+    });
+  } finally {
+    if (lock) lock.releaseLock();
+  }
 }
 
 function home_(payload) {

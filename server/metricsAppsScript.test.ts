@@ -151,6 +151,28 @@ test('a saved written goal worked out from SNAP is recalculated from NWDSR and t
   for (const line of goals.slice(1)) assert.equal(line[4], 'NWDSR Net Written');
 });
 
+test('a page that cannot get the lock leaves saved goals alone and still shows the NWDSR goal', () => {
+  const tabs = workbook({
+    CC_DailyGoals: [
+      ['date', 'written_goal', 'delivered_goal', 'days_left'],
+      ['2026-11-05', 9999.99, 8333.33, 27],
+    ],
+  });
+  let released = 0;
+  const busy = loadAppsScript(FILES, tabs, TODAY, { notifyOnce_: () => {}, APP_VERSION_: 'test', LockService: { getScriptLock: () => ({ tryLock: () => false, releaseLock: () => { released += 1; } }) } });
+  const home = plain(busy.home_({ session }));
+  assert.deepEqual(tabs.CC_DailyGoals![1], ['2026-11-05', 9999.99, 8333.33, 27]);
+  assert.equal(tabs.CC_History!.length, 1);
+  assert.equal(released, 0);
+  const yesterdayDays = busy.operatingDaysRemaining_(STORE, '2026-11-05', {});
+  assert.equal(home.board.yesterday.written.goal, Math.round(((300000 - 28500) / yesterdayDays) * 100) / 100);
+  const free = loadAppsScript(FILES, tabs, TODAY, { notifyOnce_: () => {}, APP_VERSION_: 'test', LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => { released += 1; } }) } });
+  free.home_({ session });
+  assert.equal(released, 1);
+  assert.equal(tabs.CC_DailyGoals!.find((line) => line[0] === '2026-11-05')![4], 'NWDSR Net Written');
+  assert.equal(tabs.CC_History!.filter((line) => line[1] === 'CC_DailyGoals').length, 1);
+});
+
 test('the Bedding page shows the same store percentages as Home and the store-month dollars and units', () => {
   const tabs = workbook();
   const gs = load(tabs);
