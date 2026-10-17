@@ -125,6 +125,14 @@
     .summary-goal th[colspan] { text-align: center; border-bottom: 1px solid #1d5c66; }
     .summary-flags { font-size: 13px; }
     .summary-foot { font-size: 12px; margin-top: 8px; }
+    .roster-table td .pending { display: block; font-size: 12px; }
+    .roster-actions { white-space: nowrap; }
+    .roster-actions button { min-height: 36px; padding: 0 10px; }
+    .roster-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 14px; }
+    .roster-fields select { width: 100%; }
+    .roster-preview { margin-top: 10px; padding: 10px 12px; border: 1px solid #f3d48a; border-radius: 10px; }
+    .roster-history { font-size: 13px; color: #9eb0c9; }
+    .roster-card h3 { margin: 14px 0 4px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0c9; }
     @media (max-width: 980px) {
       .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .summary-tables { grid-template-columns: 1fr; }
@@ -1079,8 +1087,130 @@
       var exceptions = (data.exceptions || []).map(function (row) { return '<li>' + esc(row.severity) + ' · ' + esc(row.message) + '</li>'; }).join('');
       document.getElementById('screen').innerHTML = '<article class="card"><h2>System health · version ' + data.version + '</h2><table>' + rows + '</table><h2>Exceptions</h2>' + (exceptions ? '<ul class="list">' + exceptions + '</ul>' : '<p class="sub">No open technical exceptions.</p>') + '<p class="sub">A negative written day is an order cancellation. It stays in the sales total and is not emailed as an error.</p><h2>Imports</h2><ul class="list">' + imports + '</ul></article>';
     }
+    var rosterCache = null;
+    var rosterMode = '';
+    function rosterStatusText(person) {
+      var text = person.currentStatus;
+      if (person.scheduled) text += ' · ' + person.scheduled;
+      if (person.startsLater) text += ' · starts ' + person.hireDate;
+      return text;
+    }
+    function rosterInput(id, label, value, type) {
+      return '<label for="' + id + '">' + label + '</label><input id="' + id + '" type="' + (type || 'text') + '" value="' + esc(value || '') + '" />';
+    }
+    function rosterSelect(id, label, options, value) {
+      return '<label for="' + id + '">' + label + '</label><select id="' + id + '">' + options.map(function (option) {
+        return '<option' + (option === value ? ' selected' : '') + '>' + esc(option) + '</option>';
+      }).join('') + '</select>';
+    }
+    function rosterForm(mode) {
+      var data = rosterCache;
+      var parts = mode.split('|');
+      var kind = parts[0];
+      var person = null;
+      (data.associates || []).forEach(function (row) { if (row.name === parts[1]) person = row; });
+      if (kind === 'hire') {
+        return '<h3>Hire or add an associate</h3><div class="roster-fields">' +
+          rosterInput('ro-full', 'Full name', '') + rosterInput('ro-preferred', 'Preferred name', '') +
+          rosterInput('ro-display', 'Display name on reports (leave blank for preferred + last name)', '') +
+          rosterInput('ro-id', 'Employee ID', '') + rosterInput('ro-hire', 'Hire date', data.today, 'date') +
+          rosterInput('ro-store', 'Store', '17') + rosterInput('ro-position', 'Role', 'Sales Associate') +
+          rosterSelect('ro-status', 'Status', ['Active', 'Leave', 'Management'], 'Active') +
+          rosterInput('ro-aliases', 'Report name aliases, separated by ;  (for example LAST, FIRST)', '') + '</div>';
+      }
+      if (!person) return '';
+      if (kind === 'edit') {
+        return '<h3>Edit ' + esc(person.name) + '</h3><p class="sub">The display name ties this person to every past report, so it is not changed here.</p><div class="roster-fields">' +
+          rosterInput('ro-full', 'Full name', person.fullName) + rosterInput('ro-preferred', 'Preferred name', person.preferredName) +
+          rosterInput('ro-id', 'Employee ID', person.employeeId) + rosterInput('ro-hire', 'Hire date', person.hireDate, 'date') +
+          rosterInput('ro-store', 'Store', person.store) + rosterInput('ro-position', 'Role', person.position) +
+          rosterInput('ro-aliases', 'Report name aliases, separated by ;', person.aliases) + rosterInput('ro-note', 'Note', person.note) + '</div>';
+      }
+      if (kind === 'status') {
+        return '<h3>Change status for ' + esc(person.name) + '</h3><p class="sub">Currently ' + esc(rosterStatusText(person)) + '. Past sales, KPIs and evaluations stay with this person whatever the status.</p><div class="roster-fields">' +
+          rosterSelect('ro-status', 'New status', data.statuses, person.status) + rosterInput('ro-effective', 'Effective date', data.today, 'date') + rosterInput('ro-note', 'Note (reason, transfer store)', '') + '</div>';
+      }
+      if (kind === 'rehire') {
+        return '<h3>Rehire ' + esc(person.name) + '</h3><p class="sub">Uses the same record, so earlier sales and evaluations stay together.</p><div class="roster-fields">' +
+          rosterInput('ro-effective', 'Rehire date', data.today, 'date') + rosterInput('ro-note', 'Note', '') + '</div>';
+      }
+      return '';
+    }
+    function rosterValue(id) {
+      var field = document.getElementById(id);
+      return field ? field.value : undefined;
+    }
+    function rosterRequest() {
+      var parts = rosterMode.split('|');
+      var kind = parts[0];
+      var record = {};
+      if (kind === 'hire' || kind === 'edit') {
+        record = { fullName: rosterValue('ro-full'), preferredName: rosterValue('ro-preferred'), employeeId: rosterValue('ro-id'), hireDate: rosterValue('ro-hire'), store: rosterValue('ro-store'), position: rosterValue('ro-position'), aliases: rosterValue('ro-aliases') };
+        if (kind === 'hire') { record.displayName = rosterValue('ro-display'); record.status = rosterValue('ro-status'); }
+        else record.note = rosterValue('ro-note');
+      } else {
+        record = { status: rosterValue('ro-status'), effectiveDate: rosterValue('ro-effective'), note: rosterValue('ro-note') };
+      }
+      return { action: kind === 'edit' ? 'update' : kind, name: parts[1] || '', record: record };
+    }
+    function drawRoster(message) {
+      var data = rosterCache;
+      var rows = (data.associates || []).map(function (person) {
+        var former = person.currentStatus === 'Terminated' || person.currentStatus === 'Transferred';
+        return '<tr><td><strong>' + esc(person.name) + '</strong>' + (person.fullName && person.fullName !== person.name ? '<span class="pending">' + esc(person.fullName) + '</span>' : '') + '</td><td>' + esc(person.employeeId || '—') + '</td><td>' + esc(person.position) + '</td><td>' + esc(person.hireDate || '—') + '</td><td>' + esc(rosterStatusText(person)) + (person.statusEffective ? '<span class="pending">since ' + esc(person.statusEffective) + '</span>' : '') + '</td><td class="' + (person.onSalesTeam ? 'good' : 'pending') + '">' + (person.onSalesTeam ? 'Yes' : 'No') + '</td><td class="roster-actions">' +
+          '<button class="secondary" type="button" data-roster="edit|' + esc(person.name) + '">Edit</button> ' +
+          '<button class="secondary" type="button" data-roster="status|' + esc(person.name) + '">Status</button>' +
+          (former ? ' <button class="secondary" type="button" data-roster="rehire|' + esc(person.name) + '">Rehire</button>' : '') + '</td></tr>';
+      }).join('');
+      var history = (data.history || []).map(function (line) {
+        return '<li>' + esc(line.at.slice(0, 16).replace('T', ' ')) + ' · ' + esc(line.action) + ' · ' + esc(line.name) + ' · ' + esc(line.field.replace(/_/g, ' ')) + (line.field === 'all' ? '' : ': ' + esc(line.before || '—') + ' → ' + esc(line.after || '—')) + (line.effective ? ' (effective ' + esc(line.effective) + ')' : '') + '</li>';
+      }).join('');
+      document.getElementById('roster-area').innerHTML =
+        '<article class="card roster-card"><div class="score-controls"><h2 style="margin:0">Roster</h2><button type="button" data-roster="hire|">Hire / add associate</button></div>' +
+        '<p class="sub">Active and Leave associates appear on the Sales Team automatically. Management, Transferred and Terminated people do not. A status change takes effect on its effective date. Nothing here deletes sales, KPI or evaluation history.</p>' +
+        '<div class="kpi-wrap"><table class="kpi roster-table"><tr><th>Associate</th><th>Employee ID</th><th>Role</th><th>Hire date</th><th>Status</th><th>Sales Team</th><th></th></tr>' + rows + '</table></div>' +
+        (message ? '<p class="good" id="roster-message">' + esc(message) + '</p>' : '') +
+        '<div id="roster-form">' + (rosterMode ? rosterForm(rosterMode) + '<p id="roster-error" class="error"></p><div id="roster-confirm"></div><p class="summary-actions"><button type="button" id="roster-review">Review change</button> <button type="button" class="secondary" id="roster-cancel">Cancel</button></p>' : '') + '</div>' +
+        '<h3>Recent roster changes</h3>' + (history ? '<ul class="list roster-history">' + history + '</ul>' : '<p class="sub">No changes yet.</p>') + '</article>';
+      Array.prototype.forEach.call(document.querySelectorAll('[data-roster]'), function (button) {
+        button.addEventListener('click', function () { rosterMode = button.getAttribute('data-roster'); drawRoster(''); var form = document.getElementById('roster-form'); if (form && form.scrollIntoView) form.scrollIntoView({ block: 'start' }); });
+      });
+      var cancel = document.getElementById('roster-cancel');
+      if (cancel) cancel.addEventListener('click', function () { rosterMode = ''; drawRoster(''); });
+      var review = document.getElementById('roster-review');
+      if (review) review.addEventListener('click', function () {
+        var request = rosterRequest();
+        document.getElementById('roster-error').textContent = '';
+        api('saveAssociate', request).then(function (result) {
+          var preview = result.preview;
+          document.getElementById('roster-confirm').innerHTML = '<div class="roster-preview"><p><strong>' + esc(preview.summary) + '</strong></p><p class="sub">' + esc(preview.teamNote) + '</p><ul class="list">' + preview.changes.map(function (change) {
+            return '<li>' + esc(change.field.replace(/_/g, ' ')) + ': ' + esc(change.before || '—') + ' → ' + esc(change.after || '—') + '</li>';
+          }).join('') + '</ul><p class="summary-actions"><button type="button" id="roster-confirm-save">Confirm and save</button></p></div>';
+          document.getElementById('roster-confirm-save').addEventListener('click', function () {
+            request.confirm = true;
+            api('saveAssociate', request).then(function (saved) {
+              rosterCache = saved;
+              rosterMode = '';
+              drawRoster('Saved. ' + saved.saved.summary);
+            }).catch(function (error) { document.getElementById('roster-error').textContent = error.message; });
+          });
+        }).catch(function (error) {
+          if (/sign in/i.test(error.message)) showLogin(error.message);
+          else document.getElementById('roster-error').textContent = error.message;
+        });
+      });
+    }
+    function loadRoster() {
+      api('roster').then(function (data) { rosterCache = data; drawRoster(''); }).catch(function (error) {
+        if (/sign in/i.test(error.message)) showLogin(error.message);
+        else document.getElementById('roster-area').innerHTML = '<p class="error">' + esc(error.message) + '</p>';
+      });
+    }
     function renderAdmin() {
+      rosterMode = '';
       document.getElementById('screen').innerHTML =
+        '<h2 class="section-title">Manage associates</h2><div id="roster-area"><p class="sub">Loading the roster…</p></div>' +
+        '<h2 class="section-title">Passwords and imports</h2>' +
         '<article class="card"><h2>Shared passwords</h2><p class="sub">Changing a password signs that role out everywhere.</p>' +
         '<label>Role</label><input id="pw-role" value="manager" />' +
         '<label>New password</label><input id="pw-value" type="password" />' +
@@ -1097,6 +1227,7 @@
       document.getElementById('retry').addEventListener('click', function () {
         api('retry').then(function () { openScreen('health'); }).catch(function (error) { document.getElementById('pw-error').textContent = error.message; });
       });
+      loadRoster();
     }
     function na(value) {
       return value === null || value === undefined || value === '' ? 'Not Available' : value;

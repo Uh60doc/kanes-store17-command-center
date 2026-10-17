@@ -38,7 +38,7 @@ function load(tabs: Record<string, Grid>, today: string) {
     },
   };
   vm.createContext(sandbox);
-  for (const file of ['Data.gs', 'Ledger.gs', 'MonthEnd.gs']) vm.runInContext(readFileSync(new URL(`../apps-script/${file}`, import.meta.url), 'utf8'), sandbox);
+  for (const file of ['Data.gs', 'Roster.gs', 'Ledger.gs', 'MonthEnd.gs']) vm.runInContext(readFileSync(new URL(`../apps-script/${file}`, import.meta.url), 'utf8'), sandbox);
   vm.runInContext(`todayNy_ = function () { return '${today}'; };`, sandbox);
   return sandbox as Record<string, (...args: unknown[]) => any>;
 }

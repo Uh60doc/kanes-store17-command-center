@@ -23,7 +23,7 @@ function load(tabs: Record<string, Grid>, today: string) {
     SpreadsheetApp: { openById: () => ({ getSheetByName: (name: string) => (tabs[name] ? sheet(name) : null) }) },
   };
   vm.createContext(sandbox);
-  for (const file of ['Data.gs', 'Ledger.gs', 'KpiImport.gs']) vm.runInContext(readFileSync(new URL(`../apps-script/${file}`, import.meta.url), 'utf8'), sandbox);
+  for (const file of ['Data.gs', 'Roster.gs', 'Ledger.gs', 'KpiImport.gs']) vm.runInContext(readFileSync(new URL(`../apps-script/${file}`, import.meta.url), 'utf8'), sandbox);
   vm.runInContext(`todayNy_ = function () { return '${today}'; };`, sandbox);
   return sandbox as Record<string, (...args: unknown[]) => any>;
 }
@@ -253,7 +253,7 @@ test('the associate summary defaults to the salesperson month and refuses ranges
   assert.equal(inside.person.snapWritten, null, 'no SNAP line in the range and no cached month total');
   assert.equal(inside.person.analysisWritten, null, 'a to-date snapshot is not split, so Group 17 is Pending');
 
-  assert.throws(() => gs.summary_({ session, name: 'Caroline Amaro' }), /Choose an associate on the Sales Team/);
+  assert.throws(() => gs.summary_({ session, name: 'Caroline Amaro' }), /Choose an associate who was on the Sales Team/);
   assert.throws(() => gs.summary_({ session, name: 'Ricky Nassif', start: '2026-10-20', end: '2026-11-02' }), /inside one salesperson month/);
   assert.throws(() => gs.summary_({ session, name: 'Ricky Nassif', start: '2026-10-10', end: '2026-10-09' }), /before the start date/);
   assert.throws(() => gs.summary_({ session, name: 'Ricky Nassif', start: '2026-02-30', end: '2026-03-01' }), /Choose a start and end date/);

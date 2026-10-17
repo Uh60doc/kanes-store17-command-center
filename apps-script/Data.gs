@@ -333,8 +333,7 @@ function storeKpis_(config, metrics, bedding, closing) {
 }
 
 function activePerson_(row) {
-  var role = String(row.role || 'associate');
-  return role !== 'management' && role !== 'former' && role !== 'unknown';
+  return rosterRole_(row, todayNy_()) === 'associate';
 }
 
 // Daily SNAP lines live in CC_AssociateDays. SNAP_PERSON is a copy of those same lines and is not added again.
@@ -382,8 +381,9 @@ function peopleRows_(individualStart, individualEnd, options) {
   var goals = approvedGoals_(config_());
   var closingFacts = loadClosing_();
   var analysis = personAnalysisContext_({ start: individualStart, end: individualEnd });
-  var roster = sheet_('CC_People').filter(activePerson_);
-  if (options.only) roster = roster.filter(function (row) { return String(row.name) === options.only; });
+  var roster = options.only
+    ? sheet_('CC_People').filter(function (row) { return String(row.name) === options.only; })
+    : sheet_('CC_People').filter(activePerson_);
   var rows = roster.length ? roster.map(function (row) {
     var name = String(row.name);
     var written = Object.prototype.hasOwnProperty.call(totals, name)
@@ -889,7 +889,9 @@ function personAliases_(name) {
     'brenda sanchez': ['brenda sanchez'],
     'caroline amaro': ['caroline amaro'],
   };
-  return table[key] || [key];
+  var aliases = (table[key] || [key]).slice();
+  rosterAliases_(name).forEach(function (alias) { if (aliases.indexOf(alias) === -1) aliases.push(alias); });
+  return aliases;
 }
 
 function rowMatchesPerson_(row, name) {
@@ -1903,8 +1905,9 @@ function summary_(payload) {
   if (end > period.end) throw new Error('Choose dates inside one salesperson month, the 1st through the last day.');
   if (start > today) throw new Error('The start date is in the future.');
   var associates = activeAssociates_();
+  membersDuring_(start, end).forEach(function (member) { if (associates.indexOf(member) === -1) associates.push(member); });
   var name = String(payload.name || associates[0] || '');
-  if (associates.indexOf(name) === -1) throw new Error('Choose an associate on the Sales Team.');
+  if (associates.indexOf(name) === -1) throw new Error('Choose an associate who was on the Sales Team during those dates.');
   var lines = snapAssociateLines_(start, end);
   var currentMonth = start === month.start && end === month.end;
   var person = peopleRows_(start, end, { only: name, cachedSnap: currentMonth })[0] || null;

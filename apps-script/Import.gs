@@ -195,8 +195,9 @@ function writeSnapAssociates_(parsed, text, sha) {
   for (r = 1; r < values.length; r += 1) known[String(values[r][1]).toUpperCase()] = values[r];
   lines.forEach(function (line) {
     var prior = known[line.sourceName.toUpperCase()];
-    var display = prior ? String(prior[2]) : line.sourceName;
-    var role = prior ? String(prior[3]) : 'unknown';
+    var match = prior ? null : rosterMatch_('', line.sourceName);
+    var display = prior ? String(prior[2]) : (match ? match.name : line.sourceName);
+    var role = prior ? String(prior[3]) : (match ? rosterRole_(match.raw, parsed.start) : 'unknown');
     var existing = 0;
     for (r = 1; r < values.length; r += 1) {
       if (isoDate_(values[r][0]) === parsed.start && String(values[r][1]).toUpperCase() === line.sourceName.toUpperCase()) existing = r + 1;

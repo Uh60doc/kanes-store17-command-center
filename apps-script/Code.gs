@@ -16,6 +16,8 @@ var ROUTES_ = {
   changePassword: ['admin'],
   retry: ['admin'],
   coverage: ['admin'],
+  roster: ['admin'],
+  saveAssociate: ['admin'],
 };
 
 function doGet() {
@@ -53,5 +55,7 @@ function dispatch(name, payload) {
   if (name === 'changePassword') return changePassword_(payload);
   if (name === 'retry') return retry_(payload);
   if (name === 'coverage') return coverage_(payload);
+  if (name === 'roster') return roster_(payload);
+  if (name === 'saveAssociate') return saveAssociate_(payload);
   throw new Error('That request is not available.');
 }
