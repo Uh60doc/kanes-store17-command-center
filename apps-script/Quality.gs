@@ -451,11 +451,29 @@ function checkCumulativeDaily_(ctx, add) {
   if (!problems) add('cumulative-daily', 'PASS', 'Month-to-date figures', 'Single-day rows each cover one day; month-to-date figures use the latest cumulative report plus only the days after it' + (checked.length ? ' (' + checked.join('; ') + ')' : '') + '.');
 }
 
+/** Names the GM left unmatched on purpose. Preserve their lines; do not push them onto the roster. */
+var INTENTIONALLY_UNMATCHED_ = {
+  'maria rafalik': true,
+};
+
+function intentionallyUnmatched_(name) {
+  return !!INTENTIONALLY_UNMATCHED_[aliasKey_(name)];
+}
+
 function checkEmployeeMatching_(ctx, add) {
+  // Seed GM-confirmed former identities so aliases match. Do not rewrite AssociateDays here — rematch runs from Sales Team / roster views.
+  if (typeof ensureRosterColumns_ === 'function') ensureRosterColumns_();
   var unmatched = {};
+  var intentional = {};
   function note(name, code, where, date) {
     var key = aliasKey_(name) || String(code || '').toLowerCase();
     if (!key) return;
+    if (intentionallyUnmatched_(name) || intentionallyUnmatched_(code)) {
+      var kept = intentional[key] || (intentional[key] = { name: name || code, where: {}, dates: [] });
+      kept.where[where] = true;
+      if (date && kept.dates.indexOf(date) === -1) kept.dates.push(date);
+      return;
+    }
     var item = unmatched[key] || (unmatched[key] = { name: name || code, where: {}, dates: [] });
     item.where[where] = true;
     if (date && item.dates.indexOf(date) === -1) item.dates.push(date);
@@ -476,11 +494,15 @@ function checkEmployeeMatching_(ctx, add) {
   ids.repeated.forEach(function (id) {
     add('employee-match', 'FLAG', 'Roster employee ID ' + id, 'Employee ID ' + id + ' is on more than one roster row, so report lines with that ID cannot be matched to one person.', ['person_written', 'person_kpis']);
   });
+  Object.keys(intentional).sort().forEach(function (key) {
+    var item = intentional[key];
+    add('employee-match', 'NOTE', item.name, item.name + ' appears on ' + Object.keys(item.where).join(', ') + (item.dates.length ? ' (' + item.dates.sort().join(', ') + ')' : '') + '. The GM left this name unmatched on purpose. Lines stay in official store totals under the printed name and are not credited to any active salesperson or forced onto the roster.', ['person_written', 'person_kpis', 'person_delivered']);
+  });
   Object.keys(unmatched).sort().forEach(function (key) {
     var item = unmatched[key];
     add('employee-match', 'FLAG', item.name, item.name + ' appears on ' + Object.keys(item.where).join(', ') + (item.dates.length ? ' (' + item.dates.sort().join(', ') + ')' : '') + ' in the salesperson month but does not match one roster person (CC_People). The lines stay in store totals and on file under the printed name (month end shows "Not on the roster"); they are not credited to any roster salesperson. Add the name or alias to the roster, with a Transferred or Terminated status if they do not sell at Store 17.', ['person_written', 'person_kpis', 'person_delivered']);
   });
-  if (!ids.repeated.length && !Object.keys(unmatched).length) add('employee-match', 'PASS', 'Salesperson month', 'Every salesperson line from ' + ctx.person.start + ' matches exactly one roster person.');
+  if (!ids.repeated.length && !Object.keys(unmatched).length) add('employee-match', 'PASS', 'Salesperson month', 'Every salesperson line from ' + ctx.person.start + ' that should match a roster person does' + (Object.keys(intentional).length ? '; intentionally unmatched names remain NOTES only' : '') + '.');
 }
 
 var VIEW_SIDES_ = { SNAP_STORE: 'written', SNAP_PERSON: 'written', NWDSR_WRITTEN_STORE: 'written', NWDSR_WRITTEN_PERSON: 'written', NWDSR_DELIVERED_STORE: 'delivered', NWDSR_DELIVERED_PERSON: 'delivered', PERQ_STORE: '', PERQ_PERSON: '' };

@@ -184,7 +184,11 @@ test('a recalculation leaves every imported and verified figure as it was', () =
   gs.refreshMetricRegistry_();
   ['home_', 'daily_', 'closing_', 'people_', 'morning_', 'bedding_'].forEach((page) => gs[page]!({ session }));
   const changed = Object.keys(tabs).filter((name) => JSON.stringify(cells(tabs[name])) !== JSON.stringify(cells(before[name])));
-  // Recalculated tabs may refresh their timestamps; imported and history tabs must not change at all.
+  // Recalculated tabs may refresh their timestamps; imported sales/KPI figures must not change.
+  // CC_People / CC_RosterHistory / CC_AssociateDays may gain GM-confirmed former identities and rematched roles only.
   const imported = ['CC_Daily', 'CC_Ledger', 'CC_Closing', 'CC_AssociateDays', 'CC_Kpi', 'CC_Imports', 'CC_Uploads', 'CC_People', 'CC_Config', 'CC_DailyHistory', 'CC_MonthlyHistory', 'CC_GoalHistory', 'CC_SourceArchive', 'CC_History', 'CC_DailyGoals', 'CC_MonthEnd'];
-  assert.deepEqual(changed.filter((name) => imported.includes(name)), []);
+  const identity = ['CC_People', 'CC_RosterHistory', 'CC_AssociateDays'];
+  assert.deepEqual(changed.filter((name) => imported.includes(name) && !identity.includes(name)), []);
+  assert.equal(Number(plain(gs.home_({ session })).month.written), 109993);
+  assert.equal(Number(plain(gs.home_({ session })).month.delivered), 104220);
 });

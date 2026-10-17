@@ -21,7 +21,16 @@ var KPI_ALIASES_ = {
   'ELIZABETH PEREZ': ['EPEREZ', 'Elizabeth Perez'],
   'PEREZ, ELIZABETH': ['EPEREZ', 'Elizabeth Perez'],
   'VALENTINA LOPEZ': ['', 'Valentina Lopez'],
-  'MARIA RAFALIK': ['', 'Maria Rafalik']
+  /** Display-only. GM does not recognize Maria Rafalik — leave unmatched on purpose (no roster row). */
+  'MARIA RAFALIK': ['', 'Maria Rafalik'],
+  'MUKHTAR JUNAID': ['', 'Mukhtar Junaid'],
+  'MUKHTAR, JUNAID': ['', 'Mukhtar Junaid'],
+  'JUNAID, MUKHTAR': ['', 'Mukhtar Junaid'],
+  'CHAVES FELIPE': ['', 'Filepe Chaves'],
+  'CHAVES, FELIPE': ['', 'Filepe Chaves'],
+  'FELIPE CHAVES': ['', 'Filepe Chaves'],
+  'FILEPE CHAVES': ['', 'Filepe Chaves'],
+  'CHAVES, FILEPE': ['', 'Filepe Chaves']
 };
 
 function importKpiAttachment_(sha, attachment) {

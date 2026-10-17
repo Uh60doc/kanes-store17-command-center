@@ -152,7 +152,7 @@ test('roster changes are admin only, checked on the server', () => {
     vm.runInContext(code, gs as vm.Context);
     vm.runInContext(`requireSession_ = function () { return { role: '${role}' }; };`, gs as vm.Context);
     if (role === 'admin') {
-      assert.equal(plain(gs.dispatch('roster', { token: 't' })).associates.length, 10);
+      assert.equal(plain(gs.dispatch('roster', { token: 't' })).associates.length, 12);
       assert.equal(plain(gs.dispatch('saveAssociate', { token: 't', action: 'status', name: 'Eric Montes Rodriguez', record: { status: 'Leave' } })).confirmed, false);
     } else {
       assert.throws(() => gs.dispatch('roster', { token: 't' }), /not available for this login/);

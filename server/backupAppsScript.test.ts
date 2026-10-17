@@ -56,7 +56,7 @@ test('the restore drill rebuilds the dashboard from a scratch copy and never wri
   assert.equal(drill.status, 'Passed', drill.note);
   assert.notEqual(drill.file_id, backup.file_id);
   assert.match(drill.note, /6 of 6 dashboard pages built from the restored copy are identical to production/);
-  assert.match(drill.note, /Quality checks on the restored copy: 11 PASS, 4 FLAG, 5 NOTE/);
+  assert.match(drill.note, /Quality checks on the restored copy: 12 PASS, 0 FLAG, 6 NOTE/);
   assert.match(drill.note, /Production was not written/);
   assert.equal(tabText(tabs, LOG_TABS), production, 'production unchanged');
   assert.equal(tabText(drive.files[backup.file_id]!.tabs!), backupData, 'the backup itself unchanged');

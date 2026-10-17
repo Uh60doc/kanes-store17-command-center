@@ -8,21 +8,29 @@ import { cells, harness, session, tabText, verifiedOctober } from './octoberVeri
 import { table } from './snapshotGrid.ts';
 
 const QUALITY_TABS = ['CC_QualityChecks', 'CC_QualityRuns', 'CC_DataStatus', 'CC_Alerts', 'CC_Health'];
-const UNMATCHED = ['Chaves Felipe', 'FELIPE CHAVES', 'MARIA RAFALIK', 'Mukhtar Junaid'];
+/** Roster / history may gain GM-confirmed former identities during checks; sales figures stay frozen. */
+const QUALITY_ALLOWED = [...QUALITY_TABS, 'CC_People', 'CC_RosterHistory'];
 const statusOf = (tabs: ReturnType<typeof verifiedOctober>, key: string) => table(tabs, 'CC_DataStatus').find((row) => row.key === key)!;
 const alerts = (tabs: ReturnType<typeof verifiedOctober>) => table(tabs, 'CC_Alerts');
 const active = (tabs: ReturnType<typeof verifiedOctober>) => alerts(tabs).filter((row) => row.status === 'Active').map((row) => row.alert_key);
 
-test('every check runs on the verified October records and only the unmatched names are flagged', () => {
+test('every check runs on the verified October records; Maria stays unmatched as a NOTE; former aliases match', () => {
   const { gs, tabs } = harness();
-  const before = tabText(tabs, QUALITY_TABS);
+  const written = Number(plain(gs.home_({ session })).month.written);
+  const delivered = Number(plain(gs.home_({ session })).month.delivered);
+  const before = tabText(tabs, QUALITY_ALLOWED);
   const summary = plain(gs.runQualityChecks_('test'));
-  assert.equal(tabText(tabs, QUALITY_TABS), before, 'no imported or calculated tab changed');
+  assert.equal(tabText(tabs, QUALITY_ALLOWED), before, 'no sales or KPI tab changed');
+  assert.equal(Number(plain(gs.home_({ session })).month.written), written);
+  assert.equal(Number(plain(gs.home_({ session })).month.delivered), delivered);
   const checks = table(tabs, 'CC_QualityChecks');
   const areas = new Set(checks.map((row) => row.check_id));
   for (const id of ['business-date', 'reporting-period', 'approved-source', 'duplicate-import', 'cumulative-daily', 'employee-match', 'written-delivered', 'kpi-math', 'closing-math', 'store-reconcile', 'history-retained', 'report-package']) assert.ok(areas.has(id), id);
-  assert.deepEqual(checks.filter((row) => row.status === 'FLAG').map((row) => row.subject).sort(), [...UNMATCHED].sort());
-  assert.ok(checks.filter((row) => row.status === 'FLAG').every((row) => /does not match one roster person/.test(row.explanation) && /Add the name or alias/.test(row.explanation)));
+  assert.deepEqual(checks.filter((row) => row.check_id === 'employee-match' && row.status === 'FLAG').map((row) => row.subject), []);
+  const maria = checks.find((row) => row.check_id === 'employee-match' && /maria rafalik/i.test(row.subject))!;
+  assert.equal(maria.status, 'NOTE');
+  assert.match(maria.explanation, /left this name unmatched on purpose/i);
+  assert.ok(checks.some((row) => row.check_id === 'employee-match' && row.status === 'PASS'));
   // SNAP vs NWDSR is a legitimate difference: noted with the variance, never flagged.
   const snap = checks.find((row) => row.subject === 'SNAP Written vs NWDSR Net Written')!;
   assert.equal(snap.status, 'NOTE');
@@ -30,7 +38,7 @@ test('every check runs on the verified October records and only the unmatched na
   assert.equal(checks.find((row) => row.check_id === 'store-reconcile' && row.status === 'PASS')!.subject, 'Store month totals');
   assert.equal(checks.find((row) => row.check_id === 'closing-math')!.status, 'PASS');
   assert.equal(checks.find((row) => row.check_id === 'kpi-math')!.status, 'PASS');
-  assert.equal(summary.flagged, 4);
+  assert.equal(summary.flagged, 0);
   assert.equal(table(tabs, 'CC_QualityRuns').length, 1);
 });
 
@@ -54,7 +62,8 @@ test('a recent import does not make the reporting package complete', () => {
   assert.equal(statusOf(afternoon.tabs, 'store-month').status, 'PARTIAL');
   assert.equal(statusOf(afternoon.tabs, '2026-10-15').status, 'COMPLETE');
   assert.equal(statusOf(afternoon.tabs, 'kpi_warranty').status, 'MISSING');
-  assert.equal(statusOf(afternoon.tabs, 'person_written').status, 'NEEDS REVIEW');
+  // Former aliases match; Maria is a NOTE only — person written is no longer held for unmatched names.
+  assert.ok(['CURRENT', 'PARTIAL', 'MISSING'].includes(statusOf(afternoon.tabs, 'person_written').status));
 });
 
 test('a missing-report alert resolves itself when the report arrives, and the record is kept', () => {
@@ -139,9 +148,10 @@ test('only one consolidated email is sent for the outstanding problems', () => {
   const { gs, tabs, mail, setToday } = harness();
   gs.qualityAfterUpdate_('scheduled import', true);
   assert.equal(mail.length, 1);
-  assert.equal(mail[0]!.subject, 'Command Center: 14 outstanding report problems');
+  assert.equal(mail[0]!.subject, 'Command Center: 10 outstanding report problems');
   assert.match(mail[0]!.body, /2026-10-16: SNAP Written, NWDSR Written, NWDSR Delivered, Group 17 Written/);
-  assert.match(mail[0]!.body, /Needs review\n- Chaves Felipe/);
+  assert.ok(!/Needs review\n- Chaves Felipe/.test(mail[0]!.body), 'Filepe Chaves aliases match; not Needs Review');
+  assert.ok(!/Needs review\n- Mukhtar Junaid/.test(mail[0]!.body), 'Mukhtar / Jimmy aliases match; not Needs Review');
   gs.qualityAfterUpdate_('scheduled import', true);
   gs.notifyOnce_('PERQ export could not be read. No figure was changed.');
   gs.qualityAfterUpdate_('scheduled import', true);

@@ -137,7 +137,8 @@ function calendarEntry_(ctx, track, period) {
   if (track === 'Store') ly = storeLastYear_(ctx.config, period);
   else {
     var last = periodFor_('individual', period.year - 1, period.month);
-    ly = { start: last.start, end: last.end, confirmed: true, status: 'Confirmed: salesperson months compare calendar month to calendar month' };
+    // GM confirmation: last-year performance comparisons are store-level for now. Do not require individual prior-year salesperson figures.
+    ly = { start: last.start, end: last.end, confirmed: false, status: 'Pending: last-year comparisons are store-level for now (not individual salesperson). Proposed calendar month ' + last.start + ' to ' + last.end + ' is reserved only if individual last-year rows are later verified.' };
   }
   var lyDays = historyDayGap_(ly.start, ly.end) + 1;
   var mapping = track === 'Store'
@@ -618,6 +619,9 @@ function lastYearSameReport_(metric, source) {
 
 function lastYearFor_(entry, lyRows, line) {
   if (!entry) return { value: 'Pending', basis: 'No period calendar entry' };
+  if (String(line.track || '') === 'Person') {
+    return { value: 'Pending', basis: 'Last-year comparisons are store-level for now. Individual prior-year salesperson figures are not required (most last-year associates are no longer at Store 17).' };
+  }
   if (!entry.ly.confirmed) return { value: 'Pending', basis: 'Last-year period ' + entry.ly.status };
   var rejected = false;
   var match = null;
