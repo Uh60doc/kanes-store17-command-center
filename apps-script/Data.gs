@@ -911,6 +911,7 @@ function countThrough_(facts, scope, name, start, date, field, closed, daily) {
   for (b = 0; b < bases.length; b += 1) {
     var total = bases[b].total;
     var added = [];
+    var addedDays = [];
     var complete = true;
     eachDate_(shiftDate_(bases[b].through, 1), date).forEach(function (day) {
       if (!complete || closed[day]) return;
@@ -920,12 +921,13 @@ function countThrough_(facts, scope, name, start, date, field, closed, daily) {
       }
       total += daily[day];
       added.push(day + ' ' + daily[day]);
+      addedDays.push(day);
     });
     if (!complete) continue;
     var parts = [];
     if (!bases[b].daily) parts.push(bases[b].total + ' for ' + start + ' through ' + bases[b].through);
     if (added.length) parts.push((bases[b].daily ? 'daily ' : 'plus daily ') + added.join(', '));
-    return { total: total, source: parts.join(' ') || 'none' };
+    return { total: total, source: parts.join(' ') || 'none', base: bases[b].daily ? null : { through: bases[b].through, total: bases[b].total }, days: addedDays };
   }
   return null;
 }

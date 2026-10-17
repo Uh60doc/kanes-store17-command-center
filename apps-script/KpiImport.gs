@@ -44,6 +44,11 @@ function importKpiAttachment_(sha, attachment) {
     return true;
   }
   if (start !== end) {
+    var final = recordKpiFinal_(grid, family, side, start, end, name);
+    if (final) {
+      recordImport_(sha, name, 'official-final', side + ' ' + start + ' through ' + end + ': official month-end final for the ' + (final.track === 'STORE' ? 'store' : 'salesperson') + ' month, ' + final.rows + ' figures recorded beside the daily record (CC_MonthEnd). Not added to the daily totals.');
+      return true;
+    }
     recordImport_(sha, name, 'cumulative-not-added', side + ' ' + start + ' through ' + end + ' was not added to the daily totals. Store NWDSR totals were not changed.');
     return true;
   }
@@ -231,6 +236,20 @@ function kpiRecords_(source, family, side, start, end, filename) {
     }
   }
   return records;
+}
+
+/**
+ * A Data Analysis workbook printed for exactly one finished month is that month's official final. A store-month file
+ * keeps its Store 17 lines, a salesperson-month file its salesperson lines: each track only takes its own scope.
+ * Returns null when the period is not a finished month or the file has no line for that track.
+ */
+function recordKpiFinal_(grid, family, side, start, end, filename) {
+  var track = officialFinalTrack_(start, end, todayNy_());
+  if (!track) return null;
+  var suffix = track === 'STORE' ? /_STORE$/ : /_PERSON$/;
+  var records = kpiRecords_(grid, family, side, start, end, filename).filter(function (record) { return suffix.test(record[0]); });
+  if (!records.length) return null;
+  return { track: track, rows: records.length, outcome: upsertKpiRecords_(records) };
 }
 
 function kpiRecord_(daily, start, end, view, code, display, side, sales, units, eligible, attachments, percent, filename) {

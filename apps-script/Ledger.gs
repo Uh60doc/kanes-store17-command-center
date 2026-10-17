@@ -49,6 +49,27 @@ function fitsTrack_(scope, start, end) {
   return period.start === start && end <= period.end;
 }
 
+/**
+ * A multi-day report is an official month-end final only when its printed period is exactly one finished reporting
+ * month: STORE for the 2nd through the 1st, PERSON for the 1st through the last day. A report imported on or before
+ * the period's last day cannot be the final, so the period must have ended before today.
+ */
+function officialFinalTrack_(start, end, today) {
+  if (!start || !end || start === end || end >= today) return '';
+  var store = storePeriodContaining_(start);
+  if (store.start === start && store.end === end) return 'STORE';
+  var person = individualPeriodContaining_(start);
+  if (person.start === start && person.end === end) return 'PERSON';
+  return '';
+}
+
+/** One official final as a cumulative CC_Ledger row. It sits beside the daily rows and is never added to them. */
+function officialFinalRow_(view, start, end, code, name, side, figures, source) {
+  var cell = function (value) { return value === null || value === undefined ? '' : value; };
+  return [view, 'cumulative', '', start, end, end, '17', code || '', name || '', side, cell(figures.sales), cell(figures.units), cell(figures.eligible), cell(figures.attachments), cell(figures.percent), source, new Date().toISOString(),
+    [view, 'cumulative', start, end, '', side, code || name || 'STORE'].join('|')];
+}
+
 function ledgerRows_() {
   return sheet_('CC_Ledger').map(function (row) {
     var view = String(row.view || '');
@@ -73,6 +94,7 @@ function ledgerRows_() {
       percent: fineNumber_(row.kpi_percent),
       source: String(row.source_report || ''),
       key: String(row.record_key || ''),
+      importedAt: row.imported_at instanceof Date ? row.imported_at.toISOString() : String(row.imported_at || ''),
     };
   });
 }
