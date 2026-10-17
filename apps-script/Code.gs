@@ -25,6 +25,8 @@ var ROUTES_ = {
   evalWorkbook: ['manager', 'admin'],
   saveEvalMetric: ['manager', 'admin'],
   importEvalWorkbook: ['admin'],
+  uploads: ['manager', 'admin'],
+  uploadReport: ['manager', 'admin'],
 };
 
 function doGet() {
@@ -71,5 +73,7 @@ function dispatch(name, payload) {
   if (name === 'evalWorkbook') return evalWorkbook_(payload);
   if (name === 'saveEvalMetric') return saveEvalMetric_(payload);
   if (name === 'importEvalWorkbook') return importEvalWorkbook_(payload);
+  if (name === 'uploads') return uploads_(payload);
+  if (name === 'uploadReport') return uploadReport_(payload);
   throw new Error('That request is not available.');
 }
