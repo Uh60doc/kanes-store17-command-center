@@ -10,7 +10,7 @@ import { textGrid } from './snapshotGrid.ts';
  * nothing here can reach the production workbook.
  */
 export const FIXTURE_TODAY = '2026-10-17';
-export const ALL_FILES = ['Code.gs', 'Data.gs', 'Metrics.gs', 'Roster.gs', 'Ledger.gs', 'Import.gs', 'KpiImport.gs', 'EvalImport.gs', 'Evaluations.gs', 'Upload.gs', 'MonthEnd.gs', 'History.gs', 'Quality.gs', 'Backup.gs'];
+export const ALL_FILES = ['Code.gs', 'Data.gs', 'Metrics.gs', 'Roster.gs', 'Ledger.gs', 'Import.gs', 'KpiImport.gs', 'EvalImport.gs', 'Evaluations.gs', 'Upload.gs', 'MonthEnd.gs', 'History.gs', 'Quality.gs', 'Backup.gs', 'Brief.gs'];
 
 let fixtureText: string | null = null;
 export function verifiedOctober(): Record<string, Grid> {
@@ -70,7 +70,7 @@ export interface Harness {
   gs: Record<string, (...args: any[]) => any>;
   tabs: Record<string, Grid>;
   props: Record<string, string>;
-  mail: { to: string; subject: string; body: string }[];
+  mail: { to: string; subject: string; body: string; htmlBody?: string; name?: string }[];
   drive: ReturnType<typeof fakeDrive>;
   setHour: (hour: number) => void;
   setToday: (today: string) => void;
@@ -99,7 +99,16 @@ export function harness(tabs: Record<string, Grid> = verifiedOctober(), today = 
     DriveApp: drive.DriveApp,
     PropertiesService: { getScriptProperties: () => ({ getProperty: (key: string) => props[key] ?? null, setProperty: (key: string, value: string) => { props[key] = String(value); }, deleteProperty: (key: string) => { delete props[key]; }, getProperties: () => ({ ...props }) }) },
     CacheService: { getScriptCache: () => ({ get: (key: string) => cache[key] ?? null, put: (key: string, value: string) => { cache[key] = value; }, remove: (key: string) => { delete cache[key]; } }) },
-    MailApp: { sendEmail: (to: string, subject: string, body: string) => { mail.push({ to, subject, body }); } },
+    MailApp: {
+      sendEmail: (...args: any[]) => {
+        const first = args[0];
+        if (first && typeof first === 'object' && !Array.isArray(first)) {
+          mail.push({ to: String(first.to || ''), subject: String(first.subject || ''), body: String(first.body || ''), htmlBody: String(first.htmlBody || ''), name: first.name });
+          return;
+        }
+        mail.push({ to: String(args[0] || ''), subject: String(args[1] || ''), body: String(args[2] || '') });
+      },
+    },
     LockService: { getScriptLock: () => ({ tryLock: () => true, waitLock: () => undefined, releaseLock: () => undefined }) },
     ScriptApp: { getProjectTriggers: () => [], newTrigger: () => { throw new Error('no triggers in tests'); } },
     Session: { getScriptTimeZone: () => 'America/New_York' },

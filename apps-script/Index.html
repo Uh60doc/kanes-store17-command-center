@@ -80,6 +80,9 @@
     }
     button, input, textarea { font: inherit; }
     textarea { width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid #1d5c66; background: #070b10; color: white; }
+    .brief-mail { border: 1px solid #1d5c66; border-radius: 14px; padding: 8px; background: #ffffff; color: #102027; overflow: auto; }
+    .brief-mail-inner { max-width: 720px; margin: 0 auto; }
+    .brief-log td, .brief-log th { font-size: 13px; }
     .morning .figure { font-size: 32px; }
     .morning-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .morning-five { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; align-items: stretch; }
@@ -293,6 +296,11 @@
       html:has(body.print-doc), body.print-doc { background: white !important; }
       body.print-doc > :not(#doc-print) { display: none !important; }
       body.print-doc #doc-print { display: block; }
+      html:has(body.print-brief), body.print-brief { background: white !important; }
+      body.print-brief .wrap { padding: 0; max-width: none; }
+      body.print-brief header.brand, body.print-brief .section-title, body.print-brief .noprint, body.print-brief #brief-mtd, body.print-brief #brief-admin { display: none !important; }
+      body.print-brief #brief-startup { margin: 0; border: 0; padding: 0; background: white; }
+      body.print-brief #brief-startup, body.print-brief #brief-startup * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       #doc-print img { display: block; width: auto; height: auto; max-width: 100%; max-height: 10.2in; margin: 0 auto; break-after: page; }
       #doc-print img:last-child { break-after: auto; }
       body { background: white; color: black; }
@@ -406,6 +414,7 @@
     }
     function navItems() {
       var items = [['home', 'Home'], ['daily', 'Daily'], ['closing', 'Closing'], ['written', 'Written'], ['delivered', 'Delivered'], ['people', 'Sales Team'], ['morning', 'Morning meeting'], ['documents', 'Documents']];
+      if (role !== 'sales') items.splice(7, 0, ['brief', 'Manager brief']);
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['orders', 'Open orders'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
@@ -1256,7 +1265,7 @@
       });
       bindEvalImport();
     }
-    window.addEventListener('afterprint', function () { document.body.classList.remove('print-eval'); });
+    window.addEventListener('afterprint', function () { document.body.classList.remove('print-eval', 'print-brief'); });
     var summaryCache = null;
     function drawSummary(name, start, end) {
       document.getElementById('screen').innerHTML = '<h2 class="section-title">Summary</h2>' + teamNav('summary') + '<p class="sub">Loading the associate summary…</p>';
@@ -1396,6 +1405,105 @@
       document.getElementById('back-people').addEventListener('click', function () { drawPeopleTable(); });
       document.getElementById('print-person').addEventListener('click', function () { window.print(); });
     }
+    function renderBrief(data) {
+      document.getElementById('header-note').textContent = 'Manager brief · ' + (data.today || '') + ' · version ' + (data.version || '');
+      document.body.classList.remove('print-brief');
+      var mail = data.mail || {};
+      var plan = data.plan || { actions: [], notes: '' };
+      var actions = (data.priorities || []).slice();
+      while (actions.length < 3) actions.push('');
+      var logs = (mail.logs || []).map(function (row) {
+        return '<tr><td>' + esc(String(row.at || '').replace('T', ' ').slice(0, 19)) + '</td><td>' + esc(row.kind) + '</td><td>' + esc(row.channel) + '</td><td>' + esc(row.status) + '</td><td>' + esc(row.to) + '</td><td>' + esc(row.subject) + '</td><td>' + esc(row.version) + '</td><td>' + esc(row.reason || row.missing || '') + '</td></tr>';
+      }).join('');
+      var missing = (data.missing || []).map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('');
+      var admin = '';
+      if (mail.canEnable) {
+        admin = '<article class="card noprint" id="brief-admin"><h2>Automatic delivery</h2>' +
+          '<p class="sub">Production delivery is ' + (mail.enabled ? 'ON' : 'OFF') + '. Live mail goes to ' + esc(mail.to || mail.liveList || '') + '. It stays off until an Admin enables it. A test send requires an address typed here and never uses the live list automatically.</p>' +
+          '<label><input id="brief-enabled" type="checkbox" ' + (mail.enabled ? 'checked' : '') + ' /> Enable automatic production delivery before 7:00 AM ET</label>' +
+          '<label>Production recipient</label><input id="brief-prod-to" value="' + esc(mail.to || '') + '" />' +
+          '<label>Test address</label><input id="brief-test-to" value="" placeholder="Required for a test send" />' +
+          '<p id="brief-admin-error" class="error"></p>' +
+          '<p class="summary-actions"><button type="button" id="brief-save-mail">Save delivery settings</button> ' +
+          '<button type="button" class="secondary" id="brief-test-startup">Send Start-Up test</button> ' +
+          '<button type="button" class="secondary" id="brief-test-mtd">Send MTD test</button></p></article>';
+      }
+      var resend = mail.canResend
+        ? '<p class="summary-actions noprint"><button type="button" id="print-brief">Print Morning Start-Up</button> ' +
+          '<button type="button" class="secondary" id="brief-resend-startup">Resend Start-Up</button> ' +
+          '<button type="button" class="secondary" id="brief-resend-mtd">Resend MTD Performance</button></p>'
+        : '<p class="summary-actions noprint"><button type="button" id="print-brief">Print Morning Start-Up</button></p>';
+      document.getElementById('screen').innerHTML =
+        '<h2 class="section-title">Morning Start-Up</h2>' +
+        '<p class="sub">One printable page. Yesterday uses the prior completed business day\'s verified Home figures. Missing reports show Pending with the source. Store month ' + esc(data.storePeriod || '') + '. Salesperson month ' + esc(data.individualPeriod || '') + '.</p>' +
+        (data.partial ? '<article class="card"><p class="sub"><strong>Partial report — not final.</strong></p><ul class="list">' + (missing || '<li>Missing sources are listed on the email.</li>') + '</ul></article>' : '') +
+        '<div class="brief-mail" id="brief-startup"><div class="brief-mail-inner">' + (data.startup && data.startup.html ? data.startup.html : '') + '</div></div>' +
+        '<h2 class="section-title">MTD Performance</h2>' +
+        '<p class="sub">Sent separately after Morning Start-Up. Same verified Home and Sales Team figures. Last-year comparison is Pending until a verified CC_LastYear figure is on file.</p>' +
+        '<div class="brief-mail" id="brief-mtd"><div class="brief-mail-inner">' + (data.mtd && data.mtd.html ? data.mtd.html : '') + '</div></div>' +
+        '<h2 class="section-title noprint">Today\'s management plan</h2>' +
+        '<article class="card noprint"><p class="sub">These three actions print on the Start-Up email. Notes never change sales figures. Coaching is taken only from verified shortfalls.</p>' +
+        '<p class="sub">Verified coaching: ' + esc(data.coaching || '') + '</p>' +
+        '<label>Priority 1</label><input id="brief-a1" value="' + esc(actions[0] || '') + '" />' +
+        '<label>Priority 2</label><input id="brief-a2" value="' + esc(actions[1] || '') + '" />' +
+        '<label>Priority 3</label><input id="brief-a3" value="' + esc(actions[2] || '') + '" />' +
+        '<label>Notes</label><input id="brief-notes" value="' + esc(plan.notes || '') + '" />' +
+        '<p id="brief-plan-error" class="error"></p><button type="button" id="brief-save-plan">Save plan</button></article>' +
+        admin +
+        '<h2 class="section-title noprint">Delivery log</h2>' +
+        '<article class="card noprint kpi-wrap"><table class="kpi brief-log"><tr><th>When</th><th>Email</th><th>Channel</th><th>Status</th><th>To</th><th>Subject</th><th>Version</th><th>Note</th></tr>' +
+        (logs || '<tr><td colspan="8">No delivery attempts yet. Production delivery is off until an Admin enables it.</td></tr>') + '</table></article>' +
+        resend;
+      document.getElementById('print-brief').addEventListener('click', function () {
+        document.body.classList.add('print-brief');
+        window.print();
+      });
+      var savePlan = document.getElementById('brief-save-plan');
+      if (savePlan) savePlan.addEventListener('click', function () {
+        document.getElementById('brief-plan-error').textContent = '';
+        api('saveBriefPlan', {
+          action1: document.getElementById('brief-a1').value,
+          action2: document.getElementById('brief-a2').value,
+          action3: document.getElementById('brief-a3').value,
+          notes: document.getElementById('brief-notes').value,
+        }).then(renderBrief).catch(function (error) {
+          if (/sign in/i.test(error.message)) showLogin(error.message);
+          else document.getElementById('brief-plan-error').textContent = error.message;
+        });
+      });
+      function briefFailed(error, id) {
+        if (/sign in/i.test(error.message)) showLogin(error.message);
+        else document.getElementById(id).textContent = error.message;
+      }
+      var saveMail = document.getElementById('brief-save-mail');
+      if (saveMail) saveMail.addEventListener('click', function () {
+        document.getElementById('brief-admin-error').textContent = '';
+        api('saveBriefMailSettings', { enabled: document.getElementById('brief-enabled').checked, to: document.getElementById('brief-prod-to').value }).then(renderBrief).catch(function (error) { briefFailed(error, 'brief-admin-error'); });
+      });
+      function sendTest(kind) {
+        var to = document.getElementById('brief-test-to').value;
+        document.getElementById('brief-admin-error').textContent = '';
+        api('sendBriefTest', { kind: kind, to: to }).then(function (result) {
+          document.getElementById('brief-admin-error').textContent = result.sent ? 'Test sent to ' + result.to + '.' : (result.reason || 'Test was not sent.');
+          api('brief').then(renderBrief);
+        }).catch(function (error) { briefFailed(error, 'brief-admin-error'); });
+      }
+      var testStartup = document.getElementById('brief-test-startup');
+      if (testStartup) testStartup.addEventListener('click', function () { sendTest('startup'); });
+      var testMtd = document.getElementById('brief-test-mtd');
+      if (testMtd) testMtd.addEventListener('click', function () { sendTest('mtd'); });
+      function resend(kind) {
+        api('resendBriefEmail', { kind: kind }).then(function () { api('brief').then(renderBrief); }).catch(function (error) {
+          if (document.getElementById('brief-admin-error')) briefFailed(error, 'brief-admin-error');
+          else if (document.getElementById('brief-plan-error')) briefFailed(error, 'brief-plan-error');
+        });
+      }
+      var resendStartup = document.getElementById('brief-resend-startup');
+      if (resendStartup) resendStartup.addEventListener('click', function () { resend('startup'); });
+      var resendMtd = document.getElementById('brief-resend-mtd');
+      if (resendMtd) resendMtd.addEventListener('click', function () { resend('mtd'); });
+    }
+
     function renderMorning(data) {
       document.getElementById('header-note').textContent = 'Morning meeting · ' + data.date;
       function pending(value) {
@@ -2868,7 +2976,7 @@
     }
     function openScreen(name) {
       screen = name;
-      document.body.classList.remove('print-summary', 'print-eval', 'print-doc');
+      document.body.classList.remove('print-summary', 'print-eval', 'print-doc', 'print-brief');
       closeDocViewer();
       drawNav();
       var request = name === 'written' || name === 'delivered' || name === 'orders' ? 'home' : name;
@@ -2898,6 +3006,7 @@
         else if (name === 'closing') renderClosing(data);
         else if (name === 'people') renderPeople(data);
         else if (name === 'morning') renderMorning(data);
+        else if (name === 'brief') renderBrief(data);
         else if (name === 'health') renderHealth(data);
         else if (name === 'coverage') renderCoverage(data);
       }).catch(function (error) {
