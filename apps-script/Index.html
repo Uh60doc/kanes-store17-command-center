@@ -1718,10 +1718,10 @@
       var sd = storeSides.delivered || {};
       function unitsAndDollars(units, dollars) {
         if (units === null || units === undefined) return 'Not Available';
-        return count(units) + ' units · ' + money(dollars);
+        return count(units) + (Number(units) === 1 ? ' unit · ' : ' units · ') + money(dollars);
       }
-      function ledgerNote(figure, side) {
-        return figure.ledgerThrough ? 'Group 17 Data Analysis ' + side + ', store month through ' + esc(figure.ledgerThrough) + '.' : 'No ' + side + ' store-month figure is on file.';
+      function ledgerNote(figure, side, source) {
+        return figure.ledgerThrough ? source + ' ' + side + ', store month through ' + esc(figure.ledgerThrough) + '.' : 'No ' + side + ' store-month figure is on file.';
       }
       function attachmentNote(written, delivered, goal) {
         return 'Written. Delivered ' + percent(delivered) + '. Goal ' + goal + '.' + (sw.through ? ' Store month through ' + esc(sw.through) + ', same figure as the Home tile.' : '');
@@ -1748,14 +1748,14 @@
         '</div>' +
         '<h2 class="section-title">Store bedding attachments</h2>' +
         '<div class="grid bedding-band">' +
-        card('Protectors written', unitsAndDollars(sw.protectorUnits, sw.protectorDollars), 'Units and dollars. ' + ledgerNote(sw, 'written') + ' Goal ' + percent(data.protectorGoal) + ' attachment. Not divided by store sales.') +
-        card('Protectors delivered', unitsAndDollars(sd.protectorUnits, sd.protectorDollars), 'Units and dollars. ' + ledgerNote(sd, 'delivered')) +
+        card('Protectors written', unitsAndDollars(sw.protectorUnits, sw.protectorDollars), 'Units and dollars. ' + ledgerNote(sw, 'written', 'Group 17 Data Analysis') + ' Goal ' + percent(data.protectorGoal) + ' attachment. Not divided by store sales.') +
+        card('Protectors delivered', unitsAndDollars(sd.protectorUnits, sd.protectorDollars), 'Units and dollars. ' + ledgerNote(sd, 'delivered', 'Group 17 Data Analysis')) +
         card('Protector attachment', percent(sw.protectors), attachmentNote(sw.protectors, sd.protectors, percent(data.protectorGoal)), toneFor(sw.protectors, data.protectorGoal)) +
-        card('Pillows written', unitsAndDollars(sw.pillowUnits, sw.pillowDollars), 'Units and dollars. ' + ledgerNote(sw, 'written') + ' Pillows are not included in the bedding percentage. Goal ' + goalLabel(data.pillowGoal, data.pillowUnit) + '.') +
-        card('Pillows delivered', unitsAndDollars(sd.pillowUnits, sd.pillowDollars), 'Units and dollars. ' + ledgerNote(sd, 'delivered')) +
+        card('Pillows written', unitsAndDollars(sw.pillowUnits, sw.pillowDollars), 'Units and dollars. ' + ledgerNote(sw, 'written', 'ASL Data Analysis') + ' Pillows are not included in the bedding percentage. Goal ' + goalLabel(data.pillowGoal, data.pillowUnit) + '.') +
+        card('Pillows delivered', unitsAndDollars(sd.pillowUnits, sd.pillowDollars), 'Units and dollars. ' + ledgerNote(sd, 'delivered', 'ASL Data Analysis')) +
         card('Pillows per mattress', 'Not Available', 'Needs pillow units and mattress sales for the same side.') +
-        card('Adjustable bases written', unitsAndDollars(sw.baseUnits, sw.baseDollars), 'Units and dollars. ' + ledgerNote(sw, 'written') + ' Goal ' + goalLabel(data.baseGoal, data.baseUnit) + '.') +
-        card('Adjustable bases delivered', unitsAndDollars(sd.baseUnits, sd.baseDollars), 'Units and dollars. ' + ledgerNote(sd, 'delivered')) +
+        card('Adjustable bases written', unitsAndDollars(sw.baseUnits, sw.baseDollars), 'Units and dollars. ' + ledgerNote(sw, 'written', 'ASL Data Analysis') + ' Goal ' + goalLabel(data.baseGoal, data.baseUnit) + '.') +
+        card('Adjustable bases delivered', unitsAndDollars(sd.baseUnits, sd.baseDollars), 'Units and dollars. ' + ledgerNote(sd, 'delivered', 'ASL Data Analysis')) +
         card('Adjustable base attachment', percent(sw.bases), attachmentNote(sw.bases, sd.bases, goalLabel(data.baseGoal, data.baseUnit)) + ' Packaged bases are not counted twice.', goalTone(sw.bases, data.baseGoal, data.baseUnit)) +
         '</div>' +
         '<article class="card kpi-wrap" style="margin-top:12px"><h2>Store KPI scoreboard</h2><table class="kpi"><tr><th>KPI</th><th>Written</th><th>Delivered</th><th>Goal</th></tr>' +
