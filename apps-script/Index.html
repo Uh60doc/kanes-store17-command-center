@@ -1532,11 +1532,66 @@
       });
     }
 
+    function dataStatusTone(status) {
+      if (status === 'COMPLETE' || status === 'CURRENT' || status === 'PASS' || status === 'Verified' || status === 'Passed' || status === 'Resolved') return 'good';
+      if (status === 'PARTIAL' || status === 'NOTE' || status === 'Withdrawn' || status === 'Closed') return 'warn';
+      return 'bad';
+    }
+    function pill(status) {
+      return '<span class="status-pill ' + dataStatusTone(status) + '">' + esc(status) + '</span>';
+    }
+    function qualityCards(quality) {
+      if (!quality) return '<article class="card"><h2>Data status</h2><p class="sub">The automated checks have not run yet. They run after the next import.</p></article>';
+      var periods = quality.status.filter(function (row) { return row.kind === 'Period'; });
+      var metrics = quality.status.filter(function (row) { return row.kind === 'Metric'; });
+      var days = quality.status.filter(function (row) { return row.kind === 'Day'; }).slice(0, 7);
+      var periodRows = periods.map(function (row) { return '<tr><td>' + esc(row.name) + '<div class="sub">' + esc(row.periodDates) + '</div></td><td>' + pill(row.status) + '</td><td>' + esc(row.explanation) + '</td></tr>'; }).join('');
+      var metricRows = metrics.map(function (row) { return '<tr><td>' + esc(row.name) + '<div class="sub">' + esc(row.source) + '</div></td><td>' + pill(row.status) + '</td><td>' + esc(row.through || 'Pending') + '</td><td>' + esc(row.expected || '—') + '</td><td class="sub">' + esc(row.explanation) + '</td></tr>'; }).join('');
+      var dayRows = days.map(function (row) { return '<tr><td>' + esc(row.key) + '</td><td>' + pill(row.status) + '</td><td>' + esc(row.through) + '</td><td class="sub">' + esc(row.explanation) + '</td></tr>'; }).join('');
+      var active = quality.active.map(function (row) { return '<li>' + pill(row.severity) + (row.date ? esc(row.date) + ' · ' : '') + esc(row.message) + ' <span class="sub">since ' + esc(String(row.since).slice(0, 16).replace('T', ' ')) + '</span></li>'; }).join('');
+      var resolved = quality.resolved.map(function (row) { return '<li>' + pill(row.status) + (row.date ? esc(row.date) + ' · ' : '') + esc(row.report) + ': ' + esc(row.resolution) + ' <span class="sub">' + esc(String(row.resolvedAt).slice(0, 16).replace('T', ' ')) + '</span></li>'; }).join('');
+      var checks = quality.checks.map(function (row) { return '<tr><td>' + esc(row.area) + '</td><td>' + pill(row.status) + '</td><td>' + esc(row.subject) + '<div class="sub">' + esc(row.explanation) + '</div></td></tr>'; }).join('');
+      var last = quality.lastRun;
+      return '<article class="card"><h2>Data status</h2><p class="sub">CURRENT: up to date for an open period. COMPLETE: every required report for the period is on file and verified. PARTIAL: some reports are on file. NEEDS REVIEW: an unexplained mismatch or mapping. MISSING: a required report has not arrived. A recent import alone does not make a period complete.</p>' +
+        '<table><tr><th>Period</th><th>Status</th><th>Detail</th></tr>' + periodRows + '</table>' +
+        '<h2>Metrics: latest verified business date</h2><table><tr><th>Metric</th><th>Status</th><th>Verified through</th><th>Expected through</th><th>Detail</th></tr>' + metricRows + '</table>' +
+        '<h2>Daily report packages</h2><table><tr><th>Business day</th><th>Status</th><th>Reports</th><th>Detail</th></tr>' + dayRows + '</table></article>' +
+        '<article class="card"><h2>Active alerts (' + quality.active.length + ')</h2>' + (active ? '<ul class="list">' + active + '</ul>' : '<p class="sub good">No active alerts.</p>') +
+        '<h2>Resolved alerts (' + quality.resolvedCount + ')</h2>' + (resolved ? '<ul class="list">' + resolved + '</ul>' : '<p class="sub">None yet.</p>') +
+        '<p class="sub">A missing-report alert resolves itself when the report arrives and passes validation. Resolved alerts stay here as a record. One consolidated email a day goes to the admin when a new problem appears.</p></article>' +
+        '<article class="card"><h2>Automated quality checks</h2><p class="sub">' + (last ? 'Last run ' + esc(String(last.at).slice(0, 16).replace('T', ' ')) + ' UTC after ' + esc(last.trigger) + ': ' + esc(last.passed) + ' PASS, ' + esc(last.flagged) + ' FLAG, ' + esc(last.noted) + ' NOTE in ' + esc(last.seconds) + ' s.' : 'Not run yet.') + ' NOTE is a legitimate, explained difference (for example SNAP vs NWDSR). Checks never change a reported figure.</p>' +
+        '<table><tr><th>Check</th><th>Result</th><th>Finding</th></tr>' + checks + '</table>' +
+        (role === 'admin' ? '<p class="noprint"><button id="run-checks" type="button">Run checks now</button></p>' : '') + '</article>';
+    }
+    function backupCard(backups) {
+      if (!backups) return '';
+      var latest = backups.latest;
+      var drill = backups.drill;
+      var recent = backups.recent.map(function (row) { return '<li>' + pill(row.status) + esc(row.kind) + ' · ' + esc(String(row.at).slice(0, 16).replace('T', ' ')) + ' UTC · ' + esc(row.trigger) + '<div class="sub">' + esc(row.note) + '</div></li>'; }).join('');
+      return '<article class="card"><h2>Backups and recovery</h2>' +
+        '<p>' + (latest ? pill(latest.status) + 'Latest workbook copy ' + esc(String(latest.at).slice(0, 16).replace('T', ' ')) + ' UTC: ' + esc(latest.tabs) + ' tabs, ' + esc(latest.rows) + ' rows.' : '<span class="warn">No backup yet.</span> The nightly backup runs at 2:00.') + '</p>' +
+        '<p>' + (drill ? pill(drill.status) + 'Last restore drill ' + esc(String(drill.at).slice(0, 16).replace('T', ' ')) + ' UTC.' : '<span class="warn">No restore drill yet.</span> One runs weekly after the nightly backup.') + '</p>' +
+        '<p class="sub">' + esc(backups.kept) + ' workbook copies kept · ' + esc(backups.filesBackedUp) + ' archived report and evaluation files copied' + (backups.folder ? ' · <a href="' + esc(backups.folder) + '" target="_blank" rel="noopener">Open the backup folder</a>' : '') + '</p>' +
+        (recent ? '<ul class="list">' + recent + '</ul>' : '') +
+        (role === 'admin' ? '<p class="noprint"><button id="backup-now" type="button">Back up now</button> <button id="restore-drill" type="button">Test restore</button></p><p id="backup-error" class="error"></p>' : '') + '</article>';
+    }
     function renderHealth(data) {
       var rows = data.rows.map(function (row) { return '<tr><td>' + esc(row.key) + '</td><td>' + esc(row.value) + '</td></tr>'; }).join('');
       var imports = data.imports.map(function (row) { return '<li>' + esc(row.status) + ' · ' + esc(row.file) + ' · ' + esc(row.note) + '</li>'; }).join('');
       var exceptions = (data.exceptions || []).map(function (row) { return '<li>' + esc(row.severity) + ' · ' + esc(row.message) + '</li>'; }).join('');
-      document.getElementById('screen').innerHTML = '<article class="card"><h2>System health · version ' + data.version + '</h2><table>' + rows + '</table><h2>Exceptions</h2>' + (exceptions ? '<ul class="list">' + exceptions + '</ul>' : '<p class="sub">No open technical exceptions.</p>') + '<p class="sub">A negative written day is an order cancellation. It stays in the sales total and is not emailed as an error.</p><h2>Imports</h2><ul class="list">' + imports + '</ul></article>';
+      document.getElementById('screen').innerHTML = qualityCards(data.quality) + backupCard(data.backups) + '<article class="card"><h2>System health · version ' + data.version + '</h2><table>' + rows + '</table><h2>Exceptions</h2>' + (exceptions ? '<ul class="list">' + exceptions + '</ul>' : '<p class="sub">No open technical exceptions.</p>') + '<p class="sub">A negative written day is an order cancellation. It stays in the sales total and is not emailed as an error.</p><h2>Imports</h2><ul class="list">' + imports + '</ul></article>';
+      var busy = function (button, text) { button.disabled = true; button.textContent = text; };
+      var failed = function (error) {
+        if (/sign in/i.test(error.message)) return showLogin(error.message);
+        var box = document.getElementById('backup-error');
+        if (box) box.textContent = error.message;
+      };
+      var checks = document.getElementById('run-checks');
+      if (checks) checks.addEventListener('click', function () { busy(checks, 'Checking…'); api('runChecks').then(function (reply) { renderHealth(reply.health); }).catch(failed); });
+      var backup = document.getElementById('backup-now');
+      if (backup) backup.addEventListener('click', function () { busy(backup, 'Backing up…'); api('runBackup', { mode: 'backup' }).then(function (reply) { renderHealth(reply.health); }).catch(failed); });
+      var drill = document.getElementById('restore-drill');
+      if (drill) drill.addEventListener('click', function () { busy(drill, 'Testing restore…'); api('runBackup', { mode: 'drill' }).then(function (reply) { renderHealth(reply.health); }).catch(failed); });
     }
     var rosterCache = null;
     var rosterMode = '';
