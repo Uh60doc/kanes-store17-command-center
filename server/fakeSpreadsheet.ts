@@ -16,6 +16,8 @@ export function fakeSpreadsheet(tabs: Record<string, Grid>) {
       appendRow: (row: unknown[]) => { grid().push([...row]); },
       clearContents: () => { grid().length = 0; },
       getLastRow: () => grid().length,
+      setFrozenRows: (_count: number) => undefined,
+      setColumnWidth: (_col: number, _width: number) => undefined,
       getRange: (row: number, col: number, rows = 1, cols = 1) => {
         const ensure = () => {
           while (grid().length < row + rows - 1) grid().push([]);

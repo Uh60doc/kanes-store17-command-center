@@ -29,6 +29,18 @@ Usernames are `Sales17`, `Store17`, and `Kelly`.
 
 Changing a password in Admin signs that role out. The monthly goals live on `CC_Config` and are not rewritten by the daily pace.
 
+## Development log (`CC_DevLog`)
+
+Every new Cursor development assignment is recorded on the `CC_DevLog` tab of the production spreadsheet so the General Manager can check progress remotely. Newest row is at the top. Statuses are only `QUEUED`, `STARTED`, `COMPLETED`, and `BLOCKED`. Daily imports do not create versions. A development version is not live until that change is deployed.
+
+```javascript
+var started = startDevTask('Short description', 'optional note');
+finishDevTask(started.taskNumber, 'Tested successfully');
+blockDevTask(started.taskNumber, 'Brief reason');
+```
+
+If the sheet write fails, report that instead of claiming the log was updated. Do not invent completion records.
+
 The store month always runs from the 2nd through the 1st of the next month. The salesperson month always runs from the 1st through the last calendar day. Both are generated for whatever month the New York date falls in. October 1 is salesperson-only. November 1 closes the October store month and opens the November salesperson month. Every store day is a selling day unless `CC_SellingDays` marks that date `NO` or `closed`. A blank day is incomplete, not zero.
 
 ## What the owner still has to do
