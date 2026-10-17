@@ -1875,9 +1875,42 @@
         else document.getElementById('roster-area').innerHTML = '<p class="error">' + esc(error.message) + '</p>';
       });
     }
+    function drawDevLog(data) {
+      var host = document.getElementById('devlog-area');
+      if (!host) return;
+      var d = data && data.development ? data.development : data;
+      if (!d || d.error) {
+        host.innerHTML = '<article class="card"><h2>Development status</h2><p class="error">CC_DevLog could not be read' + (d && d.error ? ': ' + esc(d.error) : '') + '. Do not assume the log was updated.</p></article>';
+        return;
+      }
+      function taskLine(label, record) {
+        if (!record) return '<p><strong>' + esc(label) + '</strong> None</p>';
+        return '<p><strong>' + esc(label) + '</strong> ' + esc(record.version) + ' · Task ' + esc(String(record.taskNumber)) + ' · ' + esc(record.description) + ' · ' + esc(record.status) + '</p>';
+      }
+      var liveNote = d.aheadOfProduction
+        ? 'Deployed production version is ' + esc(d.productionVersion || 'unknown') + '. Latest CC_DevLog version ' + esc(d.latestVersion || '') + ' is not live until it is deployed.'
+        : (d.deployedMatchesLatestCompleted
+          ? 'The latest completed assignment matches this deployed web app.'
+          : 'Deployed production version is ' + esc(d.productionVersion || 'unknown') + '.');
+      host.innerHTML = '<article class="card"><h2>Development status</h2>' +
+        '<p class="sub">Read-only. Open CC_DevLog in the Command Center Google Sheet for the full list. Newest assignment is at the top. Daily imports do not create software versions.</p>' +
+        '<p><strong>LATEST VERSION</strong> ' + esc(d.latestVersion || 'None') + '</p>' +
+        taskLine('LAST STARTED TASK', d.lastStarted) +
+        taskLine('LAST COMPLETED TASK', d.lastCompleted) +
+        '<p><strong>LAST UPDATED</strong> ' + esc(d.lastUpdated ? d.lastUpdated + ' ET' : 'None') + '</p>' +
+        '<p><strong>DEPLOYED PRODUCTION</strong> ' + esc(d.productionVersion || '') + '</p>' +
+        '<p class="sub">' + liveNote + '</p></article>';
+    }
+    function loadDevLog() {
+      api('devLog').then(drawDevLog).catch(function (error) {
+        if (/sign in/i.test(error.message)) showLogin(error.message);
+        else drawDevLog({ development: { error: error.message } });
+      });
+    }
     function renderAdmin() {
       rosterMode = '';
       document.getElementById('screen').innerHTML =
+        '<h2 class="section-title">Development status</h2><div id="devlog-area"><p class="sub">Loading development status…</p></div>' +
         '<h2 class="section-title">Manage associates</h2><div id="roster-area"><p class="sub">Loading the roster…</p></div>' +
         '<h2 class="section-title">Passwords and imports</h2>' +
         '<article class="card"><h2>Shared passwords</h2><p class="sub">Changing a password signs that role out everywhere.</p>' +
@@ -1896,6 +1929,7 @@
       document.getElementById('retry').addEventListener('click', function () {
         api('retry').then(function () { openScreen('health'); }).catch(function (error) { document.getElementById('pw-error').textContent = error.message; });
       });
+      loadDevLog();
       loadRoster();
     }
     function na(value) {

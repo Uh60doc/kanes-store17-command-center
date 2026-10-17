@@ -29,6 +29,24 @@ Usernames are `Sales17`, `Store17`, and `Kelly`.
 
 Changing a password in Admin signs that role out. The monthly goals live on `CC_Config` and are not rewritten by the daily pace.
 
+## Development log (`CC_DevLog`)
+
+Every new Cursor development assignment is recorded on the `CC_DevLog` tab of the production spreadsheet so the General Manager can check progress remotely. Newest row is at the top. Statuses are only `QUEUED`, `STARTED`, `COMPLETED`, and `BLOCKED`. Daily imports do not create versions. A development version is not live until that change is deployed.
+
+From Apps Script (or an admin Command Center session using the existing `dispatch` connection):
+
+```javascript
+var started = startDevTask('Short description', 'optional note');
+finishDevTask(started.taskNumber, 'Tested successfully');
+blockDevTask(started.taskNumber, 'Brief reason');
+
+google.script.run.dispatch('recordDevLog', { action: 'start', description: 'Short description', notes: 'optional note' });
+google.script.run.dispatch('recordDevLog', { action: 'finish', taskNumber: 1, notes: 'Tested successfully' });
+google.script.run.dispatch('recordDevLog', { action: 'block', taskNumber: 1, notes: 'Brief reason' });
+```
+
+`recordDevLog` is admin-only. The Admin page is read-only. The clasp Execution API (`clasp run`) is not enabled on this project; if a write fails, report that instead of claiming the log was updated. Do not invent completion records. Do not store credentials in client-side code.
+
 The store month always runs from the 2nd through the 1st of the next month. The salesperson month always runs from the 1st through the last calendar day. Both are generated for whatever month the New York date falls in. October 1 is salesperson-only. November 1 closes the October store month and opens the November salesperson month. Every store day is a selling day unless `CC_SellingDays` marks that date `NO` or `closed`. A blank day is incomplete, not zero.
 
 ## What the owner still has to do

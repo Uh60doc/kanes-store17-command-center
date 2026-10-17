@@ -16,6 +16,8 @@ export function fakeSpreadsheet(tabs: Record<string, Grid>) {
       appendRow: (row: unknown[]) => { grid().push([...row]); },
       clearContents: () => { grid().length = 0; },
       getLastRow: () => grid().length,
+      setFrozenRows: (_count: number) => undefined,
+      setColumnWidth: (_col: number, _width: number) => undefined,
       getRange: (row: number, col: number, rows = 1, cols = 1) => {
         const ensure = () => {
           while (grid().length < row + rows - 1) grid().push([]);
@@ -29,6 +31,7 @@ export function fakeSpreadsheet(tabs: Record<string, Grid>) {
           setValue: (value: unknown) => { ensure(); grid()[row - 1]![col - 1] = value; },
           getValue: () => grid()[row - 1]?.[col - 1] ?? '',
           getValues: () => Array.from({ length: rows }, (_, r) => Array.from({ length: cols }, (_, c) => grid()[row - 1 + r]?.[col - 1 + c] ?? '')),
+          setNumberFormat: (_pattern: string) => undefined,
         };
       },
     };

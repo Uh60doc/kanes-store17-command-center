@@ -1,5 +1,5 @@
 var SPREADSHEET_ID_ = '1KtsfQPQRdg3IdNXomlM5t47IyE1psouxvgW-D8VSLfw';
-var APP_VERSION_ = '1.0.0';
+var APP_VERSION_ = '1.0.1';
 
 var ROUTES_ = {
   login: null,
@@ -42,10 +42,12 @@ var ROUTES_ = {
   editDocument: ['admin'],
   removeDocument: ['admin'],
   saveDocPacket: ['admin'],
+  devLog: ['admin'],
+  recordDevLog: ['admin'],
 };
 
 // Routes that only read. Every other route can change figures, so the cached pages are dropped after it runs.
-var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, previewBriefEmail: true, health: true, bedding: true, coverage: true, roster: true, evals: true, evalWorkbook: true, uploads: true, documents: true, docFile: true };
+var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, previewBriefEmail: true, health: true, bedding: true, coverage: true, roster: true, evals: true, evalWorkbook: true, uploads: true, documents: true, docFile: true, devLog: true };
 // Backups and restore drills write only their own logs, which no cached page reads; a problem they record moves the version itself.
 var LOG_ONLY_ROUTES_ = { runBackup: true };
 // Pages whose reply is reused until the data changes. Each reads every tab once while it is built.
@@ -209,5 +211,7 @@ function route_(name, payload) {
   if (name === 'editDocument') return editDocument_(payload);
   if (name === 'removeDocument') return removeDocument_(payload);
   if (name === 'saveDocPacket') return saveDocPacket_(payload);
+  if (name === 'devLog') return devLog_(payload);
+  if (name === 'recordDevLog') return recordDevLog_(payload);
   throw new Error('That request is not available.');
 }
