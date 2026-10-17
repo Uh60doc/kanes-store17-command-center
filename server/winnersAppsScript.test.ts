@@ -155,3 +155,30 @@ test('the rest of the morning meeting and Home are unchanged by the roster', () 
   assert.equal(morning.yesterday.written.actual, home.board.yesterday.written.actual);
   assert.equal(morning.today.written, home.board.today.written);
 });
+
+test('Home page Sales Winners use the individual PERQ roster: October 15 Ricky then Eric, later day pending, other Home figures unchanged', () => {
+  const logs = ['CC_Health', 'CC_Exceptions', 'CC_Alerts', 'CC_Staffing'];
+  const { gs, tabs } = harness(verifiedOctober(), '2026-10-16');
+  const before = tabText(tabs, logs);
+  const home = plain(gs.home_({ session }));
+  const morning = plain(gs.morning_({ session }));
+  assert.equal(home.winners.date, '2026-10-15');
+  assert.deepEqual(people(home.winners), [['Ricky Nassif', 910, 3], ['Eric Montes Rodriguez', 500, 3]], 'Home ranks Ricky first, Eric second');
+  assert.deepEqual(home.winners, morning.winners);
+  assert.deepEqual(home.rosterNotes, morning.rosterNotes);
+  assert.match((home.rosterNotes as string[]).join(' '), /Store PERQ shows 7 opportunities but the salesperson report adds to 6/);
+  assert.ok(!/not on file/.test(JSON.stringify(home.winners)));
+  assert.equal(tabText(tabs, logs), before, 'reading Home winners does not write staffing or alerts');
+
+  const later = plain(harness().gs.home_({ session }));
+  assert.equal(later.winners.date, '2026-10-16');
+  assert.equal(later.winners.status, 'pending');
+  assert.equal(later.winners.reason, 'PERQ Report Pending');
+
+  const fifteenth = plain(harness().gs.home_({ session, day: '2026-10-15' }));
+  assert.deepEqual(people(fifteenth.winners), [['Ricky Nassif', 910, 3], ['Eric Montes Rodriguez', 500, 3]]);
+  const strip = (row: Row) => ({ ...row, winners: undefined, rosterNotes: undefined, updated: undefined });
+  assert.deepEqual(strip(fifteenth), strip(later), 'choosing a Home winners day changes only the winners section');
+  assert.equal(later.month.written, home.month.written);
+  assert.equal(later.board.kpis.length, home.board.kpis.length);
+});

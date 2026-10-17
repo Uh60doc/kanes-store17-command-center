@@ -1686,6 +1686,13 @@ function home_(payload) {
     },
     kpis: homeKpiStrip_(goals, kpiActuals, monthClosing),
   };
+  var winnersPack = { winners: { date: priorBusinessDay_(today), status: 'pending', reason: 'PERQ Report Pending', detail: '', people: [] }, roster: { notes: [] } };
+  try {
+    winnersPack = salesWinnersPack_(today, yesterdayWrittenGoal, payload && payload.day);
+  } catch (error) {
+    if (payload && payload.day) throw error;
+    try { appendException_('Update Failed', 'Yesterday\'s sales winners could not be read. Last verified totals were left in place.'); } catch (ignore) {}
+  }
   return {
     role: payload.session.role,
     version: APP_VERSION_,
@@ -1737,6 +1744,8 @@ function home_(payload) {
     board: board,
     attention: attention.slice(0, 8),
     people: peopleRows_(individual.start, individual.end).slice(0, 8),
+    winners: winnersPack.winners,
+    rosterNotes: winnersPack.roster.notes || [],
   };
 }
 
@@ -2396,9 +2405,35 @@ function snapWrittenOn_(date) {
 }
 
 /**
- * Every salesperson on the working roster, ranked by SNAP Written for the same business date. Without that day's
- * SNAP salesperson lines each amount is Pending, never 0. The goal share is context only and ranks nobody.
+ * Prior completed business day's working roster and SNAP ranking. A chosen day is only the winners section;
+ * Written, Delivered and the other Home figures stay on calendar today / yesterday.
  */
+function salesWinnersPack_(today, writtenGoal, askedDay) {
+  var winnersDay = priorBusinessDay_(today);
+  var chosenDay = false;
+  if (askedDay) {
+    var asked = validDate_(askedDay);
+    if (asked >= today) throw new Error('Choose a business day before today.');
+    chosenDay = asked !== winnersDay;
+    winnersDay = asked;
+  }
+  var roster;
+  try {
+    roster = workingRoster_(winnersDay);
+  } catch (error) {
+    try { appendException_('Update Failed', 'The working roster for ' + winnersDay + ' could not be read. ' + String(error && error.message ? error.message : error)); } catch (ignore) {}
+    roster = { date: winnersDay, status: 'pending', reason: 'PERQ Report Pending', detail: 'The working roster for ' + winnersDay + ' could not be read.', people: [], notes: [] };
+  }
+  var yesterday = shiftDate_(today, -1);
+  return {
+    winnersDay: winnersDay,
+    chosenDay: chosenDay,
+    roster: roster,
+    winners: morningWinners_(roster, winnersDay === yesterday ? writtenGoal : null, snapWrittenOn_(winnersDay)),
+  };
+}
+
+/** Every salesperson on the working roster, ranked by SNAP Written for the same date. Missing SNAP is Pending, never $0. */
 function morningWinners_(roster, goal, snap) {
   var result = { date: roster.date, status: 'pending', reason: roster.reason, detail: roster.detail || '', share: null, snapReported: false, people: [] };
   if (roster.status !== 'ready') return result;
@@ -2510,29 +2545,18 @@ function morning_(payload) {
   } catch (error) {
     try { appendException_('Update Failed', 'Morning meeting figures could not be read. Last verified totals were left in place.'); } catch (ignore) {}
   }
-  var winnersDay = priorBusinessDay_(home.today);
-  var chosenDay = false;
-  if (payload.day) {
-    var asked = validDate_(payload.day);
-    if (asked >= home.today) throw new Error('Choose a business day before today.');
-    chosenDay = asked !== winnersDay;
-    winnersDay = asked;
-  }
   var todayStaffing = [];
   try {
     todayStaffing = readStaffing_(home.today);
   } catch (error) {
     todayStaffing = [];
   }
-  var roster;
-  try {
-    roster = workingRoster_(winnersDay);
-  } catch (error) {
-    try { appendException_('Update Failed', 'The working roster for ' + winnersDay + ' could not be read. ' + String(error && error.message ? error.message : error)); } catch (ignore) {}
-    roster = { date: winnersDay, status: 'pending', reason: 'PERQ Report Pending', detail: 'The working roster for ' + winnersDay + ' could not be read.', people: [], notes: [] };
-  }
   var writtenPerf = home.board.yesterday.written;
-  var winners = morningWinners_(roster, winnersDay === yesterday ? writtenPerf.goal : null, snapWrittenOn_(winnersDay));
+  var pack = salesWinnersPack_(home.today, writtenPerf.goal, payload.day);
+  var winnersDay = pack.winnersDay;
+  var chosenDay = pack.chosenDay;
+  var roster = pack.roster;
+  var winners = pack.winners;
   var workedToday = workedCount_(todayStaffing);
   var personalShare = workedToday === null || home.board.today.written === null ? null : Math.round((home.board.today.written / workedToday) * 100) / 100;
   var gaps = [];

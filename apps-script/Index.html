@@ -430,6 +430,68 @@
     function card(title, figure, note, tone) {
       return '<article class="card"><h2>' + title + '</h2><p class="figure ' + (tone || '') + '">' + figure + '</p><p class="sub">' + (note || '') + '</p></article>';
     }
+    function pendingFigure(value) {
+      return value === null || value === undefined || value === '';
+    }
+    function shortDate(iso) {
+      if (!iso || String(iso).length < 10) return '';
+      var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      var parts = String(iso).slice(0, 10).split('-');
+      var month = months[Number(parts[1]) - 1] || '';
+      var day = Number(parts[2]);
+      if (!month || !day) return '';
+      return month + ' ' + day;
+    }
+    function winnerCardsHtml(winners) {
+      winners = winners || { status: 'pending', reason: 'PERQ Report Pending', people: [] };
+      var day = shortDate(winners.date) || 'yesterday';
+      if (winners.status !== 'ready') {
+        return '<article class="card"><h2>Working roster · ' + esc(day) + '</h2><p class="figure pending">' + esc(winners.reason || 'PERQ Report Pending') + '</p><p class="sub">' + esc(winners.detail || '') + '</p></article>';
+      }
+      if (!winners.people.length) return '<p class="sub">' + esc(winners.reason) + '</p>';
+      return winners.people.map(function (person, index) {
+        var waiting = pendingFigure(person.written);
+        var parts = [];
+        if (person.source === 'staffing') parts.push('Confirmed in CC_Staffing');
+        else if (pendingFigure(person.opportunities)) parts.push('Individual PERQ: opportunities conflict between exports');
+        else parts.push('Individual PERQ: ' + person.opportunities + (Number(person.opportunities) === 1 ? ' opportunity' : ' opportunities'));
+        if (waiting) parts.push('SNAP Written not on file yet');
+        else if (Number(person.written) === 0) parts.push('No sales on the complete SNAP report');
+        if (!pendingFigure(person.share)) parts.push('Individual share ' + money(person.share) + (pendingFigure(person.above) ? '' : ' · EXCEEDED BY ' + money(person.above)));
+        var tone = waiting ? 'pending' : (Number(person.written) > 0 && (index === 0 || !pendingFigure(person.above)) ? 'good' : '');
+        return '<article class="card"><h2>' + esc((waiting ? '' : '#' + (index + 1) + ' ') + person.name) + '</h2><p class="figure ' + tone + '">' + (waiting ? 'Pending' : money(person.written)) + '</p><p class="sub">' + esc(parts.join(' · ')) + '</p></article>';
+      }).join('');
+    }
+    function winnersSectionHtml(winners, yesterdayDate, notes) {
+      winners = winners || { status: 'pending', reason: 'PERQ Report Pending', people: [] };
+      var day = shortDate(winners.date) || 'yesterday';
+      var title = winners.date && yesterdayDate && winners.date !== yesterdayDate ? 'Sales winners · ' + day : 'Yesterday\'s sales winners';
+      var intro = '<p class="sub">Business date ' + esc(winners.date || '') + ' · working salespeople from the individual PERQ report, ranked by SNAP Written, highest first.' +
+        (winners.status === 'ready' && winners.people.length && !winners.snapReported ? ' ' + esc(winners.reason) : '') + '</p>';
+      var picker = '<div class="summary-actions noprint" style="align-items:center;margin:8px 0 12px"><input id="winners-day" type="date" aria-label="Business day" max="' + esc(yesterdayDate || '') + '" value="' + esc(winners.date || '') + '" style="max-width:220px" />' +
+        '<button type="button" id="winners-show" class="secondary">Show this business day</button><span id="winners-error" class="error"></span></div>';
+      var staffNote = (notes || []).map(function (line) { return '<p class="sub">' + esc(line) + '</p>'; }).join('');
+      return '<h2 class="section-title" id="winners-title">' + esc(title) + '</h2>' + intro + picker + '<div class="morning-grid">' + winnerCardsHtml(winners) + '</div>' + staffNote;
+    }
+    function bindWinnersPicker(route, redraw) {
+      var button = document.getElementById('winners-show');
+      if (!button) return;
+      button.addEventListener('click', function () {
+        var day = document.getElementById('winners-day').value;
+        button.disabled = true;
+        document.getElementById('winners-error').textContent = '';
+        api(route, day ? { day: day } : {}).then(function (next) {
+          if (screen !== route && !(route === 'home' && screen === 'home')) return;
+          redraw(next);
+          var title = document.getElementById('winners-title');
+          if (title && title.scrollIntoView) title.scrollIntoView({ block: 'start' });
+        }).catch(function (error) {
+          button.disabled = false;
+          if (/sign in/i.test(error.message)) showLogin(error.message);
+          else document.getElementById('winners-error').textContent = error.message;
+        });
+      });
+    }
     function toneFor(actual, goal) {
       if (actual === null || actual === undefined || goal === null || goal === undefined || goal === '') return 'pending';
       var value = Number(actual);
@@ -541,6 +603,7 @@
       var kpiRows = board.kpis || [];
       var primaryKpis = kpiRows.filter(function (row) { return row.tier === 'primary'; }).map(kpiTile).join('');
       var secondaryKpis = kpiRows.filter(function (row) { return row.tier !== 'primary'; }).map(kpiTile).join('');
+      var winnersHtml = (focus === 'written' || focus === 'delivered') ? '' : winnersSectionHtml(data.winners, data.yesterday && data.yesterday.date, data.rosterNotes);
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Yesterday\'s results</h2>' +
         '<div class="score-row">' +
@@ -549,6 +612,7 @@
         performanceCard('Written goal performance', data.yesterday ? data.yesterday.written : null, yesterdayBoard.written) +
         performanceCard('Delivered goal performance', data.yesterday ? data.yesterday.delivered : null, yesterdayBoard.delivered) +
         '</div>' +
+        winnersHtml +
         '<h2 class="section-title">Today\'s goals</h2>' +
         '<div class="score-row">' +
         boardCard('Today\'s written goal', boardMoney(todayBoard.written), 'Remaining budget divided by days left.', '') +
@@ -567,6 +631,7 @@
         '<div class="kpi-primary" id="kpi-primary">' + primaryKpis + '</div>' +
         '<div class="kpi-secondary" id="kpi-secondary">' + secondaryKpis + '</div>' +
         '<p class="sub">Store month ' + esc(data.period) + ' only. ' + standardText(data) + '</p>';
+      if (winnersHtml) bindWinnersPicker('home', function (next) { renderHome(next, focus); });
     }
 
     function renderDaily(data) {
@@ -1362,15 +1427,6 @@
         if (Math.abs(pct) < 0.0005) return 'even with the goal';
         return Math.abs(pct * 100).toFixed(1) + '% ' + (pct > 0 ? 'above' : 'below') + ' the goal · ' + signed(perf.delta);
       }
-      function shortDate(iso) {
-        if (!iso || String(iso).length < 10) return '';
-        var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        var parts = String(iso).slice(0, 10).split('-');
-        var month = months[Number(parts[1]) - 1] || '';
-        var day = Number(parts[2]);
-        if (!month || !day) return '';
-        return month + ' ' + day;
-      }
       function periodLabel(period) {
         var match = String(period || '').match(/(\d{4}-\d{2}-\d{2})\s+through\s+(\d{4}-\d{2}-\d{2})/);
         if (!match) return '';
@@ -1423,28 +1479,6 @@
       } else if (closingMtd && closingMtd.gap) {
         closingDetail += ' · ' + closingMtd.gap;
       }
-      var winners = data.winners || { status: 'pending', reason: 'PERQ Report Pending', people: [] };
-      var winnerDay = shortDate(winners.date) || 'yesterday';
-      var winnerHtml = '';
-      if (winners.status !== 'ready') winnerHtml = huddleCard('Working roster · ' + winnerDay, esc(winners.reason || 'PERQ Report Pending'), esc(winners.detail || ''), 'pending');
-      else if (!winners.people.length) winnerHtml = '<p class="sub">' + esc(winners.reason) + '</p>';
-      else winnerHtml = winners.people.map(function (person, index) {
-        var waiting = pending(person.written);
-        var parts = [];
-        if (person.source === 'staffing') parts.push('Confirmed in CC_Staffing');
-        else if (pending(person.opportunities)) parts.push('Individual PERQ: opportunities conflict between exports');
-        else parts.push('Individual PERQ: ' + person.opportunities + (Number(person.opportunities) === 1 ? ' opportunity' : ' opportunities'));
-        if (waiting) parts.push('SNAP Written not on file yet');
-        else if (Number(person.written) === 0) parts.push('No sales on the complete SNAP report');
-        if (!pending(person.share)) parts.push('Individual share ' + money(person.share) + (pending(person.above) ? '' : ' · EXCEEDED BY ' + money(person.above)));
-        var tone = waiting ? 'pending' : (Number(person.written) > 0 && (index === 0 || !pending(person.above)) ? 'good' : '');
-        return huddleCard((waiting ? '' : '#' + (index + 1) + ' ') + person.name, waiting ? 'Pending' : money(person.written), esc(parts.join(' · ')), tone);
-      }).join('');
-      var winnerTitle = winners.date && yesterday.date && winners.date !== yesterday.date ? 'Sales winners · ' + winnerDay : 'Yesterday\'s sales winners';
-      var winnerIntro = '<p class="sub">Business date ' + esc(winners.date || '') + ' · working salespeople from the individual PERQ report, ranked by SNAP Written, highest first.' +
-        (winners.status === 'ready' && winners.people.length && !winners.snapReported ? ' ' + esc(winners.reason) : '') + '</p>';
-      var winnerPicker = '<div class="summary-actions noprint" style="align-items:center;margin:8px 0 12px"><input id="winners-day" type="date" aria-label="Business day" max="' + esc(yesterday.date || '') + '" value="' + esc(winners.date || '') + '" style="max-width:220px" />' +
-        '<button type="button" id="winners-show" class="secondary">Show this business day</button><span id="winners-error" class="error"></span></div>';
       var promo = data.promotion;
       var promoHtml = '<p class="sub">No approved promotion is on the calendar.</p>';
       if (promo) {
@@ -1496,7 +1530,6 @@
           '<label><input id="promo-approved" type="checkbox" ' + (promoSource.approved === 'yes' ? 'checked' : '') + ' /> Approved for the team</label>' +
           '<p id="promo-error" class="error"></p><button id="promo-save" type="button">Save promotion</button></article>';
       }
-      var staffNote = (data.rosterNotes || []).map(function (line) { return '<p class="sub">' + esc(line) + '</p>'; }).join('');
       document.getElementById('screen').innerHTML =
         '<div class="morning">' +
         '<h2 class="section-title">Results</h2><div class="morning-five">' +
@@ -1513,7 +1546,7 @@
         huddleCard('Closing target', percent(today.closingGoal), 'Net Written customers divided by PERQ.', '') +
         huddleCard('Per salesperson', huddleMoney(today.personalShare), pending(today.personalShare) ? 'Today\'s working roster is not on file.' : 'Today\'s written goal divided by associates working today.', pending(today.personalShare) ? 'pending' : '') +
         '</div>' +
-        '<h2 class="section-title" id="winners-title">' + esc(winnerTitle) + '</h2>' + winnerIntro + winnerPicker + '<div class="morning-grid">' + winnerHtml + '</div>' + staffNote +
+        winnersSectionHtml(data.winners, yesterday.date, data.rosterNotes) +
         '<h2 class="section-title">Today\'s promotion</h2>' + promoHtml +
         '<h2 class="section-title">Sales reminders</h2><ul class="list">' + reminders + '</ul>' +
         '<div class="morning-finance"><h2 class="section-title">Financing options</h2><div class="morning-grid">' + finance + '</div>' +
@@ -1523,22 +1556,7 @@
         editor +
         '</div>';
       document.getElementById('print-morning').addEventListener('click', function () { window.print(); });
-      document.getElementById('winners-show').addEventListener('click', function () {
-        var button = this;
-        var day = document.getElementById('winners-day').value;
-        button.disabled = true;
-        document.getElementById('winners-error').textContent = '';
-        api('morning', day ? { day: day } : {}).then(function (next) {
-          if (screen !== 'morning') return;
-          renderMorning(next);
-          var title = document.getElementById('winners-title');
-          if (title && title.scrollIntoView) title.scrollIntoView({ block: 'start' });
-        }).catch(function (error) {
-          button.disabled = false;
-          if (/sign in/i.test(error.message)) showLogin(error.message);
-          else document.getElementById('winners-error').textContent = error.message;
-        });
-      });
+      bindWinnersPicker('morning', renderMorning);
       var save = document.getElementById('promo-save');
       if (save) save.addEventListener('click', function () {
         api('savePromotion', {
