@@ -20,7 +20,7 @@ var DOC_CATEGORIES_ = [
   { name: 'Tools', subcategories: ['Maintenance and Protection Tools', 'Sales Order Checklists', 'Reference Documents', 'Store Forms'] },
   { name: 'Training', subcategories: ['Sales Training', 'Role-Play Materials', 'Training Attendance Forms', 'Product Training', 'Certifications'] },
   { name: 'New Hire', subcategories: ['New Hire Training Manuals', 'Day 1–5 Training Materials', 'Sales Order Completion Checklist', 'Training Quizzes', 'Manager Training Resources', 'Onboarding Documents'] },
-  { name: 'Store Policies', subcategories: ['Store 17 Floor Rules', 'Attendance and Employee Expectations', 'Sales Floor Procedures', 'Opening and Closing Procedures', 'Security Procedures', 'Other Store and Company Policies'] },
+  { name: 'Store Policies', subcategories: ['Store 17 Floor Rules', 'Attendance and Employee Expectations', 'Sales Floor Procedures', 'Opening and Closing Procedures', 'Security Procedures', 'Other Approved Store and Company Policies'] },
   { name: 'Customer Service / CSR', subcategories: ['Customer Service Procedures', 'Delivery Reference Guides', 'Returns and Exchanges', 'Order Corrections', 'Customer Follow-Up', 'CSR Training and Reference Materials'] },
 ];
 

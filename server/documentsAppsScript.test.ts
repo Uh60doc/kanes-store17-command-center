@@ -176,6 +176,19 @@ test('the category is required, the no-personal-records confirmation is required
   assert.equal(gs.sheet_('CC_Documents').length, 0);
 });
 
+test('the five library sections and their suggested subcategories are offered, and a new subcategory needs no code', () => {
+  const { upload, library } = boot();
+  const sections = library(manager).categories;
+  assert.deepEqual(sections.map((entry: any) => entry.name), ['Tools', 'Training', 'New Hire', 'Store Policies', 'Customer Service / CSR']);
+  assert.deepEqual(sections[3].subcategories, ['Store 17 Floor Rules', 'Attendance and Employee Expectations', 'Sales Floor Procedures', 'Opening and Closing Procedures', 'Security Procedures', 'Other Approved Store and Company Policies']);
+  assert.deepEqual(sections[4].subcategories, ['Customer Service Procedures', 'Delivery Reference Guides', 'Returns and Exchanges', 'Order Corrections', 'Customer Follow-Up', 'CSR Training and Reference Materials']);
+  const typed = upload(manager, pdf('returns'), { fileName: 'Returns.pdf', title: 'Returns Guide', category: 'Customer Service / CSR', subcategory: 'returns and exchanges' });
+  const fresh = upload(manager, pdf('holiday'), { fileName: 'Holiday.pdf', title: 'Holiday Hours', category: 'Store Policies', subcategory: 'Holiday Schedules' });
+  const docs = library(manager).docs;
+  assert.equal(docs.find((doc: any) => doc.id === typed.id).subcategory, 'Returns and Exchanges');
+  assert.equal(docs.find((doc: any) => doc.id === fresh.id).subcategory, 'Holiday Schedules');
+});
+
 test('identical titles, file names or contents never replace a document by accident', () => {
   const { upload, library } = boot();
   upload(manager, pdf('one'), { fileName: 'Floor Rules.pdf', title: 'Floor Rules', category: 'Store Policies' });
