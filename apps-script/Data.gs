@@ -2498,6 +2498,7 @@ function health_(payload) {
       return { file: String(item.file_name || item.sha256 || ''), status: String(item.status || ''), note: String(item.note || '') };
     }),
     quality: quality,
+    backups: typeof backupHealth_ === 'function' ? backupHealth_() : null,
   };
 }
 
