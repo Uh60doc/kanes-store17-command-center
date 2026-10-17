@@ -8,7 +8,7 @@ const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 function load() {
   const sandbox: Record<string, unknown> = { SPREADSHEET_ID_: 'test' };
   vm.createContext(sandbox);
-  vm.runInContext(readFileSync(new URL('../apps-script/Data.gs', import.meta.url), 'utf8'), sandbox);
+  for (const file of ['Data.gs', 'Metrics.gs']) vm.runInContext(readFileSync(new URL(`../apps-script/${file}`, import.meta.url), 'utf8'), sandbox);
   return sandbox as Record<string, (...args: unknown[]) => any>;
 }
 

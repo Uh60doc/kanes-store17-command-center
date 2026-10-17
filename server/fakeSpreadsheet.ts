@@ -14,6 +14,7 @@ export function fakeSpreadsheet(tabs: Record<string, Grid>) {
         getValues: () => grid().map((row) => Array.from({ length: width() }, (_, i) => (row[i] === undefined ? '' : row[i]))),
       }),
       appendRow: (row: unknown[]) => { grid().push([...row]); },
+      clearContents: () => { grid().length = 0; },
       getLastRow: () => grid().length,
       getRange: (row: number, col: number, rows = 1, cols = 1) => {
         const ensure = () => {

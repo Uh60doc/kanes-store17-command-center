@@ -23,7 +23,7 @@ function load(tabs: Record<string, Grid>, today: string) {
     SpreadsheetApp: { openById: () => ({ getSheetByName: (name: string) => (tabs[name] ? sheet(name) : null) }) },
   };
   vm.createContext(sandbox);
-  for (const file of ['Data.gs', 'Roster.gs', 'Ledger.gs', 'KpiImport.gs']) vm.runInContext(readFileSync(new URL(`../apps-script/${file}`, import.meta.url), 'utf8'), sandbox);
+  for (const file of ['Data.gs', 'Metrics.gs', 'Roster.gs', 'Ledger.gs', 'KpiImport.gs']) vm.runInContext(readFileSync(new URL(`../apps-script/${file}`, import.meta.url), 'utf8'), sandbox);
   vm.runInContext(`todayNy_ = function () { return '${today}'; };`, sandbox);
   return sandbox as Record<string, (...args: unknown[]) => any>;
 }

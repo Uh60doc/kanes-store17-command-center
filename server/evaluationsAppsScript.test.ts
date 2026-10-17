@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { appsScriptServices, unzipEntries } from './appsScriptServices.ts';
 import { type Grid, loadAppsScript, plain } from './fakeSpreadsheet.ts';
 
-const FILES = ['Data.gs', 'Roster.gs', 'Ledger.gs', 'Import.gs', 'KpiImport.gs', 'Logos.gs', 'Xlsx.gs', 'Evaluations.gs', 'EvalImport.gs'];
+const FILES = ['Data.gs', 'Metrics.gs', 'Roster.gs', 'Ledger.gs', 'Import.gs', 'KpiImport.gs', 'Logos.gs', 'Xlsx.gs', 'Evaluations.gs', 'EvalImport.gs'];
 const manager = { role: 'manager' };
 const admin = { role: 'admin' };
 

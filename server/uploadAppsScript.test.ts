@@ -5,7 +5,7 @@ import { crc32 } from 'node:zlib';
 import { appsScriptServices } from './appsScriptServices.ts';
 import { type Grid, loadAppsScript, plain } from './fakeSpreadsheet.ts';
 
-const FILES = ['Code.gs', 'Data.gs', 'Roster.gs', 'Ledger.gs', 'Import.gs', 'KpiImport.gs', 'EvalImport.gs', 'Evaluations.gs', 'Upload.gs'];
+const FILES = ['Code.gs', 'Data.gs', 'Metrics.gs', 'Roster.gs', 'Ledger.gs', 'Import.gs', 'KpiImport.gs', 'EvalImport.gs', 'Evaluations.gs', 'Upload.gs'];
 const manager = { role: 'manager' };
 const SNAPSHOT_17 = 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-11-01.xlsx';
 const LEDGER_HEADER = ['view', 'grain', 'report_date', 'period_start', 'period_end', 'verified_through', 'store', 'employee_code', 'employee_name', 'side', 'sales_dollars', 'unit_count', 'eligible', 'attachments', 'kpi_percent', 'source_report', 'imported_at', 'record_key'];

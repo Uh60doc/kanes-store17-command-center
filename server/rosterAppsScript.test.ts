@@ -4,7 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { type Grid, loadAppsScript, plain } from './fakeSpreadsheet.ts';
 
-const FILES = ['Data.gs', 'Roster.gs', 'Ledger.gs', 'Import.gs', 'KpiImport.gs'];
+const FILES = ['Data.gs', 'Metrics.gs', 'Roster.gs', 'Ledger.gs', 'Import.gs', 'KpiImport.gs'];
 const admin = { role: 'admin' };
 
 function store(): Record<string, Grid> {

@@ -5,7 +5,7 @@ import { crc32 } from 'node:zlib';
 import { appsScriptServices, blob } from './appsScriptServices.ts';
 import { type Grid, loadAppsScript, plain } from './fakeSpreadsheet.ts';
 
-const FILES = ['Code.gs', 'Data.gs', 'Auth.gs', 'Logos.gs', 'Upload.gs', 'Evaluations.gs', 'Documents.gs'];
+const FILES = ['Code.gs', 'Data.gs', 'Metrics.gs', 'Auth.gs', 'Logos.gs', 'Upload.gs', 'Evaluations.gs', 'Documents.gs'];
 const sales = { role: 'sales' };
 const manager = { role: 'manager' };
 const admin = { role: 'admin' };

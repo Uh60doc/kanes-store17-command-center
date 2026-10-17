@@ -884,6 +884,7 @@ function uploads_(payload) {
         refreshRollup_();
         refreshed = refreshStoreKpiQuietly_(date);
         try { refreshMonthEnd_(); } catch (error) { appendException_('Update Failed', 'CC_MonthEnd could not be refreshed after an upload. The daily record was not changed.'); }
+        try { refreshMetricRegistry_(); } catch (error) { appendException_('Update Failed', 'CC_MetricDefinitions could not be refreshed after an upload. ' + String(error && error.message ? error.message : error)); }
         noteHealth_('last_calculation', new Date().toISOString());
       } finally {
         lock.releaseLock();
