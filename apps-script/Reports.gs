@@ -326,6 +326,7 @@ function reportCatalog_(today) {
       { key: 'monthly', label: 'Monthly', ready: true },
       { key: 'individual', label: 'Individual', ready: true },
       { key: 'meeting', label: 'Generate Meeting Packet', ready: true },
+      { key: 'trend', label: '13-week trend', ready: true },
     ],
     storePeriod: store.start + ' through ' + store.end,
     individualPeriod: individual.start + ' through ' + individual.end,
@@ -1596,10 +1597,10 @@ function reportMeetingPdf_(page) {
 function reportCenter_(payload) {
   var today = todayNy_();
   var kind = String(payload && payload.kind || 'daily');
-  if (kind !== 'daily' && kind !== 'weekly' && kind !== 'monthly' && kind !== 'individual' && kind !== 'meeting') kind = 'daily';
+  if (kind !== 'daily' && kind !== 'weekly' && kind !== 'monthly' && kind !== 'individual' && kind !== 'meeting' && kind !== 'trend') kind = 'daily';
   var locked = reportGuard_(payload, kind);
   if (locked) payload.name = locked;
-  var page = kind === 'daily' ? reportDaily_(payload, today) : (kind === 'weekly' ? reportWeekly_(payload, today) : (kind === 'individual' ? reportIndividual_(payload, today) : (kind === 'monthly' ? reportMonthly_(payload, today) : (kind === 'meeting' ? reportMeeting_(payload, today) : reportUnbuilt_(payload, today, kind)))));
+  var page = kind === 'daily' ? reportDaily_(payload, today) : (kind === 'weekly' ? reportWeekly_(payload, today) : (kind === 'individual' ? reportIndividual_(payload, today) : (kind === 'monthly' ? reportMonthly_(payload, today) : (kind === 'meeting' ? reportMeeting_(payload, today) : (kind === 'trend' ? trend_(payload, today) : reportUnbuilt_(payload, today, kind))))));
   page.catalog = reportCatalog_(today);
   if (payload.session && payload.session.role === 'sales') page.catalog.kinds = [{ key: 'individual', label: 'My report', ready: true }];
   var pdf = '';
@@ -1607,6 +1608,7 @@ function reportCenter_(payload) {
   else if (page.ready && page.layout === 'individual') pdf = reportIndividualPdf_(page);
   else if (page.ready && page.layout === 'monthly') pdf = reportMonthlyPdf_(page);
   else if (page.ready && page.layout === 'meeting') pdf = reportMeetingPdf_(page);
+  else if (page.ready && page.layout === 'trend') pdf = trendPdf_(page);
   else if (page.ready) pdf = reportPdf_(page);
   page.pdf = pdf;
   return page;

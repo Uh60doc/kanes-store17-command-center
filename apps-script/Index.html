@@ -129,6 +129,12 @@
     .report-sheet.report-meeting { max-width: 8.5in; }
     .packet-page { margin: 0 0 18px; padding: 0 0 12px; border-bottom: 1px solid #d5dee3; }
     .packet-page .page-no { margin: 8px 0 0; font-size: 11px; color: #3d5660; }
+    .trend-chart { width: 100%; height: auto; display: block; }
+    .trend-chart text { font-family: "Avenir Next", "Segoe UI", sans-serif; }
+    .trend-note { margin: 6px 0; font-size: 13px; line-height: 1.4; }
+    @media (max-width: 800px) {
+      .report-sheet.report-trend table { font-size: 12px; }
+    }
     .report-sheet h2 { margin: 8px 0 2px; }
     @media (max-width: 980px) {
       .score-row, .kpi-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -469,6 +475,8 @@
       body.print-report #report-sheet.report-meeting { max-width: none; }
       body.print-report #report-sheet.report-meeting .packet-page { break-after: page; page-break-after: always; border: 0; margin: 0; }
       body.print-report #report-sheet.report-meeting .packet-page:last-child { break-after: auto; page-break-after: auto; }
+      body.print-report #report-sheet.report-trend { max-width: none; }
+      body.print-report #report-sheet.report-trend .trend-chart { max-height: 220px; }
       body.print-report #report-sheet.report-meeting .page-no,
       body.print-report #report-sheet.report-meeting table td,
       body.print-report #report-sheet.report-meeting table th,
@@ -1620,6 +1628,10 @@
         extra.packet = reportQuery.packet || 'full';
         if (reportQuery.end) extra.end = reportQuery.end;
       }
+      if (extra.kind === 'trend') {
+        extra.metric = reportQuery.metric || 'written';
+        extra.view = reportQuery.view || 'completed';
+      }
       if (extra.kind === 'weekly' || extra.kind === 'individual') {
         extra.span = reportQuery.span || 'completed';
         if (extra.kind === 'individual' && reportQuery.name) extra.name = reportQuery.name;
@@ -1747,6 +1759,91 @@
         '<p class="report-assess">' + esc(data.assessment || '') + '</p>' +
         '<div class="report-cols"><div><h2>Strengths</h2>' + list(summary.strengths) + '</div><div><h2>Improve</h2>' + list(summary.priorities) + '</div><div><h2>Next month</h2><p>' + esc(summary.focus || '') + '</p></div></div>' };
     }
+    function trendChart(series, mode) {
+      var points = series.points || [];
+      var width = 640;
+      var height = mode === 'bar' ? 220 : 240;
+      var left = 48;
+      var right = 12;
+      var top = 16;
+      var bottom = 36;
+      var plotW = width - left - right;
+      var plotH = height - top - bottom;
+      var values = points.map(function (point) { return point.value; }).filter(function (value) { return value !== null && value !== undefined; });
+      if (series.goal !== null && series.goal !== undefined) values.push(Number(series.goal));
+      points.forEach(function (point) { if (point.moving !== null && point.moving !== undefined) values.push(point.moving); });
+      var min = values.length ? Math.min.apply(null, values) : 0;
+      var max = values.length ? Math.max.apply(null, values) : 1;
+      if (min > 0) min = 0;
+      if (max === min) max = min + 1;
+      else max = max + (max - min) * 0.22;
+      function x(index) { return left + (points.length <= 1 ? plotW / 2 : (plotW * index / (points.length - 1))); }
+      function y(value) { return top + plotH - ((value - min) / (max - min)) * plotH; }
+      var marks = [];
+      if (series.goal !== null && series.goal !== undefined) {
+        marks.push('<line x1="' + left + '" y1="' + y(Number(series.goal)).toFixed(1) + '" x2="' + (width - right) + '" y2="' + y(Number(series.goal)).toFixed(1) + '" stroke="#8a6a2f" stroke-dasharray="4 3" stroke-width="1.5"></line>');
+      }
+      if (mode === 'bar') {
+        var gap = plotW / Math.max(points.length, 1);
+        points.forEach(function (point, index) {
+          var px = left + gap * index + 4;
+          if (point.value === null || point.value === undefined) {
+            marks.push('<text x="' + (px + gap / 2).toFixed(1) + '" y="' + (top + plotH - 4) + '" text-anchor="middle" font-size="8" fill="#667085">Pending</text>');
+          } else {
+            var barY = y(point.value);
+            var barH = top + plotH - barY;
+            marks.push('<rect x="' + px.toFixed(1) + '" y="' + barY.toFixed(1) + '" width="' + Math.max(gap - 8, 4).toFixed(1) + '" height="' + Math.max(barH, 0).toFixed(1) + '" fill="#0d8087"></rect>');
+            marks.push('<text x="' + (px + gap / 2 - 4).toFixed(1) + '" y="' + Math.max(barY - 4, 14).toFixed(1) + '" text-anchor="middle" font-size="8" fill="#102027">' + esc(point.text) + '</text>');
+          }
+          marks.push('<text x="' + (px + gap / 2 - 4).toFixed(1) + '" y="' + (height - 8) + '" text-anchor="middle" font-size="8" fill="#3d5660">' + esc(point.label) + '</text>');
+        });
+      } else {
+        var line = [];
+        points.forEach(function (point, index) {
+          if (point.value === null || point.value === undefined) {
+            if (line.length) marks.push('<polyline fill="none" stroke="#0d8087" stroke-width="2" points="' + line.join(' ') + '"></polyline>');
+            line = [];
+            marks.push('<text x="' + x(index).toFixed(1) + '" y="' + (top + plotH - 4) + '" text-anchor="middle" font-size="8" fill="#667085">Pending</text>');
+          } else {
+            line.push(x(index).toFixed(1) + ',' + y(point.value).toFixed(1));
+            marks.push('<circle cx="' + x(index).toFixed(1) + '" cy="' + y(point.value).toFixed(1) + '" r="3.5" fill="#0d8087"></circle>');
+            marks.push('<text x="' + x(index).toFixed(1) + '" y="' + Math.max(y(point.value) - 8, 14).toFixed(1) + '" text-anchor="middle" font-size="8" fill="#102027">' + esc(point.text) + '</text>');
+          }
+          marks.push('<text x="' + x(index).toFixed(1) + '" y="' + (height - 8) + '" text-anchor="middle" font-size="8" fill="#3d5660">' + esc(point.label) + '</text>');
+        });
+        if (line.length) marks.push('<polyline fill="none" stroke="#0d8087" stroke-width="2" points="' + line.join(' ') + '"></polyline>');
+        var average = [];
+        points.forEach(function (point, index) {
+          if (point.moving === null || point.moving === undefined) {
+            if (average.length) marks.push('<polyline fill="none" stroke="#8a6a2f" stroke-width="1.5" stroke-dasharray="3 3" points="' + average.join(' ') + '"></polyline>');
+            average = [];
+          } else average.push(x(index).toFixed(1) + ',' + y(point.moving).toFixed(1));
+        });
+        if (average.length) marks.push('<polyline fill="none" stroke="#8a6a2f" stroke-width="1.5" stroke-dasharray="3 3" points="' + average.join(' ') + '"></polyline>');
+      }
+      return '<svg class="trend-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' + esc(series.label) + ' ' + mode + ' chart">' + marks.join('') + '</svg>';
+    }
+    function renderTrendReport(data) {
+      reportQuery.metric = data.metric || 'written';
+      reportQuery.view = data.view || 'completed';
+      var options = (data.series || []).map(function (item) {
+        return '<option value="' + esc(item.key) + '"' + (item.key === data.metric ? ' selected' : '') + '>' + esc(item.label) + '</option>';
+      }).join('');
+      var selected = data.selected || (data.series || [])[0] || { points: [], comparison: {}, source: '' };
+      var rows = (selected.points || []).map(function (point) {
+        return '<tr><td>' + esc(point.display) + '</td><td>' + esc(point.text) + '</td><td>' + esc(point.movingText || '') + '</td><td>' + esc(point.coverage) + '</td></tr>';
+      }).join('');
+      var insights = (data.insights || []).map(function (item) { return '<p class="trend-note"><strong>' + esc(item.label) + '.</strong> ' + esc(item.text) + '</p>'; }).join('');
+      var alerts = (data.alerts || []).map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('');
+      var controls = '<label>KPI<select id="report-metric">' + options + '</select></label><label>View<select id="report-view"><option value="completed"' + (data.view === 'completed' ? ' selected' : '') + '>13 completed weeks</option><option value="partial"' + (data.view === 'partial' ? ' selected' : '') + '>Current partial week</option></select></label>';
+      var body = '<h1>' + esc(data.title) + '</h1><p class="report-foot">' + esc(data.view === 'partial' ? data.partialPeriod.label : data.displayDate) + '</p><p class="report-verify">' + esc(data.verification) + '</p>' + insights +
+        '<h2>' + esc(selected.label) + '</h2><p class="trend-note">' + esc(selected.source) + (selected.goalText ? ' Goal ' + esc(selected.goalText) + '.' : '') + '</p>' +
+        trendChart(selected, 'line') + trendChart(selected, 'bar') +
+        '<p class="trend-note">' + esc(selected.comparison && selected.comparison.text || '') + '</p>' +
+        '<table><thead><tr><th>Week</th><th>Actual</th><th>Four-week average</th><th>Coverage</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+        '<h2>Early warnings</h2><ol>' + alerts + '</ol>';
+      return { controls: controls, body: body };
+    }
     function renderReports(data) {
       reportQuery.kind = data.kind || reportQuery.kind || 'daily';
       reportQuery.date = data.date || reportQuery.date || '';
@@ -1758,14 +1855,14 @@
       }).join('');
       var priorities = (data.priorities || []).map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('');
       var winners = data.winners || {};
-      var weekly = data.layout === 'weekly' ? renderWeeklyReport(data) : (data.layout === 'individual' ? renderIndividualReport(data) : (data.layout === 'monthly' ? renderMonthlyReport(data) : (data.layout === 'meeting' ? renderMeetingReport(data) : null)));
+      var weekly = data.layout === 'weekly' ? renderWeeklyReport(data) : (data.layout === 'individual' ? renderIndividualReport(data) : (data.layout === 'monthly' ? renderMonthlyReport(data) : (data.layout === 'meeting' ? renderMeetingReport(data) : (data.layout === 'trend' ? renderTrendReport(data) : null))));
       var period = weekly ? weekly.controls : (data.kind === 'daily'
         ? '<label>Business day<input id="report-date" type="date" value="' + esc(data.date || '') + '"></label>'
         : '<label>Period start<input id="report-start" type="date" value="' + esc((data.period && data.period.start) || reportQuery.start || '') + '"></label><label>Period end<input id="report-end" type="date" value="' + esc((data.period && data.period.end) || reportQuery.end || '') + '"></label>');
       document.getElementById('header-note').textContent = 'Reports · ' + (data.displayDate || data.kind) + ' · no email sent';
       document.getElementById('screen').innerHTML = '<div class="report-controls noprint"><div class="nav" id="report-kinds">' + kinds + '</div>' + period +
         '<button type="button" id="report-apply">Show report</button><button type="button" id="report-print"' + (data.ready ? '' : ' disabled') + '>Print</button><button type="button" id="report-pdf"' + (data.pdf ? '' : ' disabled') + '>Download PDF</button></div>' +
-        '<article id="report-sheet" class="report-sheet' + (data.layout === 'individual' ? ' report-individual' : '') + (data.layout === 'monthly' ? ' report-monthly' : '') + (data.layout === 'meeting' ? ' report-meeting' : '') + '"><p class="report-kicker">KANE\'S FURNITURE · STORE 17</p>' +
+        '<article id="report-sheet" class="report-sheet' + (data.layout === 'individual' ? ' report-individual' : '') + (data.layout === 'monthly' ? ' report-monthly' : '') + (data.layout === 'meeting' ? ' report-meeting' : '') + (data.layout === 'trend' ? ' report-trend' : '') + '"><p class="report-kicker">KANE\'S FURNITURE · STORE 17</p>' +
         (weekly ? weekly.body : ('<h1>' + esc(data.title || 'Report') + '</h1><p class="report-verify">' + esc(data.verification || '') + '</p>' +
         (data.ready ? '<table><thead><tr><th>Measure</th><th>Result</th><th>Goal</th><th>Versus goal</th><th>Source</th></tr></thead><tbody>' + rows + '</tbody></table>' +
           '<h2>Sales winners · ' + esc(winners.date || '') + '</h2><p>' + esc(winners.status === 'pending' ? 'Pending' : winners.text) + '</p><p class="report-foot">' + esc(winners.source || '') + (winners.quiet && winners.quiet !== 'Pending' ? ' No written sale: ' + winners.quiet : '') + '</p>' +
@@ -1786,13 +1883,21 @@
         var span = document.getElementById('report-span');
         var person = document.getElementById('report-name');
         var packet = document.getElementById('report-packet');
+        var metric = document.getElementById('report-metric');
+        var trendView = document.getElementById('report-view');
         if (day) reportQuery.date = day.value;
         if (start) reportQuery.start = start.value;
         if (end) reportQuery.end = end.value;
         if (span) reportQuery.span = span.value;
         if (person) reportQuery.name = person.value;
         if (packet) reportQuery.packet = packet.value;
+        if (metric) reportQuery.metric = metric.value;
+        if (trendView) reportQuery.view = trendView.value;
         api('reports', reportRequest()).then(renderReports).catch(function (error) { document.getElementById('header-note').textContent = error.message; });
+      });
+      ['report-metric', 'report-view'].forEach(function (id) {
+        var control = document.getElementById(id);
+        if (control) control.addEventListener('change', function () { if (apply) apply.click(); });
       });
       var print = document.getElementById('report-print');
       if (print) print.addEventListener('click', function () {
@@ -1810,7 +1915,7 @@
         var url = URL.createObjectURL(blob);
         var link = document.createElement('a');
         link.href = url;
-        var fileName = data.layout === 'individual' ? 'Store17-Weekly-Salesperson-Report-' : (data.layout === 'weekly' ? 'Store17-Weekly-Executive-Report-' : (data.layout === 'monthly' ? 'Store17-Monthly-Executive-Scorecard-' : (data.layout === 'meeting' ? (data.packet === 'executive' ? 'Store17-Executive-Summary-' : 'Store17-Monday-Sales-Meeting-Packet-') : 'Store17-Daily-Management-Summary-')));
+        var fileName = data.layout === 'individual' ? 'Store17-Weekly-Salesperson-Report-' : (data.layout === 'weekly' ? 'Store17-Weekly-Executive-Report-' : (data.layout === 'monthly' ? 'Store17-Monthly-Executive-Scorecard-' : (data.layout === 'meeting' ? (data.packet === 'executive' ? 'Store17-Executive-Summary-' : 'Store17-Monday-Sales-Meeting-Packet-') : (data.layout === 'trend' ? 'Store17-13-Week-Trend-' : 'Store17-Daily-Management-Summary-'))));
         link.download = fileName + ((data.period && data.period.end) || data.date || 'report') + '.pdf';
         link.click();
         setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
