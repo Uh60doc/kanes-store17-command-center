@@ -197,6 +197,13 @@
     .opp-result { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: #17262c; }
     .opp-take { margin: 0; padding-left: 18px; }
     .opp-take li { margin: 4px 0; }
+    .rec-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .rec-hit { font-size: 22px; font-weight: 750; margin: 4px 0; }
+    .rec-yes { color: #8fd9a8; }
+    .rec-no { color: #f0b4be; }
+    .rec-table { width: 100%; border-collapse: collapse; }
+    .rec-table td, .rec-table th { text-align: left; padding: 6px 4px; border-bottom: 1px solid #245c66; }
+    @media (max-width: 800px) { .rec-cards { grid-template-columns: 1fr; } }
     @media (max-width: 720px) { .opp-compare { grid-template-columns: 1fr; } }
     body.print-eval .eval-print { display: block; margin-top: 16px; }
     .ep-page { background: white; color: #1b2833; font-family: Calibri, "Segoe UI", Arial, sans-serif; font-size: 11pt; line-height: 1.3; max-width: 8.5in; margin: 0 auto 16px; padding: 0.4in; }
@@ -476,7 +483,8 @@
     }
     function navItems() {
       var items = [['home', 'Home'], ['daily', 'Daily'], ['closing', 'Closing'], ['written', 'Written'], ['delivered', 'Delivered'], ['people', 'Sales Team'], ['coach', 'Goal coach'], ['morning', 'Morning meeting'], ['documents', 'Documents']];
-      if (role !== 'sales') items.splice(8, 0, ['brief', 'Manager brief']);
+      if (role !== 'sales') items.splice(8, 0, ['recovery', 'Recovery']);
+      if (role !== 'sales') items.splice(9, 0, ['brief', 'Manager brief']);
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['orders', 'Open orders'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
@@ -896,7 +904,87 @@
     var peopleSnapPending = [];
     var peopleAnalysisThrough = {};
     var peopleDeliveredVariance = null;
+    var recoveryDirty = false;
     var coachDirty = false;
+    function recoveryMoney(value) {
+      if (value === null || value === undefined || value === '') return 'Pending';
+      return money(value);
+    }
+    function recoveryRemaining(days, dailyOpps, ratio, dollars, traffic) {
+      if (days === null || dailyOpps === null || ratio === null || dollars === null || traffic === null) return null;
+      if (days === '' || dailyOpps === '' || ratio === '' || dollars === '' || traffic === '') return null;
+      return Math.round(Number(dailyOpps) * Number(days) * Number(traffic) * Number(ratio) * Number(dollars) * 100) / 100;
+    }
+    function renderRecovery(data) {
+      recoveryDirty = false;
+      var actual = data.actual || {};
+      var econ = data.economics || {};
+      var closing = data.closing || {};
+      document.getElementById('header-note').textContent = 'Sales recovery · store month ' + (data.period || '') + ' · simulation only';
+      function card(block) {
+        var reach = block.reaches === null || block.reaches === undefined ? 'Pending' : (block.reaches ? 'Reaches $400,000' : 'Short of $400,000');
+        var tone = block.reaches ? 'rec-yes' : 'rec-no';
+        if (block.reaches === null || block.reaches === undefined) tone = '';
+        var width = block.monthEnd && data.budget ? Math.max(4, Math.min(100, Math.round(block.monthEnd / data.budget * 100))) : 0;
+        return '<article class="opp-card"><h3>' + esc(block.name) + '</h3><p class="rec-hit ' + tone + '">' + reach + '</p><p class="opp-amt">' + recoveryMoney(block.monthEnd) + '</p><div class="opp-meter"><span class="next" style="width:' + width + '%"></span></div><p class="sub">Remaining ' + recoveryMoney(block.remaining) + ' · gap ' + recoveryMoney(block.gap) + '</p><p class="sub">' + esc(block.note) + '</p></article>';
+      }
+      document.getElementById('screen').innerHTML = '<section class="opp-layout"><p class="opp-banner"><strong>Would the rest of the month reach the written budget?</strong> Actual sales stay as reported. These cards are illustrations for the meeting.</p>' +
+        '<div class="opp-grid"><article class="opp-card"><h3>On file</h3><p>Written ' + recoveryMoney(actual.written) + ' of ' + recoveryMoney(data.budget) + '. Remaining ' + recoveryMoney(actual.writtenLeft) + '.</p><p class="sub">Delivered ' + recoveryMoney(actual.delivered) + ' of ' + recoveryMoney(data.deliveredBudget) + '. Remaining ' + recoveryMoney(actual.deliveredLeft) + '.</p><p class="sub">' + (data.daysLeft === null || data.daysLeft === undefined ? 'Open days left: Pending' : data.daysLeft + ' open days left, including today') + '. ' + esc(data.calendar || '') + '</p></article>' +
+        '<article class="opp-card"><h3>Three different counts</h3><p>NWDSR purchasing customers: ' + (closing.customers === null || closing.customers === undefined ? 'Pending' : closing.customers) + (closing.through ? ' through ' + esc(closing.through) : '') + '.</p><p>PERQ store opportunities: ' + (closing.opportunities === null || closing.opportunities === undefined ? 'Pending' : closing.opportunities) + '. Closing ' + (closing.ratio === null || closing.ratio === undefined ? 'Pending' : percent(closing.ratio)) + '.</p><p>Data Analysis written orders: ' + (data.orders && data.orders.orders !== null && data.orders.orders !== undefined ? data.orders.orders + ' across ' + data.orders.days + ' daily files' : 'Pending') + '.</p><p class="sub">Dollars per purchasing customer on matched days: ' + recoveryMoney(econ.dollarsPerCustomer) + '. Recent daily PERQ opportunities: ' + (econ.dailyOpportunities === null || econ.dailyOpportunities === undefined ? 'Pending' : econ.dailyOpportunities) + '.</p></article></div>' +
+        '<div class="rec-cards">' + card(data.trend) + card(data.goal) + card(data.stretch) + '</div>' +
+        '<article class="opp-card"><h3>This meeting</h3><div class="opp-controls">' +
+        '<label>Closing ratio<select id="rec-close"><option value="actual">Actual</option><option value="0.5">50%</option><option value="0.55">55%</option><option value="0.6">60%</option><option value="custom">Custom</option></select></label>' +
+        '<label>Custom closing %<input id="rec-close-custom" type="number" min="0" max="100" step="1" value="50"></label>' +
+        '<label>Average ticket<select id="rec-ticket"><option value="actual">Actual per customer</option><option value="2500">$2,500 goal</option><option value="custom">Custom</option></select></label>' +
+        '<label>Custom ticket<input id="rec-ticket-custom" type="number" min="0" step="50" value="2500"></label>' +
+        '<label>Traffic % of recent PERQ<input id="rec-traffic" type="number" min="0" step="5" value="100"></label>' +
+        '<label>Remaining selling days<input id="rec-days" type="number" min="0" max="' + (data.daysLeft || 0) + '" step="1" value="' + (data.daysLeft || 0) + '"></label>' +
+        '</div><p class="rec-hit" id="rec-hit"></p><p id="rec-end"></p><p class="sub" id="rec-parts"></p></article>' +
+        '<article class="opp-card"><h3>One change at a time</h3><table class="rec-table"><thead><tr><th>Change</th><th>Extra written</th></tr></thead><tbody id="rec-rows"></tbody></table><p class="sub">The combined row already includes every selected change. Do not add it to the separate rows.</p></article>' +
+        '<article class="opp-card"><h3>Assumptions</h3><ul class="opp-take">' + (data.assumptions || []).map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('') + '</ul></article></section>';
+      function ratio() {
+        var pick = document.getElementById('rec-close').value;
+        if (pick === 'actual') return closing.ratio;
+        if (pick === 'custom') return Number(document.getElementById('rec-close-custom').value) / 100;
+        return Number(pick);
+      }
+      function dollars() {
+        var pick = document.getElementById('rec-ticket').value;
+        if (pick === 'actual') return econ.dollarsPerCustomer;
+        if (pick === 'custom') return Number(document.getElementById('rec-ticket-custom').value);
+        return 2500;
+      }
+      function paint() {
+        var days = Number(document.getElementById('rec-days').value);
+        if (data.daysLeft !== null && data.daysLeft !== undefined && days > data.daysLeft) days = data.daysLeft;
+        var traffic = Number(document.getElementById('rec-traffic').value) / 100;
+        var baseDays = data.daysLeft;
+        var base = recoveryRemaining(baseDays, econ.dailyOpportunities, closing.ratio, econ.dollarsPerCustomer, 1);
+        var chosenRatio = ratio();
+        var chosenDollars = dollars();
+        var combined = recoveryRemaining(days, econ.dailyOpportunities, chosenRatio, chosenDollars, traffic);
+        var closingOnly = recoveryRemaining(baseDays, econ.dailyOpportunities, chosenRatio, econ.dollarsPerCustomer, 1);
+        var ticketOnly = recoveryRemaining(baseDays, econ.dailyOpportunities, closing.ratio, chosenDollars, 1);
+        var trafficOnly = recoveryRemaining(baseDays, econ.dailyOpportunities, closing.ratio, econ.dollarsPerCustomer, traffic);
+        var daysOnly = recoveryRemaining(days, econ.dailyOpportunities, closing.ratio, econ.dollarsPerCustomer, 1);
+        function extra(value) { return value === null || base === null ? null : Math.round((value - base) * 100) / 100; }
+        var monthEnd = combined === null || actual.written === null || actual.written === undefined ? null : Math.round((Number(actual.written) + combined) * 100) / 100;
+        var reaches = monthEnd === null || data.budget === null ? null : monthEnd >= data.budget;
+        document.getElementById('rec-hit').className = 'rec-hit ' + (reaches === null ? '' : (reaches ? 'rec-yes' : 'rec-no'));
+        document.getElementById('rec-hit').textContent = reaches === null ? 'Pending' : (reaches ? 'This scenario reaches $400,000' : 'This scenario is short of $400,000');
+        document.getElementById('rec-end').textContent = 'Month-end illustration ' + recoveryMoney(monthEnd) + '. Remaining written ' + recoveryMoney(combined) + '. Actual written stays ' + recoveryMoney(actual.written) + '.';
+        var rows = [['Closing ratio only', extra(closingOnly)], ['Average ticket only', extra(ticketOnly)], ['Traffic only', extra(trafficOnly)], ['Selling days only', extra(daysOnly)], ['Combined scenario', extra(combined)]];
+        document.getElementById('rec-rows').innerHTML = rows.map(function (row) {
+          return '<tr><td>' + row[0] + '</td><td>' + recoveryMoney(row[1]) + '</td></tr>';
+        }).join('');
+        document.getElementById('rec-parts').textContent = 'Combined extra written is ' + recoveryMoney(extra(combined)) + '. That is the full scenario, not the sum of the rows above it.';
+      }
+      ['rec-close', 'rec-close-custom', 'rec-ticket', 'rec-ticket-custom', 'rec-traffic', 'rec-days'].forEach(function (id) {
+        document.getElementById(id).addEventListener('input', function () { recoveryDirty = true; paint(); });
+        document.getElementById(id).addEventListener('change', function () { recoveryDirty = true; paint(); });
+      });
+      paint();
+    }
     function coachMoney(value) {
       if (value === null || value === undefined || value === '') return 'Pending';
       return money(value);
@@ -3333,6 +3421,7 @@
       if (document.getElementById('eval-editor')) return true;
       if (screen === 'brief' || screen === 'admin' || screen === 'documents' || screen === 'upload') return true;
       if (screen === 'coach' && coachDirty) return true;
+      if (screen === 'recovery' && recoveryDirty) return true;
       var pillow = document.getElementById('pillow-goal');
       if (pillow && String(pillow.value || '').trim()) return true;
       var active = document.activeElement;
@@ -3355,6 +3444,7 @@
       else if (name === 'closing') renderClosing(data);
       else if (name === 'people') renderPeople(data);
       else if (name === 'coach') renderCoach(data);
+      else if (name === 'recovery') renderRecovery(data);
       else if (name === 'morning') renderMorning(data);
       else if (name === 'brief') renderBrief(data);
       else if (name === 'health') renderHealth(data);

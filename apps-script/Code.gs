@@ -1,5 +1,5 @@
 var SPREADSHEET_ID_ = '1KtsfQPQRdg3IdNXomlM5t47IyE1psouxvgW-D8VSLfw';
-var APP_VERSION_ = '1.0.9';
+var APP_VERSION_ = '1.0.10';
 
 var ROUTES_ = {
   login: null,
@@ -46,15 +46,16 @@ var ROUTES_ = {
   recordDevLog: ['admin'],
   dataPulse: ['sales', 'manager', 'admin'],
   coach: ['sales', 'manager', 'admin'],
+  recovery: ['manager', 'admin'],
 };
 
 // Routes that only read. Every other route can change figures, so the cached pages are dropped after it runs.
-var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, previewBriefEmail: true, health: true, bedding: true, coverage: true, roster: true, evals: true, evalWorkbook: true, uploads: true, documents: true, docFile: true, devLog: true, dataPulse: true, coach: true };
+var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, previewBriefEmail: true, health: true, bedding: true, coverage: true, roster: true, evals: true, evalWorkbook: true, uploads: true, documents: true, docFile: true, devLog: true, dataPulse: true, coach: true, recovery: true };
 // Backups and restore drills write only their own logs, which no cached page reads; a problem they record moves the version itself.
 var LOG_ONLY_ROUTES_ = { runBackup: true };
 // Pages whose reply is reused until the data changes. Each reads every tab once while it is built.
-var CACHED_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true, coach: true };
-var MEMO_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true, health: true, coverage: true, coach: true };
+var CACHED_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true, coach: true, recovery: true };
+var MEMO_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true, health: true, coverage: true, coach: true, recovery: true };
 var PAGE_CACHE_SECONDS_ = 1800;
 var PAGE_CACHE_MAX_CHARS_ = 95000;
 
@@ -272,5 +273,6 @@ function route_(name, payload) {
   if (name === 'recordDevLog') return recordDevLog_(payload);
   if (name === 'dataPulse') return dataPulse_(payload);
   if (name === 'coach') return opportunity_(payload);
+  if (name === 'recovery') return recovery_(payload);
   throw new Error('That request is not available.');
 }
