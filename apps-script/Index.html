@@ -75,6 +75,30 @@
     .kpi-line { margin: 4px 0 0; font-size: 14px; line-height: 1.35; color: #c9d4e3; }
     .kpi-line strong { font-weight: 750; }
     .kpi-through { font-size: 12px; color: #9eb0c9; }
+    .report-sheet { max-width: 8.5in; margin: 0 auto; background: white; color: #102027; border: 1px solid #d5dee3; border-radius: 8px; padding: 18px 18px 14px; }
+    .report-sheet h1 { margin: 0; color: #102027; font-size: 22px; letter-spacing: 0; text-transform: none; }
+    .report-sheet h2 { margin: 12px 0 4px; color: #0b7f88; font-size: 12px; letter-spacing: 0.06em; }
+    .report-kicker { margin: 0; color: #0b7f88; font-size: 11px; font-weight: 750; letter-spacing: 0.08em; }
+    .report-verify { margin: 8px 0; padding: 8px 10px; border: 1px solid #0b7f88; background: #f4fbfb; color: #102027; font-size: 12px; line-height: 1.35; }
+    .report-sheet table { width: 100%; table-layout: fixed; }
+    .report-sheet th:nth-child(1) { width: 18%; }
+    .report-sheet th:nth-child(2), .report-sheet th:nth-child(3) { width: 14%; }
+    .report-sheet th:nth-child(4) { width: 20%; }
+    .report-sheet th { color: #0b7f88; font-size: 11px; letter-spacing: 0.04em; }
+    .report-sheet td, .report-sheet th { color: #102027; font-size: 12px; padding: 4px 4px; border-bottom: 1px solid #d5dee3; vertical-align: top; overflow-wrap: anywhere; }
+    .report-sheet td.measure { font-weight: 750; }
+    .report-status { font-weight: 750; }
+    .report-sheet .hit { color: #0b6b3a; }
+    .report-sheet .short { color: #9b1c33; }
+    .report-sheet .pending { color: #6a5208; }
+    .report-bar { display: inline-block; width: 56px; height: 6px; margin-left: 6px; background: #d5dee3; vertical-align: middle; }
+    .report-bar i { display: block; height: 6px; background: #0b6b3a; }
+    .report-bar.short i { background: #9b1c33; }
+    .report-sheet ol { margin: 4px 0 0; padding-left: 18px; font-size: 12px; }
+    .report-sheet .report-foot { margin: 8px 0 0; font-size: 11px; color: #3d5660; }
+    .report-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 0 0 12px; }
+    .report-controls label { margin: 0; color: #9eb0c9; font-size: 12px; }
+    .report-controls input, .report-controls select { min-height: 36px; width: auto; }
     @media (max-width: 980px) {
       .score-row, .kpi-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
@@ -368,6 +392,25 @@
       body.print-actions header.brand, body.print-actions .section-title, body.print-actions .noprint { display: none !important; }
       body.print-actions #action-sheet, body.print-actions #action-sheet * { color: black; background: white; }
       body.print-actions #action-sheet { border: 0; }
+      html:has(body.print-report), body.print-report { background: white !important; color: black !important; }
+      body.print-report .wrap { padding: 0; max-width: 8.5in; }
+      body.print-report header.brand, body.print-report .nav, body.print-report .section-title, body.print-report .noprint, body.print-report #data-refresh { display: none !important; }
+      body.print-report #screen > :not(#report-sheet) { display: none !important; }
+      body.print-report #report-sheet { margin: 0; border: 0; box-shadow: none; max-width: none; padding: 0; }
+      body.print-report #report-sheet, body.print-report #report-sheet * { color: #102027; background: white; }
+      body.print-report #report-sheet .report-kicker, body.print-report #report-sheet .report-status { color: #0b7f88; }
+      body.print-report #report-sheet .report-bar { background: #d5dee3 !important; }
+      body.print-report #report-sheet .report-bar i { background: #0b6b3a !important; }
+      body.print-report #report-sheet .report-bar.short i { background: #9b1c33 !important; }
+      body.print-report #report-sheet .hit { color: #0b6b3a; }
+      body.print-report #report-sheet .short { color: #9b1c33; }
+      body.print-report #report-sheet .pending { color: #6a5208; }
+      body.print-report #report-sheet table td, body.print-report #report-sheet table th { font-size: 11px; line-height: 1.25; padding: 2px 4px; }
+      body.print-report #report-sheet .report-verify { font-size: 11px; line-height: 1.3; margin: 4px 0; padding: 4px 6px; }
+      body.print-report #report-sheet h2 { margin: 6px 0 2px; }
+      body.print-report #report-sheet ol, body.print-report #report-sheet .report-foot { font-size: 11px; line-height: 1.3; margin: 2px 0; }
+      body.print-report #report-sheet h1 { font-size: 18px; }
+      body.print-report #report-sheet { break-inside: avoid; page-break-after: avoid; }
       html:has(body.print-mtd), body.print-mtd { background: white !important; }
       body.print-mtd .wrap { padding: 0; max-width: 7.6in; }
       body.print-mtd #screen > :not(#brief-mtd) { display: none !important; }
@@ -442,6 +485,7 @@
     var token = '';
     var role = '';
     var screen = 'home';
+    var reportQuery = { kind: 'daily', date: '', start: '', end: '' };
     var DISPLAY_REFRESH_MS = 30 * 60 * 1000;
     var displayVersion = '';
     var displayStamp = '';
@@ -520,6 +564,7 @@
       if (role !== 'sales') items.splice(12, 0, ['leakage', 'Leakage']);
       if (role !== 'sales') items.splice(13, 0, ['brief', 'Manager brief']);
       if (role !== 'sales') items.splice(14, 0, ['actions', 'Actions']);
+      if (role !== 'sales') items.splice(15, 0, ['reports', 'Reports']);
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['delivery', 'Delivery rescue'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
@@ -1501,6 +1546,79 @@
       var overdue = action.due && action.due < (action.today || '');
       return '<tr><td>' + esc(action.description) + '<br><span class="sub">' + esc(action.lane === 'operations' ? 'Operations' : 'Sales') + '</span></td><td>' + esc(action.assignee) + '</td><td>' + esc(action.due) + (overdue ? ' · overdue' : '') + '</td><td>' + esc(action.status) + '</td><td>' + esc(action.note || '') + '</td></tr>';
     }
+    function reportRequest() {
+      var extra = { kind: reportQuery.kind || 'daily' };
+      if (extra.kind === 'daily' && reportQuery.date) extra.date = reportQuery.date;
+      if (reportQuery.start) extra.start = reportQuery.start;
+      if (reportQuery.end) extra.end = reportQuery.end;
+      return extra;
+    }
+    function reportMark(line) {
+      var word = line.status === 'hit' ? 'Hit' : (line.status === 'short' ? 'Short' : (line.status === 'even' ? 'At goal' : (line.status === 'pending' ? 'Pending' : line.versus)));
+      var bar = line.bar === null || line.bar === undefined ? '' : '<span class="report-bar' + (line.status === 'short' ? ' short' : '') + '"><i style="width:' + Math.round(Number(line.bar) * 100) + '%"></i></span>';
+      return '<span class="report-status ' + esc(line.status) + '">' + esc(word) + '</span>' + bar;
+    }
+    function renderReports(data) {
+      reportQuery.kind = data.kind || reportQuery.kind || 'daily';
+      reportQuery.date = data.date || reportQuery.date || '';
+      var kinds = ((data.catalog && data.catalog.kinds) || []).map(function (item) {
+        return '<button type="button" data-report-kind="' + esc(item.key) + '"' + (item.key === data.kind ? ' class="active"' : '') + '>' + esc(item.label) + '</button>';
+      }).join('');
+      var rows = (data.lines || []).map(function (line) {
+        return '<tr><td class="measure">' + esc(line.label) + '</td><td>' + esc(line.result) + '</td><td>' + esc(line.goal || '') + '</td><td>' + reportMark(line) + (line.status === 'ready' ? '' : '<br><span class="sub">' + esc(line.versus) + '</span>') + '</td><td>' + esc(line.source) + '</td></tr>';
+      }).join('');
+      var priorities = (data.priorities || []).map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('');
+      var winners = data.winners || {};
+      var period = data.kind === 'daily'
+        ? '<label>Business day<input id="report-date" type="date" value="' + esc(data.date || '') + '"></label>'
+        : '<label>Period start<input id="report-start" type="date" value="' + esc((data.period && data.period.start) || reportQuery.start || '') + '"></label><label>Period end<input id="report-end" type="date" value="' + esc((data.period && data.period.end) || reportQuery.end || '') + '"></label>';
+      document.getElementById('header-note').textContent = 'Reports · ' + (data.displayDate || data.kind) + ' · no email sent';
+      document.getElementById('screen').innerHTML = '<div class="report-controls noprint"><div class="nav" id="report-kinds">' + kinds + '</div>' + period +
+        '<button type="button" id="report-apply">Show report</button><button type="button" id="report-print"' + (data.ready ? '' : ' disabled') + '>Print</button><button type="button" id="report-pdf"' + (data.pdf ? '' : ' disabled') + '>Download PDF</button></div>' +
+        '<article id="report-sheet" class="report-sheet"><p class="report-kicker">KANE\'S FURNITURE · STORE 17</p><h1>' + esc(data.title || 'Report') + '</h1>' +
+        '<p class="report-verify">' + esc(data.verification || '') + '</p>' +
+        (data.ready ? '<table><thead><tr><th>Measure</th><th>Result</th><th>Goal</th><th>Versus goal</th><th>Source</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+          '<h2>Sales winners · ' + esc(winners.date || '') + '</h2><p>' + esc(winners.status === 'pending' ? 'Pending' : winners.text) + '</p><p class="report-foot">' + esc(winners.source || '') + (winners.quiet && winners.quiet !== 'Pending' ? ' No written sale: ' + winners.quiet : '') + '</p>' +
+          '<h2>Management priorities</h2>' + (priorities ? '<ol>' + priorities + '</ol>' : '<p>No additional priority is supported by verified data.</p>') +
+          '<p class="report-foot">' + esc(data.prioritySource || '') + '</p>' : '<p>' + esc(data.notice || 'This report is not built yet.') + '</p>') +
+        '<p class="report-foot">' + esc(data.calendarNote || '') + ' Store month ' + esc(data.storePeriod || '') + '. Salesperson month ' + esc(data.individualPeriod || '') + '. No email sent.</p></article>';
+      Array.prototype.forEach.call(document.querySelectorAll('[data-report-kind]'), function (button) {
+        button.addEventListener('click', function () {
+          reportQuery.kind = button.getAttribute('data-report-kind');
+          api('reports', reportRequest()).then(renderReports).catch(function (error) { document.getElementById('header-note').textContent = error.message; });
+        });
+      });
+      var apply = document.getElementById('report-apply');
+      if (apply) apply.addEventListener('click', function () {
+        var day = document.getElementById('report-date');
+        var start = document.getElementById('report-start');
+        var end = document.getElementById('report-end');
+        if (day) reportQuery.date = day.value;
+        if (start) reportQuery.start = start.value;
+        if (end) reportQuery.end = end.value;
+        api('reports', reportRequest()).then(renderReports).catch(function (error) { document.getElementById('header-note').textContent = error.message; });
+      });
+      var print = document.getElementById('report-print');
+      if (print) print.addEventListener('click', function () {
+        document.body.classList.add('print-report');
+        window.print();
+      });
+      var pdf = document.getElementById('report-pdf');
+      if (pdf) pdf.addEventListener('click', function () {
+        if (!data.pdf) return;
+        var binary = atob(data.pdf);
+        var bytes = new Uint8Array(binary.length);
+        var i;
+        for (i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        var blob = new Blob([bytes], { type: 'application/pdf' });
+        var url = URL.createObjectURL(blob);
+        var link = document.createElement('a');
+        link.href = url;
+        link.download = 'Store17-Daily-Management-Summary-' + (data.date || 'report') + '.pdf';
+        link.click();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      });
+    }
     function renderActions(data) {
       var today = data.today || '';
       (data.priorities || []).forEach(function (action) { action.today = today; });
@@ -2302,7 +2420,7 @@
       });
       bindEvalImport();
     }
-    window.addEventListener('afterprint', function () { document.body.classList.remove('print-eval', 'print-brief', 'print-mtd', 'print-coach', 'print-evalprep', 'print-actions'); });
+    window.addEventListener('afterprint', function () { document.body.classList.remove('print-eval', 'print-brief', 'print-mtd', 'print-coach', 'print-evalprep', 'print-actions', 'print-report'); });
     var summaryCache = null;
     function drawSummary(name, start, end) {
       document.getElementById('screen').innerHTML = '<h2 class="section-title">Summary</h2>' + teamNav('summary') + '<p class="sub">Loading the associate summary…</p>';
@@ -4138,7 +4256,7 @@
       var active = document.activeElement;
       if (active && active.id !== 'display-refresh' && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return true;
       var body = document.body;
-      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd') || body.classList.contains('print-evalprep') || body.classList.contains('print-actions')) return true;
+      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd') || body.classList.contains('print-evalprep') || body.classList.contains('print-actions') || body.classList.contains('print-report')) return true;
       return false;
     }
     function syncRefreshButton() {
@@ -4151,6 +4269,7 @@
       else if (name === 'delivery') renderDelivery(data);
       else if (name === 'accel') renderAccelerator(data);
       else if (name === 'actions') renderActions(data);
+      else if (name === 'reports') renderReports(data);
       else if (name === 'daily') renderDaily(data);
       else if (name === 'closing') renderClosing(data);
       else if (name === 'people') renderPeople(data);
@@ -4168,7 +4287,7 @@
       var name = screen;
       var request = name === 'written' || name === 'delivered' ? 'home' : name;
       if (name === 'admin' || name === 'documents' || name === 'upload') return Promise.resolve({ applied: false, busy: true });
-      return api(request).then(function (data) {
+      return api(request, name === 'reports' ? reportRequest() : undefined).then(function (data) {
         if (screen !== name || displayHold || displayBusy()) return { applied: false, busy: true };
         if (figuresWeakened(displayPayload, data)) return { applied: false, weakened: true };
         displayPayload = data;
@@ -4221,7 +4340,7 @@
     function openScreen(name) {
       screen = name;
       displayHold = false;
-      document.body.classList.remove('print-summary', 'print-eval', 'print-doc', 'print-brief', 'print-coach', 'print-evalprep', 'print-actions');
+      document.body.classList.remove('print-summary', 'print-eval', 'print-doc', 'print-brief', 'print-coach', 'print-evalprep', 'print-actions', 'print-report');
       closeDocViewer();
       drawNav();
       var request = name === 'written' || name === 'delivered' ? 'home' : name;
