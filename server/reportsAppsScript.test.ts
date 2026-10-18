@@ -382,3 +382,98 @@ test('the 13-week trend uses daily store records and keeps a partial week separa
   assert.equal(tabs.CC_Daily.length, dailyRows);
   assert.equal(mail.length, 0);
 });
+
+test('SNAP Written LY stays separate from NWDSR on the weekly, monthly, and meeting reports', () => {
+  const { gs, tabs, mail, setToday } = harness();
+  setToday('2026-10-18');
+  const before = plain(gs.home_({ session }));
+  const facts = plain(gs.dailyFacts_());
+  const closed = plain(gs.closedDates_());
+  const weekSnap = plain(gs.reportRangeField_(facts, 'snapWritten', '2026-10-05', '2026-10-11', closed));
+  const weekWritten = plain(gs.reportRangeField_(facts, 'nwdsrWritten', '2026-10-05', '2026-10-11', closed));
+  const weekly = plain(gs.reportCenter_({ session, kind: 'weekly' }));
+  const written = weekly.weekly.find((item: { key: string }) => item.key === 'week-written');
+  assert.equal(written.result, plain(gs.moneyText_(weekWritten.value)));
+  assert.notEqual(weekly.snapLy.current, written.result);
+  assert.equal(weekly.snapLy.current, plain(gs.moneyText_(weekSnap.value)));
+  assert.equal(weekly.snapLy.ly, 'Pending');
+  assert.equal(weekly.snapLy.dollars, 'Pending');
+  assert.equal(weekly.snapLy.percent, 'Pending');
+  assert.equal(weekly.snapLy.currentDates, 'Oct 5, 2026 - Oct 11, 2026');
+  assert.equal(weekly.snapLy.lyDates, 'Oct 6, 2025 - Oct 12, 2025');
+  assert.match(weekly.snapLy.note, /NWDSR/);
+  assert.equal(weekly.lastYear.written, 'Pending');
+  const monthly = plain(gs.reportCenter_({ session, kind: 'monthly', date: '2026-10-18' }));
+  const writtenRow = monthly.rows.find((item: { key: string }) => item.key === 'written');
+  assert.equal(writtenRow.budget, '$400,000');
+  assert.equal(writtenRow.ly, 'Pending');
+  assert.match(writtenRow.source, /SNAP is not used/);
+  assert.equal(monthly.snapLy.ly, 'Pending');
+  assert.match(monthly.snapLy.lyDates, /2025/);
+  assert.match(monthly.snapLy.currentDates, /2026/);
+  const meeting = plain(gs.reportCenter_({ session, kind: 'meeting', packet: 'executive' }));
+  assert.equal(meeting.weekly.find((item: { key: string }) => item.key === 'week-written').result, written.result);
+  assert.equal(meeting.snapLy.current, weekly.snapLy.current);
+  assert.equal(meeting.snapLy.ly, 'Pending');
+  assert.equal(meeting.lastYear.written, 'Pending');
+  const weeklyPdf = Buffer.from(weekly.pdf, 'base64').toString('latin1');
+  assert.equal((weeklyPdf.match(/\/Type \/Page[^s]/g) || []).length, 1);
+  assert.match(weeklyPdf, /SNAP WRITTEN LY/);
+  const monthlyPdf = Buffer.from(monthly.pdf, 'base64').toString('latin1');
+  assert.match(monthlyPdf, /BUDGET/);
+  assert.match(monthlyPdf, /NWDSR LY/);
+  assert.match(monthlyPdf, /SNAP WRITTEN LY/);
+  assert.equal((monthlyPdf.match(/\/Type \/Page[^s]/g) || []).length, 1);
+  const meetingPdf = Buffer.from(meeting.pdf, 'base64').toString('latin1');
+  assert.match(meetingPdf, /SNAP Written LY/);
+  assert.match(meetingPdf, /NWDSR LY written/);
+  assert.equal((meetingPdf.match(/\/Type \/Page[^s]/g) || []).length, 1);
+
+  const headers = ['ly_start', 'ly_end', 'track', 'metric', 'side', 'employee_id', 'person', 'value', 'unit', 'source_report', 'source_sha256', 'verified_by', 'entered_at', 'note'];
+  tabs.CC_LastYear = [headers,
+    ['2025-10-06', '2025-10-12', 'store', 'SNAP Written', 'written', '', '', 40000, 'dollars', 'SNAP Written', 'abc', 'GM', '2026-10-18', 'week'],
+    ['2025-10-06', '2025-10-12', 'store', 'NWDSR Written', 'written', '', '', 99999, 'dollars', 'NWDSR Written', 'abc', 'GM', '2026-10-18', 'not snap'],
+    ['2025-10-01', '2025-10-31', 'store', 'SNAP Written', 'written', '', '', 88000, 'dollars', 'SNAP Written', 'abc', 'GM', '2026-10-18', 'whole month, not this week'],
+  ];
+  const archived = plain(gs.reportCenter_({ session, kind: 'weekly' }));
+  assert.equal(archived.weekly.find((item: { key: string }) => item.key === 'week-written').result, written.result);
+  assert.equal(archived.lastYear.written, 'Pending');
+  assert.equal(archived.snapLy.ly, '$40,000');
+  assert.equal(archived.snapLy.dollars, plain(gs.reportSnapSignMoney_(weekSnap.value - 40000)));
+  assert.equal(archived.snapLy.percent, plain(gs.reportSnapSignPercent_(weekSnap.value, 40000)));
+  assert.match(archived.snapLy.source, /CC_LastYear SNAP Written/);
+  assert.doesNotMatch(archived.snapLy.source, /99999|88,000|\$88,000/);
+
+  for (let day = 6; day <= 12; day += 1) {
+    tabs.CC_Daily.push([`2025-10-${String(day).padStart(2, '0')}`, 1000, '', '']);
+  }
+  const daily = plain(gs.reportCenter_({ session, kind: 'weekly' }));
+  assert.equal(daily.snapLy.ly, '$7,000');
+  assert.equal(daily.snapLy.dollars, plain(gs.reportSnapSignMoney_(weekSnap.value - 7000)));
+  assert.match(daily.snapLy.source, /CC_Daily SNAP Written, 2025-10-06 through 2025-10-12/);
+  assert.equal(daily.weekly.find((item: { key: string }) => item.key === 'week-written').result, written.result);
+  tabs.CC_Daily.pop();
+  const incomplete = plain(gs.reportCenter_({ session, kind: 'weekly' }));
+  assert.equal(incomplete.snapLy.ly, '$40,000');
+  assert.match(incomplete.snapLy.source, /CC_LastYear/);
+
+  setToday('2026-10-16');
+  const monthFacts = plain(gs.dailyFacts_());
+  const monthCurrent = plain(gs.reportRangeField_(monthFacts, 'snapWritten', '2026-10-02', '2026-10-15', plain(gs.closedDates_())));
+  for (let day = 1; day <= 14; day += 1) tabs.CC_Daily.push([`2025-10-${String(day).padStart(2, '0')}`, 100, '', '']);
+  const scored = plain(gs.reportCenter_({ session, kind: 'monthly', date: '2026-10-15' }));
+  const still = scored.rows.find((item: { key: string }) => item.key === 'written');
+  assert.equal(still.budget, '$400,000');
+  assert.equal(still.ly, 'Pending');
+  assert.match(still.source, /NWDSR Written/);
+  assert.equal(scored.snapLy.current, plain(gs.moneyText_(monthCurrent.value)));
+  assert.equal(scored.snapLy.ly, '$1,400');
+  assert.equal(scored.snapLy.lyDates, 'Oct 1, 2025 - Oct 14, 2025');
+  assert.equal(scored.snapLy.dollars, plain(gs.reportSnapSignMoney_(monthCurrent.value - 1400)));
+  assert.equal(scored.snapLy.percent, plain(gs.reportSnapSignPercent_(monthCurrent.value, 1400)));
+  assert.notEqual(still.actual, scored.snapLy.current);
+  const after = plain(gs.home_({ session }));
+  assert.equal(after.month.written, before.month.written);
+  assert.equal(after.month.delivered, before.month.delivered);
+  assert.equal(mail.length, 0);
+});

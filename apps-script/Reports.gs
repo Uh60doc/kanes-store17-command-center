@@ -469,6 +469,132 @@ function reportDateList_(dates) {
   return dates.slice(0, 3).join(', ') + ' and ' + (dates.length - 3) + ' more';
 }
 
+function reportSnapSignMoney_(value) {
+  if (briefBlank_(value)) return 'Pending';
+  var text = moneyText_(value);
+  if (Number(value) > 0) return '+' + text;
+  return text;
+}
+
+function reportSnapSignPercent_(current, ly) {
+  if (briefBlank_(current) || briefBlank_(ly) || Number(ly) === 0) return 'Pending';
+  var ratio = (Number(current) - Number(ly)) / Number(ly);
+  var text = percentText_(ratio);
+  if (ratio > 0) return '+' + text;
+  return text;
+}
+
+function reportOpenDates_(start, end, closed) {
+  var dates = [];
+  eachDate_(start, end).forEach(function (date) { if (!closed[date]) dates.push(date); });
+  return dates;
+}
+
+function reportSnapWindow_(facts, dates) {
+  var missing = [];
+  var total = 0;
+  var seen = false;
+  dates.forEach(function (date) {
+    var row = reportFact_(facts, date);
+    var value = row ? row.snapWritten : null;
+    if (value === null || value === undefined) { missing.push(date); return; }
+    seen = true;
+    total += Number(value);
+  });
+  if (!dates.length || missing.length || !seen) return { pending: true, value: null, missing: missing };
+  return { pending: false, value: Math.round(total * 100) / 100, missing: [] };
+}
+
+/** A verified CC_LastYear store total is used only when it is SNAP Written for these exact dates. */
+function reportSnapArchive_(start, end) {
+  if (!start || !end) return { value: null, basis: '' };
+  var rows = [];
+  try { rows = lastYearRows_(); } catch (error) { return { value: null, basis: '' }; }
+  var match = null;
+  var rejected = false;
+  rows.forEach(function (row) {
+    if (match || row.start !== start || row.end !== end) return;
+    if (String(row.track || '').toLowerCase() !== 'store') return;
+    if (row.metric !== 'SNAP Written') return;
+    if (row.person || row.employeeId) return;
+    if (typeof lastYearSameReport_ === 'function' && !lastYearSameReport_('SNAP Written', row.source)) { rejected = true; return; }
+    if (row.value === null || !row.verifiedBy) return;
+    match = row;
+  });
+  if (!match) return { value: null, basis: rejected ? 'A figure from a different report was not used.' : '' };
+  return { value: match.value, basis: 'CC_LastYear ' + match.source + ', ' + start + ' through ' + end + ', verified by ' + match.verifiedBy + '.' };
+}
+
+function reportSnapComparison_(facts, currentDates, lyDates, lyLabel) {
+  var current = reportSnapWindow_(facts, currentDates);
+  var lyDaily = reportSnapWindow_(facts, lyDates);
+  var lyStart = lyDates.length ? lyDates[0] : '';
+  var lyEnd = lyDates.length ? lyDates[lyDates.length - 1] : '';
+  var contiguous = !!(lyDates.length && lyEnd === shiftDate_(lyStart, lyDates.length - 1));
+  var archive = lyDaily.pending && contiguous ? reportSnapArchive_(lyStart, lyEnd) : { value: null, basis: '' };
+  var lyValue = lyDaily.pending ? archive.value : lyDaily.value;
+  var lyPending = lyValue === null || lyValue === undefined;
+  var dollars = current.pending || lyPending ? null : Math.round((current.value - lyValue) * 100) / 100;
+  var currentStart = currentDates.length ? currentDates[0] : '';
+  var currentEnd = currentDates.length ? currentDates[currentDates.length - 1] : '';
+  var lySource = lyDaily.pending
+    ? (lyPending ? ('Pending. ' + (lyDates.length ? ('Missing SNAP Written for ' + reportDateList_(lyDaily.missing) + '.') : 'No comparable last-year dates.') + (archive.basis ? ' ' + archive.basis : '')) : archive.basis)
+    : ('CC_Daily SNAP Written, ' + lyStart + ' through ' + lyEnd + '. Not added to any other report.');
+  return {
+    label: 'SNAP Written LY',
+    current: current.pending ? 'Pending' : moneyText_(current.value),
+    currentDates: currentStart ? (briefDisplayDate_(currentStart) + ' - ' + briefDisplayDate_(currentEnd)) : 'Pending',
+    ly: lyPending ? 'Pending' : moneyText_(lyValue),
+    lyDates: lyStart ? (briefDisplayDate_(lyStart) + ' - ' + briefDisplayDate_(lyEnd)) : 'Pending',
+    dollars: dollars === null ? 'Pending' : reportSnapSignMoney_(dollars),
+    percent: reportSnapSignPercent_(current.pending ? null : current.value, lyPending ? null : lyValue),
+    note: (lyLabel ? lyLabel + ' ' : '') + 'Supplemental. SNAP Written is kept separate from NWDSR Written and is not the store budget.',
+    source: 'Current SNAP Written ' + (current.pending ? ('Pending. Missing ' + reportDateList_(current.missing) + '.') : ('CC_Daily SNAP Written, ' + currentStart + ' through ' + currentEnd + '.')) + ' Last year: ' + lySource,
+  };
+}
+
+function reportWeekSnapLy_(facts, closed, start, end) {
+  var currentDates = reportOpenDates_(start, end, closed);
+  var lyDates = currentDates.map(function (date) { return shiftDate_(date, -364); });
+  return reportSnapComparison_(facts, currentDates, lyDates, 'Same Monday-Sunday week, 52 weeks earlier.');
+}
+
+function reportMonthSnapLy_(facts, closed, store, asOf) {
+  var ly = { confirmed: false, start: '', end: '', status: 'Pending' };
+  try { ly = storeLastYear_(config_(), store); } catch (error) { ly = ly; }
+  var currentEnd = shiftDate_(asOf, -1);
+  if (currentEnd > store.end) currentEnd = store.end;
+  if (currentEnd < store.start) currentEnd = store.start;
+  var currentDates = reportOpenDates_(store.start, currentEnd, closed);
+  var proposed = ly.start && ly.end ? (briefDisplayDate_(ly.start) + ' - ' + briefDisplayDate_(ly.end)) : 'Pending';
+  if (!ly.confirmed) {
+    var waiting = reportSnapComparison_(facts, currentDates, [], 'Last-year store period is not confirmed.');
+    waiting.ly = 'Pending';
+    waiting.lyDates = proposed;
+    waiting.dollars = 'Pending';
+    waiting.percent = 'Pending';
+    waiting.note = 'Last-year period is not confirmed (' + (ly.status || 'Pending') + '). SNAP Written LY stays Pending. ' + waiting.note;
+    return waiting;
+  }
+  var lyDates = [];
+  var unpaired = false;
+  currentDates.forEach(function (date) {
+    var mapped = shiftDate_(ly.start, historyDayGap_(store.start, date));
+    if (!mapped || mapped > ly.end) { unpaired = true; return; }
+    lyDates.push(mapped);
+  });
+  var block = reportSnapComparison_(facts, currentDates, unpaired ? [] : lyDates, 'Day for day inside the confirmed last-year period ' + ly.start + ' through ' + ly.end + '.');
+  if (unpaired) {
+    block.ly = 'Pending';
+    block.lyDates = proposed;
+    block.dollars = 'Pending';
+    block.percent = 'Pending';
+    block.source = 'A current open day has no partner inside ' + ly.start + ' through ' + ly.end + '.';
+    block.note = 'A current day has no partner in the confirmed last-year period. ' + block.note;
+  }
+  return block;
+}
+
 function reportWeekly_(payload, today) {
   var span = reportSpan_(payload, today);
   var start = span.start;
@@ -610,6 +736,7 @@ function reportWeekly_(payload, today) {
   if (written.pending || delivered.pending || closing.opportunities === null) priorities.push('Obtain the missing verified reports before treating this week as complete.');
   if (coaching.length) priorities.push('Coach ' + coaching[0].name + ' on ' + coaching[0].text + '.');
   if (writtenPace.pace !== null) priorities.push('Hold the required written pace of ' + moneyText_(writtenPace.pace) + ' on the remaining open store days.');
+  var snapLy = reportWeekSnapLy_(facts, closed, start, end);
   var lastYear = { written: 'Pending', delivered: 'Pending', note: 'Last year is Pending. No verified last-year week is on file.' };
   try {
     var ly = briefLastYearStore_(config_(), store);
@@ -642,6 +769,7 @@ function reportWeekly_(payload, today) {
     mail: false,
     verification: verification,
     lastYear: lastYear,
+    snapLy: snapLy,
     weekly: weekly,
     month: month,
     kpis: kpiLines,
@@ -1122,6 +1250,7 @@ function reportMonthly_(payload, today) {
   while (priorities.length < 3) priorities.push(gapFill[priorities.length]);
   var monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   var monthName = monthNames[Number(String(store.start).slice(5, 7)) - 1] + ' ' + String(store.start).slice(0, 4);
+  var snapLy = reportMonthSnapLy_(facts, closed, store, asOf);
   var assessment = 'Store 17, ' + briefDisplayDate_(store.start) + ' through ' + briefDisplayDate_(store.end) + (partial ? ', is still open. ' : '. ') +
     'NWDSR Written is ' + rows[0].actual + ' of the ' + rows[0].budget + ' budget' + (written.through ? ' through ' + briefDisplayDate_(written.through) : '') + '. ' +
     'NWDSR Delivered is ' + rows[1].actual + ' of the ' + rows[1].budget + ' budget' + (delivered.through ? ' through ' + briefDisplayDate_(delivered.through) : '') + '. ' +
@@ -1153,6 +1282,7 @@ function reportMonthly_(payload, today) {
     verification: verification,
     rows: rows,
     lines: rows,
+    snapLy: snapLy,
     assessment: assessment,
     summary: { strengths: strengths, priorities: priorities, focus: focus },
     winners: { status: 'pending', text: '', quiet: '', source: '', date: '' },
@@ -1199,7 +1329,18 @@ function reportMonthlyPdf_(page) {
     text(640, y, 8, row.ly, false);
     y -= 14;
   });
-  y -= 6;
+  y -= 4;
+  var snapLy = page.snapLy || {};
+  paint(0.54, 0.42, 0.18);
+  text(36, y, 8, 'SNAP WRITTEN LY  ·  SUPPLEMENTAL', true);
+  y -= 11;
+  paint(0.06, 0.13, 0.16);
+  text(36, y, 8, 'SNAP Written ' + (snapLy.current || 'Pending') + '  ·  ' + (snapLy.currentDates || ''), false);
+  y -= 10;
+  text(36, y, 8, 'SNAP Written LY ' + (snapLy.ly || 'Pending') + '  ·  ' + (snapLy.lyDates || ''), false);
+  y -= 10;
+  text(36, y, 8, 'Difference ' + (snapLy.dollars || 'Pending') + (snapLy.percent && snapLy.percent !== 'Pending' ? '  ·  ' + snapLy.percent : '') + '  ·  Not the budget', false);
+  y -= 12;
   paint(0.06, 0.13, 0.16);
   reportWrap_(page.assessment, 150).slice(0, 3).forEach(function (line) { text(36, y, 8, line, false); y -= 10; });
   y -= 6;
@@ -1398,6 +1539,7 @@ function reportMeeting_(payload, today) {
     month: weekly.month,
     kpis: weekly.kpis,
     lastYear: weekly.lastYear,
+    snapLy: weekly.snapLy,
     people: people,
     illustrations: illustrations,
     recognition: recognition,
@@ -1497,6 +1639,14 @@ function reportMeetingPdf_(page) {
   paragraph(page.verification, 108, 8);
   y -= 2;
   (page.weekly || []).forEach(function (line) { row(line.label, line.result, line.goal || ''); });
+  y -= 2;
+  var snapLy = page.snapLy || {};
+  paint(0.54, 0.42, 0.18);
+  text(36, y, 9, 'SNAP WRITTEN LY', true);
+  y -= 12;
+  row('SNAP Written', snapLy.current || 'Pending', snapLy.currentDates || '');
+  row('SNAP Written LY', snapLy.ly || 'Pending', snapLy.lyDates || '');
+  row('SNAP difference', snapLy.dollars || 'Pending', snapLy.percent && snapLy.percent !== 'Pending' ? snapLy.percent : 'Not NWDSR');
   y -= 2;
   text(36, y, 9, 'STORE-MONTH KPIs  ·  NOT THIS WEEK', true);
   y -= 13;
@@ -1758,6 +1908,17 @@ function reportWeeklyPdf_(page) {
     y -= 4;
   }
   band('WEEK', page.weekly || []);
+  var snapLy = page.snapLy || {};
+  paint(0.54, 0.42, 0.18);
+  text(36, y, 8, 'SNAP WRITTEN LY', true);
+  y -= 11;
+  paint(0.06, 0.13, 0.16);
+  text(36, y, 8, 'SNAP Written ' + (snapLy.current || 'Pending') + '  ·  ' + (snapLy.currentDates || ''), false);
+  y -= 10;
+  text(36, y, 8, 'SNAP Written LY ' + (snapLy.ly || 'Pending') + '  ·  ' + (snapLy.lyDates || ''), false);
+  y -= 10;
+  text(36, y, 8, 'Difference ' + (snapLy.dollars || 'Pending') + (snapLy.percent && snapLy.percent !== 'Pending' ? '  ·  ' + snapLy.percent : '') + '  ·  Not NWDSR', false);
+  y -= 12;
   band('STORE MONTH', page.month || []);
   band('STORE-MONTH KPIs', page.kpis || []);
   paint(0.05, 0.50, 0.53);

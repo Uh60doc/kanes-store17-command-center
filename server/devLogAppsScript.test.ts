@@ -68,7 +68,7 @@ test('the latest version and last started / completed tasks are visible', () => 
   assert.equal(status.lastCompleted.taskNumber, first.taskNumber);
   assert.equal(status.lastCompleted.status, 'COMPLETED');
   assert.equal(status.rows[0].version, '1.0.2');
-  assert.equal(status.productionVersion, '1.0.22');
+  assert.equal(status.productionVersion, '1.0.23');
   assert.equal(status.deployedMatchesLatestCompleted, false);
   assert.equal(status.aheadOfProduction, true);
   assert.equal(status.sheet, 'CC_DevLog');
