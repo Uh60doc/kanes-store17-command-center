@@ -514,7 +514,7 @@
       if (role !== 'sales') items.splice(10, 0, ['recovery', 'Recovery']);
       if (role !== 'sales') items.splice(11, 0, ['leakage', 'Leakage']);
       if (role !== 'sales') items.splice(12, 0, ['brief', 'Manager brief']);
-      if (role !== 'sales') items.push(['bedding', 'Bedding'], ['orders', 'Open orders'], ['upload', 'Upload reports'], ['health', 'System health']);
+      if (role !== 'sales') items.push(['bedding', 'Bedding'], ['delivery', 'Delivery rescue'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
     }
@@ -935,6 +935,8 @@
     var peopleDeliveredVariance = null;
     var recoveryDirty = false;
     var coachDirty = false;
+    var rescuePreview = null;
+    var rescueFilters = {};
     function recoveryMoney(value) {
       if (value === null || value === undefined || value === '') return 'Pending';
       return money(value);
@@ -1482,6 +1484,160 @@
     var peopleEvaluation = null;
     var peopleToday = '';
     function canManage() { return role === 'manager' || role === 'admin'; }
+    function rescueTeamLabel(team) {
+      if (team === 'sales') return 'Sales';
+      if (team === 'operations') return 'Operations';
+      if (team === 'customer_service') return 'Customer Service';
+      return 'Pending';
+    }
+    function rescueDollars(bucket) {
+      if (!bucket) return 'Pending';
+      if (bucket.status === 'none') return '$0';
+      if (bucket.status === 'partial' || bucket.status === 'ready') return money(bucket.dollars);
+      return 'Pending';
+    }
+    function rescueDollarNote(bucket, emptyNote) {
+      if (!bucket) return 'Pending. No open-order or delivery-schedule file has been confirmed.';
+      if (bucket.status === 'none') return emptyNote;
+      if (bucket.status === 'partial') return bucket.missing + ' order' + (bucket.missing === 1 ? '' : 's') + ' have no amount in this column. The shown dollars are only the rows that had an amount. Written dollars were not used to fill the gap.';
+      return bucket.count + ' order' + (bucket.count === 1 ? '' : 's') + ' on the confirmed file.';
+    }
+    function rescueRow(order) {
+      return '<tr><td>' + esc(order.orderNumber) + '</td><td>' + esc(order.kind) + '</td><td>' + (order.writtenDollars === null ? 'Pending' : money(order.writtenDollars)) +
+        '</td><td>' + (order.scheduledDate ? esc(order.scheduledDate) : 'No date on file') + '</td><td>' + (order.scheduledDollars === null ? 'Pending' : money(order.scheduledDollars)) +
+        '</td><td>' + (order.age === null ? 'Pending' : esc(order.age)) + '</td><td>' + esc(order.status || 'Pending') + '</td><td>' + rescueTeamLabel(order.actionTeam) +
+        (order.actionName ? ' · ' + esc(order.actionName) : '') + '<br><span class="sub">' + esc(order.actionSource) + '</span></td><td>' + esc(order.action) +
+        (order.issue ? '<br><span class="sub">' + esc(order.issue) + '</span>' : '') + '</td><td>' +
+        (order.followUp ? 'Flagged' : '—') + '<br><button type="button" data-rescue-flag="' + esc(order.orderNumber) + '">' + (order.followUp ? 'Update flag' : 'Flag follow-up') + '</button></td></tr>';
+    }
+    function renderDelivery(data) {
+      var pending = !data.metrics || data.metrics.status === 'pending';
+      var metrics = data.metrics || {};
+      var delivered = data.actualDelivered || {};
+      var countFigure = function (block) { return pending || !block ? 'Pending' : String(block.count); };
+      var mapping = '';
+      if (rescuePreview) {
+        mapping = '<article class="card"><h2>Map the columns</h2><p class="sub">' + esc(rescuePreview.notice) + ' ' + rescuePreview.rowCount + ' rows in ' + esc(rescuePreview.fileName) + '.</p>' +
+          rescuePreview.fields.map(function (field) {
+            var selected = rescuePreview.suggested[field.key];
+            return '<label>' + esc(field.label) + (field.required ? ' (required)' : '') + '<select data-rescue-map="' + field.key + '"><option value="">Not in this file</option>' +
+              rescuePreview.headers.map(function (header, index) {
+                return '<option value="' + index + '"' + (selected === index ? ' selected' : '') + '>' + esc(header || ('Column ' + (index + 1))) + '</option>';
+              }).join('') + '</select></label>';
+          }).join('') + '<p class="summary-actions"><button type="button" id="rescue-confirm">Confirm mapping and save</button></p></article>';
+      }
+      var orders = (data.orders || []).map(rescueRow).join('');
+      var priority = (data.priority || []).map(rescueRow).join('');
+      document.getElementById('header-note').textContent = 'Store 17 · ' + (data.today || '') + (data.source ? ' · Open-order file ' + data.source.file : ' · No open-order file');
+      document.getElementById('screen').innerHTML =
+        '<p class="sub">' + esc(data.notice) + '</p>' +
+        '<div class="grid">' +
+        card('Actual Delivered', money(delivered.dollars), 'NWDSR Delivered through ' + (delivered.through || 'the latest verified day') + '. ' + (delivered.note || ''), 'good') +
+        card('Outstanding Written', pending ? 'Pending' : rescueDollars(metrics.outstandingWritten), pending ? metrics.notice : rescueDollarNote(metrics.outstandingWritten, 'No outstanding written dollars on the confirmed file.'), pending ? '' : 'watch') +
+        card('Scheduled future deliveries', pending ? 'Pending' : rescueDollars(metrics.scheduledFuture), pending ? 'Pending until a delivery schedule is confirmed.' : rescueDollarNote(metrics.scheduledFuture, 'No future scheduled dollars on the confirmed file.') + ' These are scheduled dollars, not Delivered dollars.') +
+        card('Scheduled in this Store month', pending ? 'Pending' : rescueDollars(metrics.scheduledThisMonth), pending ? 'Store month is the 2nd through the 1st.' : rescueDollarNote(metrics.scheduledThisMonth, 'No dollars on the file are scheduled inside the current Store month (the 2nd through the 1st).')) +
+        card('No scheduled delivery date', countFigure(metrics.ordersWithoutDate), pending ? 'Pending.' : 'Open orders on the file with a blank delivery date. A date was not invented.') +
+        card('Past-due scheduled orders', pending ? 'Pending' : String(metrics.pastDue.count), pending ? 'Pending.' : rescueDollarNote(metrics.pastDue, 'No scheduled date on the file is before today.')) +
+        card('Unresolved issues', countFigure(metrics.unresolvedIssues), pending ? 'Pending.' : 'Orders whose file row includes an issue. Nothing was marked resolved here.') +
+        card('Potential deliveries at risk', countFigure(metrics.atRisk), pending ? 'Pending.' : 'Past-due dates, missing dates, or an unresolved issue. This count is not a dollar estimate.') +
+        card('Expected Delivered remaining', pending ? 'Pending' : rescueDollars(metrics.expectedRemaining), pending ? 'Pending.' : 'Scheduled dollars still ahead in this Store month. This is a schedule, not Delivered sales. ' + rescueDollarNote(metrics.expectedRemaining, 'Nothing remaining in the Store month is scheduled on the file.')) +
+        card('Estimates', pending ? 'Pending' : String(metrics.estimates.count), pending ? 'An estimate counts only when the source file marks the row as an estimate.' : 'Rows the file marks as estimates. They are not included in the outstanding, scheduled or expected totals.') +
+        '</div>' +
+        (pending || !metrics.deliveredOnFile ? '' : '<p class="sub">The open-order file marks ' + metrics.deliveredOnFile + ' row' + (metrics.deliveredOnFile === 1 ? '' : 's') + ' as delivered. Those rows are not added to NWDSR Delivered.</p>') +
+        '<article class="card"><h2>Daily Delivery Rescue priority</h2><p class="sub">Follow-up flags, past-due dates, unresolved issues, then orders with no date. Sales, Operations and Customer Service stay separate. This list does not change a delivery.</p>' +
+        (pending ? '<p>Pending. The priority list starts when an open-order file is confirmed.</p>' : '<div class="table-wrap"><table><thead><tr><th>Order</th><th>Kind</th><th>Written</th><th>Scheduled</th><th>Scheduled $</th><th>Age</th><th>Status</th><th>Next owner</th><th>Next action</th><th>Flag</th></tr></thead><tbody>' + (priority || '<tr><td colspan="10">No open orders need rescue on this file.</td></tr>') + '</tbody></table></div>') +
+        '</article>' +
+        '<article class="card noprint"><h2>Filters</h2><div class="grid">' +
+        '<label>Scheduled from<input id="rescue-from" type="date" value="' + esc((data.filters && data.filters.dateFrom) || '') + '"></label>' +
+        '<label>Scheduled through<input id="rescue-to" type="date" value="' + esc((data.filters && data.filters.dateTo) || '') + '"></label>' +
+        '<label>Minimum age (days)<input id="rescue-min-age" inputmode="numeric" value="' + esc((data.filters && data.filters.minAge) || '') + '"></label>' +
+        '<label>Maximum age (days)<input id="rescue-max-age" inputmode="numeric" value="' + esc((data.filters && data.filters.maxAge) || '') + '"></label>' +
+        '<label>Status<select id="rescue-status"><option value="">Any</option>' + (data.statuses || []).map(function (status) { return '<option' + (data.filters && data.filters.status === status ? ' selected' : '') + '>' + esc(status) + '</option>'; }).join('') + '</select></label>' +
+        '<label>Responsible team<select id="rescue-team"><option value="">Any</option><option value="sales">Sales</option><option value="operations">Operations</option><option value="customer_service">Customer Service</option></select></label>' +
+        '</div><p class="summary-actions"><button type="button" id="rescue-apply">Apply filters</button></p></article>' +
+        '<article class="card"><h2>Open orders on the confirmed file</h2>' +
+        (pending ? '<p>Pending. Upload a file and map its columns. Orders are not shown as zero.</p>' : '<div class="table-wrap"><table><thead><tr><th>Order</th><th>Kind</th><th>Written</th><th>Scheduled</th><th>Scheduled $</th><th>Age</th><th>Status</th><th>Next owner</th><th>Next action</th><th>Flag</th></tr></thead><tbody>' + orders + '</tbody></table></div>') +
+        '</article>' +
+        '<article class="card noprint"><h2>Open-order file</h2><p class="sub">CSV or Excel. Map the columns yourself. A blank delivery date stays blank. Estimate rows count only when the file marks them as estimates. Confirming a file replaces the radar snapshot and leaves Kane\'s orders alone.</p>' +
+        '<label>File<input id="rescue-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>' +
+        '<p id="rescue-error" class="warn"></p></article>' +
+        '<article class="card noprint hidden" id="rescue-flag-box"><h2>Flag a follow-up</h2><p class="sub">Saved in the Command Center only. The customer order and the delivery date stay as they are on the file.</p>' +
+        '<p id="rescue-flag-order"></p><label>Note<input id="rescue-flag-note" maxlength="240"></label>' +
+        '<label>Next action owner<select id="rescue-flag-owner"><option value="sales">Sales</option><option value="operations">Operations</option><option value="customer_service">Customer Service</option></select></label>' +
+        '<p class="summary-actions"><button type="button" id="rescue-flag-save">Save follow-up flag</button></p></article>' + mapping;
+      var team = document.getElementById('rescue-team');
+      if (team && data.filters && data.filters.team) team.value = data.filters.team;
+      var file = document.getElementById('rescue-file');
+      if (file) file.addEventListener('change', function () {
+        var chosen = file.files && file.files[0];
+        if (!chosen) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+          api('previewRescue', { fileName: chosen.name, base64: String(reader.result).split(',')[1] || '' }).then(function (preview) {
+            rescuePreview = preview;
+            rescuePreview.base64 = String(reader.result).split(',')[1] || '';
+            renderDelivery(data);
+          }).catch(function (error) {
+            var slot = document.getElementById('rescue-error');
+            if (slot) slot.textContent = error.message || 'That file could not be read. Nothing was saved.';
+          });
+        };
+        reader.readAsDataURL(chosen);
+      });
+      var confirm = document.getElementById('rescue-confirm');
+      if (confirm) confirm.addEventListener('click', function () {
+        var mapping = {};
+        document.querySelectorAll('[data-rescue-map]').forEach(function (select) {
+          if (select.value !== '') mapping[select.getAttribute('data-rescue-map')] = Number(select.value);
+        });
+        api('confirmRescueImport', { fileName: rescuePreview.fileName, base64: rescuePreview.base64, mapping: mapping, filters: rescueFilters }).then(function (result) {
+          rescuePreview = null;
+          renderDelivery(result.page);
+        }).catch(function (error) {
+          var slot = document.getElementById('rescue-error');
+          if (slot) slot.textContent = error.message || 'The file was not saved.';
+        });
+      });
+      var apply = document.getElementById('rescue-apply');
+      if (apply) apply.addEventListener('click', function () {
+        rescueFilters = {
+          dateFrom: document.getElementById('rescue-from').value,
+          dateTo: document.getElementById('rescue-to').value,
+          minAge: document.getElementById('rescue-min-age').value,
+          maxAge: document.getElementById('rescue-max-age').value,
+          status: document.getElementById('rescue-status').value,
+          team: document.getElementById('rescue-team').value,
+        };
+        api('delivery', { filters: rescueFilters }).then(renderDelivery).catch(function (error) {
+          var slot = document.getElementById('rescue-error');
+          if (slot) slot.textContent = error.message || 'The filters could not be applied.';
+        });
+      });
+      document.querySelectorAll('[data-rescue-flag]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var box = document.getElementById('rescue-flag-box');
+          if (!box) return;
+          box.classList.remove('hidden');
+          box.setAttribute('data-order', button.getAttribute('data-rescue-flag'));
+          document.getElementById('rescue-flag-order').textContent = 'Order ' + button.getAttribute('data-rescue-flag');
+          box.scrollIntoView({ block: 'nearest' });
+        });
+      });
+      var saveFlag = document.getElementById('rescue-flag-save');
+      if (saveFlag) saveFlag.addEventListener('click', function () {
+        var box = document.getElementById('rescue-flag-box');
+        api('saveRescueFlag', {
+          orderNumber: box.getAttribute('data-order'),
+          followUp: true,
+          note: document.getElementById('rescue-flag-note').value,
+          nextOwner: document.getElementById('rescue-flag-owner').value,
+          filters: rescueFilters,
+        }).then(function (result) { renderDelivery(result.page); }).catch(function (error) {
+          var slot = document.getElementById('rescue-error');
+          if (slot) slot.textContent = error.message || 'The flag was not saved.';
+        });
+      });
+    }
     function teamNav(active) {
       if (!canManage()) return '';
       var items = [['reports', 'Reports'], ['evals', 'Evals'], ['summary', 'Summary']];
@@ -3765,10 +3921,8 @@
     function applyScreenData(name, data) {
       if (name === 'home' || name === 'written' || name === 'delivered') renderHome(data, name);
       else if (name === 'bedding') renderBedding(data);
-      else if (name === 'orders') {
-        document.getElementById('header-note').textContent = data.period + ' · Updated ' + data.updated;
-        document.getElementById('screen').innerHTML = card('Open orders and backorders', 'Not Available', 'No open-order report is on file. Nothing is shown as zero.');
-      } else if (name === 'daily') renderDaily(data);
+      else if (name === 'delivery') renderDelivery(data);
+      else if (name === 'daily') renderDaily(data);
       else if (name === 'closing') renderClosing(data);
       else if (name === 'people') renderPeople(data);
       else if (name === 'coach') renderCoach(data);
@@ -3783,7 +3937,7 @@
     }
     function reloadCurrentScreen() {
       var name = screen;
-      var request = name === 'written' || name === 'delivered' || name === 'orders' ? 'home' : name;
+      var request = name === 'written' || name === 'delivered' ? 'home' : name;
       if (name === 'admin' || name === 'documents' || name === 'upload') return Promise.resolve({ applied: false, busy: true });
       return api(request).then(function (data) {
         if (screen !== name || displayHold || displayBusy()) return { applied: false, busy: true };
@@ -3841,7 +3995,7 @@
       document.body.classList.remove('print-summary', 'print-eval', 'print-doc', 'print-brief', 'print-coach', 'print-evalprep');
       closeDocViewer();
       drawNav();
-      var request = name === 'written' || name === 'delivered' || name === 'orders' ? 'home' : name;
+      var request = name === 'written' || name === 'delivered' ? 'home' : name;
       if (name === 'admin') { renderAdmin(); return; }
       if (name === 'documents') {
         docNotice = null;
