@@ -44,10 +44,11 @@ var ROUTES_ = {
   saveDocPacket: ['admin'],
   devLog: ['admin'],
   recordDevLog: ['admin'],
+  dataPulse: ['sales', 'manager', 'admin'],
 };
 
 // Routes that only read. Every other route can change figures, so the cached pages are dropped after it runs.
-var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, previewBriefEmail: true, health: true, bedding: true, coverage: true, roster: true, evals: true, evalWorkbook: true, uploads: true, documents: true, docFile: true, devLog: true };
+var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, previewBriefEmail: true, health: true, bedding: true, coverage: true, roster: true, evals: true, evalWorkbook: true, uploads: true, documents: true, docFile: true, devLog: true, dataPulse: true };
 // Backups and restore drills write only their own logs, which no cached page reads; a problem they record moves the version itself.
 var LOG_ONLY_ROUTES_ = { runBackup: true };
 // Pages whose reply is reused until the data changes. Each reads every tab once while it is built.
@@ -55,6 +56,39 @@ var CACHED_PAGES_ = { home: true, daily: true, closing: true, people: true, summ
 var MEMO_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true, health: true, coverage: true };
 var PAGE_CACHE_SECONDS_ = 1800;
 var PAGE_CACHE_MAX_CHARS_ = 95000;
+
+// Figure tabs only. Health, import, and exception logs are omitted so a 30-minute check that found nothing new does not look like new sales.
+var DISPLAY_SOURCE_TABS_ = ['CC_Config', 'CC_Daily', 'CC_DailyGoals', 'CC_SellingDays', 'CC_AssociateDays', 'CC_People', 'CC_Staffing', 'CC_Closing', 'CC_ClosingDaily', 'CC_ClosingMTD', 'CC_Kpi', 'CC_Promotions'];
+
+function fingerprintValue_(value) {
+  if (Object.prototype.toString.call(value) === '[object Date]') return isoDate_(value);
+  if (value && typeof value === 'object') {
+    var copy = Array.isArray(value) ? [] : {};
+    Object.keys(value).sort().forEach(function (key) { copy[key] = fingerprintValue_(value[key]); });
+    return copy;
+  }
+  return value;
+}
+
+function sourceFingerprint_() {
+  var parts = DISPLAY_SOURCE_TABS_.map(function (name) {
+    var rows = [];
+    try { rows = sheet_(name); } catch (ignore) { rows = []; }
+    return name + '=' + JSON.stringify(fingerprintValue_(rows));
+  });
+  if (typeof Utilities === 'undefined' || !Utilities.computeDigest) return parts.join('\n');
+  var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, parts.join('\n'));
+  return digest.map(function (part) { var value = (part + 256) % 256; return (value < 16 ? '0' : '') + value.toString(16); }).join('');
+}
+
+/** Read-only clock for the open website. It does not import mail or write sales. */
+function dataPulse_() {
+  try {
+    return { ok: true, version: dataVersion_(), imports: false };
+  } catch (error) {
+    return { ok: false, stale: true };
+  }
+}
 
 /** Changes whenever imported data, a recalculation, a saved setting or a hand edit to the workbook changes. */
 function dataVersion_() {
@@ -124,9 +158,26 @@ function refreshRollupIfStale_() {
   if (props) props.setProperty('rollup_stamp', stamp);
 }
 
-/** A hand edit to the workbook (installable change trigger) retires every cached page. */
+/** Retires cached pages only when the figure tabs differ from the last published copy. */
+function publishSourceChange_(reason) {
+  if (typeof PropertiesService === 'undefined') return false;
+  var props = PropertiesService.getScriptProperties();
+  var current = '';
+  try { current = sourceFingerprint_(); } catch (ignore) { current = ''; }
+  if (!current) {
+    markDataChanged_(reason);
+    return true;
+  }
+  if (props.getProperty('source_fingerprint') === current) return false;
+  props.setProperty('source_fingerprint', current);
+  markDataChanged_(reason);
+  return true;
+}
+
+/** A hand edit to the workbook (installable change trigger) retires every cached page. Imports suppress this so a health-log write is not treated as new sales. */
 function workbookChanged_() {
-  markDataChanged_('workbook edited');
+  if (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties().getProperty('suppress_change_mark') === 'yes') return;
+  publishSourceChange_('workbook edited');
 }
 
 function ensureChangeTrigger_() {
@@ -142,6 +193,11 @@ function doGet() {
     refreshRollupIfStale_();
   } catch (error) {
     appendException_('Update Failed', 'CC_Rollup was not recalculated. ' + String(error && error.message ? error.message : error));
+  }
+  try {
+    if (typeof ensureDailyTrigger_ === 'function') ensureDailyTrigger_();
+  } catch (error) {
+    appendException_('Update Failed', 'The 30-minute update trigger could not be confirmed. ' + String(error && error.message ? error.message : error));
   }
   var page = HtmlService.createHtmlOutputFromFile('Index')
     .setTitle("Kane's Store 17 Command Center")
@@ -213,5 +269,6 @@ function route_(name, payload) {
   if (name === 'saveDocPacket') return saveDocPacket_(payload);
   if (name === 'devLog') return devLog_(payload);
   if (name === 'recordDevLog') return recordDevLog_(payload);
+  if (name === 'dataPulse') return dataPulse_(payload);
   throw new Error('That request is not available.');
 }

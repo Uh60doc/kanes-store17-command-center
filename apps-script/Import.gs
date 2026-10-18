@@ -13,7 +13,9 @@ function retry_(payload) {
 function scheduledImport_() {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) return;
+  var props = typeof PropertiesService === 'undefined' ? null : PropertiesService.getScriptProperties();
   try {
+    if (props) props.setProperty('suppress_change_mark', 'yes');
     importMailbox_();
     refreshRollup_();
     try { refreshMonthEnd_(); } catch (error) { appendException_('Update Failed', 'CC_MonthEnd could not be refreshed. The daily record was not changed.'); }
@@ -29,13 +31,16 @@ function scheduledImport_() {
     notifyOnce_('Command Center import failed. Last verified figures were left in place. ' + String(error && error.message ? error.message : error));
   } finally {
     if (typeof qualityAfterUpdate_ === 'function') qualityAfterUpdate_('scheduled import', true);
-    markDataChanged_('scheduled import');
     lock.releaseLock();
   }
   try { ensureChangeTrigger_(); } catch (error) { appendException_('Update Failed', 'The workbook edit trigger could not be installed, so cached pages expire after 30 minutes instead of on each hand edit. ' + String(error && error.message ? error.message : error)); }
   try { if (typeof ensureBackupTrigger_ === 'function') ensureBackupTrigger_(); } catch (error) { appendException_('Update Failed', 'The nightly backup trigger could not be installed. ' + String(error && error.message ? error.message : error)); }
   warmPages_();
   try { if (typeof maybeSendBriefEmails_ === 'function') maybeSendBriefEmails_(); } catch (error) { appendException_('Update Failed', 'Morning management emails could not be sent. Last verified figures were left in place. ' + String(error && error.message ? error.message : error)); }
+  if (props) props.deleteProperty('suppress_change_mark');
+  // A health-log write is not new sales. The website refreshes only when the figure tabs changed.
+  if (typeof publishSourceChange_ === 'function') publishSourceChange_('scheduled import');
+  else markDataChanged_('scheduled import');
 }
 
 function ensureDailyTrigger_() {
