@@ -251,8 +251,8 @@ function uploadPdf_(context) {
     return finishImport_(context, uploadOutcome_(base, 'Needs Review', parsed.reportType + ' for ' + context.date + ' shows ' + moneyPlain_(parsed.storeTotal) + ', but ' + moneyPlain_(existing) + ' is already on file. The recorded figure was kept and this file was not applied.'), 'needs-review');
   }
   if (key !== 'snapWritten') refreshStoreKpiQuietly_(context.date);
-  if (existing !== null && existing === parsed.storeTotal) {
-    return finishImport_(context, uploadOutcome_(base, 'Already on file', parsed.reportType + ' for ' + context.date + ' (Store 17 total ' + moneyPlain_(parsed.storeTotal) + ') was already on file with the same figure. Nothing was added.' + extra), 'duplicate');
+  if (decision === 'same' || (existing !== null && existing === parsed.storeTotal)) {
+    return finishImport_(context, uploadOutcome_(base, 'Already on file', parsed.reportType + ' for ' + context.date + ' (Store 17 total ' + moneyPlain_(parsed.storeTotal) + ') was already on file with the same figure. Nothing was added. Reconciled to the existing row; a manual backfill or earlier import was not overwritten. Original file ' + context.fileName + '; source date ' + parsed.start + '.' + extra), 'duplicate');
   }
   return finishImport_(context, uploadOutcome_(base, 'Imported', parsed.reportType + ' for ' + context.date + ': Store 17 total ' + moneyPlain_(parsed.storeTotal) + ' saved.' + extra), 'imported', parsed.reportType + ' ' + parsed.start);
 }
@@ -364,7 +364,7 @@ function uploadKpiWorkbook_(context, info) {
     return finishImport_(context, uploadOutcome_(base, 'Needs Review', summary + ' Saved. Not on the roster: ' + unmatched.join(', ') + '. Their figures are saved under the printed name; add them (or an alias) in Admin > Manage Associates. ' + notes.join(' ')), 'imported');
   }
   if (!outcome.added && !outcome.replaced) {
-    return finishImport_(context, uploadOutcome_(base, 'Already on file', summary + ' Every figure was already on file with the same values. Nothing was added. ' + notes.join(' ')), 'duplicate');
+    return finishImport_(context, uploadOutcome_(base, 'Already on file', summary + ' Every figure was already on file with the same values. Nothing was added. Reconciled to the existing rows; a manual backfill or earlier import was not overwritten. Original file ' + context.fileName + '; source date ' + date + '. ' + notes.join(' ')), 'duplicate');
   }
   return finishImport_(context, uploadOutcome_(base, 'Imported', summary + ' ' + outcome.added + ' figures saved' + (outcome.same ? ', ' + outcome.same + ' already on file' : '') + '. ' + notes.join(' ')), 'imported', label + ' ' + date);
 }
@@ -490,7 +490,7 @@ function uploadPerq_(context, info) {
     return finishImport_(context, uploadOutcome_(base, 'Needs Review', message + ' ' + held + ' count' + (held === 1 ? '' : 's') + ' differ from the count already recorded for ' + date + '. The recorded counts were kept and logged for review. ' + flags.join(' ')), 'needs-review');
   }
   if (flags.length) return finishImport_(context, uploadOutcome_(base, 'Needs Review', message + ' ' + flags.join(' ')), 'needs-review');
-  if (!added) return finishImport_(context, uploadOutcome_(base, 'Already on file', message + ' Already on file with the same counts. Nothing was added.'), 'duplicate');
+  if (!added) return finishImport_(context, uploadOutcome_(base, 'Already on file', message + ' Already on file with the same counts. Nothing was added. Reconciled to the existing rows; a manual backfill or earlier import was not overwritten. Original file ' + context.fileName + '; source date ' + date + '.'), 'duplicate');
   return finishImport_(context, uploadOutcome_(base, 'Imported', message + ' Saved.'), 'imported', label + ' ' + date);
 }
 

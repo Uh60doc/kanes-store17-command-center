@@ -308,6 +308,8 @@ function writeDailyAmount_(parsed) {
     refreshRollup_();
     return 'conflict';
   }
+  // A verified figure, including a negative adjustment or a manual backfill, is left untouched.
+  if (current !== null && current === parsed.storeTotal) return 'same';
   tab.getRange(target, field + 1).setValue(parsed.storeTotal);
   var ledgerView = parsed.reportType === 'SNAP Written' ? 'SNAP_STORE' : parsed.reportType === 'NWDSR Written' ? 'NWDSR_WRITTEN_STORE' : 'NWDSR_DELIVERED_STORE';
   var ledgerSide = parsed.reportType === 'NWDSR Delivered' ? 'delivered' : 'written';
