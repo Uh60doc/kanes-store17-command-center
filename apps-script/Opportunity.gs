@@ -151,6 +151,8 @@ function opportunityTakeaways_(card) {
     lines.push('The Group 17 average ticket is already at or above $2,500 on the orders on file. That written figure is not commission.');
   } else if (ticket.status === 'Pending') {
     lines.push('Average-ticket coaching waits on Group 17 written orders and written sales.');
+  } else if (ticket.status === 'No orders') {
+    lines.push('No Group 17 written orders are on file, so there is no average ticket to compare. Nothing is treated as a missed sale.');
   }
   lines.push('Qualifying rug count and rug revenue are not on a salesperson report, so a rug commission stays pending. The agreement pays 6% on quarterly area rugs. A 12% tier at 13 rugs is ' + OPP_PAY_NEEDED_.toLowerCase() + '.');
   lines.push('Protection-plan earnings need the combined qualifying dollars. Until that total is on file, the current tier is ' + OPP_PAY_NEEDED_.toLowerCase() + '. The agreement lists 20% from $3,000 through $4,500 and 25% above $4,500.');

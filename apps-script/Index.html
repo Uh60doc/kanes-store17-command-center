@@ -949,7 +949,7 @@
         var protectView = coachRate(protectInput);
         var protectPay = protectView.rate === null || protectView.amount === null ? null : Math.round(protectView.amount * protectView.rate * 100) / 100;
         document.getElementById('opp-actual').textContent = coachMoney(actualSales);
-        document.getElementById('opp-actual-note').textContent = ticket.orders === null || ticket.orders === undefined ? 'Orders pending' : ticket.orders + ' orders at ' + coachMoney(ticket.average);
+        document.getElementById('opp-actual-note').textContent = ticket.orders === null || ticket.orders === undefined ? 'Orders pending' : (Number(ticket.orders) ? ticket.orders + ' orders at ' + coachMoney(ticket.average) : 'No orders');
         document.getElementById('opp-scenario').textContent = coachMoney(scenarioSales);
         document.getElementById('opp-gap').textContent = gap === null ? 'Pending' : (gap >= 0 ? '+' : '') + money(gap) + ' written sales';
         document.getElementById('opp-bar-now').style.width = coachBar(actualSales, maxBar) + '%';
