@@ -53,9 +53,12 @@ test('October 15 verified winners appear on Start-Up when that is the prior busi
   const startup = brief.startup.text as string;
   assert.equal(brief.today, '2026-10-16');
   assert.equal(brief.homeWritten, home.yesterday.written);
-  assert.match(startup, /Ricky Nassif/);
-  assert.match(startup, /Eric Montes Rodriguez|Ricky Nassif/);
+  assert.match(startup, /Top salesperson: Ricky Nassif/);
+  assert.match(startup, /Second place: Eric Montes Rodriguez/);
+  assert.match(startup, /Third place: None/);
+  assert.match(startup, /Worked, no written sales: None/);
   assert.match(startup, /SNAP Written/);
+  assert.doesNotMatch(startup, /Kelly Meyers|Elizabeth Perez|Mukhtar|Filepe/);
 });
 
 test('saved plan notes do not change Home sales figures', () => {

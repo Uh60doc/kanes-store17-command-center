@@ -256,6 +256,23 @@ test('wrong dates, month-to-date files, unknown files and unconfirmed PERQ expor
   assert.equal(JSON.stringify([tabs.CC_Daily, tabs.CC_Ledger, tabs.CC_Closing]), before);
 });
 
+test('importing the same PERQ salesperson file twice does not duplicate traffic', () => {
+  const { send, tabs } = boot();
+  const file = perqSalesperson([['TNASSI', 'Tarik', 'Nassif', 3], ['EMON0904', 'Eric', 'Montes', 2]], '10/15/26 08:15pm');
+  const first = send('2026-10-15', 'Performance Stats by Salesperson.xlsx', file, true);
+  assert.equal(first.status, 'Imported');
+  const second = send('2026-10-15', 'Performance Stats by Salesperson.xlsx', file, true);
+  assert.equal(second.status, 'Already on file');
+  const resaved = send('2026-10-15', 'people resaved.xlsx', perqSalesperson([['TNASSI', 'Tarik', 'Nassif', 3], ['EMON0904', 'Eric', 'Montes', 2]], '10/15/26 08:15pm', 'resaved'), true);
+  assert.equal(resaved.status, 'Already on file');
+  assert.match(resaved.message, /Nothing was added/);
+  const people = tabs.CC_Closing!.filter((row) => row[1] === 'person' && row[8] === 'PERQ Ups + Be Backs' && row[0] === '2026-10-15');
+  assert.deepEqual(people.map((row) => [row[2], row[5]]), [['TNASSI', 3], ['EMON0904', 2]]);
+  const ledgerPeople = tabs.CC_Ledger!.filter((row) => row[0] === 'PERQ_PERSON' && row[2] === '2026-10-15');
+  assert.equal(ledgerPeople.length, 2);
+  assert.equal(ledgerPeople.reduce((sum, row) => sum + Number(row[12] || 0), 0), 5);
+});
+
 test('a file refused only for the chosen date stays usable, and a file the mailbox held can be confirmed here', () => {
   const { send, tabs } = boot();
   const report = nwdsrPdf('written', '2026-10-14', '2026-10-14', 1000);

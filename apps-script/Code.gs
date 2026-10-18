@@ -1,5 +1,5 @@
 var SPREADSHEET_ID_ = '1KtsfQPQRdg3IdNXomlM5t47IyE1psouxvgW-D8VSLfw';
-var APP_VERSION_ = '1.0.5';
+var APP_VERSION_ = '1.0.6';
 
 var ROUTES_ = {
   login: null,

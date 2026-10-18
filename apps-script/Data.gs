@@ -2560,17 +2560,77 @@ function salesWinnersPack_(today, writtenGoal, askedDay) {
     roster = { date: winnersDay, status: 'pending', reason: 'PERQ Report Pending', detail: 'The working roster for ' + winnersDay + ' could not be read.', people: [], notes: [] };
   }
   var yesterday = shiftDate_(today, -1);
+  var snap = snapWrittenOn_(winnersDay);
+  if (roster.status === 'ready' && snap.reported) {
+    var outside = snapOutsideWorking_(winnersDay, roster.people);
+    if (outside.length) {
+      roster.notes = (roster.notes || []).concat(
+        'SNAP Written also lists ' + nameList_(outside) + '. A SNAP line, including an adjustment, is not proof someone worked, so ' +
+        (outside.length === 1 ? 'that name is' : 'those names are') + ' not in yesterday\'s sales winners.'
+      );
+    }
+  }
   return {
     winnersDay: winnersDay,
     chosenDay: chosenDay,
     roster: roster,
-    winners: morningWinners_(roster, winnersDay === yesterday ? writtenGoal : null, snapWrittenOn_(winnersDay)),
+    winners: morningWinners_(roster, winnersDay === yesterday ? writtenGoal : null, snap),
   };
+}
+
+/**
+ * SNAP display names for this date that do not match anyone on the working roster.
+ * Their dollars stay on the SNAP report and are not used to decide who worked.
+ */
+function snapOutsideWorking_(date, people) {
+  var lines = snapAssociateLines_(date, date);
+  var extra = [];
+  var seen = {};
+  lines.order.forEach(function (key) {
+    var line = lines.byDay[key];
+    var matched = (people || []).some(function (person) {
+      var aliases = personAliases_(person.name);
+      return line.name === person.name || aliases.indexOf(String(line.name || '').toLowerCase()) !== -1;
+    });
+    if (matched) return;
+    var label = String(line.name || '');
+    var keyName = label.toLowerCase();
+    if (!label || seen[keyName]) return;
+    seen[keyName] = true;
+    extra.push(label);
+  });
+  extra.sort();
+  return extra;
+}
+
+/** 1st, 2nd and 3rd by SNAP Written, plus associates who worked and wrote nothing. $0 is not a place. */
+function winnersBoard_(people, snapReported) {
+  var empty = { places: [], noWritten: [], alsoWrote: [] };
+  if (!snapReported) return empty;
+  var ranked = (people || []).filter(function (person) { return person.written !== null && person.written !== undefined; });
+  var sellers = ranked.filter(function (person) { return Number(person.written) > 0; });
+  var places = [];
+  var alsoWrote = [];
+  var place = 0;
+  var last = null;
+  sellers.forEach(function (person) {
+    if (last === null || Number(person.written) !== last) {
+      place += 1;
+      last = Number(person.written);
+    }
+    var row = { place: place, name: person.name, written: person.written, opportunities: person.opportunities, source: person.source };
+    if (place <= 3) places.push(row);
+    else alsoWrote.push(row);
+  });
+  var noWritten = ranked.filter(function (person) { return Number(person.written) === 0; }).map(function (person) {
+    return { name: person.name, written: 0, opportunities: person.opportunities, source: person.source };
+  });
+  return { places: places, noWritten: noWritten, alsoWrote: alsoWrote };
 }
 
 /** Every salesperson on the working roster, ranked by SNAP Written for the same date. Missing SNAP is Pending, never $0. */
 function morningWinners_(roster, goal, snap) {
-  var result = { date: roster.date, status: 'pending', reason: roster.reason, detail: roster.detail || '', share: null, snapReported: false, people: [] };
+  var result = { date: roster.date, status: 'pending', reason: roster.reason, detail: roster.detail || '', share: null, snapReported: false, people: [], places: [], noWritten: [], alsoWrote: [] };
   if (roster.status !== 'ready') return result;
   result.status = 'ready';
   result.reason = '';
@@ -2597,6 +2657,10 @@ function morningWinners_(roster, goal, snap) {
     if (a.written !== null && b.written !== null && a.written !== b.written) return b.written - a.written;
     return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0);
   });
+  var board = winnersBoard_(result.people, reported);
+  result.places = board.places;
+  result.noWritten = board.noWritten;
+  result.alsoWrote = board.alsoWrote;
   if (!reported) result.reason = 'SNAP Written for ' + roster.date + ' is not on file yet, so each salesperson shows Pending.';
   return result;
 }
@@ -2718,6 +2782,9 @@ function morning_(payload) {
       snapWritten: home.yesterday.snapWritten,
       snapVariance: home.yesterday.snapVariance,
       delivered: home.board.yesterday.delivered,
+      customers: home.yesterday.customers,
+      opportunities: home.yesterday.opportunities,
+      closingRatio: home.yesterday.closingRatio,
       closing: closingFigure,
       beddingWritten: beddingWritten,
       beddingDelivered: beddingDelivered,
