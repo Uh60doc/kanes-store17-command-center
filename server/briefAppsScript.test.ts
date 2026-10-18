@@ -27,7 +27,23 @@ test('Morning Start-Up and MTD figures match Home and Sales Team, and missing Oc
   assert.equal(brief.peopleCount, people.people.length);
 
   assert.match(brief.startup.subject, /STORE 17 \| MORNING START-UP \| Oct 17, 2026/);
-  assert.match(brief.mtd.subject, /STORE 17 \| MTD PERFORMANCE \| Oct 17, 2026/);
+  assert.match(brief.mtd.subject, /STORE 17 — MONTH-TO-DATE PERFORMANCE \| Oct 17, 2026/);
+  assert.match(brief.mtd.text, /Written sales MTD/);
+  assert.match(brief.mtd.text, /Delivered sales MTD/);
+  assert.match(brief.mtd.text, /Closing ratio/);
+  assert.match(brief.mtd.text, /Average ticket/);
+  assert.match(brief.mtd.text, /Bedding/);
+  assert.match(brief.mtd.text, /Fabric Maintenance/);
+  assert.match(brief.mtd.text, /Leather Maintenance/);
+  assert.match(brief.mtd.text, /Power Upholstery/);
+  assert.match(brief.mtd.text, /Mattress Protectors/);
+  assert.match(brief.mtd.text, /Rugs/);
+  assert.match(brief.mtd.text, /NWDSR Written/);
+  assert.match(brief.mtd.text, /SNAP/);
+  assert.match(brief.mtd.text, /Former employees stay in the store delivered total/);
+  assert.doesNotMatch(brief.mtd.text, /Mukhtar|Filepe|Kelly Meyers|Elizabeth Perez/);
+  assert.match(brief.startup.text, /MORNING START-UP/);
+  assert.doesNotMatch(brief.startup.text, /MONTH-TO-DATE PERFORMANCE/);
   assert.match(brief.startup.text, /Store 17/);
   assert.match(brief.mtd.text, /2nd through the 1st/);
   assert.match(brief.mtd.text, /1st through the last day/);
@@ -44,6 +60,15 @@ test('Morning Start-Up and MTD figures match Home and Sales Team, and missing Oc
   assert.equal(brief.mail.enabled, false);
   assert.equal(brief.mail.to, LIVE);
   assert.equal(mail.length, 0, 'opening the brief does not send mail');
+});
+
+test('a salesperson hired within 90 days is marked NEW HIRE with the ramp goals, and former employees stay off the team', () => {
+  const { gs } = harness();
+  gs.ensureRosterColumns_();
+  const text = plain(gs.brief_({ session: admin })).mtd.text as string;
+  assert.match(text, /Brenda Sanchez NEW HIRE/);
+  assert.match(text, /Ramp goals: average ticket \$2,100, bedding 15%, mattress protector 60%, rugs 6/);
+  assert.doesNotMatch(text, /Mukhtar Junaid|Filepe Chaves|Valentina Lopez|Kelly Meyers/);
 });
 
 test('October 15 verified winners appear on Start-Up when that is the prior business day', () => {
@@ -104,9 +129,9 @@ test('after 6:00 AM ET an enabled store sends Start-Up first, then MTD, and will
   assert.equal(mail[0]!.to, LIVE);
   assert.equal(mail[1]!.to, LIVE);
   assert.match(mail[0]!.subject, /MORNING START-UP/);
-  assert.match(mail[1]!.subject, /MTD PERFORMANCE/);
+  assert.match(mail[1]!.subject, /MONTH-TO-DATE PERFORMANCE/);
   assert.match(mail[0]!.htmlBody || '', /Store Written sales and daily goal/);
-  assert.match(mail[1]!.htmlBody || '', /SNAP Written MTD/);
+  assert.match(mail[1]!.htmlBody || '', /SNAP Written/);
   assert.ok(first.results[0].sent && first.results[1].sent);
 
   const again = plain(gs.maybeSendBriefEmails_());
@@ -130,7 +155,7 @@ test('a test send needs an explicit address and refuses the live management list
   const mtd = plain(gs.sendBriefTest_({ session: admin, kind: 'mtd', to: 'gm-test@example.com' }));
   assert.equal(mtd.sent, true);
   assert.equal(mail.length, 2);
-  assert.match(mail[1]!.subject, /MTD PERFORMANCE/);
+  assert.match(mail[1]!.subject, /MONTH-TO-DATE PERFORMANCE/);
 });
 
 test('resend to the live list is blocked while production is off', () => {
