@@ -723,7 +723,7 @@ function evalBand_(sheet, row, evaluation, compact) {
   var last = isoParts_(evaluation.months[2].end);
   var span = evaluation.months[0].name.slice(0, 3) + ' 1, ' + first.year + ' – ' + evaluation.months[2].name.slice(0, 3) + ' ' + last.day + ', ' + last.year;
   sheet.merge(row, 2, row, 6, compact ? evaluation.name + ' · ' + evaluation.cycleLabel + ' (continued)' : (evaluation.template === 'newHire' ? 'New Hire Coaching Evaluation' : '3-Month Performance & Coaching Evaluation'), { bold: true, size: compact ? 12 : 14, color: c.navy, align: 'center', valign: 'bottom' });
-  sheet.merge(row + 1, 2, row + 1, 6, compact ? "Kane's Furniture · Store 17 · South Orlando" : "Kane's Furniture · Store 17 · South Orlando" + (evaluation.template === 'newHire' ? ' · under 90 days' : ''), { size: 10, color: c.teal, bold: true, align: 'center' });
+  sheet.merge(row + 1, 2, row + 1, 6, compact ? "Kane's Furniture · Store 17 · South Orlando" : "Kane's Furniture · Store 17 · South Orlando" + (evaluation.tenureLabel ? ' · ' + evaluation.tenureLabel : (evaluation.template === 'newHire' ? ' · under 90 days' : '')), { size: 10, color: c.teal, bold: true, align: 'center' });
   sheet.merge(row + 2, 2, row + 2, 6, 'Issued ' + evaluation.cycleLabel + ' · covers ' + span + ' (calendar months)', { size: 9, color: c.muted, italic: true, align: 'center' });
   sheet.merge(row + 3, 1, row + 3, 7, '', { border: { bottom: 'medium ' + c.teal } });
   sheet.picture('kanes.jpeg', row, 1, 1.5, 0.655, 0.05, 0.04);
@@ -748,7 +748,7 @@ function evalSheet_(styles, evaluation, used) {
     ['Salesperson', evaluation.name, 'Employee ID', evaluation.employeeId || 'Not on file'],
     ['Store', 'Store 17 · South Orlando', 'Hire date', evaluation.hireDate || 'Not on file'],
     ['Evaluation', evaluation.cycleLabel + (evaluation.revision > 1 ? ' · revision ' + evaluation.revision : ''), 'Deliver by', evaluation.deliverBy],
-    ['Status', evaluation.status + (evaluation.verification === 'Verified' ? '' : ' · Pending Verification'), 'Template', evaluation.template === 'newHire' ? 'New hire (under 90 days)' : 'Standard'],
+    ['Status', evaluation.status + (evaluation.verification === 'Verified' ? '' : ' · Pending Verification'), 'Template', evaluation.tenureLabel || (evaluation.template === 'newHire' ? 'New hire (under 90 days)' : 'Standard')],
   ];
   info.forEach(function (line) {
     var flagged = line[0] === 'Status' && evaluation.verification !== 'Verified';
