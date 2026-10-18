@@ -371,6 +371,10 @@
       body.print-coach header.brand, body.print-coach .nav, body.print-coach .noprint, body.print-coach #data-refresh, body.print-coach .section-title { display: none !important; }
       body.print-coach .coach-sheet { margin: 0; border: 0; border-radius: 0; max-width: none; padding: 0.35in; }
       body.print-coach .coach-sheet, body.print-coach .coach-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html:has(body.print-evalprep), body.print-evalprep { background: white !important; }
+      body.print-evalprep .wrap { padding: 0; max-width: 8in; }
+      body.print-evalprep header.brand, body.print-evalprep .nav, body.print-evalprep .noprint, body.print-evalprep #data-refresh, body.print-evalprep .section-title { display: none !important; }
+      body.print-evalprep .coach-sheet { margin: 0; border: 0; border-radius: 0; max-width: none; padding: 0.3in; }
       #doc-print img { display: block; width: auto; height: auto; max-width: 100%; max-height: 10.2in; margin: 0 auto; break-after: page; }
       #doc-print img:last-child { break-after: auto; }
       body { background: white; color: black; }
@@ -503,8 +507,9 @@
     function navItems() {
       var items = [['home', 'Home'], ['daily', 'Daily'], ['closing', 'Closing'], ['written', 'Written'], ['delivered', 'Delivered'], ['people', 'Sales Team'], ['coach', 'Goal coach'], ['morning', 'Morning meeting'], ['documents', 'Documents']];
       if (role !== 'sales') items.splice(8, 0, ['coaching', 'Coaching']);
-      if (role !== 'sales') items.splice(9, 0, ['recovery', 'Recovery']);
-      if (role !== 'sales') items.splice(10, 0, ['brief', 'Manager brief']);
+      if (role !== 'sales') items.splice(9, 0, ['evalPrep', 'Eval prep']);
+      if (role !== 'sales') items.splice(10, 0, ['recovery', 'Recovery']);
+      if (role !== 'sales') items.splice(11, 0, ['brief', 'Manager brief']);
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['orders', 'Open orders'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
@@ -1201,6 +1206,105 @@
       });
       paint();
     }
+    function evalPrepText(card, data) {
+      var lines = [
+        card.name + (card.newHire ? ' — NEW HIRE' : ''),
+        (data.label || '') + ' draft for manager review',
+        'Hire date ' + (card.hireDate || 'not on file'),
+        card.history || '',
+        card.threeMonthNote || '',
+        'Next written goal: ' + (card.nextGoal ? card.nextGoal.month + ' ' + card.nextGoal.text + '. ' + card.nextGoal.note : ''),
+        'Recognition: ' + (card.recognition || ''),
+        'Comments: ' + (card.comments || ''),
+        'Employee comments and signatures are blank.',
+      ];
+      (card.metrics || []).forEach(function (metric) {
+        lines.push(metric.label + ' · goal ' + metric.goalText);
+        (metric.values || []).forEach(function (cell, index) {
+          var month = card.months && card.months[index] ? card.months[index].name : String(index + 1);
+          var goal = cell.goalText || (cell.goal === null || cell.goal === undefined ? '' : '');
+          lines.push('  ' + month + ': ' + cell.text + (goal ? ' vs ' + goal : '') + (cell.note ? ' — ' + cell.note : ''));
+        });
+      });
+      (card.focus || []).forEach(function (item, index) {
+        lines.push('Focus ' + (index + 1) + ': ' + item.metric);
+        lines.push('Now: ' + item.prior);
+        lines.push('Goal: ' + item.goal);
+        lines.push('Action and measure: ' + item.plan);
+      });
+      return lines.filter(Boolean).join('\n');
+    }
+    function renderEvalPrep(data) {
+      var cards = data.cards || [];
+      document.getElementById('header-note').textContent = 'Evaluation prep · ' + (data.label || '') + ' · manager review';
+      var cycles = (data.cycles || []).map(function (item) {
+        return '<option value="' + esc(item.cycle) + '"' + (item.cycle === data.cycle ? ' selected' : '') + '>' + esc(item.label) + '</option>';
+      }).join('');
+      var options = cards.map(function (card) { return '<option>' + esc(card.name) + '</option>'; }).join('');
+      document.getElementById('screen').innerHTML = '<section class="opp-layout" id="prep-root"><p class="opp-banner noprint">' + esc(data.form || '') + '</p><div class="coach-actions noprint"><label>Review cycle<select id="prep-cycle">' + cycles + '</select></label><label>Associate<select id="prep-person">' + options + '</select></label><button type="button" id="prep-print">Print</button><button type="button" id="prep-download">Download draft</button><button type="button" class="secondary" id="prep-workbook">Download workbook</button></div><article class="coach-sheet" id="prep-sheet"></article></section>';
+      function selected() {
+        var name = document.getElementById('prep-person').value;
+        for (var i = 0; i < cards.length; i += 1) if (cards[i].name === name) return cards[i];
+        return cards[0];
+      }
+      function paint() {
+        var card = selected();
+        if (!card) { document.getElementById('prep-sheet').innerHTML = '<p>No active associate is on the roster.</p>'; return; }
+        var head = '<tr><th>Measure</th>' + card.months.map(function (month) { return '<th>' + esc(month.name) + '</th>'; }).join('') + '</tr>';
+        var rows = card.metrics.map(function (metric) {
+          return '<tr><th>' + esc(metric.label) + '<br><span class="pending">' + esc(metric.goalText) + '</span></th>' + metric.values.map(function (cell) {
+            var goal = cell.goalText ? ' vs ' + cell.goalText : '';
+            return '<td>' + esc(cell.text) + esc(goal) + (cell.note ? '<br><span class="pending">' + esc(cell.note) + '</span>' : '') + '</td>';
+          }).join('') + '</tr>';
+        }).join('');
+        var focus = (card.focus || []).map(function (item, index) {
+          return '<div class="coach-opp"><p><strong>' + (index + 1) + '. ' + esc(item.metric) + '</strong></p><p><strong>Now.</strong> ' + esc(item.prior) + '</p><p><strong>Goal.</strong> ' + esc(item.goal) + '</p><p><strong>Action and measure.</strong> ' + esc(item.plan) + '</p></div>';
+        }).join('');
+        if (!focus) focus = '<p class="coach-note">No verified, scored metric is below its goal. Pending and partial months are not misses.</p>';
+        var history = 'Hire date ' + (card.hireDate || 'not on file') + (card.position ? ' · ' + card.position : '') + (card.status ? ' · ' + card.status : '');
+        if (card.statusEffective) history += ' · status effective ' + card.statusEffective;
+        if (card.priorStatus) history += ' · prior status ' + card.priorStatus;
+        if (card.history) history += '. ' + card.history;
+        document.getElementById('prep-sheet').innerHTML =
+          '<p class="coach-kicker">Kane\'s Store 17 · Three-month review draft</p>' +
+          '<div class="coach-name"><h2>' + esc(card.name) + '</h2>' + (card.newHire ? '<span class="coach-badge">NEW HIRE</span>' : '') + '</div>' +
+          '<p class="coach-note">' + esc(data.label || '') + ' covers ' + card.months.map(function (month) { return month.label; }).join(', ') + '. ' + esc(data.calendar || '') + '</p>' +
+          '<p class="coach-note">' + esc(history) + '</p>' +
+          (card.newHire ? '<p class="coach-note"><span class="coach-badge">NEW HIRE</span> Fewer than four months of service. Month 1 written goal is $0. Months 2 and 3 are $45,000. Month 4 onward is $65,000.</p>' : '') +
+          '<p class="coach-note"><strong>Three-month written.</strong> ' + esc(card.threeMonthNote || '') + '</p>' +
+          '<table class="coach-facts">' + head + rows + '</table>' +
+          '<h3>Recognition</h3><p class="coach-note">' + esc(card.recognition || '') + '</p>' +
+          '<h3>Draft focus for the next review</h3>' + focus +
+          '<h3>Next written goal</h3><p class="coach-note">' + esc(card.nextGoal.month) + ': ' + esc(card.nextGoal.text) + '. ' + esc(card.nextGoal.note) + ' Measured on SNAP Written for that calendar month.</p>' +
+          '<h3>Manager comments (draft)</h3><p class="coach-note">' + esc(card.comments || '') + '</p>' +
+          '<p class="coach-note">Employee comments: blank. Salesperson signature: blank. Manager signature: blank. Nothing is final until a manager approves the ratings and the wording.</p>';
+      }
+      document.getElementById('prep-person').addEventListener('change', paint);
+      document.getElementById('prep-cycle').addEventListener('change', function () {
+        var cycle = document.getElementById('prep-cycle').value;
+        api('evalPrep', { cycle: cycle }).then(renderEvalPrep).catch(function (error) { alert(error.message); });
+      });
+      document.getElementById('prep-print').addEventListener('click', function () {
+        document.body.classList.add('print-evalprep');
+        window.print();
+      });
+      document.getElementById('prep-download').addEventListener('click', function () {
+        var card = selected();
+        var blob = new Blob([evalPrepText(card, data)], { type: 'text/plain' });
+        var link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'Store17-eval-draft-' + String(card.name || 'associate').replace(/[^A-Za-z0-9]+/g, '-') + '.txt';
+        link.click();
+        setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+      });
+      document.getElementById('prep-workbook').addEventListener('click', function () {
+        var card = selected();
+        api('evalPrepWorkbook', { cycle: data.cycle, names: [card.name] }).then(function (file) {
+          saveBase64(file.fileName, file.base64);
+        }).catch(function (error) { alert(error.message); });
+      });
+      paint();
+    }
     function renderPeople(data) {
       peopleCache = data.people || [];
       peopleSnapThrough = data.snapThrough || '';
@@ -1705,7 +1809,7 @@
       });
       bindEvalImport();
     }
-    window.addEventListener('afterprint', function () { document.body.classList.remove('print-eval', 'print-brief', 'print-mtd', 'print-coach'); });
+    window.addEventListener('afterprint', function () { document.body.classList.remove('print-eval', 'print-brief', 'print-mtd', 'print-coach', 'print-evalprep'); });
     var summaryCache = null;
     function drawSummary(name, start, end) {
       document.getElementById('screen').innerHTML = '<h2 class="section-title">Summary</h2>' + teamNav('summary') + '<p class="sub">Loading the associate summary…</p>';
@@ -3541,7 +3645,7 @@
       var active = document.activeElement;
       if (active && active.id !== 'display-refresh' && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return true;
       var body = document.body;
-      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd')) return true;
+      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd') || body.classList.contains('print-evalprep')) return true;
       return false;
     }
     function syncRefreshButton() {
@@ -3560,6 +3664,7 @@
       else if (name === 'coach') renderCoach(data);
       else if (name === 'recovery') renderRecovery(data);
       else if (name === 'coaching') renderCoaching(data);
+      else if (name === 'evalPrep') renderEvalPrep(data);
       else if (name === 'morning') renderMorning(data);
       else if (name === 'brief') renderBrief(data);
       else if (name === 'health') renderHealth(data);
@@ -3622,7 +3727,7 @@
     function openScreen(name) {
       screen = name;
       displayHold = false;
-      document.body.classList.remove('print-summary', 'print-eval', 'print-doc', 'print-brief', 'print-coach');
+      document.body.classList.remove('print-summary', 'print-eval', 'print-doc', 'print-brief', 'print-coach', 'print-evalprep');
       closeDocViewer();
       drawNav();
       var request = name === 'written' || name === 'delivered' || name === 'orders' ? 'home' : name;
