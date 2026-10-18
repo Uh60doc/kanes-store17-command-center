@@ -94,21 +94,14 @@ function recoveryAnalysisOrders_(period) {
   } catch (error) {
     return { orders: null, sales: null, days: 0 };
   }
-  var orders = 0;
-  var sales = 0;
-  var days = 0;
-  var incomplete = false;
-  Object.keys(byDate).forEach(function (date) {
-    var row = byDate[date];
-    if (recoveryBlank_(row.units)) incomplete = true;
-    else orders += Number(row.units);
-    if (!recoveryBlank_(row.sales)) sales += Number(row.sales);
-    days += 1;
-  });
+  var days = Object.keys(byDate).length;
   return {
-    orders: days && !incomplete ? orders : null,
-    sales: days ? recoveryRound_(sales) : null,
+    orders: null,
+    sales: null,
     days: days,
+    note: days
+      ? days + ' daily Data Analysis written files are on file. They are not the full store month, so no order total is shown.'
+      : 'No daily Data Analysis store written file is on file.',
   };
 }
 

@@ -37,5 +37,6 @@ test('the recovery page reads the store month and does not change actual sales',
   assert.ok(recovery.daysLeft > 0);
   assert.ok(recovery.economics.dollarsPerCustomer > 0);
   assert.ok(recovery.closing.customers > 0);
-  assert.notEqual(recovery.orders.orders, recovery.closing.customers);
+  assert.equal(recovery.orders.orders, null);
+  assert.match(recovery.orders.note, /no order total/);
 });
