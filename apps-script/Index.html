@@ -1560,11 +1560,15 @@
           if (card.kind === 'rate' && card.qualified) {
             var scenario = accelRateScenario(card, Number(article.querySelector('[data-accel-hand]').value || 0), Number(article.querySelector('[data-accel-new]').value || 0), Number(article.querySelector('[data-accel-on]').value || 0));
             now.textContent = accelPct(scenario.actual);
+            var diff = article.querySelector('[data-accel-diff]');
+            if (diff) diff.textContent = card.goal === null || scenario.actual === null ? 'Pending' : String(Math.round((scenario.actual - card.goal) * 1000) / 10);
             bar.style.width = (card.goal ? Math.max(0, Math.min(100, Math.round((scenario.actual / card.goal) * 100))) : 0) + '%';
             result.textContent = scenario.sold + ' of ' + scenario.qualified + ' eligible = ' + accelPct(scenario.actual) + '. Still needed on that new eligible count: ' + (scenario.needed === null ? 'Pending' : scenario.needed) + '. A new eligible item is in the denominator. An attachment on an item already eligible is not.';
           } else if (card.kind === 'bedding' && card.sales) {
             var bedding = accelBeddingScenario(card, Number(article.querySelector('[data-accel-bed]').value || 0), Number(article.querySelector('[data-accel-other]').value || 0));
             now.textContent = accelPct(bedding.actual);
+            var bedDiff = article.querySelector('[data-accel-diff]');
+            if (bedDiff) bedDiff.textContent = card.goal === null || bedding.actual === null ? 'Pending' : String(Math.round((bedding.actual - card.goal) * 1000) / 10);
             bar.style.width = (card.goal ? Math.max(0, Math.min(100, Math.round((bedding.actual / card.goal) * 100))) : 0) + '%';
             result.textContent = 'Bedding ' + accelMoney(bedding.bedding) + ' of sales ' + accelMoney(bedding.sales) + ' = ' + accelPct(bedding.actual) + '. Additional bedding still needed if no further other sales are added: ' + accelMoney(bedding.dollarsNeeded) + '.';
           } else if (card.kind === 'count' && card.count !== null) {
