@@ -66,7 +66,7 @@ var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, 
 // Backups and restore drills write only their own logs, which no cached page reads; a problem they record moves the version itself.
 var LOG_ONLY_ROUTES_ = { runBackup: true };
 // Pages whose reply is reused until the data changes. Each reads every tab once while it is built.
-var CACHED_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true, coach: true, recovery: true, coaching: true, evalPrep: true, leakage: true, delivery: true, accel: true, actions: true, reports: true };
+var CACHED_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true, coach: true, recovery: true, coaching: true, evalPrep: true, leakage: true, delivery: true, accel: true, actions: true };
 var MEMO_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true, health: true, coverage: true, coach: true, recovery: true, coaching: true, evalPrep: true, leakage: true, delivery: true, accel: true, actions: true, reports: true };
 var PAGE_CACHE_SECONDS_ = 1800;
 var PAGE_CACHE_MAX_CHARS_ = 95000;
