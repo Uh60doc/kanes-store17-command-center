@@ -263,6 +263,7 @@
       .summary-verified { text-align: left; }
     }
     @media print {
+      @page { size: letter; margin: 0.45in; }
       @page { size: letter portrait; margin: 0.35in; }
       :root { color-scheme: light; }
       html:has(body.print-summary), body.print-summary { background: white !important; }
@@ -297,9 +298,10 @@
       body.print-doc > :not(#doc-print) { display: none !important; }
       body.print-doc #doc-print { display: block; }
       html:has(body.print-brief), body.print-brief { background: white !important; }
-      body.print-brief .wrap { padding: 0; max-width: none; }
+      body.print-brief .wrap { padding: 0; max-width: 7.6in; }
+      body.print-brief #screen > :not(#brief-startup) { display: none !important; }
       body.print-brief header.brand, body.print-brief .section-title, body.print-brief .noprint, body.print-brief #brief-mtd, body.print-brief #brief-admin { display: none !important; }
-      body.print-brief #brief-startup { margin: 0; border: 0; padding: 0; background: white; }
+      body.print-brief #brief-startup { margin: 0; border: 0; padding: 0; border-radius: 0; background: white; overflow: visible; }
       body.print-brief #brief-startup, body.print-brief #brief-startup * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       #doc-print img { display: block; width: auto; height: auto; max-width: 100%; max-height: 10.2in; margin: 0 auto; break-after: page; }
       #doc-print img:last-child { break-after: auto; }

@@ -332,18 +332,20 @@ function briefMissingSources_(home, winners, people) {
   return missing;
 }
 
-function briefBrandHeader_(useCid) {
+function briefBrandHeader_(useCid, compact) {
+  var kanesWidth = compact ? 112 : 140;
+  var storeWidth = compact ? 52 : 72;
   var kanes = '';
   var store = '';
   if (useCid) {
-    kanes = '<img src="cid:kanes" alt="Kane\'s Furniture" width="140" style="display:block;height:auto;max-width:140px;border:0" />';
-    store = '<img src="cid:store17" alt="Store 17" width="72" style="display:block;height:auto;max-width:72px;border:0" />';
+    kanes = '<img src="cid:kanes" alt="Kane\'s Furniture" width="' + kanesWidth + '" style="display:block;height:auto;max-width:' + kanesWidth + 'px;border:0" />';
+    store = '<img src="cid:store17" alt="Store 17" width="' + storeWidth + '" style="display:block;height:auto;max-width:' + storeWidth + 'px;border:0" />';
   } else {
     if (typeof KANES_LOGO_JPEG_ !== 'undefined') {
-      kanes = '<img src="data:image/jpeg;base64,' + KANES_LOGO_JPEG_ + '" alt="Kane\'s Furniture" width="140" style="display:block;height:auto;max-width:140px;border:0" />';
+      kanes = '<img src="data:image/jpeg;base64,' + KANES_LOGO_JPEG_ + '" alt="Kane\'s Furniture" width="' + kanesWidth + '" style="display:block;height:auto;max-width:' + kanesWidth + 'px;border:0" />';
     }
     if (typeof STORE17_LOGO_PNG_ !== 'undefined') {
-      store = '<img src="data:image/png;base64,' + STORE17_LOGO_PNG_ + '" alt="Store 17" width="72" style="display:block;height:auto;max-width:72px;border:0" />';
+      store = '<img src="data:image/png;base64,' + STORE17_LOGO_PNG_ + '" alt="Store 17" width="' + storeWidth + '" style="display:block;height:auto;max-width:' + storeWidth + 'px;border:0" />';
     }
   }
   if (!kanes && !store) {
@@ -355,40 +357,51 @@ function briefBrandHeader_(useCid) {
     '</tr></table>';
 }
 
-function briefEmailWrap_(title, date, inner, useCid, banner) {
+function briefEmailWrap_(title, date, inner, useCid, banner, compact) {
+  var pad = compact ? '2px 0 0' : '16px 12px';
+  var kicker = compact ? '6px 0 0' : '12px 0 0';
+  var heading = compact ? '700 18px/1.1' : '700 22px/1.15';
+  var headingMargin = compact ? '2px 0 0' : '4px 0 2px';
+  var dateMargin = compact ? '0 0 6px' : '0 0 10px';
   return '<!DOCTYPE html><html><head><meta charset="utf-8" /><title>' + briefEsc_(title) + '</title></head>' +
-    '<body style="margin:0;padding:0;background:#f4f6f7;color:#102027">' +
-    '<div style="max-width:720px;margin:0 auto;padding:16px 12px;font:14px/1.35 Segoe UI,Helvetica,Arial,sans-serif;background:#ffffff">' +
-    briefBrandHeader_(useCid) +
-    '<p style="margin:12px 0 0;color:#0b7f88;font:700 11px/1.2 Segoe UI,Helvetica,Arial,sans-serif;letter-spacing:0.08em">KANE\'S FURNITURE · STORE 17</p>' +
-    '<h1 style="margin:4px 0 2px;font:700 22px/1.15 Segoe UI,Helvetica,Arial,sans-serif;color:#102027">' + briefEsc_(title) + '</h1>' +
-    '<p style="margin:0 0 10px;color:#3d5660">America/New_York · ' + briefEsc_(briefDisplayDate_(date)) + '</p>' +
+    '<body style="margin:0;padding:0;background:#ffffff;color:#102027">' +
+    '<div style="max-width:720px;margin:0 auto;padding:' + pad + ';font:14px/1.3 Segoe UI,Helvetica,Arial,sans-serif;background:#ffffff">' +
+    briefBrandHeader_(useCid, compact) +
+    '<p style="margin:' + kicker + ';color:#0b7f88;font:700 11px/1.2 Segoe UI,Helvetica,Arial,sans-serif;letter-spacing:0.08em">KANE\'S FURNITURE · STORE 17</p>' +
+    '<h1 style="margin:' + headingMargin + ';font:' + heading + ' Segoe UI,Helvetica,Arial,sans-serif;color:#102027">' + briefEsc_(title) + '</h1>' +
+    '<p style="margin:' + dateMargin + ';color:#3d5660">America/New_York · ' + briefEsc_(briefDisplayDate_(date)) + '</p>' +
     (banner || '') + inner +
     '</div></body></html>';
 }
 
-function briefBanner_(missing, partial) {
+function briefBanner_(missing, partial, compact) {
   if (!partial && !missing.length) return '';
   var lines = missing.length
     ? 'Missing or unverified sources: ' + missing.join('; ') + '.'
     : 'This report is partial. Missing figures are Pending and are not treated as zero.';
-  return '<div style="margin:0 0 12px;padding:8px 10px;border:1px solid #b45309;background:#fff7ed;color:#7c2d12;font:13px/1.35 Segoe UI,Helvetica,Arial,sans-serif"><strong>Partial report — not final.</strong> ' + briefEsc_(lines) + '</div>';
+  var box = compact ? 'margin:0 0 6px;padding:5px 8px;font:12px/1.3' : 'margin:0 0 12px;padding:8px 10px;font:13px/1.35';
+  return '<div style="' + box + ' Segoe UI,Helvetica,Arial,sans-serif;border:1px solid #b45309;background:#fff7ed;color:#7c2d12"><strong>Partial report — not final.</strong> ' + briefEsc_(lines) + '</div>';
 }
 
-function briefRow_(label, value, note) {
-  return '<tr><td style="padding:4px 8px 4px 0;border-bottom:1px solid #d7e2e6;width:42%;color:#3d5660">' + briefEsc_(label) +
-    '</td><td style="padding:4px 0;border-bottom:1px solid #d7e2e6;font-weight:700">' + briefEsc_(value) +
+function briefRow_(label, value, note, compact) {
+  var pad = compact ? '2px 8px 2px 0' : '4px 8px 4px 0';
+  var valuePad = compact ? '2px 0' : '4px 0';
+  return '<tr><td style="padding:' + pad + ';border-bottom:1px solid #d7e2e6;width:42%;color:#3d5660">' + briefEsc_(label) +
+    '</td><td style="padding:' + valuePad + ';border-bottom:1px solid #d7e2e6;font-weight:700">' + briefEsc_(value) +
     (note ? '<div style="font-weight:400;color:#3d5660;font-size:12px">' + briefEsc_(note) + '</div>' : '') +
     '</td></tr>';
 }
 
-function briefSection_(title, body) {
-  return '<h2 style="margin:14px 0 6px;font:700 13px/1.2 Segoe UI,Helvetica,Arial,sans-serif;letter-spacing:0.08em;color:#0b7f88">' +
+function briefSection_(title, body, compact) {
+  var margin = compact ? '7px 0 2px' : '14px 0 6px';
+  var size = compact ? '12px' : '13px';
+  return '<h2 style="margin:' + margin + ';font:700 ' + size + '/1.2 Segoe UI,Helvetica,Arial,sans-serif;letter-spacing:0.08em;color:#0b7f88">' +
     briefEsc_(title) + '</h2>' + body;
 }
 
-function briefFooter_(pack, kind) {
-  return '<p style="margin:14px 0 0;color:#5b7380;font-size:11px">Report version ' + briefEsc_(pack.version) +
+function briefFooter_(pack, kind, compact) {
+  var margin = compact ? '6px 0 0' : '14px 0 0';
+  return '<p style="margin:' + margin + ';color:#5b7380;font-size:11px;line-height:1.3">Report version ' + briefEsc_(pack.version) +
     ' · ' + briefEsc_(kind) + ' · figures as of ' + briefEsc_(pack.updated || 'Not Available') +
     '. Unverified numbers are labeled Pending and are not final. Store month is the 2nd through the 1st. Salesperson month is the 1st through the last day.</p>';
 }
@@ -420,24 +433,24 @@ function briefStartupInner_(pack) {
     ? ('Pending. ' + (y.closingNote || 'Net Written customers ÷ PERQ for ' + (y.date || 'yesterday')))
     : (y.customers + ' customers ÷ ' + y.opportunities + ' opportunities · ' + y.date);
   var priorities = pack.priorities.length
-    ? '<ol style="margin:4px 0 0;padding-left:20px">' + pack.priorities.map(function (line) { return '<li>' + briefEsc_(line) + '</li>'; }).join('') + '</ol>'
-    : '<p style="margin:4px 0 0">Pending. No verified management priorities are saved for today.</p>';
+    ? '<ol style="margin:2px 0 0;padding-left:18px">' + pack.priorities.map(function (line) { return '<li>' + briefEsc_(line) + '</li>'; }).join('') + '</ol>'
+    : '<p style="margin:2px 0 0">Pending. No verified management priorities are saved for today.</p>';
   return briefSection_('Yesterday · ' + briefDisplayDate_(y.date),
       '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">' +
-      briefRow_('Store Written sales and daily goal', written.value, written.note) +
-      briefRow_('Store Delivered sales and daily goal', delivered.value, delivered.note) +
-      briefRow_('Store closing ratio', briefBlank_(y.closingRatio) ? 'Pending' : briefPercent_(y.closingRatio), closingNote) +
-      briefRow_('Top salesperson', pack.top.text, pack.top.source) +
-      briefRow_('Shout-out', pack.shout.text, pack.shout.source) +
-      '</table>') +
+      briefRow_('Store Written sales and daily goal', written.value, written.note, true) +
+      briefRow_('Store Delivered sales and daily goal', delivered.value, delivered.note, true) +
+      briefRow_('Store closing ratio', briefBlank_(y.closingRatio) ? 'Pending' : briefPercent_(y.closingRatio), closingNote, true) +
+      briefRow_('Top salesperson', pack.top.text, pack.top.source, true) +
+      briefRow_('Shout-out', pack.shout.text, pack.shout.source, true) +
+      '</table>', true) +
     briefSection_('Today · ' + briefDisplayDate_(pack.today),
       '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">' +
-      briefRow_('Today\'s Written goal', briefMoney_(pack.todayWritten), 'Remaining store written budget ÷ open days left, including today. NWDSR Net Written.') +
-      briefRow_('Today\'s Delivered goal', briefMoney_(pack.todayDelivered), 'Remaining store delivered budget ÷ open days left, including today. NWDSR Delivered.') +
+      briefRow_('Today\'s Written goal', briefMoney_(pack.todayWritten), 'Remaining store written budget ÷ open days left, including today. NWDSR Net Written.', true) +
+      briefRow_('Today\'s Delivered goal', briefMoney_(pack.todayDelivered), 'Remaining store delivered budget ÷ open days left, including today. NWDSR Delivered.', true) +
       '</table>' +
-      '<p style="margin:8px 0 0;font-weight:700">Management priorities</p>' + priorities) +
-    briefSection_('Promotion', briefStartupPromo_(pack)) +
-    briefFooter_(pack, 'Morning Start-Up');
+      '<p style="margin:4px 0 0;font-weight:700">Management priorities</p>' + priorities, true) +
+    briefSection_('Promotion', briefStartupPromo_(pack), true) +
+    briefFooter_(pack, 'Morning Start-Up', true);
 }
 
 function briefThroughNote_(pack, side) {
@@ -532,7 +545,7 @@ function briefMtdInner_(pack) {
 
 function briefStartupHtml_(pack, useCid) {
   var missing = pack.startupMissing || [];
-  return briefEmailWrap_('STORE 17 | MORNING START-UP', pack.today, briefStartupInner_(pack), useCid, briefBanner_(missing, missing.length > 0));
+  return briefEmailWrap_('STORE 17 | MORNING START-UP', pack.today, briefStartupInner_(pack), useCid, briefBanner_(missing, missing.length > 0, true), true);
 }
 
 function briefMtdHtml_(pack, useCid) {
@@ -698,11 +711,9 @@ function briefPack_(payload) {
   pack.version = briefVersion_(pack);
   pack.startupSubject = 'STORE 17 | MORNING START-UP | ' + briefSubjectDate_(today);
   pack.mtdSubject = 'STORE 17 | MTD PERFORMANCE | ' + briefSubjectDate_(today);
-  pack.startupInner = '<div style="padding:8px 4px">' + briefBrandHeader_(false) +
-    '<p style="margin:12px 0 0;color:#0b7f88;font:700 11px/1.2 Segoe UI,Helvetica,Arial,sans-serif;letter-spacing:0.08em">KANE\'S FURNITURE · STORE 17</p>' +
-    '<h1 style="margin:4px 0 2px;font:700 22px/1.15 Segoe UI,Helvetica,Arial,sans-serif;color:#102027">STORE 17 | MORNING START-UP</h1>' +
-    '<p style="margin:0 0 10px;color:#3d5660">America/New_York · ' + briefEsc_(briefDisplayDate_(pack.today)) + '</p>' +
-    briefBanner_(pack.startupMissing, (pack.startupMissing || []).length > 0) + briefStartupInner_(pack) + '</div>';
+  pack.startupInner = briefEmailWrap_('STORE 17 | MORNING START-UP', pack.today, briefStartupInner_(pack), false, briefBanner_(pack.startupMissing, (pack.startupMissing || []).length > 0, true), true)
+    .replace(/^<!DOCTYPE html><html><head>[\s\S]*?<\/head><body style="margin:0;padding:0;background:#ffffff;color:#102027">/, '')
+    .replace(/<\/body><\/html>$/, '');
   pack.mtdInner = '<div style="padding:8px 4px">' + briefBrandHeader_(false) +
     '<p style="margin:12px 0 0;color:#0b7f88;font:700 11px/1.2 Segoe UI,Helvetica,Arial,sans-serif;letter-spacing:0.08em">KANE\'S FURNITURE · STORE 17</p>' +
     '<h1 style="margin:4px 0 2px;font:700 22px/1.15 Segoe UI,Helvetica,Arial,sans-serif;color:#102027">STORE 17 | MTD PERFORMANCE</h1>' +
