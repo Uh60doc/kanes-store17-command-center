@@ -225,6 +225,62 @@ function briefCoaching_(home, people) {
   return 'No coaching item is supported by verified data.';
 }
 
+function briefPlaceRows_(winners, place) {
+  return (winners && winners.places ? winners.places : []).filter(function (row) { return row.place === place; });
+}
+
+function briefWinnerPending_(winners) {
+  if (!winners || winners.status !== 'ready' || !winners.people || !winners.people.length) {
+    return { text: 'Pending', source: winners && winners.reason ? winners.reason : 'Individual PERQ salesperson report pending' };
+  }
+  if (!winners.snapReported) {
+    return { text: 'Pending', source: winners.reason || ('SNAP Written by salesperson for ' + winners.date + ' is not on file') };
+  }
+  return null;
+}
+
+function briefPlace_(winners, place) {
+  var pending = briefWinnerPending_(winners);
+  if (pending) return pending;
+  var rows = briefPlaceRows_(winners, place);
+  var label = place === 1 ? 'one' : (place === 2 ? 'two' : 'three');
+  if (!rows.length) return { text: 'None', source: 'Fewer than ' + label + ' salespeople wrote on the complete SNAP report for ' + winners.date };
+  return {
+    text: rows.map(function (person) { return person.name + ' ' + moneyText_(person.written); }).join('; '),
+    source: 'SNAP Written by salesperson ' + winners.date,
+  };
+}
+
+function briefNoWritten_(winners) {
+  var pending = briefWinnerPending_(winners);
+  if (pending) return pending;
+  var rows = winners.noWritten || [];
+  if (!rows.length) return { text: 'None', source: 'Every associate on the working roster wrote on the complete SNAP report for ' + winners.date };
+  return {
+    text: rows.map(function (person) { return person.name; }).join(', '),
+    source: 'Individual PERQ salesperson report and SNAP Written for ' + winners.date,
+  };
+}
+
+function briefStoreClosingLine_(yesterday) {
+  var date = yesterday && yesterday.date ? yesterday.date : 'yesterday';
+  if (yesterday && !briefBlank_(yesterday.closingRatio)) {
+    return {
+      value: briefPercent_(yesterday.closingRatio),
+      note: yesterday.customers + ' NWDSR Written purchasing customers ÷ ' + yesterday.opportunities + ' PERQ Store opportunities · ' + date,
+    };
+  }
+  var missing = [];
+  if (!yesterday || briefBlank_(yesterday.customers)) missing.push('NWDSR Written purchasing customers');
+  if (!yesterday || briefBlank_(yesterday.opportunities)) missing.push('PERQ Store opportunities');
+  return {
+    value: 'Pending',
+    note: missing.length
+      ? ('Missing ' + missing.join(' and ') + ' for ' + date + '. Not estimated.')
+      : ('Pending. ' + ((yesterday && yesterday.closingNote) || ('NWDSR Written purchasing customers ÷ PERQ Store opportunities for ' + date))),
+  };
+}
+
 function briefShoutOut_(winners) {
   if (!winners || winners.status !== 'ready' || !winners.people || !winners.people.length) {
     return { text: 'Pending', source: winners && winners.reason ? winners.reason : 'PERQ Report Pending' };
@@ -251,20 +307,7 @@ function briefShoutOut_(winners) {
 }
 
 function briefTopPeople_(winners) {
-  if (!winners || winners.status !== 'ready' || !winners.people || !winners.people.length) {
-    return { text: 'Pending', source: winners && winners.reason ? winners.reason : 'PERQ Report Pending' };
-  }
-  if (!winners.snapReported) {
-    return { text: 'Pending', source: winners.reason || ('SNAP Written by salesperson for ' + winners.date + ' is not on file') };
-  }
-  var ranked = winners.people.filter(function (person) { return !briefBlank_(person.written); });
-  if (!ranked.length) return { text: 'Pending', source: 'SNAP Written by salesperson for ' + winners.date + ' is not on file' };
-  var best = Number(ranked[0].written);
-  var leaders = ranked.filter(function (person) { return Number(person.written) === best; });
-  return {
-    text: leaders.map(function (person) { return person.name + ' ' + moneyText_(person.written); }).join('; '),
-    source: 'SNAP Written by salesperson ' + winners.date,
-  };
+  return briefPlace_(winners, 1);
 }
 
 function lastBriefPromotion_() {
@@ -297,7 +340,12 @@ function briefStartupMissing_(home, winners) {
   var date = yesterday.date || '';
   if (briefBlank_(yesterday.written)) missing.push((labels.written || 'NWDSR Net Written') + ' for ' + date);
   if (briefBlank_(yesterday.delivered)) missing.push((labels.delivered || 'NWDSR Delivered') + ' for ' + date);
-  if (briefBlank_(yesterday.closingRatio)) missing.push('Store closing ratio for ' + date);
+  if (briefBlank_(yesterday.closingRatio)) {
+    var closingParts = [];
+    if (briefBlank_(yesterday.customers)) closingParts.push('NWDSR Written purchasing customers');
+    if (briefBlank_(yesterday.opportunities)) closingParts.push('PERQ Store opportunities');
+    missing.push((closingParts.length ? closingParts.join(' and ') + ' for ' : 'Store closing ratio for ') + date);
+  }
   if (!winners || winners.status !== 'ready') missing.push('Individual PERQ for ' + ((winners && winners.date) || date || 'the prior business day'));
   else if (winners.people && winners.people.length && !winners.snapReported) missing.push('SNAP Written by salesperson for ' + winners.date);
   if (briefBlank_(home.todayGoal && home.todayGoal.written)) missing.push('Today\'s written goal');
@@ -429,9 +477,10 @@ function briefStartupInner_(pack) {
   var y = pack.yesterday;
   var written = briefVsGoal_(y.written, (pack.labels.written || 'NWDSR Net Written') + ' · ' + (y.date || ''));
   var delivered = briefVsGoal_(y.delivered, (pack.labels.delivered || 'NWDSR Delivered') + ' · ' + (y.date || ''));
-  var closingNote = briefBlank_(y.closingRatio)
-    ? ('Pending. ' + (y.closingNote || 'Net Written customers ÷ PERQ for ' + (y.date || 'yesterday')))
-    : (y.customers + ' customers ÷ ' + y.opportunities + ' opportunities · ' + y.date);
+  var storeClosing = briefStoreClosingLine_(y);
+  var second = pack.second || { text: 'Pending', source: '' };
+  var third = pack.third || { text: 'Pending', source: '' };
+  var quiet = pack.noWritten || { text: 'Pending', source: '' };
   var priorities = pack.priorities.length
     ? '<ol style="margin:2px 0 0;padding-left:18px">' + pack.priorities.map(function (line) { return '<li>' + briefEsc_(line) + '</li>'; }).join('') + '</ol>'
     : '<p style="margin:2px 0 0">Pending. No verified management priorities are saved for today.</p>';
@@ -439,8 +488,11 @@ function briefStartupInner_(pack) {
       '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">' +
       briefRow_('Store Written sales and daily goal', written.value, written.note, true) +
       briefRow_('Store Delivered sales and daily goal', delivered.value, delivered.note, true) +
-      briefRow_('Store closing ratio', briefBlank_(y.closingRatio) ? 'Pending' : briefPercent_(y.closingRatio), closingNote, true) +
+      briefRow_('Store closing ratio', storeClosing.value, storeClosing.note, true) +
       briefRow_('Top salesperson', pack.top.text, pack.top.source, true) +
+      briefRow_('Second place', second.text, second.source, true) +
+      briefRow_('Third place', third.text, third.source, true) +
+      briefRow_('Worked, no written sales', quiet.text, quiet.source, true) +
       briefRow_('Shout-out', pack.shout.text, pack.shout.source, true) +
       '</table>', true) +
     briefSection_('Today · ' + briefDisplayDate_(pack.today),
@@ -556,6 +608,7 @@ function briefStartupText_(pack) {
   var y = pack.yesterday;
   var written = briefVsGoal_(y.written, (pack.labels.written || 'NWDSR Net Written') + ' · ' + (y.date || ''));
   var delivered = briefVsGoal_(y.delivered, (pack.labels.delivered || 'NWDSR Delivered') + ' · ' + (y.date || ''));
+  var storeClosing = briefStoreClosingLine_(y);
   var lines = [
     'STORE 17 | MORNING START-UP | ' + briefSubjectDate_(pack.today),
     'Kane\'s Furniture · Store 17 · America/New_York',
@@ -564,8 +617,11 @@ function briefStartupText_(pack) {
     'YESTERDAY · ' + y.date,
     'Store Written sales and daily goal: ' + written.value + ' (' + written.note + ')',
     'Store Delivered sales and daily goal: ' + delivered.value + ' (' + delivered.note + ')',
-    'Store closing ratio: ' + (briefBlank_(y.closingRatio) ? 'Pending' : briefPercent_(y.closingRatio)),
+    'Store closing ratio: ' + storeClosing.value + (storeClosing.note ? ' (' + storeClosing.note + ')' : ''),
     'Top salesperson: ' + pack.top.text + (pack.top.source ? ' (' + pack.top.source + ')' : ''),
+    'Second place: ' + (pack.second ? pack.second.text : 'Pending') + (pack.second && pack.second.source ? ' (' + pack.second.source + ')' : ''),
+    'Third place: ' + (pack.third ? pack.third.text : 'Pending') + (pack.third && pack.third.source ? ' (' + pack.third.source + ')' : ''),
+    'Worked, no written sales: ' + (pack.noWritten ? pack.noWritten.text : 'Pending') + (pack.noWritten && pack.noWritten.source ? ' (' + pack.noWritten.source + ')' : ''),
     'Shout-out: ' + pack.shout.text + (pack.shout.source ? ' (' + pack.shout.source + ')' : ''),
     '',
     'TODAY · ' + pack.today,
@@ -696,6 +752,9 @@ function briefPack_(payload) {
     people: people,
     winners: winners,
     top: briefTopPeople_(winners),
+    second: briefPlace_(winners, 2),
+    third: briefPlace_(winners, 3),
+    noWritten: briefNoWritten_(winners),
     shout: briefShoutOut_(winners),
     priorities: priorities.slice(0, 3),
     plan: plan,

@@ -1,5 +1,5 @@
 var SPREADSHEET_ID_ = '1KtsfQPQRdg3IdNXomlM5t47IyE1psouxvgW-D8VSLfw';
-var APP_VERSION_ = '1.0.5';
+var APP_VERSION_ = '1.0.6';
 
 var ROUTES_ = {
   login: null,
@@ -96,7 +96,7 @@ function dataVersion_() {
   return PropertiesService.getScriptProperties().getProperty('data_version') || 'initial';
 }
 
-/** Every cached page is keyed by the data version, so a new version retires them all at once. */
+/** Every cached page is keyed by the data version and the software version, so a new deploy retires pages built by the previous release. */
 function markDataChanged_(reason) {
   if (typeof PropertiesService === 'undefined') return;
   var version = new Date().toISOString() + ' ' + String(reason || '').slice(0, 60);
@@ -108,7 +108,7 @@ function pageCacheKey_(name, payload, version) {
   Object.keys(payload).sort().forEach(function (key) {
     if (key !== 'token' && key !== 'session') params[key] = payload[key];
   });
-  var text = [version, name, payload.session.role, todayNy_(), JSON.stringify(params)].join('|');
+  var text = [version, typeof APP_VERSION_ === 'undefined' ? '' : APP_VERSION_, name, payload.session.role, todayNy_(), JSON.stringify(params)].join('|');
   var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, text);
   return 'page_' + digest.map(function (part) { var value = (part + 256) % 256; return (value < 16 ? '0' : '') + value.toString(16); }).join('');
 }

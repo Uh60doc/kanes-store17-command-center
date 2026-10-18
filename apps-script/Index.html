@@ -492,36 +492,69 @@
       if (!month || !day) return '';
       return month + ' ' + day;
     }
+    function placeWord(place) {
+      if (place === 1) return '1st';
+      if (place === 2) return '2nd';
+      if (place === 3) return '3rd';
+      return '#' + place;
+    }
+    function perqActivity(person) {
+      if (person.source === 'staffing') return 'Confirmed in CC_Staffing';
+      if (pendingFigure(person.opportunities)) return 'Individual PERQ: opportunities conflict between exports';
+      return 'Individual PERQ: ' + person.opportunities + (Number(person.opportunities) === 1 ? ' opportunity' : ' opportunities');
+    }
     function winnerCardsHtml(winners) {
       winners = winners || { status: 'pending', reason: 'PERQ Report Pending', people: [] };
       var day = shortDate(winners.date) || 'yesterday';
       if (winners.status !== 'ready') {
-        return '<article class="card"><h2>Working roster · ' + esc(day) + '</h2><p class="figure pending">' + esc(winners.reason || 'PERQ Report Pending') + '</p><p class="sub">' + esc(winners.detail || '') + '</p></article>';
+        return '<article class="card"><h2>Sales winners · ' + esc(day) + '</h2><p class="figure pending">Pending</p><p class="sub">' + esc((winners.reason || 'PERQ Report Pending') + '. ' + (winners.detail || 'The individual PERQ salesperson report is not on file. Nobody is marked as having worked.')) + '</p></article>';
       }
       if (!winners.people.length) return '<p class="sub">' + esc(winners.reason) + '</p>';
-      return winners.people.map(function (person, index) {
-        var waiting = pendingFigure(person.written);
-        var parts = [];
-        if (person.source === 'staffing') parts.push('Confirmed in CC_Staffing');
-        else if (pendingFigure(person.opportunities)) parts.push('Individual PERQ: opportunities conflict between exports');
-        else parts.push('Individual PERQ: ' + person.opportunities + (Number(person.opportunities) === 1 ? ' opportunity' : ' opportunities'));
-        if (waiting) parts.push('SNAP Written not on file yet');
-        else if (Number(person.written) === 0) parts.push('No sales on the complete SNAP report');
-        if (!pendingFigure(person.share)) parts.push('Individual share ' + money(person.share) + (pendingFigure(person.above) ? '' : ' · EXCEEDED BY ' + money(person.above)));
-        var tone = waiting ? 'pending' : (Number(person.written) > 0 && (index === 0 || !pendingFigure(person.above)) ? 'good' : '');
-        return '<article class="card"><h2>' + esc((waiting ? '' : '#' + (index + 1) + ' ') + person.name) + '</h2><p class="figure ' + tone + '">' + (waiting ? 'Pending' : money(person.written)) + '</p><p class="sub">' + esc(parts.join(' · ')) + '</p></article>';
+      if (!winners.snapReported) {
+        return '<article class="card"><h2>Sales winners · ' + esc(day) + '</h2><p class="figure pending">Pending</p><p class="sub">' + esc(winners.reason || ('SNAP Written by salesperson for ' + (winners.date || day) + ' is not on file.')) + ' Written amounts are not guessed, and $0 is not used.</p></article>';
+      }
+      var places = winners.places || [];
+      var cards = places.map(function (person) {
+        return '<article class="card"><h2>' + esc(placeWord(person.place) + ' · ' + person.name) + '</h2><p class="figure good">' + money(person.written) + '</p><p class="sub">' + esc(perqActivity(person) + ' · SNAP Written') + '</p></article>';
       }).join('');
+      if (!places.length) cards = '<article class="card"><h2>Top salesperson · ' + esc(day) + '</h2><p class="figure">None</p><p class="sub">Nobody on the working roster wrote on the complete SNAP report.</p></article>';
+      var quiet = winners.noWritten || [];
+      cards += '<article class="card"><h2>Worked, no written sales</h2><p class="figure">' + (quiet.length ? esc(String(quiet.length)) : 'None') + '</p><p class="sub">' + esc(quiet.length ? quiet.map(function (person) { return person.name; }).join(', ') : 'Every associate on the working roster wrote on the complete SNAP report.') + '</p></article>';
+      var also = winners.alsoWrote || [];
+      if (also.length) cards += '<article class="card"><h2>Also wrote</h2><p class="figure">' + esc(String(also.length)) + '</p><p class="sub">' + esc(also.map(function (person) { return person.name + ' ' + money(person.written); }).join(' · ')) + '</p></article>';
+      return cards;
     }
-    function winnersSectionHtml(winners, yesterdayDate, notes) {
+    function yesterdayClosingCard(yesterday) {
+      if (!yesterday || !yesterday.date) return '';
+      var day = shortDate(yesterday.date) || yesterday.date;
+      var customers = yesterday.customers;
+      var opportunities = yesterday.opportunities;
+      var ratio = yesterday.closingRatio;
+      if (opportunities === 0 || opportunities === '0') {
+        return '<article class="card"><h2>Store closing · ' + esc(day) + '</h2><p class="figure pending">Pending</p><p class="sub">PERQ Store opportunities for ' + esc(yesterday.date) + ' are 0, so the ratio is not calculated.</p></article>';
+      }
+      var customersMissing = pendingFigure(customers);
+      var perqMissing = pendingFigure(opportunities);
+      if (customersMissing || perqMissing || pendingFigure(ratio)) {
+        var missing = [];
+        if (customersMissing) missing.push('NWDSR Written purchasing customers');
+        if (perqMissing) missing.push('PERQ Store opportunities');
+        if (!missing.length) missing.push('Store closing');
+        return '<article class="card"><h2>Store closing · ' + esc(day) + '</h2><p class="figure pending">Pending</p><p class="sub">Missing ' + esc(missing.join(' and ')) + ' for ' + esc(yesterday.date) + '. Store closing is NWDSR Written purchasing customers ÷ PERQ Store opportunities, and it is not estimated.</p></article>';
+      }
+      return '<article class="card"><h2>Store closing · ' + esc(day) + '</h2><p class="figure">' + percent(ratio) + '</p><p class="sub">' + esc(customers + ' NWDSR Written purchasing customers ÷ ' + opportunities + ' PERQ Store opportunities') + '</p></article>';
+    }
+    function winnersSectionHtml(winners, yesterdayDate, notes, yesterday) {
       winners = winners || { status: 'pending', reason: 'PERQ Report Pending', people: [] };
       var day = shortDate(winners.date) || 'yesterday';
       var title = winners.date && yesterdayDate && winners.date !== yesterdayDate ? 'Sales winners · ' + day : 'Yesterday\'s sales winners';
-      var intro = '<p class="sub">Business date ' + esc(winners.date || '') + ' · working salespeople from the individual PERQ report, ranked by SNAP Written, highest first.' +
+      var intro = '<p class="sub">Business date ' + esc(winners.date || '') + '. Who worked is the individual PERQ salesperson report, excluding management and former employees. Places are SNAP Written for that same date. A SNAP adjustment alone does not put someone on the floor.' +
         (winners.status === 'ready' && winners.people.length && !winners.snapReported ? ' ' + esc(winners.reason) : '') + '</p>';
       var picker = '<div class="summary-actions noprint" style="align-items:center;margin:8px 0 12px"><input id="winners-day" type="date" aria-label="Business day" max="' + esc(yesterdayDate || '') + '" value="' + esc(winners.date || '') + '" style="max-width:220px" />' +
         '<button type="button" id="winners-show" class="secondary">Show this business day</button><span id="winners-error" class="error"></span></div>';
+      var closing = yesterday && (!winners.date || winners.date === yesterday.date) ? yesterdayClosingCard(yesterday) : '';
       var staffNote = (notes || []).map(function (line) { return '<p class="sub">' + esc(line) + '</p>'; }).join('');
-      return '<h2 class="section-title" id="winners-title">' + esc(title) + '</h2>' + intro + picker + '<div class="morning-grid">' + winnerCardsHtml(winners) + '</div>' + staffNote;
+      return '<h2 class="section-title" id="winners-title">' + esc(title) + '</h2>' + intro + picker + '<div class="morning-grid">' + winnerCardsHtml(winners) + closing + '</div>' + staffNote;
     }
     function bindWinnersPicker(route, redraw) {
       var button = document.getElementById('winners-show');
@@ -677,7 +710,7 @@
       var kpiRows = board.kpis || [];
       var primaryKpis = kpiRows.filter(function (row) { return row.tier === 'primary'; }).map(kpiTile).join('');
       var secondaryKpis = kpiRows.filter(function (row) { return row.tier !== 'primary'; }).map(kpiTile).join('');
-      var winnersHtml = (focus === 'written' || focus === 'delivered') ? '' : winnersSectionHtml(data.winners, data.yesterday && data.yesterday.date, data.rosterNotes);
+      var winnersHtml = (focus === 'written' || focus === 'delivered') ? '' : winnersSectionHtml(data.winners, data.yesterday && data.yesterday.date, data.rosterNotes, data.yesterday);
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Yesterday\'s results</h2>' +
         '<div class="score-row">' +
@@ -1723,7 +1756,7 @@
         huddleCard('Closing target', percent(today.closingGoal), 'Net Written customers divided by PERQ.', '') +
         huddleCard('Per salesperson', huddleMoney(today.personalShare), pending(today.personalShare) ? 'Today\'s working roster is not on file.' : 'Today\'s written goal divided by associates working today.', pending(today.personalShare) ? 'pending' : '') +
         '</div>' +
-        winnersSectionHtml(data.winners, yesterday.date, data.rosterNotes) +
+        winnersSectionHtml(data.winners, yesterday.date, data.rosterNotes, yesterday) +
         '<h2 class="section-title">Today\'s promotion</h2>' + promoHtml +
         '<h2 class="section-title">Sales reminders</h2><ul class="list">' + reminders + '</ul>' +
         '<div class="morning-finance"><h2 class="section-title">Financing options</h2><div class="morning-grid">' + finance + '</div>' +

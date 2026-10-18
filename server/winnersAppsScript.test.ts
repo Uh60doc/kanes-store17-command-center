@@ -31,6 +31,8 @@ test('October 15: the individual PERQ report is the roster, ranked by SNAP Writt
   assert.equal(morning.winners.status, 'ready');
   assert.equal(morning.winners.snapReported, true);
   assert.deepEqual(people(morning.winners), [['Ricky Nassif', 910, 3], ['Eric Montes Rodriguez', 500, 3]], 'Ricky first, Eric second');
+  assert.deepEqual(morning.winners.places.map((row: Row) => [row.place, row.name, row.written]), [[1, 'Ricky Nassif', 910], [2, 'Eric Montes Rodriguez', 500]]);
+  assert.deepEqual(morning.winners.noWritten, []);
   const notes = (morning.rosterNotes as string[]).join(' ');
   assert.match(notes, /from the individual PERQ report: Eric Montes Rodriguez \(3 opportunities\) and Ricky Nassif \(3 opportunities\)/);
   assert.match(notes, /Store PERQ shows 7 opportunities but the salesperson report adds to 6\. 1 opportunity is not assigned to any salesperson and was not given to anyone\./);
@@ -47,6 +49,8 @@ test('a missing individual PERQ report is PERQ Report Pending, not "working rost
   assert.equal(morning.winners.reason, 'PERQ Report Pending');
   assert.match(morning.winners.detail, /individual PERQ report for 2026-10-16 is not on file yet\. Nobody is marked absent/);
   assert.deepEqual(morning.winners.people, []);
+  assert.deepEqual(morning.winners.places, []);
+  assert.deepEqual(morning.winners.noWritten, []);
 });
 
 test('a later business day works with no staffing records: zero opportunities count, management does not, $0 only on a complete SNAP report', () => {
@@ -60,6 +64,8 @@ test('a later business day works with no staffing records: zero opportunities co
   const morning = plain(gs.morning_({ session }));
   assert.equal(morning.winners.status, 'ready');
   assert.deepEqual(people(morning.winners), [['Prakash Gandhi', 1200, 3], ['Eric Montes Rodriguez', 0, 0]], 'Eric was on the report with 0 opportunities and no sale: still working, shown $0');
+  assert.deepEqual(morning.winners.places.map((row: Row) => [row.place, row.name, row.written]), [[1, 'Prakash Gandhi', 1200]]);
+  assert.deepEqual(morning.winners.noWritten.map((row: Row) => row.name), ['Eric Montes Rodriguez']);
   const notes = (morning.rosterNotes as string[]).join(' ');
   assert.match(notes, /not counted as salespeople: Kelly Meyers \(management\)/);
   assert.ok(!/Store PERQ shows/.test(notes), 'store 4 equals the salesperson report total 4, so there is no warning');
@@ -133,6 +139,40 @@ test('an export that lists every active salesperson with zeros is not taken as w
   const morning = plain(harness(tabs).gs.morning_({ session }));
   assert.deepEqual(people(morning.winners), [['Renzo Del Solar', 900, 2], ['Prakash Gandhi', 0, 0], ['Ricky Nassif', 0, 1]]);
   assert.match((morning.rosterNotes as string[]).join(' '), /may be the employee list rather than who worked\. Eric Montes Rodriguez and Brenda Sanchez with 0 opportunities are not counted until confirmed in CC_Staffing/);
+});
+
+test('management, former employees, and SNAP-only adjustments are not yesterday\'s winners', () => {
+  const tabs = october16([
+    perq('2026-10-16', '', '', 8),
+    perq('2026-10-16', 'PGANDH', 'Prakash Gandhi', 2),
+    perq('2026-10-16', 'EMON0904', 'Eric Montes Rodriguez', 1),
+    perq('2026-10-16', 'JMEYERS', 'Kelly Meyers', 1),
+    perq('2026-10-16', 'EPEREZ', 'Elizabeth Perez', 1),
+    perq('2026-10-16', '', 'Mukhtar Junaid', 1),
+    perq('2026-10-16', '', 'Filepe Chaves', 1),
+    perq('2026-10-16', '', 'Valentina Lopez', 1),
+  ], [
+    snapLine('2026-10-16', 'GANDHI, PRAKASH', 'Prakash Gandhi', 800),
+    snapLine('2026-10-16', 'PEREZ, ELIZABETH', 'Elizabeth Perez', 0),
+    snapLine('2026-10-16', 'MUKHTAR, JUNAID', 'Mukhtar Junaid', 400),
+    snapLine('2026-10-16', 'CHAVES, FELIPE', 'Filepe Chaves', 250),
+    snapLine('2026-10-16', 'SANCHEZ, BRENDA', 'Brenda Sanchez', 75),
+  ]);
+  const { gs } = harness(tabs);
+  gs.ensureRosterColumns_();
+  const morning = plain(gs.morning_({ session }));
+  assert.deepEqual(people(morning.winners), [['Prakash Gandhi', 800, 2], ['Eric Montes Rodriguez', 0, 1]]);
+  assert.deepEqual(morning.winners.places.map((row: Row) => row.name), ['Prakash Gandhi']);
+  assert.deepEqual(morning.winners.noWritten.map((row: Row) => row.name), ['Eric Montes Rodriguez']);
+  const notes = (morning.rosterNotes as string[]).join(' ');
+  assert.match(notes, /Kelly Meyers \(management\)/);
+  assert.match(notes, /Elizabeth Perez \(management\)/);
+  assert.match(notes, /Mukhtar Junaid \(not employed as a salesperson/);
+  assert.match(notes, /Filepe Chaves \(not employed as a salesperson/);
+  assert.match(notes, /Valentina Lopez \(not employed as a salesperson/);
+  assert.match(notes, /SNAP Written also lists Brenda Sanchez/);
+  assert.match(notes, /not proof someone worked/);
+  assert.ok(!morning.winners.people.some((person: Row) => /Kelly|Elizabeth|Mukhtar|Filepe|Valentina|Brenda/.test(person.name)));
 });
 
 test('the winners day follows closed days back to the last business day, and a chosen day must be before today', () => {
