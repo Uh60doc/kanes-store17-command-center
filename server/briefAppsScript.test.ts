@@ -102,7 +102,7 @@ test('after 6:00 AM ET an enabled store sends Start-Up first, then MTD, and will
   assert.equal(mail[1]!.to, LIVE);
   assert.match(mail[0]!.subject, /MORNING START-UP/);
   assert.match(mail[1]!.subject, /MTD PERFORMANCE/);
-  assert.match(mail[0]!.htmlBody || '', /Written sales versus goal/);
+  assert.match(mail[0]!.htmlBody || '', /Store Written sales and daily goal/);
   assert.match(mail[1]!.htmlBody || '', /SNAP Written MTD/);
   assert.ok(first.results[0].sent && first.results[1].sent);
 
@@ -149,11 +149,31 @@ test('an unchanged promotion prints only its name after the first recorded Start
   assert.match(second.startup.text, /name only; the promotion has not changed/);
 });
 
+test('the Start-Up preview stays one page, names Pending sources, and does not invent a shout-out', () => {
+  const { gs, mail } = harness();
+  const brief = plain(gs.brief_({ session: admin }));
+  const text = brief.startup.text as string;
+  assert.match(text, /Store Written sales and daily goal: Pending/);
+  assert.match(text, /Store Delivered sales and daily goal: Pending/);
+  assert.match(text, /Store closing ratio: Pending/);
+  assert.match(text, /Top salesperson: Pending/);
+  assert.match(text, /Shout-out: Pending/);
+  assert.match(text, /Today's Written goal:/);
+  assert.match(text, /Today's Delivered goal:/);
+  assert.match(text, /78th Anniversary Sale/);
+  assert.doesNotMatch(text, /Present maintenance plans/);
+  assert.doesNotMatch(text, /Sales team/);
+  assert.equal(brief.mail.enabled, false);
+  assert.equal(mail.length, 0);
+  assert.ok(brief.startupMissing.some((line: string) => /NWDSR Delivered for 2026-10-16/.test(line)));
+  assert.ok(!brief.startupMissing.some((line: string) => /Bedding|salesperson SNAP/i.test(line)));
+});
+
 test('preview does not send mail and sales cannot open the brief routes', () => {
   const { gs, mail } = harness();
   const preview = plain(gs.previewBriefEmail_({ session: manager, kind: 'startup' }));
   assert.match(preview.subject, /MORNING START-UP/);
-  assert.match(preview.html, /Written sales versus goal/);
+  assert.match(preview.html, /Store Written sales and daily goal/);
   assert.equal(mail.length, 0);
   const routes = plain(gs.ROUTES_) as Record<string, string[]>;
   assert.deepEqual(routes.brief, ['manager', 'admin']);

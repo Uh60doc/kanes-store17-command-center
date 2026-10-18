@@ -1454,35 +1454,28 @@
       var logs = (mail.logs || []).map(function (row) {
         return '<tr><td>' + esc(String(row.at || '').replace('T', ' ').slice(0, 19)) + '</td><td>' + esc(row.kind) + '</td><td>' + esc(row.channel) + '</td><td>' + esc(row.status) + '</td><td>' + esc(row.to) + '</td><td>' + esc(row.subject) + '</td><td>' + esc(row.version) + '</td><td>' + esc(row.reason || row.missing || '') + '</td></tr>';
       }).join('');
-      var missing = (data.missing || []).map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('');
+      var missing = (data.startupMissing || data.missing || []).map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('');
       var admin = '';
       if (mail.canEnable) {
         admin = '<article class="card noprint" id="brief-admin"><h2>Automatic delivery</h2>' +
-          '<p class="sub">Production delivery is ' + (mail.enabled ? 'ON' : 'OFF') + '. Live mail goes to ' + esc(mail.to || mail.liveList || '') + '. It stays off until an Admin enables it. A test send requires an address typed here and never uses the live list automatically.</p>' +
+          '<p class="sub">Automatic production delivery is ' + (mail.enabled ? 'ON' : 'OFF') + '. It stays off. The management list ' + esc(mail.liveList || mail.to || '') + ' is not used for a test. Type a different address and confirm it before a test send.</p>' +
           '<label><input id="brief-enabled" type="checkbox" ' + (mail.enabled ? 'checked' : '') + ' /> Enable automatic production delivery before 7:00 AM ET</label>' +
           '<label>Production recipient</label><input id="brief-prod-to" value="' + esc(mail.to || '') + '" />' +
-          '<label>Test address</label><input id="brief-test-to" value="" placeholder="Required for a test send" />' +
+          '<label>Test address</label><input id="brief-test-to" value="" placeholder="Type the test recipient, then confirm" />' +
           '<p id="brief-admin-error" class="error"></p>' +
           '<p class="summary-actions"><button type="button" id="brief-save-mail">Save delivery settings</button> ' +
-          '<button type="button" class="secondary" id="brief-test-startup">Send Start-Up test</button> ' +
-          '<button type="button" class="secondary" id="brief-test-mtd">Send MTD test</button></p></article>';
+          '<button type="button" class="secondary" id="brief-test-startup">Send Start-Up test</button></p></article>';
       }
       var resend = mail.canResend
-        ? '<p class="summary-actions noprint"><button type="button" id="print-brief">Print Morning Start-Up</button> ' +
-          '<button type="button" class="secondary" id="brief-resend-startup">Resend Start-Up</button> ' +
-          '<button type="button" class="secondary" id="brief-resend-mtd">Resend MTD Performance</button></p>'
+        ? '<p class="summary-actions noprint"><button type="button" id="print-brief">Print Morning Start-Up</button></p>'
         : '<p class="summary-actions noprint"><button type="button" id="print-brief">Print Morning Start-Up</button></p>';
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Morning Start-Up</h2>' +
-        '<p class="sub">One printable page. Yesterday uses the prior completed business day\'s verified Home figures. Missing reports show Pending with the source. Store month ' + esc(data.storePeriod || '') + '. Salesperson month ' + esc(data.individualPeriod || '') + '.</p>' +
-        (data.partial ? '<article class="card"><p class="sub"><strong>Partial report — not final.</strong></p><ul class="list">' + (missing || '<li>Missing sources are listed on the email.</li>') + '</ul></article>' : '') +
+        '<p class="sub">One printable page. Yesterday uses verified Home figures for that date. A missing report shows Pending. Store month ' + esc(data.storePeriod || '') + '.</p>' +
+        (missing ? '<article class="card noprint"><p class="sub"><strong>Partial report — not final.</strong></p><ul class="list">' + missing + '</ul></article>' : '') +
         '<div class="brief-mail" id="brief-startup"><div class="brief-mail-inner">' + (data.startup && data.startup.html ? data.startup.html : '') + '</div></div>' +
-        '<h2 class="section-title">MTD Performance</h2>' +
-        '<p class="sub">Sent separately after Morning Start-Up. Same verified Home and Sales Team figures. Last-year comparison is store-level only and stays Pending until a verified store CC_LastYear figure is on file. Individual prior-year salesperson comparisons are not required.</p>' +
-        '<div class="brief-mail" id="brief-mtd"><div class="brief-mail-inner">' + (data.mtd && data.mtd.html ? data.mtd.html : '') + '</div></div>' +
         '<h2 class="section-title noprint">Today\'s management plan</h2>' +
-        '<article class="card noprint"><p class="sub">These three actions print on the Start-Up email. Notes never change sales figures. Coaching is taken only from verified shortfalls.</p>' +
-        '<p class="sub">Verified coaching: ' + esc(data.coaching || '') + '</p>' +
+        '<article class="card noprint"><p class="sub">Up to three actions print on the Start-Up email. Blank lines stay off the email. Notes never change sales figures.</p>' +
         '<label>Priority 1</label><input id="brief-a1" value="' + esc(actions[0] || '') + '" />' +
         '<label>Priority 2</label><input id="brief-a2" value="' + esc(actions[1] || '') + '" />' +
         '<label>Priority 3</label><input id="brief-a3" value="' + esc(actions[2] || '') + '" />' +
@@ -1520,27 +1513,30 @@
         api('saveBriefMailSettings', { enabled: document.getElementById('brief-enabled').checked, to: document.getElementById('brief-prod-to').value }).then(renderBrief).catch(function (error) { briefFailed(error, 'brief-admin-error'); });
       });
       function sendTest(kind) {
-        var to = document.getElementById('brief-test-to').value;
-        document.getElementById('brief-admin-error').textContent = '';
+        var input = document.getElementById('brief-test-to');
+        var to = String(input && input.value || '').trim();
+        var error = document.getElementById('brief-admin-error');
+        error.textContent = '';
+        if (!to) {
+          error.textContent = 'Type the test recipient, then confirm the send. The management list is not filled in for you.';
+          return;
+        }
+        var live = String(mail.liveList || mail.to || '').trim().toLowerCase();
+        if (live && to.toLowerCase() === live) {
+          error.textContent = 'That is the live management list. Automatic delivery is off, so this test was not sent.';
+          return;
+        }
+        if (!window.confirm('Send the Morning Start-Up test only to ' + to + '? The management distribution list will not be copied.')) {
+          error.textContent = 'Test send cancelled. Nothing was emailed.';
+          return;
+        }
         api('sendBriefTest', { kind: kind, to: to }).then(function (result) {
-          document.getElementById('brief-admin-error').textContent = result.sent ? 'Test sent to ' + result.to + '.' : (result.reason || 'Test was not sent.');
+          error.textContent = result.sent ? 'Test sent to ' + result.to + '.' : (result.reason || 'Test was not sent.');
           api('brief').then(renderBrief);
         }).catch(function (error) { briefFailed(error, 'brief-admin-error'); });
       }
       var testStartup = document.getElementById('brief-test-startup');
       if (testStartup) testStartup.addEventListener('click', function () { sendTest('startup'); });
-      var testMtd = document.getElementById('brief-test-mtd');
-      if (testMtd) testMtd.addEventListener('click', function () { sendTest('mtd'); });
-      function resend(kind) {
-        api('resendBriefEmail', { kind: kind }).then(function () { api('brief').then(renderBrief); }).catch(function (error) {
-          if (document.getElementById('brief-admin-error')) briefFailed(error, 'brief-admin-error');
-          else if (document.getElementById('brief-plan-error')) briefFailed(error, 'brief-plan-error');
-        });
-      }
-      var resendStartup = document.getElementById('brief-resend-startup');
-      if (resendStartup) resendStartup.addEventListener('click', function () { resend('startup'); });
-      var resendMtd = document.getElementById('brief-resend-mtd');
-      if (resendMtd) resendMtd.addEventListener('click', function () { resend('mtd'); });
     }
 
     function renderMorning(data) {
