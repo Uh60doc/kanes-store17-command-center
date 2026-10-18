@@ -508,12 +508,12 @@
       document.getElementById('login-error').textContent = message || '';
     }
     function navItems() {
-      var items = [['home', 'Home'], ['daily', 'Daily'], ['closing', 'Closing'], ['written', 'Written'], ['delivered', 'Delivered'], ['people', 'Sales Team'], ['coach', 'Goal coach'], ['morning', 'Morning meeting'], ['documents', 'Documents']];
-      if (role !== 'sales') items.splice(8, 0, ['coaching', 'Coaching']);
-      if (role !== 'sales') items.splice(9, 0, ['evalPrep', 'Eval prep']);
-      if (role !== 'sales') items.splice(10, 0, ['recovery', 'Recovery']);
-      if (role !== 'sales') items.splice(11, 0, ['leakage', 'Leakage']);
-      if (role !== 'sales') items.splice(12, 0, ['brief', 'Manager brief']);
+      var items = [['home', 'Home'], ['daily', 'Daily'], ['closing', 'Closing'], ['written', 'Written'], ['delivered', 'Delivered'], ['people', 'Sales Team'], ['coach', 'Goal coach'], ['accel', 'Attachments'], ['morning', 'Morning meeting'], ['documents', 'Documents']];
+      if (role !== 'sales') items.splice(9, 0, ['coaching', 'Coaching']);
+      if (role !== 'sales') items.splice(10, 0, ['evalPrep', 'Eval prep']);
+      if (role !== 'sales') items.splice(11, 0, ['recovery', 'Recovery']);
+      if (role !== 'sales') items.splice(12, 0, ['leakage', 'Leakage']);
+      if (role !== 'sales') items.splice(13, 0, ['brief', 'Manager brief']);
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['delivery', 'Delivery rescue'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
@@ -1484,6 +1484,135 @@
     var peopleEvaluation = null;
     var peopleToday = '';
     function canManage() { return role === 'manager' || role === 'admin'; }
+    var accelSide = 'written';
+    var accelWho = 'store';
+    function accelPct(value) {
+      if (value === null || value === undefined || value === '') return 'Pending';
+      return (Number(value) * 100).toFixed(1) + '%';
+    }
+    function accelNum(value) {
+      if (value === null || value === undefined || value === '') return 'Pending';
+      return String(value);
+    }
+    function accelMoney(value) {
+      if (value === null || value === undefined || value === '') return 'Pending';
+      return money(value);
+    }
+    function accelRateScenario(card, hand, added, attached) {
+      var missed = Math.max(0, Number(card.qualified) - Number(card.sold));
+      hand = Math.max(0, Math.min(hand, missed));
+      added = Math.max(0, added);
+      attached = Math.max(0, Math.min(attached, added));
+      var sold = Math.round((Number(card.sold) + hand + attached) * 10000) / 10000;
+      var qualified = Math.round((Number(card.qualified) + added) * 10000) / 10000;
+      var actual = qualified ? Math.round((sold / qualified) * 10000) / 10000 : null;
+      var needed = card.goal === null || !qualified ? null : Math.max(0, Math.ceil(Math.round((qualified * card.goal - sold) * 1e6) / 1e6));
+      return { sold: sold, qualified: qualified, actual: actual, needed: needed, met: actual !== null && card.goal !== null && sold >= qualified * card.goal - 1e-9 };
+    }
+    function accelBeddingScenario(card, extraBedding, extraOther) {
+      extraBedding = Math.max(0, extraBedding);
+      extraOther = Math.max(0, extraOther);
+      var bedding = Math.round((Number(card.bedding) + extraBedding) * 100) / 100;
+      var sales = Math.round((Number(card.sales) + extraBedding + extraOther) * 100) / 100;
+      var actual = sales ? Math.round((bedding / sales) * 10000) / 10000 : null;
+      var dollarsNeeded = null;
+      if (card.goal !== null && card.goal < 1 && sales) {
+        var raw = (card.goal * sales - bedding) / (1 - card.goal);
+        dollarsNeeded = raw <= 1e-9 ? 0 : Math.ceil(raw * 100) / 100;
+      }
+      return { bedding: bedding, sales: sales, actual: actual, dollarsNeeded: dollarsNeeded };
+    }
+    function accelCard(card) {
+      var goal = card.kind === 'count' || card.kind === 'protection' ? accelNum(card.goal) : accelPct(card.goal);
+      if (card.kind === 'protection') goal = accelMoney(card.goal);
+      if (card.kind === 'count') goal = accelNum(card.goal);
+      var now = card.kind === 'count' ? accelNum(card.count) : (card.kind === 'protection' ? (card.complete ? accelMoney(card.actual) : 'Pending') : accelPct(card.actual));
+      var width = card.ratioToGoal === null ? 0 : Math.max(0, Math.min(100, Math.round(card.ratioToGoal * 100)));
+      var controls = '';
+      if (card.kind === 'rate' && card.qualified) {
+        controls = '<div class="opp-controls noprint"><label>Attachments on items already eligible<input data-accel-hand type="number" min="0" step="1" value="0"></label><label>New eligible items<input data-accel-new type="number" min="0" step="1" value="0"></label><label>Attachments on the new items<input data-accel-on type="number" min="0" step="1" value="0"></label></div>';
+      } else if (card.kind === 'bedding' && card.sales) {
+        controls = '<div class="opp-controls noprint"><label>Additional bedding dollars<input data-accel-bed type="number" min="0" step="50" value="0"></label><label>Additional other written sales<input data-accel-other type="number" min="0" step="50" value="0"></label></div>';
+      } else if (card.kind === 'count' && card.count !== null) {
+        controls = '<div class="opp-controls noprint"><label>Additional rugs<input data-accel-count type="number" min="0" step="1" value="0"></label></div>';
+      } else if (card.kind === 'protection' && card.known) {
+        controls = '<div class="opp-controls noprint"><label>Additional verified protection dollars<input data-accel-protect type="number" min="0" step="100" value="0"></label></div>';
+      }
+      return '<article class="opp-card" data-accel-key="' + esc(card.key) + '"><h3>' + esc(card.label) + '</h3><p class="sub">' + esc(card.source || '') + (card.through ? ' · through ' + esc(card.through) : '') + '</p>' +
+        '<p>Now <strong data-accel-now>' + now + '</strong> · Goal <strong>' + goal + '</strong> · Difference <strong data-accel-diff>' + (card.difference === null || card.difference === undefined ? 'Pending' : card.difference) + '</strong></p>' +
+        '<p class="sub" data-accel-detail>' + (card.kind === 'rate' ? 'Sold ' + accelNum(card.sold) + ' of ' + accelNum(card.qualified) + ' qualified. Minimum additional attachments on that eligible count: ' + accelNum(card.needed) + '.' : (card.kind === 'bedding' ? 'Bedding ' + accelMoney(card.bedding) + ' of sales ' + accelMoney(card.sales) + '. Additional bedding dollars to the goal, with no other sales added: ' + accelMoney(card.dollarsNeeded) + '.' : (card.kind === 'protection' ? 'Verified dollars on file ' + accelMoney(card.known) + '. ' + (card.complete ? 'Additional dollars to $' + card.goal + ': ' + accelMoney(card.dollarsNeeded) + '.' : 'Missing ' + esc((card.missing || []).join(', ')) + '. The gap stays Pending.') : esc(card.note || '')))) + '</p>' +
+        '<div class="opp-meter"><span class="now" data-accel-bar style="width:' + width + '%"></span></div>' +
+        controls + '<p class="opp-result" data-accel-result></p><p class="sub">' + esc(card.coaching || '') + (card.customer ? ' Customer language: ' + esc(card.customer) + '.' : '') + '</p></article>';
+    }
+    function accelDraw(pack) {
+      var board = document.getElementById('accel-board');
+      if (!board || !pack) return;
+      var closest = pack.closest;
+      document.getElementById('accel-closest').textContent = closest ? 'Closest open goal: ' + closest.label + '. Customer language: ' + closest.customer + '.' : 'No open goal has both a verified result and an approved goal yet.';
+      board.innerHTML = (pack.cards || []).map(accelCard).join('');
+      board.querySelectorAll('[data-accel-key]').forEach(function (article) {
+        var key = article.getAttribute('data-accel-key');
+        var card = (pack.cards || []).filter(function (item) { return item.key === key; })[0];
+        var update = function () {
+          var result = article.querySelector('[data-accel-result]');
+          var now = article.querySelector('[data-accel-now]');
+          var bar = article.querySelector('[data-accel-bar]');
+          if (card.kind === 'rate' && card.qualified) {
+            var scenario = accelRateScenario(card, Number(article.querySelector('[data-accel-hand]').value || 0), Number(article.querySelector('[data-accel-new]').value || 0), Number(article.querySelector('[data-accel-on]').value || 0));
+            now.textContent = accelPct(scenario.actual);
+            var diff = article.querySelector('[data-accel-diff]');
+            if (diff) diff.textContent = card.goal === null || scenario.actual === null ? 'Pending' : String(Math.round((scenario.actual - card.goal) * 1000) / 10);
+            bar.style.width = (card.goal ? Math.max(0, Math.min(100, Math.round((scenario.actual / card.goal) * 100))) : 0) + '%';
+            result.textContent = scenario.sold + ' of ' + scenario.qualified + ' eligible = ' + accelPct(scenario.actual) + '. Still needed on that new eligible count: ' + (scenario.needed === null ? 'Pending' : scenario.needed) + '. A new eligible item is in the denominator. An attachment on an item already eligible is not.';
+          } else if (card.kind === 'bedding' && card.sales) {
+            var bedding = accelBeddingScenario(card, Number(article.querySelector('[data-accel-bed]').value || 0), Number(article.querySelector('[data-accel-other]').value || 0));
+            now.textContent = accelPct(bedding.actual);
+            var bedDiff = article.querySelector('[data-accel-diff]');
+            if (bedDiff) bedDiff.textContent = card.goal === null || bedding.actual === null ? 'Pending' : String(Math.round((bedding.actual - card.goal) * 1000) / 10);
+            bar.style.width = (card.goal ? Math.max(0, Math.min(100, Math.round((bedding.actual / card.goal) * 100))) : 0) + '%';
+            result.textContent = 'Bedding ' + accelMoney(bedding.bedding) + ' of sales ' + accelMoney(bedding.sales) + ' = ' + accelPct(bedding.actual) + '. Additional bedding still needed if no further other sales are added: ' + accelMoney(bedding.dollarsNeeded) + '.';
+          } else if (card.kind === 'count' && card.count !== null) {
+            var extra = Math.max(0, Number(article.querySelector('[data-accel-count]').value || 0));
+            var count = Number(card.count) + extra;
+            now.textContent = String(count);
+            result.textContent = count + ' rugs. ' + (card.goal === null ? 'Goal Pending.' : (count >= card.goal ? 'The monthly goal is met in this illustration.' : (card.goal - count) + ' more would reach ' + card.goal + '.'));
+          } else if (card.kind === 'protection' && card.known !== null && card.known !== undefined) {
+            var more = Math.max(0, Number(article.querySelector('[data-accel-protect]').value || 0));
+            var total = Math.round((Number(card.known) + more) * 100) / 100;
+            result.textContent = 'Illustrated dollars ' + accelMoney(total) + '. ' + (card.complete ? (total >= card.goal ? 'The $' + card.goal + ' coaching target is met in this illustration. Commission is not calculated here.' : accelMoney(card.goal - total) + ' still to go. Commission stays in Goal coach.') : 'Missing categories are still Pending and are not included in this illustration.');
+          }
+        };
+        article.querySelectorAll('input').forEach(function (input) { input.addEventListener('input', update); });
+      });
+    }
+    function renderAccelerator(data) {
+      accelCache = data;
+      var options = (data.people || []).map(function (person) {
+        return '<option value="' + esc(person.name) + '"' + (accelWho === person.name ? ' selected' : '') + '>' + esc(person.name) + (person.newHire ? ' · new hire' : '') + '</option>';
+      }).join('');
+      document.getElementById('header-note').textContent = 'Attachments · ' + (data.side === 'delivered' ? 'Delivered' : 'Written') + ' · not commission';
+      document.getElementById('screen').innerHTML = '<section class="opp-layout"><p class="opp-banner"><strong>A few more Maintenance Plans can close the gap.</strong> ' + esc(data.notice) + '</p>' +
+        '<div class="opp-controls noprint"><label>Report<select id="accel-side"><option value="written"' + (data.side !== 'delivered' ? ' selected' : '') + '>Written</option><option value="delivered"' + (data.side === 'delivered' ? ' selected' : '') + '>Delivered</option></select></label>' +
+        (data.role === 'sales' ? '' : '<label>View<select id="accel-who"><option value="store"' + (accelWho === 'store' ? ' selected' : '') + '>Store</option>' + options + '</select></label>') +
+        '<button type="button" id="accel-coach">Open Goal coach for commission scenarios</button></div>' +
+        '<article class="opp-card"><h3 data-accel-title>' + (accelWho === 'store' || data.role === 'sales' ? 'Store' : esc(accelWho)) + '</h3><p class="sub">' + esc(accelWho === 'store' || data.role === 'sales' ? data.store.calendar + ' ' + data.store.period : data.individualCalendar + ' ' + data.individualPeriod) + '. Written and Delivered are not added together.</p><p id="accel-closest"></p></article>' +
+        '<div class="opp-grid" id="accel-board"></div></section>';
+      document.getElementById('accel-side').addEventListener('change', function (event) {
+        accelSide = event.target.value;
+        api('accel', { side: accelSide }).then(renderAccelerator).catch(function (error) {
+          document.getElementById('accel-closest').textContent = error.message || 'The report could not be loaded.';
+        });
+      });
+      var who = document.getElementById('accel-who');
+      if (who) who.addEventListener('change', function () { accelWho = who.value; renderAccelerator(accelCache); });
+      document.getElementById('accel-coach').addEventListener('click', function () { openScreen('coach'); });
+      var pack = data.store;
+      if (accelWho !== 'store' && data.role !== 'sales') {
+        pack = (data.people || []).filter(function (person) { return person.name === accelWho; })[0] || data.store;
+      }
+      accelDraw(pack);
+    }
+    var accelCache = null;
     function rescueTeamLabel(team) {
       if (team === 'sales') return 'Sales';
       if (team === 'operations') return 'Operations';
@@ -3922,6 +4051,7 @@
       if (name === 'home' || name === 'written' || name === 'delivered') renderHome(data, name);
       else if (name === 'bedding') renderBedding(data);
       else if (name === 'delivery') renderDelivery(data);
+      else if (name === 'accel') renderAccelerator(data);
       else if (name === 'daily') renderDaily(data);
       else if (name === 'closing') renderClosing(data);
       else if (name === 'people') renderPeople(data);
