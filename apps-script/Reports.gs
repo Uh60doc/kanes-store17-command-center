@@ -324,7 +324,7 @@ function reportCatalog_(today) {
       { key: 'daily', label: 'Daily', ready: true },
       { key: 'weekly', label: 'Weekly', ready: true },
       { key: 'monthly', label: 'Monthly', ready: false },
-      { key: 'individual', label: 'Individual', ready: false },
+      { key: 'individual', label: 'Individual', ready: true },
     ],
     storePeriod: store.start + ' through ' + store.end,
     individualPeriod: individual.start + ' through ' + individual.end,
@@ -664,13 +664,329 @@ function reportWeekly_(payload, today) {
   };
 }
 
+function reportAssociates_(today) {
+  var names = [];
+  sheet_('CC_People').forEach(function (row) {
+    if (rosterRole_(row, today) === 'associate') names.push(String(row.name || ''));
+  });
+  return names.filter(function (name) { return name; }).sort();
+}
+
+function employeeReportOn_() {
+  return /^(1|true|yes|on)$/i.test(String(config_().employee_report_access || ''));
+}
+
+function employeeReportName_(session) {
+  var user = String(session && session.username || '').trim().toLowerCase();
+  if (!user) return '';
+  return String(config_()['employee_report_' + user] || '').trim();
+}
+
+function reportGuard_(payload, kind) {
+  if (!payload.session || payload.session.role !== 'sales') return '';
+  if (kind !== 'individual') throw new Error('This login can open only its own salesperson report.');
+  if (!employeeReportOn_()) throw new Error('Employee access is not enabled.');
+  var name = employeeReportName_(payload.session);
+  if (!name) throw new Error('This login is not linked to an associate.');
+  return name;
+}
+
+function reportPersonSnap_(name, start, end) {
+  var pending = snapPendingDates_(start, end, end);
+  if (pending.length) return { value: null, pending: true, missing: pending };
+  var total = 0;
+  var lines = snapAssociateLines_(start, end);
+  lines.order.forEach(function (key) {
+    var line = lines.byDay[key];
+    if (line.name === name) total += line.amount;
+  });
+  return { value: Math.round(total * 100) / 100, pending: false, missing: [] };
+}
+
+function reportWeekOrders_(ledger, name, start, end, closed) {
+  var missing = [];
+  var orders = 0;
+  var sales = 0;
+  eachDate_(start, end).forEach(function (date) {
+    if (closed[date]) return;
+    var file = false;
+    var units = null;
+    var amount = null;
+    ledger.forEach(function (row) {
+      if (row.side !== 'written' || row.grain !== 'daily' || row.reportDate !== date || !PERSON_ANALYSIS_SOURCE_.test(row.source)) return;
+      if (row.view === 'DA_SALES_STORE') file = true;
+      if (row.view === 'DA_SALES_PERSON' && rowMatchesPerson_(row, name)) {
+        units = saleOrders_(row);
+        amount = row.sales === null || row.sales === undefined ? null : Number(row.sales);
+      }
+    });
+    if (!file) { missing.push(date); return; }
+    orders += units === null ? 0 : Number(units);
+    sales += amount === null ? 0 : amount;
+  });
+  if (missing.length) return { pending: true, missing: missing, orders: null, sales: null };
+  return { pending: false, missing: [], orders: orders, sales: Math.round(sales * 100) / 100 };
+}
+
+function reportWeekTraffic_(facts, name, start, end, closed) {
+  var map = personDailyOpportunities_(facts, name);
+  var missing = [];
+  var total = 0;
+  eachDate_(start, end).forEach(function (date) {
+    if (closed[date]) return;
+    if (!Object.prototype.hasOwnProperty.call(map, date)) { missing.push(date); return; }
+    total += Number(map[date]);
+  });
+  if (missing.length) return { pending: true, missing: missing, value: null };
+  return { pending: false, missing: [], value: total };
+}
+
+function reportStaffing_(name, start, end) {
+  var rows = [];
+  try {
+    sheet_('CC_Staffing').forEach(function (row) {
+      var date = isoDate_(row.date);
+      if (!date || date < start || date > end) return;
+      if (String(row.display_name || row.name || '') !== name) return;
+      rows.push(row);
+    });
+  } catch (error) { rows = []; }
+  if (!rows.length) return reportLine_('activity', 'Selling activity', 'Pending', '', 'Pending', 'pending', 'No verified staffing record for this associate in this week. Working days are not assumed.', null);
+  var worked = 0;
+  var off = 0;
+  rows.forEach(function (row) {
+    var flag = String(row.worked || '').trim().toLowerCase();
+    if (flag === 'yes') worked += 1;
+    else if (flag === 'no') off += 1;
+  });
+  var line = reportLine_('activity', 'Selling activity', worked + ' working', '', off + ' confirmed off', 'ready', 'CC_Staffing confirmations in this week. Unconfirmed open days are not counted as worked or as off.', null);
+  line.scope = 'week';
+  return line;
+}
+
+function reportRateLine_(key, label, actual, goal, unit, source) {
+  var goalText = briefBlank_(goal) ? '' : briefKpiCell_(goal, unit);
+  if (briefBlank_(actual)) {
+    var pending = reportLine_(key, label, 'Pending', goalText, 'Pending', 'pending', source, null);
+    pending.scope = 'salesperson-month';
+    return pending;
+  }
+  var versusUnit = unit === 'dollars' ? 'dollars' : (unit === 'count' ? 'count' : 'percent');
+  var line = reportLine_(key, label, briefKpiCell_(actual, unit), goalText, reportVersus_(actual, goal, versusUnit), reportStatus_(actual, goal), source, reportBar_(actual, goal));
+  line.scope = 'salesperson-month';
+  return line;
+}
+
+function reportIndividual_(payload, today) {
+  var span = reportSpan_(payload, today);
+  if (span.span === 'custom') span = reportCompletedWeek_(today, payload && (payload.end || payload.start || payload.date));
+  var start = span.start;
+  var end = span.end;
+  var associates = reportAssociates_(today);
+  var locked = payload.session && payload.session.role === 'sales' ? employeeReportName_(payload.session) : '';
+  var requested = locked || String(payload.name || '');
+  if (requested && associates.indexOf(requested) === -1) throw new Error('Choose a current associate. Management and former associates are not on this coaching report.');
+  var name = requested || associates[0] || '';
+  if (!name) throw new Error('Choose a current associate. Management and former associates are not on this coaching report.');
+  if (locked && name !== locked) throw new Error('This login can open only its own salesperson report.');
+  var hired = '';
+  sheet_('CC_People').forEach(function (row) { if (String(row.name || '') === name) hired = isoDate_(row.hire_date); });
+  var individual = individualPeriodContaining_(end);
+  var service = evalPrepServiceMonth_(hired, individual.start);
+  var goal = evalPrepVolumeGoal_(service);
+  var employed = !(hired && hired > end);
+  var partialLabel = span.partial ? 'Partial · week to date' : 'Completed week';
+  var monthNote = 'Salesperson month ' + individual.start + ' through ' + end + '. Not this week.';
+  var closed = closedDates_();
+  var weekSnap = employed ? reportPersonSnap_(name, start, end) : { value: null, pending: false, missing: [] };
+  var mtdSnap = employed ? reportPersonSnap_(name, individual.start, end) : { value: null, pending: false, missing: [] };
+  var ledger = [];
+  try { ledger = personAnalysisLedger_(); } catch (error) { ledger = []; }
+  var weekOrders = employed ? reportWeekOrders_(ledger, name, start, end, closed) : { pending: false, orders: null, sales: null, missing: [] };
+  var facts = [];
+  try { facts = loadClosing_(); } catch (error) { facts = []; }
+  var traffic = employed ? reportWeekTraffic_(facts, name, start, end, closed) : { pending: false, value: null, missing: [] };
+  var analysis = personAnalysisContext_({ start: individual.start, end: end });
+  var side = personAnalysisSide_(ledger, name, analysis.written);
+  var goals = approvedGoals_(config_());
+  var newHireRates = service !== null && service >= 1 && service < 4;
+  var ticketGoal = goals.averageTicket || 2500;
+  var beddingGoal = newHireRates ? evalPrepRateGoal_('mattress', true) : goals.bedding;
+  var fabricGoal = newHireRates ? evalPrepRateGoal_('fabric', true) : goals.fabric;
+  var leatherGoal = newHireRates ? evalPrepRateGoal_('leather', true) : goals.leather;
+  var powerGoal = newHireRates ? evalPrepRateGoal_('power', true) : goals.power;
+  var padGoal = newHireRates ? evalPrepRateGoal_('protector', true) : goals.mattress;
+  var rugGoal = newHireRates ? evalPrepRateGoal_('rugs', true) : goals.rugs;
+  var monthLabel = side && side.through ? ('Salesperson month through ' + briefDisplayDate_(side.through) + '. Not this week.') : 'Group 17 written coverage through this week is not on file. The later month total is not used.';
+  function moneyPending(key, label, pack, source) {
+    if (!employed) return reportLine_(key, label, 'Not employed', '', 'Hired ' + briefDisplayDate_(hired), 'pending', 'Hired after this week.', null);
+    if (pack.pending) return reportLine_(key, label, 'Pending', '', 'Pending', 'pending', source + ' Missing: ' + reportDateList_(pack.missing) + '. Not counted as zero.', null);
+    return reportLine_(key, label, moneyText_(pack.value), '', 'On file', 'ready', source, null);
+  }
+  var written = moneyPending('snap-week', 'SNAP Written', weekSnap, 'SNAP Written for this week only.');
+  var mtd = moneyPending('snap-mtd', 'SNAP Written MTD', mtdSnap, monthNote + ' SNAP Written.');
+  written.scope = 'week';
+  mtd.scope = 'salesperson-month';
+  var goalLine = reportLine_('volume-goal', 'Monthly goal', goal.amount === null ? 'Pending' : moneyText_(goal.amount), '', goal.amount === 0 ? 'Training month' : (goal.amount === null ? 'Pending' : 'On file'), goal.amount === null ? 'pending' : 'ready', goal.note, null);
+  var pct;
+  var left;
+  if (!employed) {
+    pct = reportLine_('volume-pct', 'Percent to goal', 'Not employed', '', 'Pending', 'pending', 'Hired after this week.', null);
+    left = reportLine_('volume-left', 'Remaining', 'Not employed', '', 'Pending', 'pending', 'Hired after this week.', null);
+  } else if (goal.amount === 0) {
+    pct = reportLine_('volume-pct', 'Percent to goal', 'Not scored', '$0', 'Training month', 'ready', 'Month 1 is a training month. The $0 goal is not scored as a miss.', null);
+    left = reportLine_('volume-left', 'Remaining', '$0', '', 'Training month', 'ready', 'Nothing is owed against the $0 training goal.', null);
+  } else if (goal.amount === null || mtdSnap.pending) {
+    pct = reportLine_('volume-pct', 'Percent to goal', 'Pending', goal.amount === null ? '' : '100%', 'Pending', 'pending', goal.amount === null ? goal.note : 'SNAP Written MTD is not complete, so the percent stays Pending.', null);
+    left = reportLine_('volume-left', 'Remaining', 'Pending', '', 'Pending', 'pending', 'Remaining dollars wait for a complete SNAP Written MTD and a verified goal.', null);
+  } else {
+    pct = reportLine_('volume-pct', 'Percent to goal', percentText_(mtdSnap.value / goal.amount), '100%', reportVersus_(mtdSnap.value, goal.amount, 'dollars'), reportStatus_(mtdSnap.value, goal.amount), 'SNAP Written MTD ÷ the tenure written goal. Not NWDSR.', reportBar_(mtdSnap.value, goal.amount));
+    var remain = Math.max(0, Math.round((goal.amount - mtdSnap.value) * 100) / 100);
+    left = reportLine_('volume-left', 'Remaining', moneyText_(remain), '', 'On file', 'ready', 'Tenure goal minus SNAP Written MTD. Not the week total.', null);
+  }
+  var ordersLine = !employed
+    ? reportLine_('orders', 'Written orders', 'Not employed', '', 'Pending', 'pending', 'Hired after this week.', null)
+    : (weekOrders.pending
+      ? reportLine_('orders', 'Written orders', 'Pending', '', 'Pending', 'pending', 'Group 17 written day files are missing for ' + reportDateList_(weekOrders.missing) + '. The salesperson-month order count is not used as this week. Not SNAP dollars.', null)
+      : reportLine_('orders', 'Written orders', String(weekOrders.orders), '', 'On file', 'ready', 'Group 17 written orders for the open days in this week. A covered day with no line is 0. Not SNAP dollars.', null));
+  var ticketLine;
+  var ticketActual = null;
+  var ticketOrders = null;
+  var ticketScope = '';
+  if (!employed) ticketLine = reportLine_('ticket', 'Average ticket', 'Not employed', moneyText_(ticketGoal), 'Pending', 'pending', 'Hired after this week.', null);
+  else if (!weekOrders.pending && weekOrders.orders) {
+    ticketActual = Math.round((weekOrders.sales / weekOrders.orders) * 100) / 100;
+    ticketOrders = weekOrders.orders;
+    ticketScope = 'This week. Group 17 written sales ÷ Group 17 written orders. Not SNAP dollars.';
+    ticketLine = reportLine_('ticket', 'Average ticket', moneyText_(ticketActual), moneyText_(ticketGoal), reportVersus_(ticketActual, ticketGoal, 'dollars'), reportStatus_(ticketActual, ticketGoal), ticketScope, reportBar_(ticketActual, ticketGoal));
+  } else if (side && side.orders && side.average && !briefBlank_(side.average.value)) {
+    ticketActual = side.average.value;
+    ticketOrders = side.orders;
+    ticketScope = 'Salesperson month through ' + side.through + '. Not this week. Group 17 written sales ÷ Group 17 written orders. Not SNAP dollars.';
+    ticketLine = reportLine_('ticket', 'Average ticket', moneyText_(ticketActual), moneyText_(ticketGoal), reportVersus_(ticketActual, ticketGoal, 'dollars'), reportStatus_(ticketActual, ticketGoal), ticketScope, reportBar_(ticketActual, ticketGoal));
+    ticketLine.scope = 'salesperson-month';
+  } else ticketLine = reportLine_('ticket', 'Average ticket', 'Pending', moneyText_(ticketGoal), 'Pending', 'pending', 'No complete Group 17 written order count is on file for this week, and the salesperson-month ticket through the week end is not on file.', null);
+  var trafficLine = !employed
+    ? reportLine_('perq', 'PERQ opportunities', 'Not employed', '', 'Pending', 'pending', 'Hired after this week.', null)
+    : (traffic.pending
+      ? reportLine_('perq', 'PERQ opportunities', 'Pending', '', 'Pending', 'pending', 'PERQ for this salesperson is missing for ' + reportDateList_(traffic.missing) + '. Not counted as zero.', null)
+      : reportLine_('perq', 'PERQ opportunities', String(traffic.value), '', 'On file', 'ready', 'PERQ Ups + Be Backs for this salesperson on the open days in this week.', null));
+  var closingLine;
+  if (!employed) closingLine = reportLine_('closing', 'Week closing', 'Not employed', '', 'Pending', 'pending', 'Hired after this week.', null);
+  else if (weekOrders.pending || traffic.pending) closingLine = reportLine_('closing', 'Week closing', 'Pending', percentText_(goals.closing), 'Pending', 'pending', 'Week closing needs Group 17 written orders and PERQ for every open day in this week.', null);
+  else if (!traffic.value) closingLine = reportLine_('closing', 'Week closing', 'No opportunities', percentText_(goals.closing), 'Pending', 'pending', 'PERQ opportunities for this week are 0, so the ratio is not calculated.', null);
+  else {
+    var ratio = Math.round((weekOrders.orders / traffic.value) * 1000) / 1000;
+    closingLine = reportLine_('closing', 'Week closing', percentText_(ratio), percentText_(goals.closing), reportVersus_(ratio, goals.closing, 'percent'), reportStatus_(ratio, goals.closing), weekOrders.orders + ' Group 17 written orders ÷ ' + traffic.value + ' PERQ opportunities. Not SNAP dollars.', reportBar_(ratio, goals.closing));
+  }
+  var monthClosing = null;
+  try { monthClosing = employed ? personClosing_(facts, name, individual.start, end, goals.closing, ledger) : null; } catch (error) { monthClosing = null; }
+  var monthClosingLine = reportLine_('month-closing', 'Month closing', !monthClosing || monthClosing.ratio === null ? 'Pending' : percentText_(monthClosing.ratio), percentText_(goals.closing), !monthClosing || monthClosing.ratio === null ? 'Pending' : reportVersus_(monthClosing.ratio, goals.closing, 'percent'), !monthClosing || monthClosing.ratio === null ? 'pending' : reportStatus_(monthClosing.ratio, goals.closing), (monthClosing && monthClosing.note ? monthClosing.note + ' ' : '') + 'Salesperson month. Not this week.', monthClosing && monthClosing.ratio !== null ? reportBar_(monthClosing.ratio, goals.closing) : null);
+  monthClosingLine.scope = 'salesperson-month';
+  var activity = employed ? reportStaffing_(name, start, end) : reportLine_('activity', 'Selling activity', 'Not employed', '', 'Pending', 'pending', 'Hired after this week.', null);
+  var performance = [written, mtd, goalLine, pct, left, ordersLine, ticketLine, trafficLine, closingLine, monthClosingLine, activity];
+  performance.forEach(function (line) { if (!line.scope) line.scope = 'week'; line.section = 'performance'; });
+  var quality = [
+    reportRateLine_('bedding', 'Bedding', side && side.bedding ? side.bedding.value : null, beddingGoal, 'percent', monthLabel + ' Bedding dollars ÷ Group 17 written sales.'),
+    reportRateLine_('fabric', 'Fabric maintenance', side && side.fabric ? side.fabric.value : null, fabricGoal, 'percent', monthLabel + ' Group 17 fabric protection.'),
+    reportRateLine_('leather', 'Leather maintenance', side && side.leather ? side.leather.value : null, leatherGoal, 'percent', monthLabel + ' Group 17 leather protection.'),
+    reportRateLine_('power', 'Power upholstery', side && side.power ? side.power.value : null, powerGoal, 'percent', monthLabel + ' Group 17 power protection.'),
+    reportRateLine_('pads', 'Mattress protectors', side && side.pads ? side.pads.value : null, padGoal, 'percent', monthLabel + ' Group 17 mattress protectors.'),
+    reportLine_('rugs', 'Rugs', 'Pending', briefBlank_(rugGoal) ? '' : String(rugGoal), 'Pending', 'pending', 'No salesperson rug count is on file. ASL rugs are a store total, so this stays Pending.', null),
+  ];
+  var protect = null;
+  var tallies = side && side.tallies ? side.tallies : null;
+  if (tallies && tallies.fabric && tallies.leather && tallies.power && tallies.pads && tallies.fabric.dollars !== null && tallies.leather.dollars !== null && tallies.power.dollars !== null && tallies.pads.dollars !== null) {
+    protect = Math.round((tallies.fabric.dollars + tallies.leather.dollars + tallies.power.dollars + tallies.pads.dollars) * 100) / 100;
+  }
+  var protectLine = reportLine_('protection', 'Protection dollars', protect === null ? 'Pending' : moneyText_(protect), '', protect === null ? 'Pending' : 'On file', protect === null ? 'pending' : 'ready', protect === null ? (monthLabel + ' Protection dollars are not on every Group 17 category.') : (monthLabel + ' Fabric, leather, power, and mattress-protector dollars. Not added to SNAP Written.'), null);
+  protectLine.scope = 'salesperson-month';
+  quality.push(protectLine);
+  quality.forEach(function (line) { line.section = 'quality'; if (!line.scope) line.scope = 'salesperson-month'; });
+  var opportunity = [];
+  if (ticketActual === null || ticketOrders === null) opportunity.push('Ticket opportunity is Pending. It needs the same verified Group 17 order count and Group 17 average ticket.');
+  else {
+    var gap = Math.round((ticketGoal - ticketActual) * ticketOrders * 100) / 100;
+    opportunity.push((gap > 0 ? moneyText_(gap) + ' between the verified average ticket and ' + moneyText_(ticketGoal) + ' on ' + ticketOrders + ' Group 17 orders. ' : 'The verified average ticket is at or above ' + moneyText_(ticketGoal) + ' on ' + ticketOrders + ' Group 17 orders. ') + ticketScope);
+  }
+  var attachments = personAttachments_({ written: side, delivered: null }, { fabric: fabricGoal, leather: leatherGoal, power: powerGoal, mattress: padGoal, attachment: goals.attachment });
+  var gaps = [];
+  (attachments.written.lines || []).forEach(function (line) {
+    if (line.status === 'below' && line.needed) gaps.push(line.name + ' needs ' + line.needed + ' more on the verified eligible count (' + line.sold + ' of ' + line.qualified + ').');
+  });
+  if (side && side.bedding && !briefBlank_(side.bedding.value) && !briefBlank_(beddingGoal) && Number(side.bedding.value) < Number(beddingGoal)) gaps.push('Bedding is ' + percentText_(side.bedding.value) + ' versus ' + percentText_(beddingGoal) + ' for the salesperson month.');
+  if (!gaps.length) opportunity.push('No verified attachment gap is on file for this period.');
+  gaps.slice(0, 3).forEach(function (item) { opportunity.push(item); });
+  if (goal.amount === 0) opportunity.push('Progress toward the monthly goal: training month, $0 written goal, not scored.');
+  else if (goal.amount === null || mtdSnap.pending || !employed) opportunity.push('Progress toward the monthly goal stays Pending until SNAP Written and the tenure goal are both verified.');
+  else opportunity.push('Progress toward the monthly goal: ' + moneyText_(mtdSnap.value) + ' of ' + moneyText_(goal.amount) + ' SNAP Written (' + percentText_(mtdSnap.value / goal.amount) + ').');
+  var strengths = [];
+  var improvements = [];
+  if (goal.amount === 0 && employed) strengths.push('The written goal is the $0 training goal and is not scored as a miss.');
+  if (!mtdSnap.pending && employed && goal.amount > 0 && mtdSnap.value >= goal.amount) strengths.push('SNAP Written is at the ' + moneyText_(goal.amount) + ' monthly goal.');
+  quality.forEach(function (line) {
+    if (line.status === 'hit' || line.status === 'even') strengths.push(line.label + ' is at the goal (' + line.result + ').');
+    if (line.status === 'short') improvements.push(line.label + ' is ' + line.result + ' versus ' + (line.goal || 'the goal') + '.');
+  });
+  if (ticketLine.status === 'short') improvements.push('Average ticket is ' + ticketLine.result + ' versus ' + moneyText_(ticketGoal) + '.');
+  if (closingLine.status === 'short') improvements.push('Week closing is ' + closingLine.result + ' versus ' + percentText_(goals.closing) + '.');
+  if (weekSnap.pending || mtdSnap.pending) improvements.push('A missing SNAP day stays Pending and is not coached as zero.');
+  var seen = {};
+  strengths = strengths.filter(function (item) { if (seen[item]) return false; seen[item] = true; return true; }).slice(0, 2);
+  var seenGap = {};
+  improvements = improvements.filter(function (item) { if (seenGap[item]) return false; seenGap[item] = true; return true; }).slice(0, 2);
+  if (!strengths.length) strengths.push('No verified strength is on this report.');
+  else if (strengths.length === 1) strengths.push('No second verified strength.');
+  if (!improvements.length) improvements.push('No verified gap is on this report.');
+  else if (improvements.length === 1) improvements.push('No second verified gap.');
+  var nextGoal = improvements[0].indexOf('No verified') === 0 ? 'Obtain the missing verified reports before setting a numeric coaching goal.' : ('Next week: ' + improvements[0]);
+  var verification = partialLabel + ' · ' + briefDisplayDate_(start) + ' through ' + briefDisplayDate_(end) + ' · ' + name + (newHireRates ? ' · NEW HIRE' : '') + ' · prepared ' + briefDisplayDate_(today) + '. SNAP Written is the individual written volume. Group 17 is the order count and average ticket. PERQ is the traffic. ' + (hired ? ('Hired ' + briefDisplayDate_(hired) + '. ') : 'Hire date is not on file. ') + 'No email sent.';
+  return {
+    role: payload.session.role,
+    version: APP_VERSION_,
+    kind: 'individual',
+    layout: 'individual',
+    ready: true,
+    title: 'Weekly Salesperson Report',
+    name: name,
+    associates: locked ? [locked] : associates,
+    access: { enabled: employeeReportOn_(), self: locked },
+    newHire: newHireRates,
+    hired: hired,
+    span: span.span,
+    partial: !!span.partial,
+    partialLabel: partialLabel,
+    date: end,
+    displayDate: name + ' · ' + briefDisplayDate_(start) + ' – ' + briefDisplayDate_(end),
+    today: today,
+    period: { start: start, end: end },
+    storePeriod: '',
+    individualPeriod: individual.start + ' through ' + individual.end,
+    calendarNote: 'SNAP Written is the official individual written volume. Group 17 written orders and the average ticket are a different report and are not mixed with SNAP dollars. PERQ is salesperson traffic. Store month is not this report.',
+    mail: false,
+    verification: verification,
+    performance: performance,
+    quality: quality,
+    opportunity: opportunity.slice(0, 4),
+    coaching: { strengths: strengths, improvements: improvements, goal: nextGoal, notes: 'Manager notes stay on this printed page. Nothing is saved or emailed.' },
+    lines: performance.concat(quality),
+    winners: { status: 'pending', text: '', quiet: '', source: '', date: '' },
+    priorities: [nextGoal],
+    prioritySource: 'One coaching goal from the verified gaps. Not emailed.',
+    notice: 'Preview, print, or download this page. No email is sent.',
+  };
+}
+
 function reportCenter_(payload) {
   var today = todayNy_();
   var kind = String(payload && payload.kind || 'daily');
   if (kind !== 'daily' && kind !== 'weekly' && kind !== 'monthly' && kind !== 'individual') kind = 'daily';
-  var page = kind === 'daily' ? reportDaily_(payload, today) : (kind === 'weekly' ? reportWeekly_(payload, today) : reportUnbuilt_(payload, today, kind));
+  var locked = reportGuard_(payload, kind);
+  if (locked) payload.name = locked;
+  var page = kind === 'daily' ? reportDaily_(payload, today) : (kind === 'weekly' ? reportWeekly_(payload, today) : (kind === 'individual' ? reportIndividual_(payload, today) : reportUnbuilt_(payload, today, kind)));
   page.catalog = reportCatalog_(today);
-  page.pdf = page.ready ? (page.layout === 'weekly' ? reportWeeklyPdf_(page) : reportPdf_(page)) : '';
+  if (payload.session && payload.session.role === 'sales') page.catalog.kinds = [{ key: 'individual', label: 'My report', ready: true }];
+  page.pdf = page.ready ? (page.layout === 'weekly' ? reportWeeklyPdf_(page) : (page.layout === 'individual' ? reportIndividualPdf_(page) : reportPdf_(page))) : '';
   return page;
 }
 
@@ -852,6 +1168,69 @@ function reportWeeklyPdf_(page) {
   paint(0.25, 0.32, 0.36);
   text(36, 28, 7.5, reportAscii_(page.calendarNote).slice(0, 150), false);
   text(36, 18, 7.5, 'No email sent. Last year stays Pending until verified. Written is not Delivered.', false);
+  return reportPdfFinish_(commands);
+}
+
+function reportIndividualPdf_(page) {
+  var commands = [];
+  function paint(r, g, b) { commands.push(r + ' ' + g + ' ' + b + ' rg'); }
+  function text(x, y, size, value, bold) {
+    commands.push('BT /' + (bold ? 'F2' : 'F1') + ' ' + size + ' Tf ' + x.toFixed(1) + ' ' + y.toFixed(1) + ' Td (' + reportPdfEscape_(value) + ') Tj ET');
+  }
+  commands.push('0.06 0.13 0.16 rg 0 748 612 44 re f');
+  commands.push('0.05 0.50 0.53 rg 0 742 612 6 re f');
+  paint(1, 1, 1);
+  text(36, 768, 8, "KANE'S FURNITURE  ·  STORE 17  ·  SALESPERSON", true);
+  text(36, 754, 13, 'Weekly Salesperson Report', true);
+  paint(0.06, 0.13, 0.16);
+  text(36, 726, 10, reportAscii_(page.partialLabel) + '  ·  ' + reportAscii_(page.displayDate), true);
+  var y = 712;
+  reportWrap_(page.verification, 112).slice(0, 2).forEach(function (line) { text(36, y, 8, line, false); y -= 10; });
+  y -= 2;
+  function band(title, rows) {
+    paint(0.05, 0.50, 0.53);
+    text(36, y, 9, title, true);
+    y -= 11;
+    rows.forEach(function (line) {
+      if (y < 78) return;
+      paint(0.06, 0.13, 0.16);
+      text(36, y, 8, line.label, true);
+      var tone = reportTone_(line.status);
+      paint(tone[0], tone[1], tone[2]);
+      text(168, y, 8, line.result + (line.goal ? '  /  ' + line.goal : ''), true);
+      y -= 10;
+    });
+    y -= 2;
+  }
+  band('PERFORMANCE', page.performance || []);
+  band('SALES QUALITY', page.quality || []);
+  paint(0.05, 0.50, 0.53);
+  text(36, y, 9, 'OPPORTUNITY', true);
+  y -= 11;
+  paint(0.06, 0.13, 0.16);
+  (page.opportunity || []).slice(0, 3).forEach(function (item) {
+    reportWrap_(item, 112).slice(0, 1).forEach(function (line) { text(36, y, 8, line, false); y -= 10; });
+  });
+  var coaching = page.coaching || {};
+  paint(0.05, 0.50, 0.53);
+  text(36, y, 8, 'STRENGTHS', true);
+  text(230, y, 8, 'IMPROVE', true);
+  text(420, y, 8, 'NEXT WEEK', true);
+  y -= 11;
+  paint(0.06, 0.13, 0.16);
+  var row = y;
+  (coaching.strengths || []).slice(0, 2).forEach(function (item, index) {
+    reportWrap_((index + 1) + '. ' + item, 32).slice(0, 2).forEach(function (line) { text(36, row, 7.5, line, false); row -= 9; });
+  });
+  row = y;
+  (coaching.improvements || []).slice(0, 2).forEach(function (item, index) {
+    reportWrap_((index + 1) + '. ' + item, 32).slice(0, 2).forEach(function (line) { text(230, row, 7.5, line, false); row -= 9; });
+  });
+  reportWrap_(coaching.goal || '', 32).slice(0, 3).forEach(function (line) { text(420, y, 7.5, line, false); y -= 9; });
+  text(36, 36, 8, 'Manager notes:', true);
+  commands.push('0.7 0.76 0.78 RG 36 28 m 560 28 l S');
+  commands.push('36 16 m 560 16 l S');
+  text(36, 6, 7, 'No email sent. Notes on this page are not saved.', false);
   return reportPdfFinish_(commands);
 }
 

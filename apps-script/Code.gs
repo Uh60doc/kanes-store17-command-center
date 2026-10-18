@@ -1,5 +1,5 @@
 var SPREADSHEET_ID_ = '1KtsfQPQRdg3IdNXomlM5t47IyE1psouxvgW-D8VSLfw';
-var APP_VERSION_ = '1.0.18';
+var APP_VERSION_ = '1.0.19';
 
 var ROUTES_ = {
   login: null,
@@ -58,7 +58,7 @@ var ROUTES_ = {
   saveRescueFlag: ['manager', 'admin'],
   actions: ['manager', 'admin'],
   saveAction: ['manager', 'admin'],
-  reports: ['manager', 'admin'],
+  reports: ['sales', 'manager', 'admin'],
 };
 
 // Routes that only read. Every other route can change figures, so the cached pages are dropped after it runs.
