@@ -108,7 +108,7 @@ test('reporting periods: the store month runs 2nd to 1st and the salesperson mon
 test('a duplicate or conflicting daily import never adds a second figure', () => {
   const { gs, tabs } = harness();
   const before = textGrid(tabs.CC_Daily);
-  assert.equal(gs.writeDailyAmount_({ reportType: 'NWDSR Written', start: '2026-10-15', storeTotal: 1410 }), 'imported');
+  assert.equal(gs.writeDailyAmount_({ reportType: 'NWDSR Written', start: '2026-10-15', storeTotal: 1410 }), 'same');
   assert.deepEqual(textGrid(tabs.CC_Daily), before);
   assert.equal(gs.writeDailyAmount_({ reportType: 'NWDSR Written', start: '2026-10-15', storeTotal: 9999 }), 'conflict');
   assert.deepEqual(textGrid(tabs.CC_Daily), before);

@@ -404,6 +404,46 @@ test('a report printed for exactly a finished month is its official final, recor
   ], 'each recorded original is archived once; the file sent for review is not');
 });
 
+test('reprocessing the October 16 manual backfill does not add a second store figure', () => {
+  const tabs = store();
+  // Prior days plus the verified October 16 written line. Delivered and PERQ were never entered.
+  tabs.CC_Daily = [
+    ['date', 'snap_written', 'nwdsr_written', 'nwdsr_delivered'],
+    ['2026-10-15', 1410, 109993, 104220],
+    ['2026-10-16', 7432, 10495, ''],
+  ];
+  const { send, gs } = boot(tabs, '2026-10-18');
+  const before = JSON.stringify(tabs.CC_Daily);
+  const snap = send('2026-10-16', 'output (1).pdf', snapPdf('2026-10-16', 7432, [['NASSIF, TARIK', 3000], ['MONTES, ERIC', 4336], ['DELSOLAR, RENZO', 96]]));
+  const written = send('2026-10-16', 'output.pdf', nwdsrPdf('written', '2026-10-16', '2026-10-16', 10495, 5));
+  assert.equal(snap.status, 'Already on file');
+  assert.equal(written.status, 'Already on file');
+  assert.match(written.message, /Original file output\.pdf; source date 2026-10-16/);
+  assert.match(written.message, /manual backfill or earlier import was not overwritten/);
+  assert.equal(JSON.stringify(tabs.CC_Daily), before);
+  assert.equal(tabs.CC_Daily!.filter((row) => row[0] === '2026-10-16').length, 1);
+  const writtenMtd = tabs.CC_Daily!.slice(1).reduce((sum, row) => sum + Number(row[2] || 0), 0);
+  assert.equal(writtenMtd, 120488);
+  const again = send('2026-10-16', 'output-resaved.pdf', nwdsrPdf('written', '2026-10-16', '2026-10-16', 10495, 5, '\n%again'));
+  assert.equal(again.status, 'Already on file');
+  assert.equal(JSON.stringify(tabs.CC_Daily), before);
+  const view = plain(gs.uploads_({ date: '2026-10-16', session: manager }));
+  const status = Object.fromEntries(view.checklist.map((item: any) => [item.key, item.status]));
+  assert.equal(status.nwdsrWritten, 'Imported');
+  assert.equal(status.nwdsrDelivered, 'Missing');
+  assert.equal(status.perqLocation, 'Missing');
+  assert.equal(status.perqSalesperson, 'Missing');
+  const delivered = send('2026-10-16', 'delivered.pdf', nwdsrPdf('delivered', '2026-10-16', '2026-10-16', 2502));
+  assert.equal(delivered.status, 'Imported');
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-16')![3], 2502);
+  const repeat = send('2026-10-16', 'delivered-again.pdf', nwdsrPdf('delivered', '2026-10-16', '2026-10-16', 2502, 2, '\n%copy'));
+  assert.equal(repeat.status, 'Already on file');
+  assert.equal(tabs.CC_Daily!.filter((row) => row[0] === '2026-10-16').length, 1);
+  const after = plain(gs.uploads_({ date: '2026-10-16', session: manager }));
+  assert.equal(after.checklist.find((item: any) => item.key === 'nwdsrDelivered').status, 'Imported');
+  assert.equal(after.checklist.find((item: any) => item.key === 'perqLocation').status, 'Missing');
+});
+
 test('the report still running is not a final: the month must have ended before the report was imported', () => {
   const { send, tabs } = boot(store(), '2026-11-01');
   const early = send('2026-11-01', 'mtd.pdf', nwdsrPdf('written', '2026-10-02', '2026-11-01', 400000));
