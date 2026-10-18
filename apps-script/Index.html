@@ -117,6 +117,7 @@
     .report-chip.pending { color: #6a5208; border-color: #b8860b; }
     .report-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
     .report-cols ol { margin: 2px 0 0; padding-left: 16px; font-size: 12px; }
+    .report-notes i { display: block; height: 18px; border-bottom: 1px solid #8aa4ad; margin-top: 8px; }
     .report-sheet h2 { margin: 8px 0 2px; }
     @media (max-width: 980px) {
       .score-row, .kpi-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -438,6 +439,13 @@
       body.print-report #report-sheet .report-kpis { margin: 2px 0; gap: 3px; }
       body.print-report #report-sheet h2 { margin: 3px 0 1px; font-size: 11px; }
       body.print-report #report-sheet { break-inside: avoid; page-break-after: avoid; }
+      body.print-report #report-sheet.report-individual table td:nth-child(5),
+      body.print-report #report-sheet.report-individual table th:nth-child(5) { display: none; }
+      body.print-report #report-sheet.report-individual table td,
+      body.print-report #report-sheet.report-individual table th { font-size: 11px; line-height: 1.2; padding: 1px 3px; }
+      body.print-report #report-sheet.report-individual h2 { margin: 3px 0 1px; }
+      body.print-report #report-sheet.report-individual ol { margin: 0; font-size: 11px; }
+      body.print-report #report-sheet.report-individual .report-notes i { height: 12px; margin-top: 3px; }
       html:has(body.print-mtd), body.print-mtd { background: white !important; }
       body.print-mtd .wrap { padding: 0; max-width: 7.6in; }
       body.print-mtd #screen > :not(#brief-mtd) { display: none !important; }
@@ -511,8 +519,9 @@
   <script>
     var token = '';
     var role = '';
+    var ownReport = false;
     var screen = 'home';
-    var reportQuery = { kind: 'daily', date: '', start: '', end: '', span: 'completed' };
+    var reportQuery = { kind: 'daily', date: '', start: '', end: '', span: 'completed', name: '' };
     var DISPLAY_REFRESH_MS = 30 * 60 * 1000;
     var displayVersion = '';
     var displayStamp = '';
@@ -576,6 +585,8 @@
       if (displayTimer) { clearInterval(displayTimer); displayTimer = null; }
       sessionStorage.removeItem('cc-token');
       sessionStorage.removeItem('cc-role');
+      sessionStorage.removeItem('cc-own-report');
+      ownReport = false;
       closeDocViewer();
       docBlobs = {};
       docCache = null;
@@ -592,6 +603,7 @@
       if (role !== 'sales') items.splice(13, 0, ['brief', 'Manager brief']);
       if (role !== 'sales') items.splice(14, 0, ['actions', 'Actions']);
       if (role !== 'sales') items.splice(15, 0, ['reports', 'Reports']);
+      else if (ownReport) items.push(['reports', 'My report']);
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['delivery', 'Delivery rescue'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
@@ -1576,8 +1588,9 @@
     function reportRequest() {
       var extra = { kind: reportQuery.kind || 'daily' };
       if (extra.kind === 'daily' && reportQuery.date) extra.date = reportQuery.date;
-      if (extra.kind === 'weekly') {
+      if (extra.kind === 'weekly' || extra.kind === 'individual') {
         extra.span = reportQuery.span || 'completed';
+        if (extra.kind === 'individual' && reportQuery.name) extra.name = reportQuery.name;
         if (extra.span !== 'week-to-date') {
           if (reportQuery.start) extra.start = reportQuery.start;
           if (reportQuery.end) extra.end = reportQuery.end;
@@ -1622,6 +1635,31 @@
         '<h2>People</h2><div class="report-cols"><div><h3>Top associates</h3>' + top + '<p class="report-foot">' + esc(people.source || '') + '</p></div><div><h3>Coaching</h3>' + coach + '<p class="report-foot">' + esc(people.coachingSource || '') + '</p></div><div><h3>New hires</h3><p>' + hires + '</p></div></div>' +
         '<div class="report-cols"><div><h2>Wins</h2>' + list(summary.wins) + '</div><div><h2>Needs attention</h2>' + list(summary.attention) + '</div><div><h2>Coming week</h2>' + list(summary.priorities) + '</div></div>' };
     }
+    function renderIndividualReport(data) {
+      reportQuery.span = data.span || 'completed';
+      reportQuery.name = data.name || '';
+      reportQuery.start = data.period && data.period.start || '';
+      reportQuery.end = data.period && data.period.end || '';
+      var coaching = data.coaching || {};
+      function rows(lines) {
+        return (lines || []).map(function (line) {
+          return '<tr class="' + esc(line.status) + '"><td class="measure">' + esc(line.label) + '</td><td>' + esc(line.result) + '</td><td>' + esc(line.goal || '') + '</td><td>' + reportMark(line) + '</td><td>' + esc(line.source) + '</td></tr>';
+        }).join('');
+      }
+      function list(items) { return (items || []).length ? '<ol>' + items.map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ol>' : '<p>None verified.</p>'; }
+      var people = (data.associates || []).map(function (person) {
+        return '<option value="' + esc(person) + '"' + (person === data.name ? ' selected' : '') + '>' + esc(person) + '</option>';
+      }).join('');
+      var who = data.access && data.access.self ? '' : '<label>Associate<select id="report-name">' + people + '</select></label>';
+      var span = '<label>Period<select id="report-span"><option value="completed"' + (data.span === 'completed' ? ' selected' : '') + '>Completed week</option><option value="week-to-date"' + (data.span === 'week-to-date' ? ' selected' : '') + '>Week to date</option></select></label>';
+      var dates = data.span === 'week-to-date' ? '' : '<label>Week containing<input id="report-end" type="date" value="' + esc(reportQuery.end) + '"></label>';
+      return { controls: who + span + dates, body: '<p class="report-badge ' + (data.partial ? 'partial' : 'complete') + '">' + esc(data.partialLabel || '') + (data.newHire ? ' · NEW HIRE' : '') + '</p><h1>' + esc(data.title) + '</h1><p class="report-verify">' + esc(data.verification) + '</p>' +
+        '<h2>Performance</h2><table><thead><tr><th>Measure</th><th>Result</th><th>Goal</th><th>Versus goal</th><th>Source</th></tr></thead><tbody>' + rows(data.performance) + '</tbody></table>' +
+        '<h2>Sales quality · salesperson month, not this week</h2><table><thead><tr><th>Measure</th><th>Result</th><th>Goal</th><th>Versus goal</th><th>Source</th></tr></thead><tbody>' + rows(data.quality) + '</tbody></table>' +
+        '<h2>Opportunity</h2><ol>' + (data.opportunity || []).map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ol>' +
+        '<div class="report-cols"><div><h2>Strengths</h2>' + list(coaching.strengths) + '</div><div><h2>Improve</h2>' + list(coaching.improvements) + '</div><div><h2>Next week</h2><p>' + esc(coaching.goal || '') + '</p></div></div>' +
+        '<h2>Manager notes</h2><p class="report-foot">' + esc(coaching.notes || '') + '</p><div class="report-notes"><i></i><i></i><i></i></div>' };
+    }
     function renderReports(data) {
       reportQuery.kind = data.kind || reportQuery.kind || 'daily';
       reportQuery.date = data.date || reportQuery.date || '';
@@ -1633,20 +1671,20 @@
       }).join('');
       var priorities = (data.priorities || []).map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('');
       var winners = data.winners || {};
-      var weekly = data.layout === 'weekly' ? renderWeeklyReport(data) : null;
+      var weekly = data.layout === 'weekly' ? renderWeeklyReport(data) : (data.layout === 'individual' ? renderIndividualReport(data) : null);
       var period = weekly ? weekly.controls : (data.kind === 'daily'
         ? '<label>Business day<input id="report-date" type="date" value="' + esc(data.date || '') + '"></label>'
         : '<label>Period start<input id="report-start" type="date" value="' + esc((data.period && data.period.start) || reportQuery.start || '') + '"></label><label>Period end<input id="report-end" type="date" value="' + esc((data.period && data.period.end) || reportQuery.end || '') + '"></label>');
       document.getElementById('header-note').textContent = 'Reports · ' + (data.displayDate || data.kind) + ' · no email sent';
       document.getElementById('screen').innerHTML = '<div class="report-controls noprint"><div class="nav" id="report-kinds">' + kinds + '</div>' + period +
         '<button type="button" id="report-apply">Show report</button><button type="button" id="report-print"' + (data.ready ? '' : ' disabled') + '>Print</button><button type="button" id="report-pdf"' + (data.pdf ? '' : ' disabled') + '>Download PDF</button></div>' +
-        '<article id="report-sheet" class="report-sheet"><p class="report-kicker">KANE\'S FURNITURE · STORE 17</p>' +
+        '<article id="report-sheet" class="report-sheet' + (data.layout === 'individual' ? ' report-individual' : '') + '"><p class="report-kicker">KANE\'S FURNITURE · STORE 17</p>' +
         (weekly ? weekly.body : ('<h1>' + esc(data.title || 'Report') + '</h1><p class="report-verify">' + esc(data.verification || '') + '</p>' +
         (data.ready ? '<table><thead><tr><th>Measure</th><th>Result</th><th>Goal</th><th>Versus goal</th><th>Source</th></tr></thead><tbody>' + rows + '</tbody></table>' +
           '<h2>Sales winners · ' + esc(winners.date || '') + '</h2><p>' + esc(winners.status === 'pending' ? 'Pending' : winners.text) + '</p><p class="report-foot">' + esc(winners.source || '') + (winners.quiet && winners.quiet !== 'Pending' ? ' No written sale: ' + winners.quiet : '') + '</p>' +
           '<h2>Management priorities</h2>' + (priorities ? '<ol>' + priorities + '</ol>' : '<p>No additional priority is supported by verified data.</p>') +
           '<p class="report-foot">' + esc(data.prioritySource || '') + '</p>' : '<p>' + esc(data.notice || 'This report is not built yet.') + '</p>'))) +
-        '<p class="report-foot">' + esc(data.calendarNote || '') + ' Store month ' + esc(data.storePeriod || '') + '. Salesperson month ' + esc(data.individualPeriod || '') + '. No email sent.</p></article>';
+        '<p class="report-foot">' + esc(data.calendarNote || '') + (data.storePeriod ? ' Store month ' + esc(data.storePeriod) + '.' : '') + ' Salesperson month ' + esc(data.individualPeriod || '') + '. No email sent.</p></article>';
       Array.prototype.forEach.call(document.querySelectorAll('[data-report-kind]'), function (button) {
         button.addEventListener('click', function () {
           reportQuery.kind = button.getAttribute('data-report-kind');
@@ -1659,10 +1697,12 @@
         var start = document.getElementById('report-start');
         var end = document.getElementById('report-end');
         var span = document.getElementById('report-span');
+        var person = document.getElementById('report-name');
         if (day) reportQuery.date = day.value;
         if (start) reportQuery.start = start.value;
         if (end) reportQuery.end = end.value;
         if (span) reportQuery.span = span.value;
+        if (person) reportQuery.name = person.value;
         api('reports', reportRequest()).then(renderReports).catch(function (error) { document.getElementById('header-note').textContent = error.message; });
       });
       var print = document.getElementById('report-print');
@@ -1681,7 +1721,8 @@
         var url = URL.createObjectURL(blob);
         var link = document.createElement('a');
         link.href = url;
-        link.download = (data.layout === 'weekly' ? 'Store17-Weekly-Executive-Report-' : 'Store17-Daily-Management-Summary-') + ((data.period && data.period.end) || data.date || 'report') + '.pdf';
+        var fileName = data.layout === 'individual' ? 'Store17-Weekly-Salesperson-Report-' : (data.layout === 'weekly' ? 'Store17-Weekly-Executive-Report-' : 'Store17-Daily-Management-Summary-');
+        link.download = fileName + ((data.period && data.period.end) || data.date || 'report') + '.pdf';
         link.click();
         setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
       });
@@ -4440,8 +4481,11 @@
       api('login', { username: document.getElementById('username').value, password: document.getElementById('password').value }).then(function (result) {
         token = result.token;
         role = result.role;
+        ownReport = !!result.ownReport;
         sessionStorage.setItem('cc-token', token);
         sessionStorage.setItem('cc-role', role);
+        if (ownReport) sessionStorage.setItem('cc-own-report', '1');
+        else sessionStorage.removeItem('cc-own-report');
         document.getElementById('login').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
         openScreen('home');
@@ -4451,6 +4495,7 @@
     document.getElementById('display-refresh').addEventListener('click', function () { refreshDisplayed(true); });
     token = sessionStorage.getItem('cc-token') || '';
     role = sessionStorage.getItem('cc-role') || '';
+    ownReport = sessionStorage.getItem('cc-own-report') === '1';
     if (token && role) {
       document.getElementById('login').classList.add('hidden');
       document.getElementById('app').classList.remove('hidden');

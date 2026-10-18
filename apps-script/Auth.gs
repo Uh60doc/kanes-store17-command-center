@@ -39,10 +39,13 @@ function login_(payload) {
   var token = Utilities.getUuid() + Utilities.getUuid();
   saveSession_(token, {
     role: role,
+    username: username,
     epoch: props.getProperty('epoch_' + role) || '0',
     expires: Date.now() + SESSION_MS_,
   });
-  return { token: token, role: role };
+  var ownName = '';
+  if (role === 'sales' && typeof employeeReportOn_ === 'function' && employeeReportOn_()) ownName = String(config_()['employee_report_' + username] || '').trim();
+  return { token: token, role: role, ownReport: !!ownName, ownName: ownName };
 }
 
 function requireSession_(token) {
