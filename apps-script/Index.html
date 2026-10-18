@@ -217,7 +217,10 @@
     .coach-opp { margin: 8px 0; padding: 8px 10px; border-left: 3px solid #0e7c86; background: #f4f8f8; }
     .coach-opp p { margin: 2px 0; font-size: 13px; }
     .coach-opp strong { color: #0f2a3a; }
-    @media (max-width: 800px) { .rec-cards { grid-template-columns: 1fr; } }
+    .leak-split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .leak-big { font-size: 34px; font-weight: 750; color: #f3d48a; margin: 4px 0; }
+    .leak-tabs button.active { background: #0e7c86; }
+    @media (max-width: 800px) { .rec-cards, .leak-split { grid-template-columns: 1fr; } }
     @media (max-width: 720px) { .opp-compare { grid-template-columns: 1fr; } }
     body.print-eval .eval-print { display: block; margin-top: 16px; }
     .ep-page { background: white; color: #1b2833; font-family: Calibri, "Segoe UI", Arial, sans-serif; font-size: 11pt; line-height: 1.3; max-width: 8.5in; margin: 0 auto 16px; padding: 0.4in; }
@@ -509,7 +512,8 @@
       if (role !== 'sales') items.splice(8, 0, ['coaching', 'Coaching']);
       if (role !== 'sales') items.splice(9, 0, ['evalPrep', 'Eval prep']);
       if (role !== 'sales') items.splice(10, 0, ['recovery', 'Recovery']);
-      if (role !== 'sales') items.splice(11, 0, ['brief', 'Manager brief']);
+      if (role !== 'sales') items.splice(11, 0, ['leakage', 'Leakage']);
+      if (role !== 'sales') items.splice(12, 0, ['brief', 'Manager brief']);
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['orders', 'Open orders'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
@@ -1304,6 +1308,112 @@
         }).catch(function (error) { alert(error.message); });
       });
       paint();
+    }
+    function leakBlank(value) { return value === null || value === undefined || value === ''; }
+    function leakExtra(count, opportunities, ratio, dollars) {
+      if (leakBlank(count) || leakBlank(opportunities) || leakBlank(ratio) || leakBlank(dollars)) return null;
+      var extra = Number(ratio) * Number(opportunities) - Number(count);
+      if (extra <= 0) return 0;
+      return Math.round(extra * Number(dollars) * 100) / 100;
+    }
+    function leakTicket(orders, sales, goal) {
+      if (leakBlank(orders) || leakBlank(sales) || !Number(orders) || leakBlank(goal)) return null;
+      var hypothetical = Math.round(Number(orders) * Number(goal) * 100) / 100;
+      var opportunity = Math.round((hypothetical - Number(sales)) * 100) / 100;
+      return opportunity > 0 ? opportunity : 0;
+    }
+    function leakRank(items) {
+      return items.filter(function (item) { return item.dollars !== null && item.dollars > 0; }).sort(function (left, right) { return right.dollars - left.dollars; });
+    }
+    function leakBiggest(ranked) {
+      for (var i = 0; i < ranked.length; i += 1) if (ranked[i].kind === 'incremental') return ranked[i];
+      return null;
+    }
+    function renderLeakage(data) {
+      var store = data.store || {};
+      var people = data.people || [];
+      document.getElementById('header-note').textContent = 'Sales leakage · store ' + (store.period || '') + ' · illustrations, not lost revenue';
+      document.getElementById('screen').innerHTML = '<section class="opp-layout"><p class="opp-banner">' + esc(data.notice || '') + '</p><div class="leak-tabs noprint"><button type="button" id="leak-store" class="active">Store</button> <button type="button" id="leak-people">Sales team</button></div><div id="leak-body"></div></section>';
+      function moneyOr(value) { return leakBlank(value) ? 'Pending' : money(value); }
+      function pctOr(value) { return leakBlank(value) ? 'Pending' : percent(value); }
+      function biggestText(item) {
+        if (!item) return '<p class="leak-big">Pending</p><p class="sub">No priced incremental illustration is available. Pending is not zero, and closing is not added to average ticket.</p>';
+        return '<p class="sub">Biggest incremental illustration</p><p class="leak-big">' + money(item.dollars) + '</p><p><strong>' + esc(item.label) + '</strong></p><p class="sub">' + esc(item.note || '') + '</p>';
+      }
+      function showStore() {
+        document.getElementById('leak-store').className = 'active';
+        document.getElementById('leak-people').className = '';
+        document.getElementById('leak-body').innerHTML = '<article class="opp-card" id="leak-hero"></article><div class="opp-controls noprint"><label>Closing goal %<input id="leak-close" type="number" min="0" max="100" step="1" value="' + Math.round((store.closingGoal || 0.5) * 100) + '"></label><label>Ticket goal<input id="leak-ticket" type="number" min="0" step="50" value="' + (store.ticketGoal || 2500) + '"></label></div><div class="leak-split"><article class="opp-card"><h3>Closing</h3><p id="leak-close-now"></p><p class="opp-amt" id="leak-close-dollars"></p><p class="sub">NWDSR purchasing customers ' + (leakBlank(store.customers) ? 'Pending' : store.customers) + '. PERQ opportunities ' + (leakBlank(store.opportunities) ? 'Pending' : store.opportunities) + (store.closingThrough ? ' through ' + esc(store.closingThrough) : '') + '. Dollars per purchasing customer ' + moneyOr(store.dollarsPerCustomer) + '.</p></article><article class="opp-card"><h3>Average ticket</h3><p id="leak-ticket-now"></p><p class="opp-amt" id="leak-ticket-dollars"></p><p class="sub">' + esc(store.ordersNote || '') + '</p></article></div><article class="opp-card"><h3>On file</h3><p>Written ' + moneyOr(store.written) + ' of ' + moneyOr(store.writtenGoal) + '.</p><p class="sub">' + esc(store.calendar || '') + ' Data Analysis written orders: ' + (leakBlank(store.orders) ? 'Pending' : store.orders) + '.</p></article>';
+        function paint() {
+          var ratio = Number(document.getElementById('leak-close').value) / 100;
+          var goal = Number(document.getElementById('leak-ticket').value);
+          var closing = leakExtra(store.customers, store.opportunities, ratio, store.dollarsPerCustomer);
+          var ticket = leakTicket(store.orders, null, goal);
+          var ranked = leakRank([
+            { key: 'closing', label: 'Store closing', kind: 'incremental', dollars: closing, note: 'Extra purchasing customers at the current dollars per customer. Not added to the ticket illustration.' },
+            { key: 'ticket', label: 'Store average ticket', kind: 'incremental', dollars: ticket, note: 'Same written-order count at the ticket goal. Store orders are Pending, so this stays Pending.' },
+          ]);
+          document.getElementById('leak-hero').innerHTML = '<h3>Biggest opportunity today</h3>' + biggestText(leakBiggest(ranked));
+          document.getElementById('leak-close-now').textContent = 'Closing ' + pctOr(store.closingRatio) + ' versus ' + percent(ratio) + '.';
+          document.getElementById('leak-close-dollars').textContent = moneyOr(closing);
+          document.getElementById('leak-ticket-now').textContent = 'Ticket goal ' + money(goal) + ' on the same orders.';
+          document.getElementById('leak-ticket-dollars').textContent = moneyOr(ticket);
+        }
+        ['leak-close', 'leak-ticket'].forEach(function (id) { document.getElementById(id).addEventListener('input', paint); });
+        paint();
+      }
+      function showPeople() {
+        document.getElementById('leak-store').className = '';
+        document.getElementById('leak-people').className = 'active';
+        var options = people.map(function (person) { return '<option>' + esc(person.name) + '</option>'; }).join('');
+        var board = people.map(function (person) {
+          var top = person.biggest;
+          return '<tr><td>' + esc(person.name) + (person.newHire ? ' <span class="coach-badge">NEW HIRE</span>' : '') + '</td><td>' + (top ? esc(top.label) : 'Pending') + '</td><td>' + (top ? money(top.dollars) : 'Pending') + '</td></tr>';
+        }).join('');
+        document.getElementById('leak-body').innerHTML = '<p class="sub">' + esc(data.individual.calendar || '') + ' ' + esc(data.individual.period || '') + '</p><article class="card kpi-wrap"><table class="kpi"><tr><th>Associate</th><th>Biggest incremental illustration</th><th>Dollars</th></tr>' + board + '</table><p class="sub">The dollar column is one illustration. It is not closing plus ticket, and it is not lost revenue.</p></article><div class="opp-pick noprint"><label>Associate<select id="leak-person">' + options + '</select></label></div><div class="opp-controls noprint"><label>Closing goal %<input id="leak-person-close" type="number" min="0" max="100" step="1"></label><label>Ticket goal<input id="leak-person-ticket" type="number" min="0" step="50"></label></div><article class="opp-card" id="leak-person-hero"></article><div class="leak-split"><article class="opp-card"><h3>Closing</h3><p id="leak-person-close-now"></p><p class="opp-amt" id="leak-person-close-dollars"></p></article><article class="opp-card"><h3>Average ticket</h3><p id="leak-person-ticket-now"></p><p class="opp-amt" id="leak-person-ticket-dollars"></p></article></div><article class="opp-card"><h3>Bedding and attachments</h3><div id="leak-attach"></div></article>';
+        function selected() {
+          var name = document.getElementById('leak-person').value;
+          for (var i = 0; i < people.length; i += 1) if (people[i].name === name) return people[i];
+          return people[0];
+        }
+        function fill() {
+          var person = selected();
+          if (!person) return;
+          document.getElementById('leak-person-close').value = Math.round((person.closingGoal || 0.5) * 100);
+          document.getElementById('leak-person-ticket').value = person.ticketGoal || 2500;
+          paint();
+        }
+        function paint() {
+          var person = selected();
+          if (!person) return;
+          var ratio = Number(document.getElementById('leak-person-close').value) / 100;
+          var goal = Number(document.getElementById('leak-person-ticket').value);
+          var closing = leakExtra(person.closingOrders, person.opportunities, ratio, person.average);
+          var ticket = leakTicket(person.orders, person.groupSales, goal);
+          var ranked = leakRank([
+            { key: 'closing', label: 'Closing ratio', kind: 'incremental', dollars: closing, note: 'Extra orders at the current average ticket. The ticket goal is not included.' },
+            { key: 'ticket', label: 'Average ticket', kind: 'incremental', dollars: ticket, note: 'The same Group 17 orders at the ticket goal. This is not added to closing.' },
+            { key: 'bedding', label: 'Bedding mix', kind: 'mix', dollars: person.bedding, note: 'Short of the bedding mix on sales already written. Not new written sales.' },
+          ]);
+          document.getElementById('leak-person-hero').innerHTML = '<h3>Biggest opportunity today · ' + esc(person.name) + (person.newHire ? ' · NEW HIRE' : '') + '</h3>' + biggestText(leakBiggest(ranked)) + '<p class="sub">SNAP written ' + moneyOr(person.snapWritten) + ' of ' + moneyOr(person.monthlyGoal) + '. That remaining goal is not ranked, because the month is still open.</p>';
+          document.getElementById('leak-person-close-now').textContent = pctOr(person.closingRatio) + ' versus ' + percent(ratio) + ' · ' + (leakBlank(person.closingOrders) ? 'Pending' : person.closingOrders) + ' orders and ' + (leakBlank(person.opportunities) ? 'Pending' : person.opportunities) + ' PERQ opportunities' + (person.closingThrough ? ' through ' + person.closingThrough : '') + '.';
+          document.getElementById('leak-person-close-dollars').textContent = moneyOr(closing);
+          document.getElementById('leak-person-ticket-now').textContent = moneyOr(person.average) + ' versus ' + money(goal) + ' on ' + (leakBlank(person.orders) ? 'Pending' : person.orders) + ' Group 17 orders' + (person.writtenThrough ? ' through ' + person.writtenThrough : '') + '.';
+          document.getElementById('leak-person-ticket-dollars').textContent = moneyOr(ticket);
+          var rows = '<p>Bedding ' + pctOr(person.beddingRate) + ' versus ' + pctOr(person.beddingGoal) + '. Mix illustration ' + moneyOr(person.bedding) + '.</p>';
+          rows += (person.attachments || []).map(function (line) {
+            var count = line.needed === null || line.needed === undefined ? 'Pending' : line.needed + ' more';
+            return '<p>' + esc(line.label) + ' ' + pctOr(line.actual) + ' versus ' + pctOr(line.goal) + '. Additional attachments ' + count + '. Dollars Pending.</p>';
+          }).join('');
+          document.getElementById('leak-attach').innerHTML = rows;
+        }
+        document.getElementById('leak-person').addEventListener('change', fill);
+        ['leak-person-close', 'leak-person-ticket'].forEach(function (id) { document.getElementById(id).addEventListener('input', paint); });
+        fill();
+      }
+      document.getElementById('leak-store').addEventListener('click', showStore);
+      document.getElementById('leak-people').addEventListener('click', showPeople);
+      showStore();
     }
     function renderPeople(data) {
       peopleCache = data.people || [];
@@ -3665,6 +3775,7 @@
       else if (name === 'recovery') renderRecovery(data);
       else if (name === 'coaching') renderCoaching(data);
       else if (name === 'evalPrep') renderEvalPrep(data);
+      else if (name === 'leakage') renderLeakage(data);
       else if (name === 'morning') renderMorning(data);
       else if (name === 'brief') renderBrief(data);
       else if (name === 'health') renderHealth(data);
