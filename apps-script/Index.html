@@ -363,6 +363,11 @@
       body.print-brief header.brand, body.print-brief .section-title, body.print-brief .noprint, body.print-brief #brief-mtd, body.print-brief #brief-admin { display: none !important; }
       body.print-brief #brief-startup { margin: 0; border: 0; padding: 0; border-radius: 0; background: white; overflow: visible; }
       body.print-brief #brief-startup, body.print-brief #brief-startup * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html:has(body.print-actions), body.print-actions { background: white !important; color: black !important; }
+      body.print-actions .wrap { padding: 0; max-width: 7.6in; }
+      body.print-actions header.brand, body.print-actions .section-title, body.print-actions .noprint { display: none !important; }
+      body.print-actions #action-sheet, body.print-actions #action-sheet * { color: black; background: white; }
+      body.print-actions #action-sheet { border: 0; }
       html:has(body.print-mtd), body.print-mtd { background: white !important; }
       body.print-mtd .wrap { padding: 0; max-width: 7.6in; }
       body.print-mtd #screen > :not(#brief-mtd) { display: none !important; }
@@ -514,6 +519,7 @@
       if (role !== 'sales') items.splice(11, 0, ['recovery', 'Recovery']);
       if (role !== 'sales') items.splice(12, 0, ['leakage', 'Leakage']);
       if (role !== 'sales') items.splice(13, 0, ['brief', 'Manager brief']);
+      if (role !== 'sales') items.splice(14, 0, ['actions', 'Actions']);
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['delivery', 'Delivery rescue'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
@@ -1484,6 +1490,98 @@
     var peopleEvaluation = null;
     var peopleToday = '';
     function canManage() { return role === 'manager' || role === 'admin'; }
+    function actionOptions(list, selected) {
+      return list.map(function (item) {
+        var value = item.key || item;
+        var label = item.label || item;
+        return '<option value="' + esc(value) + '"' + (value === selected ? ' selected' : '') + '>' + esc(label) + '</option>';
+      }).join('');
+    }
+    function actionLine(action) {
+      var overdue = action.due && action.due < (action.today || '');
+      return '<tr><td>' + esc(action.description) + '<br><span class="sub">' + esc(action.lane === 'operations' ? 'Operations' : 'Sales') + '</span></td><td>' + esc(action.assignee) + '</td><td>' + esc(action.due) + (overdue ? ' · overdue' : '') + '</td><td>' + esc(action.status) + '</td><td>' + esc(action.note || '') + '</td></tr>';
+    }
+    function renderActions(data) {
+      var today = data.today || '';
+      (data.priorities || []).forEach(function (action) { action.today = today; });
+      (data.open || []).forEach(function (action) { action.today = today; });
+      var priorities = (data.priorities || []).map(function (action, index) {
+        return '<article class="opp-card"><h3>' + (index + 1) + '. ' + esc(action.description) + '</h3><p>' + esc(action.assignee) + ' · due ' + esc(action.due) + ' · ' + esc(action.status) + '</p><p class="sub">' + esc(action.lane === 'operations' ? 'Operations' : 'Sales') + (action.note ? ' · ' + esc(action.note) : '') + '</p></article>';
+      }).join('') || '<p>No open actions yet. Approve a suggestion or add one below. Nothing is invented.</p>';
+      var overdue = (data.overdue || []).map(function (action) {
+        return '<li>' + esc(action.description) + ' · ' + esc(action.assignee) + ' · due ' + esc(action.due) + '</li>';
+      }).join('');
+      var suggestions = (data.suggestions || []).map(function (item) {
+        return '<article class="opp-card"><h3>' + esc(item.description) + '</h3><p class="sub">' + esc(item.basis || '') + '</p><p class="sub">' + esc(item.laneNote || '') + ' ' + esc(item.approval || '') + '</p><p class="summary-actions"><button type="button" data-approve="' + esc(item.key) + '">Approve and assign</button></p></article>';
+      }).join('') || '<p>No new verified suggestion is waiting. A missing report or a gap that is already an open action is not suggested again.</p>';
+      var editable = (data.open || []).concat(data.blocked || []);
+      var openRows = editable.map(function (action) {
+        var assignees = (data.assignees || []).slice();
+        if (action.assignee && assignees.indexOf(action.assignee) === -1) assignees.push(action.assignee);
+        return '<tr data-action="' + esc(action.id) + '"><td>' + esc(action.description) + '<br><span class="sub">' + esc(action.lane === 'operations' ? 'Operations' : 'Sales') + '</span></td><td><select data-field="assignee">' + actionOptions(assignees, action.assignee) + '</select></td><td><input data-field="due" type="date" value="' + esc(action.due) + '"></td><td><select data-field="status">' + actionOptions(data.statuses || [], action.status) + '</select></td><td><input data-field="note" maxlength="240" value="' + esc(action.note) + '"></td><td class="noprint"><button type="button" data-save-action="' + esc(action.id) + '">Save</button></td></tr>';
+      }).join('');
+      var history = (data.history || []).map(function (action) {
+        action.today = '9999-99-99';
+        return actionLine(action);
+      }).join('');
+      document.getElementById('header-note').textContent = 'Actions · ' + today + ' · no messages sent';
+      document.getElementById('screen').innerHTML = '<section id="action-sheet"><p class="sub">' + esc(data.notice) + '</p><p class="sub">' + esc(data.boundary) + '</p>' +
+        '<p class="summary-actions noprint"><button type="button" id="action-print">Print daily task sheet</button></p>' +
+        '<h2>Today\'s top three</h2><div class="opp-grid">' + priorities + '</div>' +
+        '<article class="card"><h2>Overdue follow-up</h2>' + (overdue ? '<ul>' + overdue + '</ul>' : '<p>No overdue action. A reminder stays on this page. It is not emailed.</p>') + '</article>' +
+        '<h2 class="noprint">Suggestions waiting for approval</h2><div class="opp-grid noprint">' + suggestions + '</div>' +
+        '<article class="card noprint"><h2>Add an action</h2><label>Description<input id="action-description" maxlength="180" placeholder="Coach an associate, follow up on a missing report, or review a KPI"></label>' +
+        '<div class="opp-controls"><label>Lane<select id="action-lane">' + actionOptions(data.lanes || [], 'sales') + '</select></label><label>Assigned to<select id="action-assignee">' + actionOptions(data.assignees || [], 'Store manager') + '</select></label><label>Due<input id="action-due" type="date" value="' + esc(today) + '"></label><label>Status<select id="action-status">' + actionOptions(data.statuses || [], 'Open') + '</select></label></div>' +
+        '<label>Note<input id="action-note" maxlength="240"></label><p class="summary-actions"><button type="button" id="action-create">Save action</button></p><p id="action-error" class="warn"></p></article>' +
+        '<article class="card"><h2>Open, in progress, and blocked</h2><div class="table-wrap"><table><thead><tr><th>Action</th><th>Assigned</th><th>Due</th><th>Status</th><th>Note</th><th class="noprint"></th></tr></thead><tbody>' + (openRows || '<tr><td colspan="6">No open actions.</td></tr>') + '</tbody></table></div></article>' +
+        '<article class="card"><h2>Blocked</h2>' + ((data.blocked || []).map(function (action) { return '<p>' + esc(action.description) + ' · ' + esc(action.assignee) + (action.note ? ' · ' + esc(action.note) : '') + '</p>'; }).join('') || '<p>No blocked action.</p>') + '</article>' +
+        '<article class="card"><h2>Completed history</h2><div class="table-wrap"><table><thead><tr><th>Action</th><th>Assigned</th><th>Due</th><th>Status</th><th>Completion note</th></tr></thead><tbody>' + (history || '<tr><td colspan="5">Completed actions stay here. None are completed yet.</td></tr>') + '</tbody></table></div></article></section>';
+      document.getElementById('action-print').addEventListener('click', function () {
+        document.body.classList.add('print-actions');
+        window.print();
+      });
+      function save(body) {
+        api('saveAction', body).then(function (result) { renderActions(result.page); }).catch(function (error) {
+          var slot = document.getElementById('action-error');
+          if (slot) slot.textContent = error.message || 'The action was not saved.';
+        });
+      }
+      document.getElementById('action-create').addEventListener('click', function () {
+        save({
+          description: document.getElementById('action-description').value,
+          lane: document.getElementById('action-lane').value,
+          assignee: document.getElementById('action-assignee').value,
+          due: document.getElementById('action-due').value,
+          status: document.getElementById('action-status').value,
+          note: document.getElementById('action-note').value,
+        });
+      });
+      document.querySelectorAll('[data-approve]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var key = button.getAttribute('data-approve');
+          var item = (data.suggestions || []).filter(function (suggestion) { return suggestion.key === key; })[0];
+          if (!item) return;
+          save({ description: item.description, lane: item.lane, assignee: item.assignee, due: item.due, status: 'Open', note: item.basis || '', suggestionKey: item.key });
+        });
+      });
+      document.querySelectorAll('[data-save-action]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var row = button.closest('tr');
+          var id = button.getAttribute('data-save-action');
+          var current = editable.filter(function (action) { return action.id === id; })[0] || {};
+          save({
+            id: id,
+            description: current.description,
+            lane: current.lane,
+            assignee: row.querySelector('[data-field="assignee"]').value,
+            due: row.querySelector('[data-field="due"]').value,
+            status: row.querySelector('[data-field="status"]').value,
+            note: row.querySelector('[data-field="note"]').value,
+            suggestionKey: current.suggestionKey || '',
+          });
+        });
+      });
+    }
     var accelSide = 'written';
     var accelWho = 'store';
     function accelPct(value) {
@@ -2204,7 +2302,7 @@
       });
       bindEvalImport();
     }
-    window.addEventListener('afterprint', function () { document.body.classList.remove('print-eval', 'print-brief', 'print-mtd', 'print-coach', 'print-evalprep'); });
+    window.addEventListener('afterprint', function () { document.body.classList.remove('print-eval', 'print-brief', 'print-mtd', 'print-coach', 'print-evalprep', 'print-actions'); });
     var summaryCache = null;
     function drawSummary(name, start, end) {
       document.getElementById('screen').innerHTML = '<h2 class="section-title">Summary</h2>' + teamNav('summary') + '<p class="sub">Loading the associate summary…</p>';
@@ -4040,7 +4138,7 @@
       var active = document.activeElement;
       if (active && active.id !== 'display-refresh' && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return true;
       var body = document.body;
-      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd') || body.classList.contains('print-evalprep')) return true;
+      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd') || body.classList.contains('print-evalprep') || body.classList.contains('print-actions')) return true;
       return false;
     }
     function syncRefreshButton() {
@@ -4052,6 +4150,7 @@
       else if (name === 'bedding') renderBedding(data);
       else if (name === 'delivery') renderDelivery(data);
       else if (name === 'accel') renderAccelerator(data);
+      else if (name === 'actions') renderActions(data);
       else if (name === 'daily') renderDaily(data);
       else if (name === 'closing') renderClosing(data);
       else if (name === 'people') renderPeople(data);
@@ -4122,7 +4221,7 @@
     function openScreen(name) {
       screen = name;
       displayHold = false;
-      document.body.classList.remove('print-summary', 'print-eval', 'print-doc', 'print-brief', 'print-coach', 'print-evalprep');
+      document.body.classList.remove('print-summary', 'print-eval', 'print-doc', 'print-brief', 'print-coach', 'print-evalprep', 'print-actions');
       closeDocViewer();
       drawNav();
       var request = name === 'written' || name === 'delivered' ? 'home' : name;
