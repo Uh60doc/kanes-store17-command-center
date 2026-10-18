@@ -64,11 +64,6 @@ test('the daily summary uses Morning Start-Up figures and does not email', () =>
   assert.match(line(missing, 'written-mtd').source, new RegExp('through ' + writtenThrough));
   assert.match(line(missing, 'written-mtd').source, /not included/);
   assert.equal(line(missing, 'written-mtd').result, plain(gs.moneyText_(writtenMtd)));
-  const monthly = plain(gs.reportCenter_({ session, kind: 'monthly' }));
-  assert.equal(monthly.ready, false);
-  assert.equal(monthly.lines.length, 0);
-  assert.equal(monthly.pdf, '');
-  assert.match(monthly.notice, /not built yet/);
   const pdf = Buffer.from(page.pdf, 'base64').toString('latin1');
   assert.match(pdf, /^%PDF-1\.4/);
   assert.equal((pdf.match(/\/Type \/Page[^s]/g) || []).length, 1);
@@ -181,5 +176,73 @@ test('an individual weekly report uses SNAP for volume and keeps Group 17 and PE
   const after = plain(gs.home_({ session }));
   assert.equal(after.month.written, before.month.written);
   assert.equal(after.month.delivered, before.month.delivered);
+  assert.equal(mail.length, 0);
+});
+
+test('the monthly executive scorecard uses NWDSR store dollars and does not invent last year', () => {
+  const { gs, tabs, mail, setToday } = harness();
+  setToday('2026-10-18');
+  const dailyRows = tabs.CC_Daily.length;
+  const kpiRows = (tabs.CC_Kpi || []).length;
+  const before = plain(gs.home_({ session }));
+  assert.throws(() => gs.reportCenter_({ session: { role: 'sales', username: 'sales17' }, kind: 'monthly' }));
+  const page = plain(gs.reportCenter_({ session, kind: 'monthly', date: '2026-10-18' }));
+  assert.equal(page.ready, true);
+  assert.equal(page.layout, 'monthly');
+  assert.equal(page.mail, false);
+  assert.equal(page.partial, true);
+  assert.equal(page.period.start, '2026-10-02');
+  assert.equal(page.period.end, '2026-11-01');
+  assert.match(page.displayDate, /October 2026/);
+  assert.match(page.individualPeriod, /2026-10-01 through 2026-10-31/);
+  assert.match(page.summary.priorities[0], /Written sales/);
+  const facts = plain(gs.dailyFacts_());
+  const closed = plain(gs.closedDates_());
+  const written = plain(gs.reportMonthFacts_('nwdsrWritten', facts, page.period, '2026-10-18', closed));
+  const delivered = plain(gs.reportMonthFacts_('nwdsrDelivered', facts, page.period, '2026-10-18', closed));
+  const row = (key: string) => page.rows.find((item: { key: string }) => item.key === key);
+  assert.equal(row('written').actual, written.value === null ? 'Pending' : plain(gs.moneyText_(written.value)));
+  assert.equal(row('written').budget, '$400,000');
+  assert.equal(row('written').ly, 'Pending');
+  assert.match(row('written').source, /NWDSR Written/);
+  assert.match(row('written').source, /SNAP is not used/);
+  const snapThrough = written.through ? plain(gs.sumField_(facts, 'snapWritten', '2026-10-02', written.through)) : null;
+  if (written.value !== null && snapThrough !== null && snapThrough !== written.value) {
+    assert.notEqual(row('written').actual, plain(gs.moneyText_(snapThrough)));
+  }
+  assert.equal(row('delivered').actual, delivered.value === null ? 'Pending' : plain(gs.moneyText_(delivered.value)));
+  assert.equal(row('delivered').budget, '$320,000');
+  assert.equal(row('delivered').ly, 'Pending');
+  assert.match(row('delivered').source, /NWDSR Delivered/);
+  ['closing', 'ticket', 'bedding', 'fabric', 'leather', 'power', 'pads', 'rugs'].forEach((key) => {
+    const item = row(key);
+    assert.ok(item, key);
+    assert.equal(typeof item.budget, 'string');
+    assert.equal(typeof item.ly, 'string');
+    assert.notEqual(item.ly, '');
+  });
+  assert.equal(row('bedding').ly, 'N/A');
+  assert.equal(page.summary.strengths.length, 3);
+  assert.equal(page.summary.priorities.length, 3);
+  assert.match(page.summary.focus, /focus/i);
+  assert.doesNotMatch(page.assessment, /because|due to|weather|promotion/i);
+  assert.match(page.calendarNote, /SNAP is not Store Written/);
+  assert.match(page.calendarNote, /2nd through the 1st/);
+  const headers = ['actual', 'progress', 'variance', 'budget', 'ly'];
+  page.rows.forEach((item: Record<string, string>) => {
+    headers.forEach((field) => assert.equal(typeof item[field], 'string'));
+  });
+  const pdf = Buffer.from(page.pdf, 'base64').toString('latin1');
+  assert.match(pdf, /^%PDF-1\.4/);
+  assert.equal((pdf.match(/\/Type \/Page[^s]/g) || []).length, 1);
+  assert.match(pdf, /MediaBox \[0 0 792 612\]/);
+  assert.match(pdf, /BUDGET/);
+  assert.match(pdf, /NWDSR LY/);
+  assert.match(pdf, /Monthly Executive Scorecard/);
+  const after = plain(gs.home_({ session }));
+  assert.equal(after.month.written, before.month.written);
+  assert.equal(after.month.delivered, before.month.delivered);
+  assert.equal(tabs.CC_Daily.length, dailyRows);
+  assert.equal((tabs.CC_Kpi || []).length, kpiRows);
   assert.equal(mail.length, 0);
 });
