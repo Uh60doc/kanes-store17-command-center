@@ -97,7 +97,7 @@ function reportKpiLine_(key, label, row, reportDate, sameMonth) {
   }
   var number = reportCompleteNumber_(!briefBlank_(row.written), row.written);
   var actual = number.pending ? null : number.value;
-  var scope = through ? ('Store month through ' + through + (through < reportDate ? '. Does not include ' + reportDate : '') + '. ' + (row.note || '')) : (row.note || 'Store month. Through date is Pending.');
+  var scope = through ? ('Store month through ' + through + (through < reportDate ? '. Does not include ' + reportDate + '.' : '.')) : 'Store-month through date is Pending.';
   return reportLine_(
     key,
     label,
@@ -144,12 +144,12 @@ function reportDaily_(payload, today) {
   var deliveredDay = reportCompleteNumber_(deliveredOnFile, row ? row.nwdsrDelivered : null);
   var dayNote = closed[date] ? ' The store was closed. Nothing was estimated.' : '';
   var lines = [
-    reportMoneyLine_('written', 'NWDSR Written', writtenDay.pending ? null : writtenDay.value, writtenPace, (writtenDay.pending ? 'NWDSR Written for ' + date + ' is not on file.' : labels.written + ' for ' + date) + dayNote),
-    reportMoneyLine_('delivered', 'NWDSR Delivered', deliveredDay.pending ? null : deliveredDay.value, deliveredPace, (deliveredDay.pending ? 'NWDSR Delivered for ' + date + ' is not on file.' : labels.delivered + ' for ' + date) + dayNote),
-    reportLine_('written-pace', 'Written pace', briefBlank_(writtenPace) ? 'Pending' : moneyText_(writtenPace), briefBlank_(budgets.written) ? 'Pending' : moneyText_(budgets.written), briefBlank_(writtenPace) ? 'Pending' : 'Required pace', briefBlank_(writtenPace) ? 'pending' : 'ready', 'Remaining store written budget divided by open days left, including ' + date + '. A saved goal counts only on the NWDSR basis.', null),
-    reportLine_('delivered-pace', 'Delivered pace', briefBlank_(deliveredPace) ? 'Pending' : moneyText_(deliveredPace), briefBlank_(budgets.delivered) ? 'Pending' : moneyText_(budgets.delivered), briefBlank_(deliveredPace) ? 'Pending' : 'Required pace', briefBlank_(deliveredPace) ? 'pending' : 'ready', 'Remaining store delivered budget divided by open days left, including ' + date + '.', null),
-    reportMoneyLine_('written-mtd', 'Written MTD', writtenThrough && writtenThrough <= date ? writtenMtd : null, budgets.written, writtenThrough ? ('NWDSR Written ' + store.start + ' through ' + writtenThrough + (writtenThrough < date ? '. ' + date + ' is not included.' : '')) : ('NWDSR Written month to date is Pending for ' + date)),
-    reportMoneyLine_('delivered-mtd', 'Delivered MTD', deliveredThrough && deliveredThrough <= date ? deliveredMtd : null, budgets.delivered, deliveredThrough ? ('NWDSR Delivered ' + store.start + ' through ' + deliveredThrough + (deliveredThrough < date ? '. ' + date + ' is not included.' : '')) : ('NWDSR Delivered month to date is Pending for ' + date)),
+    reportMoneyLine_('written', 'NWDSR Written', writtenDay.pending ? null : writtenDay.value, writtenPace, (writtenDay.pending ? 'NWDSR Written for ' + date + ' is not on file.' : labels.written + ' · ' + date) + dayNote),
+    reportMoneyLine_('delivered', 'NWDSR Delivered', deliveredDay.pending ? null : deliveredDay.value, deliveredPace, (deliveredDay.pending ? 'NWDSR Delivered for ' + date + ' is not on file.' : labels.delivered + ' · ' + date) + dayNote),
+    reportLine_('written-pace', 'Written pace', briefBlank_(writtenPace) ? 'Pending' : moneyText_(writtenPace), briefBlank_(budgets.written) ? 'Pending' : moneyText_(budgets.written), briefBlank_(writtenPace) ? 'Pending' : 'Required pace', briefBlank_(writtenPace) ? 'pending' : 'ready', 'Remaining NWDSR written budget ÷ open days left, including ' + date + '.', null),
+    reportLine_('delivered-pace', 'Delivered pace', briefBlank_(deliveredPace) ? 'Pending' : moneyText_(deliveredPace), briefBlank_(budgets.delivered) ? 'Pending' : moneyText_(budgets.delivered), briefBlank_(deliveredPace) ? 'Pending' : 'Required pace', briefBlank_(deliveredPace) ? 'pending' : 'ready', 'Remaining NWDSR delivered budget ÷ open days left, including ' + date + '.', null),
+    reportMoneyLine_('written-mtd', 'Written MTD', writtenThrough && writtenThrough <= date ? writtenMtd : null, budgets.written, writtenThrough ? ('NWDSR Written ' + store.start + ' through ' + writtenThrough + (writtenThrough < date ? '. ' + date + ' not included.' : '.')) : ('NWDSR Written month to date is Pending.')),
+    reportMoneyLine_('delivered-mtd', 'Delivered MTD', deliveredThrough && deliveredThrough <= date ? deliveredMtd : null, budgets.delivered, deliveredThrough ? ('NWDSR Delivered ' + store.start + ' through ' + deliveredThrough + (deliveredThrough < date ? '. ' + date + ' not included.' : '.')) : ('NWDSR Delivered month to date is Pending.')),
   ];
   var view = loadClosingView_();
   var dayClosing = viewDayClosing_(view, date);
@@ -183,7 +183,7 @@ function reportDaily_(payload, today) {
     briefBlank_(closingGoal) ? 'Pending' : percentText_(closingGoal),
     reportVersus_(dayClosing.ratio, closingGoal, 'percent'),
     reportStatus_(dayClosing.ratio, closingGoal),
-    briefBlank_(dayClosing.ratio) ? (dayClosing.note || ('Store closing for ' + date + ' is Pending. Not estimated.')) : (dayClosing.customers + ' purchasing customers divided by ' + dayClosing.opportunities + ' PERQ opportunities.'),
+    briefBlank_(dayClosing.ratio) ? ('Store closing for ' + date + ' is Pending. Not estimated.') : (dayClosing.customers + ' customers ÷ ' + dayClosing.opportunities + ' PERQ opportunities.'),
     reportBar_(dayClosing.ratio, closingGoal)
   ));
   var monthClosing = home.closing && home.closing.mtd ? home.closing.mtd : null;
@@ -196,7 +196,7 @@ function reportDaily_(payload, today) {
     briefBlank_(closingGoal) ? 'Pending' : percentText_(closingGoal),
     reportVersus_(monthRatio, closingGoal, 'percent'),
     reportStatus_(monthRatio, closingGoal),
-    monthThrough ? ('Store closing month to date through ' + monthThrough + (monthThrough < date ? '. Later days stay Pending.' : '') + (monthClosing.customers !== null ? ' ' + monthClosing.customers + ' purchasing customers / ' + monthClosing.opportunities + ' opportunities.' : '')) : 'Store closing month to date is Pending.',
+    monthThrough ? ('Store closing through ' + monthThrough + (monthThrough < date ? '. Later days Pending.' : '.') + (monthClosing.customers !== null ? ' ' + monthClosing.customers + ' / ' + monthClosing.opportunities + '.' : '')) : 'Store closing month to date is Pending.',
     reportBar_(monthRatio, closingGoal)
   ));
   var kpis = sameMonth && home.board ? home.board.kpis : [];
