@@ -12,6 +12,9 @@
     h1 { margin: 0; font-size: 30px; color: #f4f7f8; letter-spacing: 0.01em; }
     h2 { margin: 0 0 8px; font-size: 15px; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0c9; }
     .sub { color: #9eb0c9; margin: 4px 0 0; }
+    .display-tools { margin: 6px 0 0; font-size: 13px; color: #9eb0c9; }
+    .display-tools .stale { color: #f3d48a; }
+    .display-tools button { margin-left: 8px; font-size: 13px; }
     .logo { display: block; height: auto; }
     .logo-login { width: 168px; margin: 0 auto 12px; }
     .brand { display: flex; align-items: center; gap: 14px; }
@@ -342,6 +345,7 @@
         <div>
           <h1>Kane's Store 17 Command Center</h1>
           <p class="sub" id="header-note"></p>
+          <p class="display-tools noprint"><span id="display-status"></span><button type="button" id="display-refresh" class="linkish hidden">Refresh</button></p>
         </div>
       </header>
       <nav class="nav noprint" id="nav"></nav>
@@ -353,6 +357,14 @@
     var token = '';
     var role = '';
     var screen = 'home';
+    var DISPLAY_REFRESH_MS = 30 * 60 * 1000;
+    var displayVersion = '';
+    var displayStamp = '';
+    var displayStale = false;
+    var displayTimer = null;
+    var displayRefreshing = false;
+    var displayHold = false;
+    var displayPayload = null;
 
     function esc(value) {
       return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
@@ -405,6 +417,7 @@
     function showLogin(message) {
       token = '';
       role = '';
+      if (displayTimer) { clearInterval(displayTimer); displayTimer = null; }
       sessionStorage.removeItem('cc-token');
       sessionStorage.removeItem('cc-role');
       closeDocViewer();
@@ -836,6 +849,7 @@
     }
     var PERSON_COMPARE = ['Bedding', 'Mattress Pads', 'Adjustable Bases', 'Pillows', 'Fabric', 'Leather', 'Power', 'Financing', 'Average Ticket', 'Orders'];
     function drawPeopleTable() {
+      displayHold = false;
       document.body.classList.remove('print-summary');
       var rows = sortedPeople().map(function (person) {
         return '<tr><td><button class="linkish" type="button" data-person="' + esc(person.name) + '">' + esc(person.name) + '</button></td><td>' + money(person.snapWritten) + '</td><td>' + (person.monthlyGoal === null || person.monthlyGoal === undefined ? 'Data Pending' : money(person.monthlyGoal)) + '</td><td class="pending">' + goalProgress(person) + '</td><td>' + money(person.deliveredSales) + '</td><td>' + (person.closingThrough ? count(person.closingOrders) : 'Pending') + '</td><td>' + (person.closingThrough ? count(person.opportunities) : 'Pending') + '</td><td class="' + personRatioTone(person) + '">' + personRatioText(person) + (person.closingThrough ? ' <span class="pending">through ' + esc(person.closingThrough) + '</span>' : '') + '</td></tr>';
@@ -1421,6 +1435,7 @@
       return basis + 'Differs from SNAP written by ' + money(person.analysisWritten - person.snapWritten) + ' through ' + esc(peopleSnapThrough) + '. Reconciliation only; never used for the goal.';
     }
     function renderPerson(name) {
+      displayHold = true;
       var person = peopleCache.filter(function (item) { return item.name === name; })[0];
       if (!person) return;
       var rows = (person.kpis || []).map(function (row) {
@@ -1985,6 +2000,7 @@
     var beddingSort = 'name';
     var beddingCache = null;
     function renderBedding(data) {
+      displayHold = false;
       beddingCache = data;
       document.getElementById('header-note').textContent = 'Bedding · Updated ' + data.updated;
       drawBedding();
@@ -2087,6 +2103,7 @@
       });
     }
     function renderBeddingPerson(name) {
+      displayHold = true;
       var person = (beddingCache.people || []).filter(function (item) { return item.name === name; })[0];
       if (!person) return;
       document.getElementById('screen').innerHTML =
@@ -3057,8 +3074,156 @@
       };
       draw();
     }
+    /* display-refresh-policy */
+    function displayRefreshPlan(state) {
+      if (state.failed) return { redraw: false, stale: true, stamp: false, defer: false };
+      if (state.weakened) return { redraw: false, stale: true, stamp: false, defer: false };
+      if (state.busy) return { redraw: false, stale: false, stamp: false, defer: true };
+      if (!state.manual && !state.changed) return { redraw: false, stale: false, stamp: true, defer: false };
+      return { redraw: true, stale: false, stamp: true, defer: false };
+    }
+    function figuresWeakened(previous, next) {
+      if (!previous) return false;
+      if (!next || typeof next !== 'object') return true;
+      var weakened = false;
+      function hasNumber(value) {
+        if (typeof value === 'number' && isFinite(value)) return true;
+        if (!value || typeof value !== 'object') return false;
+        var keys = Object.keys(value);
+        for (var i = 0; i < keys.length; i += 1) if (hasNumber(value[keys[i]])) return true;
+        return false;
+      }
+      function walk(before, after) {
+        if (weakened || before === null || before === undefined || Array.isArray(before) || typeof before !== 'object') return;
+        Object.keys(before).forEach(function (key) {
+          if (weakened) return;
+          var left = before[key];
+          if (typeof left === 'number' && isFinite(left)) {
+            if (!after || typeof after !== 'object' || after[key] === null || after[key] === undefined || after[key] === '') weakened = true;
+            return;
+          }
+          if (!left || typeof left !== 'object' || Array.isArray(left)) return;
+          if (!after || typeof after !== 'object' || !Object.prototype.hasOwnProperty.call(after, key)) {
+            if (hasNumber(left)) weakened = true;
+            return;
+          }
+          walk(left, after[key]);
+        });
+      }
+      walk(previous, next);
+      return weakened;
+    }
+    /* end-display-refresh-policy */
+    function displayClock(date) {
+      try {
+        return new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date) + ' ET';
+      } catch (ignore) {
+        return date.toISOString();
+      }
+    }
+    function paintDisplayStatus(waiting) {
+      var el = document.getElementById('display-status');
+      if (!el) return;
+      if (!displayStamp && !waiting) { el.textContent = ''; el.className = ''; return; }
+      el.className = displayStale ? 'stale' : '';
+      el.textContent = waiting ? 'Refresh is waiting until this form is finished.' : ('Last updated ' + displayStamp + (displayStale ? ' · may be stale' : ''));
+    }
+    function displayBusy() {
+      if (uploadBusy) return true;
+      if (screen === 'upload' && uploadFiles && uploadFiles.length) return true;
+      if (displayHold) return true;
+      var viewer = document.getElementById('doc-viewer');
+      if (viewer && !viewer.classList.contains('hidden')) return true;
+      if (document.getElementById('eval-editor')) return true;
+      if (screen === 'brief' || screen === 'admin' || screen === 'documents' || screen === 'upload') return true;
+      var pillow = document.getElementById('pillow-goal');
+      if (pillow && String(pillow.value || '').trim()) return true;
+      var active = document.activeElement;
+      if (active && active.id !== 'display-refresh' && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return true;
+      var body = document.body;
+      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary')) return true;
+      return false;
+    }
+    function syncRefreshButton() {
+      var button = document.getElementById('display-refresh');
+      if (!button) return;
+      button.classList.toggle('hidden', role !== 'manager' && role !== 'admin');
+    }
+    function applyScreenData(name, data) {
+      if (name === 'home' || name === 'written' || name === 'delivered') renderHome(data, name);
+      else if (name === 'bedding') renderBedding(data);
+      else if (name === 'orders') {
+        document.getElementById('header-note').textContent = data.period + ' · Updated ' + data.updated;
+        document.getElementById('screen').innerHTML = card('Open orders and backorders', 'Not Available', 'No open-order report is on file. Nothing is shown as zero.');
+      } else if (name === 'daily') renderDaily(data);
+      else if (name === 'closing') renderClosing(data);
+      else if (name === 'people') renderPeople(data);
+      else if (name === 'morning') renderMorning(data);
+      else if (name === 'brief') renderBrief(data);
+      else if (name === 'health') renderHealth(data);
+      else if (name === 'coverage') renderCoverage(data);
+    }
+    function reloadCurrentScreen() {
+      var name = screen;
+      var request = name === 'written' || name === 'delivered' || name === 'orders' ? 'home' : name;
+      if (name === 'admin' || name === 'documents' || name === 'upload') return Promise.resolve({ applied: false, busy: true });
+      return api(request).then(function (data) {
+        if (screen !== name || displayHold || displayBusy()) return { applied: false, busy: true };
+        if (figuresWeakened(displayPayload, data)) return { applied: false, weakened: true };
+        displayPayload = data;
+        applyScreenData(name, data);
+        return { applied: true };
+      });
+    }
+    function refreshDisplayed(manual) {
+      if (!token || displayRefreshing) return;
+      syncRefreshButton();
+      var plan = displayRefreshPlan({ failed: false, weakened: false, busy: displayBusy(), manual: !!manual, changed: false });
+      if (plan.defer) { paintDisplayStatus(true); return; }
+      displayRefreshing = true;
+      api('dataPulse').then(function (pulse) {
+        if (!pulse || pulse.ok === false) {
+          displayStale = true;
+          paintDisplayStatus(false);
+          return null;
+        }
+        var changed = !!(displayVersion && pulse.version !== displayVersion);
+        var next = displayRefreshPlan({ failed: false, weakened: false, busy: displayBusy(), manual: !!manual, changed: changed });
+        if (next.defer) { paintDisplayStatus(true); return null; }
+        if (!next.redraw) {
+          displayVersion = pulse.version || displayVersion;
+          displayStale = false;
+          if (next.stamp) displayStamp = displayClock(new Date());
+          paintDisplayStatus(false);
+          return null;
+        }
+        return reloadCurrentScreen().then(function (result) {
+          if (result && result.weakened) {
+            displayStale = true;
+            paintDisplayStatus(false);
+            return;
+          }
+          if (result && result.applied) {
+            displayVersion = pulse.version || displayVersion;
+            displayStale = false;
+            displayStamp = displayClock(new Date());
+            paintDisplayStatus(false);
+          }
+        });
+      }).catch(function (error) {
+        if (/sign in/i.test(error.message)) showLogin(error.message);
+        else { displayStale = true; paintDisplayStatus(false); }
+      }).then(function () { displayRefreshing = false; });
+    }
+    function startDisplayRefresh() {
+      syncRefreshButton();
+      if (displayTimer) return;
+      refreshDisplayed(false);
+      displayTimer = setInterval(function () { refreshDisplayed(false); }, DISPLAY_REFRESH_MS);
+    }
     function openScreen(name) {
       screen = name;
+      displayHold = false;
       document.body.classList.remove('print-summary', 'print-eval', 'print-doc', 'print-brief');
       closeDocViewer();
       drawNav();
@@ -3079,19 +3244,9 @@
       }
       api(request).then(function (data) {
         // A slow reply for a screen the user already left must not draw over the current one.
-        if (screen !== name) return;
-        if (name === 'home' || name === 'written' || name === 'delivered') renderHome(data, name);
-        else if (name === 'bedding') renderBedding(data);
-        else if (name === 'orders') {
-          document.getElementById('header-note').textContent = data.period + ' · Updated ' + data.updated;
-          document.getElementById('screen').innerHTML = card('Open orders and backorders', 'Not Available', 'No open-order report is on file. Nothing is shown as zero.');
-        } else if (name === 'daily') renderDaily(data);
-        else if (name === 'closing') renderClosing(data);
-        else if (name === 'people') renderPeople(data);
-        else if (name === 'morning') renderMorning(data);
-        else if (name === 'brief') renderBrief(data);
-        else if (name === 'health') renderHealth(data);
-        else if (name === 'coverage') renderCoverage(data);
+        if (screen !== name || displayHold) return;
+        displayPayload = data;
+        applyScreenData(name, data);
       }).catch(function (error) {
         if (/sign in/i.test(error.message)) showLogin(error.message);
         else if (screen === name) document.getElementById('screen').innerHTML = '<p class="error">' + error.message + '</p>';
@@ -3107,14 +3262,17 @@
         document.getElementById('login').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
         openScreen('home');
+        startDisplayRefresh();
       }).catch(function (error) { document.getElementById('login-error').textContent = error.message; });
     });
+    document.getElementById('display-refresh').addEventListener('click', function () { refreshDisplayed(true); });
     token = sessionStorage.getItem('cc-token') || '';
     role = sessionStorage.getItem('cc-role') || '';
     if (token && role) {
       document.getElementById('login').classList.add('hidden');
       document.getElementById('app').classList.remove('hidden');
       openScreen('home');
+      startDisplayRefresh();
     }
   </script>
 </body>

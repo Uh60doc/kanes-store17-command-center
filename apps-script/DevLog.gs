@@ -271,5 +271,30 @@ function recordDevLog_(payload) {
   if (action === 'finish' || action === 'complete') return finishDevTask(payload.taskNumber, payload.notes);
   if (action === 'block') return blockDevTask(payload.taskNumber, payload.notes);
   if (action === 'queue') return queueDevTask(payload.description, payload.notes);
-  throw new Error('Choose start, finish, block, or queue.');
+  if (action === 'note') return appendDevNote_(payload.taskNumber, payload.notes);
+  throw new Error('Choose start, finish, block, queue, or note.');
+}
+
+/** Adds a note to an existing assignment. It does not create a version or change the status. */
+function appendDevNote_(taskNumber, notes) {
+  if (taskNumber && typeof taskNumber === 'object' && !Array.isArray(taskNumber)) {
+    notes = taskNumber.notes;
+    taskNumber = taskNumber.taskNumber;
+  }
+  return withDevLogLock_(function () {
+    var addition = String(notes || '').replace(/\s+/g, ' ').trim();
+    if (!addition) throw new Error('Enter the note to add.');
+    var records = devLogRecords_();
+    var index = findDevLogIndex_(records, taskNumber);
+    if (index === -1) throw new Error('Task ' + taskNumber + ' is not on CC_DevLog.');
+    var record = records[index];
+    var current = String(record.notes || '').trim();
+    var room = 400 - (current ? current.length + 1 : 0);
+    if (room >= addition.length) record.notes = current ? current + ' ' + addition : addition;
+    else if (room > 40) record.notes = current + ' ' + addition.slice(0, room);
+    else record.notes = (addition + (current ? ' ' + current : '')).slice(0, 400);
+    record.updated = devLogNowEt_();
+    rewriteDevLog_(records);
+    return record;
+  });
 }
