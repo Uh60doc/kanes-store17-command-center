@@ -309,3 +309,76 @@ test('the Monday meeting packet reuses the weekly and salesperson reports and do
   assert.equal(tabs.CC_Daily.length, dailyRows);
   assert.equal(mail.length, 0);
 });
+
+test('the 13-week trend uses daily store records and keeps a partial week separate', () => {
+  const { gs, tabs, mail, setToday } = harness();
+  setToday('2026-10-18');
+  const dailyRows = tabs.CC_Daily.length;
+  const before = plain(gs.home_({ session }));
+  assert.throws(() => gs.reportCenter_({ session: { role: 'sales', username: 'sales17' }, kind: 'trend' }));
+  const weekly = plain(gs.reportCenter_({ session, kind: 'weekly' }));
+  const page = plain(gs.reportCenter_({ session, kind: 'trend' }));
+  assert.equal(page.ready, true);
+  assert.equal(page.mail, false);
+  assert.equal(page.weeksShown, 13);
+  assert.equal(page.view, 'completed');
+  const written = page.series.find((item: { key: string }) => item.key === 'written');
+  const delivered = page.series.find((item: { key: string }) => item.key === 'delivered');
+  const closing = page.series.find((item: { key: string }) => item.key === 'closing');
+  const latest = written.points[written.points.length - 1];
+  assert.equal(latest.start, '2026-10-05');
+  assert.equal(latest.end, '2026-10-11');
+  assert.equal(latest.text, weekly.weekly.find((item: { key: string }) => item.key === 'week-written').result);
+  assert.equal(delivered.points[delivered.points.length - 1].text, weekly.weekly.find((item: { key: string }) => item.key === 'week-delivered').result);
+  assert.match(written.source, /NWDSR Written/);
+  assert.match(delivered.source, /NWDSR Delivered/);
+  assert.notEqual(written.source, delivered.source);
+  const openDays = ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11'];
+  const dailySum = openDays.reduce((sum, date) => {
+    const row = tabs.CC_Daily.find((line) => String(line[0]).slice(0, 10) === date);
+    return sum + Number(row?.[2] || 0);
+  }, 0);
+  assert.equal(latest.value, Math.round(dailySum * 100) / 100);
+  assert.ok(written.verified < 13);
+  assert.match(page.coverage, /not estimated/);
+  setToday('2026-10-16');
+  const current = plain(gs.reportCenter_({ session, kind: 'trend', view: 'partial' }));
+  const partialSum = ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15'].reduce((sum, date) => {
+    const row = tabs.CC_Daily.find((line) => String(line[0]).slice(0, 10) === date);
+    return sum + Number(row?.[2] || 0);
+  }, 0);
+  assert.equal(current.selected.points[0].text.startsWith('$'), true);
+  assert.equal(current.selected.points[0].value, Math.round(partialSum * 100) / 100);
+  assert.equal(current.series[0].points.some((point: { start: string }) => point.start === '2026-10-12'), false);
+  setToday('2026-10-18');
+  assert.equal(page.partialPeriod.start, '2026-10-12');
+  assert.equal(page.partial[0].points[0].partial, true);
+  assert.ok(!written.points.some((point: { partial: boolean }) => point.partial));
+  const weighted = gs.trendRate_([{ numerator: 1, denominator: 10 }, { numerator: 50, denominator: 100 }], 3);
+  const averaged = ((1 / 10) + (50 / 100)) / 2;
+  assert.equal(weighted, Math.round((51 / 110) * 1000) / 1000);
+  assert.notEqual(weighted, Math.round(averaged * 1000) / 1000);
+  assert.equal(gs.trendRate_([null], 3), null);
+  if (closing.points[closing.points.length - 1].value !== null) {
+    const point = closing.points[closing.points.length - 1];
+    assert.equal(point.value, Math.round((point.numerator / point.denominator) * 1000) / 1000);
+  }
+  const deliveredOnly = plain(gs.reportCenter_({ session, kind: 'trend', metric: 'delivered' }));
+  assert.equal(deliveredOnly.metric, 'delivered');
+  assert.match(deliveredOnly.selected.source, /Delivered/);
+  assert.equal(deliveredOnly.selected.source.includes('Not Written') || deliveredOnly.selected.source.includes('Not SNAP'), true);
+  const partial = plain(gs.reportCenter_({ session, kind: 'trend', view: 'partial' }));
+  assert.equal(partial.view, 'partial');
+  assert.equal(partial.selected.points.length, 1);
+  assert.equal(partial.selected.points[0].value, null);
+  const pdf = Buffer.from(page.pdf, 'base64').toString('latin1');
+  assert.match(pdf, /^%PDF-1\.4/);
+  assert.equal((pdf.match(/\/Type \/Page[^s]/g) || []).length, 1);
+  assert.match(pdf, /MediaBox \[0 0 612 792\]/);
+  assert.match(pdf, /13-week store trend/);
+  const after = plain(gs.home_({ session }));
+  assert.equal(after.month.written, before.month.written);
+  assert.equal(after.month.delivered, before.month.delivered);
+  assert.equal(tabs.CC_Daily.length, dailyRows);
+  assert.equal(mail.length, 0);
+});
