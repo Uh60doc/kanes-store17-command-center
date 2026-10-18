@@ -96,6 +96,9 @@
     .report-bar.short i { background: #9b1c33; }
     .report-sheet ol { margin: 4px 0 0; padding-left: 18px; font-size: 12px; }
     .report-sheet .report-foot { margin: 8px 0 0; font-size: 11px; color: #3d5660; }
+    .report-snap { margin: 6px 0 8px; padding: 6px 8px; border: 1px solid #d5dee3; border-left: 4px solid #8a6a2f; background: #fbfaf6; }
+    .report-snap h2 { margin: 0 0 2px; }
+    .report-snap p { margin: 0; font-size: 12px; line-height: 1.35; }
     .report-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 0 0 12px; }
     .report-controls label { margin: 0; color: #9eb0c9; font-size: 12px; }
     .report-controls input, .report-controls select { min-height: 36px; width: auto; }
@@ -1654,6 +1657,12 @@
       else if (extra) note += ' · ' + extra;
       return '<article class="report-tile ' + esc(line.status) + '"><h3>' + esc(line.label) + '</h3><p class="figure">' + esc(line.result) + '</p><p class="sub">' + esc(note) + '</p></article>';
     }
+    function renderSnapCompare(block) {
+      block = block || {};
+      var difference = esc(block.dollars || 'Pending');
+      if (block.percent && block.percent !== 'Pending') difference += ' · ' + esc(block.percent);
+      return '<aside class="report-snap"><h2>SNAP Written LY</h2><p><strong>SNAP Written</strong> ' + esc(block.current || 'Pending') + ' · ' + esc(block.currentDates || '') + '</p><p><strong>SNAP Written LY</strong> ' + esc(block.ly || 'Pending') + ' · ' + esc(block.lyDates || '') + '</p><p><strong>Difference</strong> ' + difference + '</p><p class="report-foot">' + esc(block.note || '') + ' ' + esc(block.source || '') + '</p></aside>';
+    }
     function renderWeeklyReport(data) {
       reportQuery.span = data.span || 'completed';
       reportQuery.start = data.period && data.period.start || '';
@@ -1671,7 +1680,7 @@
         ? '<label>Start<input id="report-start" type="date" value="' + esc(reportQuery.start) + '"></label><label>End<input id="report-end" type="date" value="' + esc(reportQuery.end) + '"></label>'
         : '<label>Week containing<input id="report-end" type="date" value="' + esc(reportQuery.end) + '"></label>');
       return { controls: span + dates, body: '<p class="report-badge ' + (data.partial ? 'partial' : 'complete') + '">' + esc(data.partialLabel || '') + '</p><h1>' + esc(data.title) + '</h1><p class="report-verify">' + esc(data.verification) + '</p>' +
-        '<h2>This week</h2><div class="report-tiles">' + (data.weekly || []).map(reportTile).join('') + '</div>' +
+        '<h2>This week</h2><div class="report-tiles">' + (data.weekly || []).map(reportTile).join('') + '</div>' + renderSnapCompare(data.snapLy) +
         '<h2>Store month to date</h2><div class="report-tiles">' + (data.month || []).map(reportTile).join('') + '</div>' +
         '<h2>Store-month KPIs · not this week</h2><div class="report-kpis">' + (data.kpis || []).map(function (line) {
           return '<span class="report-chip ' + esc(line.status) + '">' + esc(line.label) + ' ' + esc(line.result) + (line.goal ? ' / ' + esc(line.goal) : '') + '</span>';
@@ -1717,7 +1726,7 @@
         return '<h2>' + esc(person.name) + (person.newHire ? ' · NEW HIRE' : '') + '</h2>' + table(lines) + '<p>Coaching opportunity: ' + esc(person.opportunity) + '</p><p>Coming week: ' + esc(person.nextGoal) + '</p>';
       }
       var pages = [];
-      pages.push('<h1>' + esc(data.title) + '</h1><p class="report-foot">' + esc(data.displayDate || '') + '</p><p class="report-verify">' + esc(data.verification) + '</p><h2>This week · NWDSR</h2>' + table(data.weekly) + '<h2>Store-month KPIs · not this week</h2>' + table(data.kpis) + '<h2>Store month through this week</h2>' + table(data.month) + '<p>Last year written ' + esc((data.lastYear && data.lastYear.written) || 'Pending') + '. Last year delivered ' + esc((data.lastYear && data.lastYear.delivered) || 'Pending') + '. ' + esc((data.lastYear && data.lastYear.note) || '') + '</p>');
+      pages.push('<h1>' + esc(data.title) + '</h1><p class="report-foot">' + esc(data.displayDate || '') + '</p><p class="report-verify">' + esc(data.verification) + '</p><h2>This week · NWDSR</h2>' + table(data.weekly) + renderSnapCompare(data.snapLy) + '<h2>Store-month KPIs · not this week</h2>' + table(data.kpis) + '<h2>Store month through this week</h2>' + table(data.month) + '<p>Last year written ' + esc((data.lastYear && data.lastYear.written) || 'Pending') + '. Last year delivered ' + esc((data.lastYear && data.lastYear.delivered) || 'Pending') + '. ' + esc((data.lastYear && data.lastYear.note) || '') + '</p>');
       if (data.packet !== 'executive') {
         var people = data.people || [];
         var index = 0;
@@ -1755,7 +1764,7 @@
         return '<tr class="' + esc(row.status) + '"><td class="measure">' + esc(row.label) + '</td><td class="' + esc(row.status) + '">' + esc(row.actual) + '</td><td>' + esc(row.progress) + '</td><td>' + esc(row.variance) + '</td><td>' + esc(row.budget) + '</td><td>' + esc(row.ly) + '</td></tr>';
       }).join('');
       return { controls: '<label>Month containing<input id="report-date" type="date" value="' + esc(reportQuery.date) + '"></label>', body: '<p class="report-badge ' + (data.partial ? 'partial' : 'complete') + '">' + esc(data.partialLabel || '') + '</p><h1>' + esc(data.title) + '</h1><p class="report-foot">' + esc(data.displayDate || '') + '</p><p class="report-verify">' + esc(data.verification) + '</p>' +
-        '<table><thead><tr><th>Measure</th><th>Actual</th><th>Progress</th><th>Variance</th><th>BUDGET</th><th>NWDSR LY</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+        '<table><thead><tr><th>Measure</th><th>Actual</th><th>Progress</th><th>Variance</th><th>BUDGET</th><th>NWDSR LY</th></tr></thead><tbody>' + rows + '</tbody></table>' + renderSnapCompare(data.snapLy) +
         '<p class="report-assess">' + esc(data.assessment || '') + '</p>' +
         '<div class="report-cols"><div><h2>Strengths</h2>' + list(summary.strengths) + '</div><div><h2>Improve</h2>' + list(summary.priorities) + '</div><div><h2>Next month</h2><p>' + esc(summary.focus || '') + '</p></div></div>' };
     }
