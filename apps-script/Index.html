@@ -203,6 +203,20 @@
     .rec-no { color: #f0b4be; }
     .rec-table { width: 100%; border-collapse: collapse; }
     .rec-table td, .rec-table th { text-align: left; padding: 6px 4px; border-bottom: 1px solid #245c66; }
+    .coach-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+    .coach-sheet { background: white; color: #1b2833; border: 1px solid #c5d0d6; border-radius: 8px; padding: 18px 20px; max-width: 8.2in; font-family: Calibri, "Segoe UI", Arial, sans-serif; }
+    .coach-sheet h2, .coach-sheet h3 { color: #0f2a3a; text-transform: none; letter-spacing: 0; margin: 0 0 4px; }
+    .coach-sheet h2 { font-size: 20px; }
+    .coach-kicker { margin: 0; color: #0e7c86; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; }
+    .coach-name { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+    .coach-badge { background: #0e7c86; color: white; border-radius: 99px; padding: 2px 8px; font-size: 12px; font-weight: 700; }
+    .coach-facts { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+    .coach-facts th, .coach-facts td { text-align: left; padding: 3px 6px; border-bottom: 1px solid #d5dee3; vertical-align: top; }
+    .coach-facts th { width: 34%; color: #3d5160; font-weight: 650; }
+    .coach-note { margin: 6px 0; font-size: 13px; }
+    .coach-opp { margin: 8px 0; padding: 8px 10px; border-left: 3px solid #0e7c86; background: #f4f8f8; }
+    .coach-opp p { margin: 2px 0; font-size: 13px; }
+    .coach-opp strong { color: #0f2a3a; }
     @media (max-width: 800px) { .rec-cards { grid-template-columns: 1fr; } }
     @media (max-width: 720px) { .opp-compare { grid-template-columns: 1fr; } }
     body.print-eval .eval-print { display: block; margin-top: 16px; }
@@ -352,6 +366,11 @@
       body.print-mtd header.brand, body.print-mtd .section-title, body.print-mtd .noprint, body.print-mtd #brief-startup, body.print-mtd #brief-admin { display: none !important; }
       body.print-mtd #brief-mtd { margin: 0; border: 0; padding: 0; border-radius: 0; background: white; overflow: visible; }
       body.print-mtd #brief-mtd, body.print-mtd #brief-mtd * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html:has(body.print-coach), body.print-coach { background: white !important; }
+      body.print-coach .wrap { padding: 0; max-width: 8in; }
+      body.print-coach header.brand, body.print-coach .nav, body.print-coach .noprint, body.print-coach #data-refresh, body.print-coach .section-title { display: none !important; }
+      body.print-coach .coach-sheet { margin: 0; border: 0; border-radius: 0; max-width: none; padding: 0.35in; }
+      body.print-coach .coach-sheet, body.print-coach .coach-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       #doc-print img { display: block; width: auto; height: auto; max-width: 100%; max-height: 10.2in; margin: 0 auto; break-after: page; }
       #doc-print img:last-child { break-after: auto; }
       body { background: white; color: black; }
@@ -483,8 +502,9 @@
     }
     function navItems() {
       var items = [['home', 'Home'], ['daily', 'Daily'], ['closing', 'Closing'], ['written', 'Written'], ['delivered', 'Delivered'], ['people', 'Sales Team'], ['coach', 'Goal coach'], ['morning', 'Morning meeting'], ['documents', 'Documents']];
-      if (role !== 'sales') items.splice(8, 0, ['recovery', 'Recovery']);
-      if (role !== 'sales') items.splice(9, 0, ['brief', 'Manager brief']);
+      if (role !== 'sales') items.splice(8, 0, ['coaching', 'Coaching']);
+      if (role !== 'sales') items.splice(9, 0, ['recovery', 'Recovery']);
+      if (role !== 'sales') items.splice(10, 0, ['brief', 'Manager brief']);
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['orders', 'Open orders'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
@@ -1087,6 +1107,100 @@
       document.getElementById('opp-person').addEventListener('change', function () { coachDirty = true; mount(); });
       mount();
     }
+    function coachingText(card) {
+      var moneyOr = function (value) { return value === null || value === undefined || value === '' ? 'Pending' : money(value); };
+      var pctOr = function (value) { return value === null || value === undefined || value === '' ? 'Pending' : percent(value); };
+      var lines = [
+        card.name + (card.newHire ? ' — NEW HIRE' : ''),
+        card.period,
+        card.newHire ? 'Hired ' + (card.hired || 'Pending') + ', day ' + card.tenureDays + ' of 90. New-hire goals apply.' : 'Established goals apply.',
+        'SNAP written ' + moneyOr(card.snapWritten) + ' of ' + moneyOr(card.monthlyGoal),
+        'Average ticket ' + moneyOr(card.ticket && card.ticket.average) + ' versus ' + moneyOr(card.ticket && card.ticket.goal) + ' on ' + (card.orders === null || card.orders === undefined ? 'Pending' : card.orders) + ' orders',
+        'Closing ' + pctOr(card.closingRatio) + ' versus ' + pctOr(card.closingGoal),
+        'Bedding ' + pctOr(card.bedding) + ' versus ' + pctOr(card.beddingGoal),
+        'Fabric ' + pctOr(card.fabric) + ' versus ' + pctOr(card.fabricGoal) + ', leather ' + pctOr(card.leather) + ' versus ' + pctOr(card.leatherGoal),
+        'Power ' + pctOr(card.power) + ' versus ' + pctOr(card.powerGoal) + ', mattress protectors ' + pctOr(card.pads) + ' versus ' + pctOr(card.padsGoal),
+        'Rugs ' + (card.rugs && card.rugs.note ? card.rugs.note : 'Pending'),
+        (card.financial && card.financial.ticketAtGoal ? 'Average ticket is already at the goal on the orders on file. ' : 'Ticket opportunity ' + moneyOr(card.financial && card.financial.ticket) + '. ') + ((card.financial && card.financial.protection) || ''),
+        'Strengths: ' + (card.strengths && card.strengths.length ? card.strengths.join(' ') : 'None verified yet.'),
+      ];
+      (card.opportunities || []).forEach(function (item, index) {
+        lines.push((index + 1) + '. ' + item.label);
+        lines.push('Now: ' + item.now);
+        lines.push('Goal: ' + item.goal);
+        lines.push('Additional: ' + item.additional);
+        lines.push('Action: ' + item.action);
+      });
+      if (!card.opportunities || !card.opportunities.length) lines.push('No verified metric is below its goal.');
+      lines.push('These figures are verified results and Goal coach illustrations. They are not observed behavior, customer objections, or payroll.');
+      return lines.join('\n');
+    }
+    function renderCoaching(data) {
+      var cards = data.cards || [];
+      document.getElementById('header-note').textContent = 'Coaching cards · ' + (data.period || '') + ' · manager only';
+      if (!cards.length) {
+        document.getElementById('screen').innerHTML = '<section class="opp-layout"><p class="opp-banner">No active associate is on the roster.</p></section>';
+        return;
+      }
+      var options = cards.map(function (card) { return '<option>' + esc(card.name) + '</option>'; }).join('');
+      document.getElementById('screen').innerHTML = '<section class="opp-layout" id="coach-root"><div class="coach-actions noprint"><label>Associate<select id="coach-person">' + options + '</select></label><button type="button" id="coach-print">Print</button><button type="button" id="coach-download">Download</button></div><article class="coach-sheet" id="coach-sheet"></article></section>';
+      function selected() {
+        var name = document.getElementById('coach-person').value;
+        for (var i = 0; i < cards.length; i += 1) if (cards[i].name === name) return cards[i];
+        return cards[0];
+      }
+      function fact(label, value) { return '<tr><th>' + esc(label) + '</th><td>' + value + '</td></tr>'; }
+      function moneyOr(value) { return value === null || value === undefined || value === '' ? 'Pending' : esc(money(value)); }
+      function pctOr(value) { return value === null || value === undefined || value === '' ? 'Pending' : esc(percent(value)); }
+      function paint() {
+        var card = selected();
+        var ticket = card.ticket || {};
+        var fin = card.financial || {};
+        var opps = card.opportunities || [];
+        var strengths = card.strengths || [];
+        var hire = card.newHire ? '<p class="coach-note"><span class="coach-badge">NEW HIRE</span> Hired ' + esc(card.hired || 'Pending') + '. Day ' + esc(String(card.tenureDays)) + ' of 90. Average ticket $2,100, bedding 15%, mattress protector 60%, and rugs 6. Fabric, leather, and power stay at 80%. SNAP stays against the monthly goal.</p>' : '';
+        var oppHtml = opps.map(function (item, index) {
+          return '<div class="coach-opp"><p><strong>' + (index + 1) + '. ' + esc(item.label) + '</strong></p><p><strong>Now.</strong> ' + esc(item.now) + '</p><p><strong>Goal.</strong> ' + esc(item.goal) + '</p><p><strong>Additional.</strong> ' + esc(item.additional) + '</p><p><strong>Action.</strong> ' + esc(item.action) + '</p></div>';
+        }).join('');
+        if (opps.length < 3) oppHtml += '<p class="coach-note">Showing ' + opps.length + ' verified item' + (opps.length === 1 ? '' : 's') + ' below the applicable goal. The rest are at the goal or still Pending. Pending is not scored as a miss.</p>';
+        document.getElementById('coach-sheet').innerHTML =
+          '<p class="coach-kicker">Kane\'s Store 17 · Coaching card</p>' +
+          '<div class="coach-name"><h2>' + esc(card.name) + '</h2>' + (card.newHire ? '<span class="coach-badge">NEW HIRE</span>' : '') + '</div>' +
+          '<p class="coach-note">' + esc(card.period) + '. ' + esc(data.calendar || '') + '</p>' + hire +
+          '<table class="coach-facts">' +
+          fact('SNAP written', moneyOr(card.snapWritten) + ' of ' + moneyOr(card.monthlyGoal)) +
+          fact('Average ticket', moneyOr(ticket.average) + ' versus ' + moneyOr(ticket.goal) + (card.writtenThrough ? ' · Group 17 through ' + esc(card.writtenThrough) : '')) +
+          fact('Written orders', card.orders === null || card.orders === undefined ? 'Pending' : esc(String(card.orders)) + ' Group 17 written orders') +
+          fact('Closing ratio', pctOr(card.closingRatio) + ' versus ' + pctOr(card.closingGoal) + (card.closingThrough ? ' through ' + esc(card.closingThrough) : '')) +
+          fact('Bedding', pctOr(card.bedding) + ' versus ' + pctOr(card.beddingGoal)) +
+          fact('Fabric maintenance', pctOr(card.fabric) + ' versus ' + pctOr(card.fabricGoal)) +
+          fact('Leather maintenance', pctOr(card.leather) + ' versus ' + pctOr(card.leatherGoal)) +
+          fact('Power upholstery', pctOr(card.power) + ' versus ' + pctOr(card.powerGoal)) +
+          fact('Mattress protectors', pctOr(card.pads) + ' versus ' + pctOr(card.padsGoal)) +
+          fact('Rugs', 'Pending. Monthly goal ' + esc(String(card.rugs && card.rugs.goal)) + '. ' + esc(card.rugs && card.rugs.note)) +
+          '</table>' +
+          '<h3>Recognition</h3><p class="coach-note">' + esc(card.recognition || '') + (strengths.length > 1 ? ' ' + esc(strengths.slice(1).join(' ')) : '') + '</p>' +
+          '<h3>Three coaching priorities</h3>' + oppHtml +
+          '<h3>Financial opportunity</h3><p class="coach-note">' + (fin.ticketAtGoal ? 'The average ticket is already at the goal on the orders on file, so there is no additional written-sales illustration.' : 'Reaching the average-ticket goal on the orders already on file: ' + moneyOr(fin.ticket) + '.') + ' ' + esc(fin.ticketNote || '') + '</p>' +
+          '<p class="coach-note">Protection earnings: ' + esc(fin.protection || 'Pay rule confirmation needed') + '. ' + esc(fin.protectionNote || '') + '</p>' +
+          '<p class="coach-note">Rug commission stays pending. The agreement lists 6% on quarterly area rugs. A 12% tier is Pay rule confirmation needed.</p>';
+      }
+      document.getElementById('coach-person').addEventListener('change', paint);
+      document.getElementById('coach-print').addEventListener('click', function () {
+        document.body.classList.add('print-coach');
+        window.print();
+      });
+      document.getElementById('coach-download').addEventListener('click', function () {
+        var card = selected();
+        var blob = new Blob([coachingText(card)], { type: 'text/plain' });
+        var link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'Store17-coaching-' + String(card.name || 'associate').replace(/[^A-Za-z0-9]+/g, '-') + '.txt';
+        link.click();
+        setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+      });
+      paint();
+    }
     function renderPeople(data) {
       peopleCache = data.people || [];
       peopleSnapThrough = data.snapThrough || '';
@@ -1591,7 +1705,7 @@
       });
       bindEvalImport();
     }
-    window.addEventListener('afterprint', function () { document.body.classList.remove('print-eval', 'print-brief', 'print-mtd'); });
+    window.addEventListener('afterprint', function () { document.body.classList.remove('print-eval', 'print-brief', 'print-mtd', 'print-coach'); });
     var summaryCache = null;
     function drawSummary(name, start, end) {
       document.getElementById('screen').innerHTML = '<h2 class="section-title">Summary</h2>' + teamNav('summary') + '<p class="sub">Loading the associate summary…</p>';
@@ -3427,7 +3541,7 @@
       var active = document.activeElement;
       if (active && active.id !== 'display-refresh' && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return true;
       var body = document.body;
-      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary')) return true;
+      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd')) return true;
       return false;
     }
     function syncRefreshButton() {
@@ -3445,6 +3559,7 @@
       else if (name === 'people') renderPeople(data);
       else if (name === 'coach') renderCoach(data);
       else if (name === 'recovery') renderRecovery(data);
+      else if (name === 'coaching') renderCoaching(data);
       else if (name === 'morning') renderMorning(data);
       else if (name === 'brief') renderBrief(data);
       else if (name === 'health') renderHealth(data);
@@ -3507,7 +3622,7 @@
     function openScreen(name) {
       screen = name;
       displayHold = false;
-      document.body.classList.remove('print-summary', 'print-eval', 'print-doc', 'print-brief');
+      document.body.classList.remove('print-summary', 'print-eval', 'print-doc', 'print-brief', 'print-coach');
       closeDocViewer();
       drawNav();
       var request = name === 'written' || name === 'delivered' || name === 'orders' ? 'home' : name;

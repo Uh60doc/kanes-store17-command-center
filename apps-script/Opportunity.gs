@@ -23,8 +23,9 @@ function opportunityBlank_(value) {
   return value === null || value === undefined || value === '';
 }
 
-function opportunityTicket_(orders, sales) {
-  var goal = OPP_TICKET_GOAL_;
+function opportunityTicket_(orders, sales, goal) {
+  if (opportunityBlank_(goal)) goal = OPP_TICKET_GOAL_;
+  else goal = Number(goal);
   if (opportunityBlank_(orders) || opportunityBlank_(sales)) {
     return { status: 'Pending', orders: opportunityBlank_(orders) ? null : orders, sales: opportunityBlank_(sales) ? null : sales, average: null, goal: goal, hypothetical: null, opportunity: null, basis: 'Group 17 written orders and written sales are not both on file.' };
   }
