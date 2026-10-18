@@ -323,7 +323,7 @@ function reportCatalog_(today) {
     kinds: [
       { key: 'daily', label: 'Daily', ready: true },
       { key: 'weekly', label: 'Weekly', ready: true },
-      { key: 'monthly', label: 'Monthly', ready: false },
+      { key: 'monthly', label: 'Monthly', ready: true },
       { key: 'individual', label: 'Individual', ready: true },
     ],
     storePeriod: store.start + ' through ' + store.end,
@@ -977,16 +977,265 @@ function reportIndividual_(payload, today) {
   };
 }
 
+function reportMonthFacts_(field, facts, store, asOf, closed) {
+  var through = latestFactDate_(facts, field, store.start, store.end, asOf);
+  var missing = [];
+  eachDate_(store.start, shiftDate_(asOf, -1)).forEach(function (date) {
+    if (date > store.end || closed[date]) return;
+    var row = null;
+    facts.forEach(function (item) { if (item.date === date) row = item; });
+    if (!row || row[field] === null || row[field] === undefined) missing.push(date);
+  });
+  return { through: through, value: through ? sumField_(facts, field, store.start, through) : null, missing: missing };
+}
+
+function reportKpiMap_(store) {
+  var map = {};
+  try {
+    sheet_('CC_Kpi').forEach(function (row) {
+      if (!row.metric || String(row.metric) === 'Daily Bedding') return;
+      if (isoDate_(row.period_start) !== store.start || isoDate_(row.period_end) !== store.end) return;
+      map[String(row.metric)] = { written: fineNumber_(row.written), delivered: fineNumber_(row.delivered), note: String(row.note || ''), through: isoDate_(row.verified_through) };
+    });
+  } catch (error) { map = {}; }
+  if (!Object.keys(map).length && store.start === '2026-10-02' && store.end === '2026-11-01') {
+    kpiActuals_().forEach(function (row) {
+      map[row[0]] = { written: row[1], delivered: row[2], note: row[3], through: '' };
+    });
+  }
+  return map;
+}
+
+function reportProgressText_(actual, goal) {
+  if (briefBlank_(actual) || briefBlank_(goal) || Number(goal) === 0) return 'Pending';
+  return percentText_(Number(actual) / Number(goal));
+}
+
+function reportCell_(value, unit) {
+  if (briefBlank_(value)) return 'Pending';
+  if (unit === 'dollars') return moneyText_(value);
+  if (unit === 'count') return String(value);
+  return percentText_(value);
+}
+
+function reportLyValue_(metric, ly, unit) {
+  if (metric === 'NWDSR Written' || metric === 'NWDSR Delivered') {
+    var side = metric === 'NWDSR Written' ? ly.written : ly.delivered;
+    if (ly.confirmed && side && !briefBlank_(side.value)) return reportCell_(side.value, unit);
+    return 'Pending';
+  }
+  var found = null;
+  try {
+    lastYearRows_().forEach(function (row) {
+      if (found || row.track !== 'store' || row.metric !== metric || row.person || row.employeeId) return;
+      if (ly.period && row.start + ' through ' + row.end !== ly.period) return;
+      if (row.value === null || !row.verifiedBy) return;
+      found = row;
+    });
+  } catch (error) { found = null; }
+  if (found) return reportCell_(found.value, unit);
+  return 'N/A';
+}
+
+function reportScoreRow_(key, label, actual, goal, unit, source, lyMetric, ly) {
+  var pending = briefBlank_(actual);
+  var ratio = pending || briefBlank_(goal) || Number(goal) === 0 ? null : Number(actual) / Number(goal);
+  return {
+    key: key,
+    label: label,
+    actual: pending ? 'Pending' : reportCell_(actual, unit),
+    progress: reportProgressText_(actual, goal),
+    variance: pending || briefBlank_(goal) ? 'Pending' : reportVersus_(actual, goal, unit === 'percent' ? 'percent' : (unit === 'count' ? 'count' : 'dollars')),
+    budget: briefBlank_(goal) ? 'Pending' : reportCell_(goal, unit),
+    ly: reportLyValue_(lyMetric, ly, unit),
+    status: reportStatus_(actual, goal),
+    ratio: ratio === null || !isFinite(ratio) ? null : ratio,
+    source: source,
+  };
+}
+
+function reportMonthly_(payload, today) {
+  var anchor = today;
+  try { if (payload && payload.date) anchor = validDate_(payload.date); } catch (error) { anchor = today; }
+  if (!anchor || anchor > today) anchor = today;
+  var store = storePeriodContaining_(anchor);
+  var asOf = today <= store.end ? today : shiftDate_(store.end, 1);
+  var partial = asOf <= store.end;
+  var facts = dailyFacts_();
+  var closed = closedDates_();
+  var config = config_();
+  var budgets = storeSalesGoals_(config, store);
+  var goals = approvedGoals_(config);
+  var written = reportMonthFacts_('nwdsrWritten', facts, store, asOf, closed);
+  var delivered = reportMonthFacts_('nwdsrDelivered', facts, store, asOf, closed);
+  var ly = { confirmed: false, period: '', written: { value: null }, delivered: { value: null } };
+  try { ly = briefLastYearStore_(config, store); } catch (error) { ly = ly; }
+  var closing = { ratio: null, goal: closingGoal_(config), through: '', note: 'Store closing is Pending.' };
+  try { closing = storeMonthClosing_(loadClosingView_(), store, closing.goal); } catch (error) { closing = closing; }
+  var kpis = reportKpiMap_(store);
+  function kpiSource(name) {
+    var row = kpis[name] || {};
+    var through = row.through || '';
+    var note = row.note ? ' ' + row.note : '';
+    if (briefBlank_(row.written)) return 'Not on the verified store KPI file for this store month.' + note;
+    return 'Store KPI' + (through ? ' through ' + through : '') + '. Not a salesperson figure.' + note;
+  }
+  function dollarSource(pack, label) {
+    if (pack.value === null) return label + ' is not on file for this store month. Not counted as zero. SNAP is not used.';
+    return label + ' through ' + pack.through + (pack.missing.length ? '. Missing ' + reportDateList_(pack.missing) + ' not counted as zero.' : '.') + ' SNAP is not used.';
+  }
+  var rows = [
+    reportScoreRow_('written', 'Written sales', written.value, budgets.written, 'dollars', dollarSource(written, 'NWDSR Written'), 'NWDSR Written', ly),
+    reportScoreRow_('delivered', 'Delivered sales', delivered.value, budgets.delivered, 'dollars', dollarSource(delivered, 'NWDSR Delivered'), 'NWDSR Delivered', ly),
+    reportScoreRow_('closing', 'Closing ratio', closing.ratio, closing.goal, 'percent', closing.ratio === null ? (closing.note || closing.gap || 'Store closing is Pending.') : ('Purchasing customers ÷ PERQ opportunities through ' + (closing.through || 'Pending') + '. Not SNAP.'), 'Closing ratio', ly),
+    reportScoreRow_('ticket', 'Average ticket', kpis['Average Ticket'] ? kpis['Average Ticket'].written : null, goals.averageTicket, 'dollars', kpiSource('Average Ticket'), 'Average Ticket', ly),
+    reportScoreRow_('bedding', 'Bedding', kpis.Bedding ? kpis.Bedding.written : null, goals.bedding, 'percent', kpiSource('Bedding'), 'Bedding', ly),
+    reportScoreRow_('fabric', 'Fabric maintenance', kpis['Fabric Maintenance'] ? kpis['Fabric Maintenance'].written : null, goals.fabric, 'percent', kpiSource('Fabric Maintenance'), 'Fabric Maintenance', ly),
+    reportScoreRow_('leather', 'Leather maintenance', kpis['Leather Maintenance'] ? kpis['Leather Maintenance'].written : null, goals.leather, 'percent', kpiSource('Leather Maintenance'), 'Leather Maintenance', ly),
+    reportScoreRow_('power', 'Power upholstery', kpis['Power Upholstery'] ? kpis['Power Upholstery'].written : null, goals.power, 'percent', kpiSource('Power Upholstery'), 'Power Upholstery', ly),
+    reportScoreRow_('pads', 'Mattress protectors', kpis['Mattress Protectors'] ? kpis['Mattress Protectors'].written : null, goals.mattress, 'percent', kpiSource('Mattress Protectors'), 'Mattress Protectors', ly),
+    reportScoreRow_('rugs', 'Rugs sold', kpis.Rugs ? kpis.Rugs.written : null, goals.rugs, 'count', kpiSource('Rugs'), 'Rugs', ly),
+  ];
+  if (kpis.Finance && !briefBlank_(kpis.Finance.written)) rows.push(reportScoreRow_('finance', 'Financing', kpis.Finance.written, goals.finance, 'percent', kpiSource('Finance'), 'Finance', ly));
+  if (kpis.Pillows && !briefBlank_(kpis.Pillows.written)) rows.push(reportScoreRow_('pillows', 'Pillows', kpis.Pillows.written, goals.pillow, 'percent', kpiSource('Pillows'), 'Pillows', ly));
+  if (kpis['Adjustable Base Attachment'] && !briefBlank_(kpis['Adjustable Base Attachment'].written)) rows.push(reportScoreRow_('bases', 'Adjustable bases', kpis['Adjustable Base Attachment'].written, goals.adjustableBase, 'percent', kpiSource('Adjustable Base Attachment'), 'Adjustable Base Attachment', ly));
+  var strengths = [];
+  var gaps = [];
+  rows.forEach(function (row) {
+    if (row.status === 'hit' || row.status === 'even') strengths.push(row.label + ' is ' + row.actual + ' versus the budget ' + row.budget + '.');
+    if (row.status === 'short') gaps.push(row);
+  });
+  strengths = strengths.slice(0, 3);
+  var strengthFill = ['No metric on this page is at its budget.', 'No second verified strength.', 'No third verified strength.'];
+  while (strengths.length < 3) strengths.push(strengthFill[strengths.length]);
+  var dollarGaps = gaps.filter(function (row) { return row.key === 'written' || row.key === 'delivered'; });
+  var otherGaps = gaps.filter(function (row) { return row.key !== 'written' && row.key !== 'delivered'; });
+  otherGaps.sort(function (a, b) {
+    if (a.ratio === null) return 1;
+    if (b.ratio === null) return -1;
+    return a.ratio - b.ratio;
+  });
+  var priorities = dollarGaps.concat(otherGaps).slice(0, 3).map(function (row) { return row.label + ' is ' + row.actual + ' versus ' + row.budget + '.'; });
+  var gapFill = ['No verified gap is on this page.', 'No second verified gap.', 'No third verified gap.'];
+  while (priorities.length < 3) priorities.push(gapFill[priorities.length]);
+  var monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var monthName = monthNames[Number(String(store.start).slice(5, 7)) - 1] + ' ' + String(store.start).slice(0, 4);
+  var assessment = 'Store 17, ' + briefDisplayDate_(store.start) + ' through ' + briefDisplayDate_(store.end) + (partial ? ', is still open. ' : '. ') +
+    'NWDSR Written is ' + rows[0].actual + ' of the ' + rows[0].budget + ' budget' + (written.through ? ' through ' + briefDisplayDate_(written.through) : '') + '. ' +
+    'NWDSR Delivered is ' + rows[1].actual + ' of the ' + rows[1].budget + ' budget' + (delivered.through ? ' through ' + briefDisplayDate_(delivered.through) : '') + '. ' +
+    'These are the verified figures. This page does not explain why the result moved.';
+  var focus = priorities[0].indexOf('No verified gap') === 0
+    ? 'No verified gap is on file, so no next-month focus is set.'
+    : ((partial ? 'Principal focus while this store month is still open: ' : 'Principal focus for the next store month: ') + priorities[0]);
+  var partialLabel = partial ? 'Partial · store month in progress' : 'Completed store month';
+  var verification = partialLabel + ' · Store 17 · ' + briefDisplayDate_(store.start) + ' through ' + briefDisplayDate_(store.end) + ' · prepared ' + briefDisplayDate_(today) +
+    '. Written through ' + (written.through ? briefDisplayDate_(written.through) : 'Pending') + '. Delivered through ' + (delivered.through ? briefDisplayDate_(delivered.through) : 'Pending') +
+    '. Closing through ' + (closing.through ? briefDisplayDate_(closing.through) : 'Pending') + '. Last year is ' + rows[0].ly + ' for NWDSR Written and ' + rows[1].ly + ' for NWDSR Delivered. No email sent.';
+  return {
+    role: payload.session.role,
+    version: APP_VERSION_,
+    kind: 'monthly',
+    layout: 'monthly',
+    ready: true,
+    title: 'Monthly Executive Scorecard',
+    partial: partial,
+    partialLabel: partialLabel,
+    date: store.end,
+    displayDate: 'Store 17 · ' + monthName + ' · ' + briefDisplayDate_(store.start) + ' – ' + briefDisplayDate_(store.end),
+    today: today,
+    period: { start: store.start, end: store.end },
+    storePeriod: store.start + ' through ' + store.end,
+    individualPeriod: individualPeriodContaining_(store.end).start + ' through ' + individualPeriodContaining_(store.end).end,
+    calendarNote: 'Store month is the 2nd through the 1st and uses NWDSR Written and Delivered. The salesperson month is the 1st through the last calendar day and is not this report. SNAP is not Store Written.',
+    mail: false,
+    verification: verification,
+    rows: rows,
+    lines: rows,
+    assessment: assessment,
+    summary: { strengths: strengths, priorities: priorities, focus: focus },
+    winners: { status: 'pending', text: '', quiet: '', source: '', date: '' },
+    priorities: [focus],
+    prioritySource: 'From verified gaps only. Not emailed.',
+    notice: 'Preview, print, or download this page. No email is sent.',
+  };
+}
+
+function reportMonthlyPdf_(page) {
+  var commands = [];
+  function paint(r, g, b) { commands.push(r + ' ' + g + ' ' + b + ' rg'); }
+  function text(x, y, size, value, bold) {
+    commands.push('BT /' + (bold ? 'F2' : 'F1') + ' ' + size + ' Tf ' + x.toFixed(1) + ' ' + y.toFixed(1) + ' Td (' + reportPdfEscape_(value) + ') Tj ET');
+  }
+  commands.push('0.06 0.13 0.16 rg 0 568 792 44 re f');
+  commands.push('0.05 0.50 0.53 rg 0 562 792 6 re f');
+  paint(1, 1, 1);
+  text(36, 588, 8, "KANE'S FURNITURE  ·  STORE 17  ·  EXECUTIVE", true);
+  text(36, 574, 13, 'Monthly Executive Scorecard', true);
+  paint(0.06, 0.13, 0.16);
+  text(36, 546, 9, reportAscii_(page.partialLabel) + '  ·  ' + reportAscii_(page.displayDate), true);
+  var y = 532;
+  reportWrap_(page.verification, 150).slice(0, 3).forEach(function (line) { text(36, y, 8, line, false); y -= 10; });
+  y -= 4;
+  paint(0.05, 0.50, 0.53);
+  text(36, y, 8, 'MEASURE', true);
+  text(190, y, 8, 'ACTUAL', true);
+  text(300, y, 8, 'PROGRESS', true);
+  text(400, y, 8, 'VARIANCE', true);
+  text(520, y, 8, 'BUDGET', true);
+  text(640, y, 8, 'NWDSR LY', true);
+  y -= 12;
+  (page.rows || []).forEach(function (row) {
+    paint(0.06, 0.13, 0.16);
+    text(36, y, 8, row.label, true);
+    var tone = reportTone_(row.status);
+    paint(tone[0], tone[1], tone[2]);
+    text(190, y, 8, row.actual, true);
+    text(300, y, 8, row.progress, false);
+    text(400, y, 8, row.variance, false);
+    paint(0.06, 0.13, 0.16);
+    text(520, y, 8, row.budget, true);
+    text(640, y, 8, row.ly, false);
+    y -= 14;
+  });
+  y -= 6;
+  paint(0.06, 0.13, 0.16);
+  reportWrap_(page.assessment, 150).slice(0, 3).forEach(function (line) { text(36, y, 8, line, false); y -= 10; });
+  y -= 6;
+  var summary = page.summary || {};
+  var columnTop = y;
+  function column(x, title, items, width) {
+    paint(0.05, 0.50, 0.53);
+    text(x, columnTop, 8, title, true);
+    var row = columnTop - 12;
+    paint(0.06, 0.13, 0.16);
+    (items || []).slice(0, 3).forEach(function (item, index) {
+      reportWrap_((index + 1) + '. ' + item, width).forEach(function (line) { text(x, row, 8, line, false); row -= 10; });
+      row -= 2;
+    });
+    if (row < y) y = row;
+  }
+  column(36, 'STRENGTHS', summary.strengths, 48);
+  column(290, 'IMPROVE', summary.priorities, 48);
+  column(544, 'NEXT MONTH', [summary.focus || ''], 40);
+  text(36, 18, 8, 'No email sent. Last year stays Pending until verified. SNAP is not Store Written.', false);
+  return reportPdfFinish_(commands, '0 0 792 612');
+}
+
 function reportCenter_(payload) {
   var today = todayNy_();
   var kind = String(payload && payload.kind || 'daily');
   if (kind !== 'daily' && kind !== 'weekly' && kind !== 'monthly' && kind !== 'individual') kind = 'daily';
   var locked = reportGuard_(payload, kind);
   if (locked) payload.name = locked;
-  var page = kind === 'daily' ? reportDaily_(payload, today) : (kind === 'weekly' ? reportWeekly_(payload, today) : (kind === 'individual' ? reportIndividual_(payload, today) : reportUnbuilt_(payload, today, kind)));
+  var page = kind === 'daily' ? reportDaily_(payload, today) : (kind === 'weekly' ? reportWeekly_(payload, today) : (kind === 'individual' ? reportIndividual_(payload, today) : (kind === 'monthly' ? reportMonthly_(payload, today) : reportUnbuilt_(payload, today, kind))));
   page.catalog = reportCatalog_(today);
   if (payload.session && payload.session.role === 'sales') page.catalog.kinds = [{ key: 'individual', label: 'My report', ready: true }];
-  page.pdf = page.ready ? (page.layout === 'weekly' ? reportWeeklyPdf_(page) : (page.layout === 'individual' ? reportIndividualPdf_(page) : reportPdf_(page))) : '';
+  var pdf = '';
+  if (page.ready && page.layout === 'weekly') pdf = reportWeeklyPdf_(page);
+  else if (page.ready && page.layout === 'individual') pdf = reportIndividualPdf_(page);
+  else if (page.ready && page.layout === 'monthly') pdf = reportMonthlyPdf_(page);
+  else if (page.ready) pdf = reportPdf_(page);
+  page.pdf = pdf;
   return page;
 }
 
@@ -1234,14 +1483,14 @@ function reportIndividualPdf_(page) {
   return reportPdfFinish_(commands);
 }
 
-function reportPdfFinish_(commands) {
+function reportPdfFinish_(commands, box) {
   var stream = commands.join('\n');
   var objects = [];
   function add(body) { objects.push(body); return objects.length; }
   var font1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
   var font2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
   var content = add('<< /Length ' + stream.length + ' >>\nstream\n' + stream + '\nendstream');
-  var pageId = add('<< /Type /Page /Parent PAGES 0 R /MediaBox [0 0 612 792] /Contents ' + content + ' 0 R /Resources << /Font << /F1 ' + font1 + ' 0 R /F2 ' + font2 + ' 0 R >> >> >>');
+  var pageId = add('<< /Type /Page /Parent PAGES 0 R /MediaBox [' + (box || '0 0 612 792') + '] /Contents ' + content + ' 0 R /Resources << /Font << /F1 ' + font1 + ' 0 R /F2 ' + font2 + ' 0 R >> >> >>');
   var pages = add('<< /Type /Pages /Count 1 /Kids [' + pageId + ' 0 R] >>');
   var catalog = add('<< /Type /Catalog /Pages ' + pages + ' 0 R >>');
   objects[pageId - 1] = objects[pageId - 1].replace('Parent PAGES 0 R', 'Parent ' + pages + ' 0 R');
