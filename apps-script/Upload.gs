@@ -520,9 +520,20 @@ function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
   var prefixOf = function (row) { return row.view.replace(/_STORE$/, ''); };
   var storeRow = function (row) { return row.scope === 'STORE' && row.side === side && !row.code && !row.name && spec.views.indexOf(prefixOf(row)) !== -1 && spec.source.test(row.source); };
   var snapshot = '';
+  var nwdsrLimit = '';
+  if (family === 'group17') {
+    Object.keys(facts).forEach(function (date) {
+      if (date < period.start || date > period.end) return;
+      var amount = side === 'written' ? facts[date].nwdsrWritten : facts[date].nwdsrDelivered;
+      if (amount === null || amount === undefined) return;
+      if (date > nwdsrLimit) nwdsrLimit = date;
+    });
+  }
   ledger.forEach(function (row) {
     if (!storeRow(row) || row.grain !== 'cumulative' || !row.fitsTrack || row.periodStart !== period.start) return;
     if (row.source.indexOf(' + ') !== -1 || row.verifiedThrough > period.end) return;
+    // A Group 17 snapshot cannot run past the last official NWDSR day for that side.
+    if (nwdsrLimit && row.verifiedThrough > nwdsrLimit) return;
     if (prefixOf(row) === spec.anchor && row.verifiedThrough > snapshot) snapshot = row.verifiedThrough;
   });
   var snapRows = {};
@@ -749,7 +760,6 @@ function refreshStoreKpi_(date) {
       }
       var current = kpi[index];
       var recordedThrough = isoDate_(current[6]);
-      if (recordedThrough && recordedThrough > through) return;
       var same = fineNumber_(current[1]) === fineNumber_(values[1]) && fineNumber_(current[2]) === fineNumber_(values[2]) && String(current[3]) === values[3] && recordedThrough === through;
       if (same) return;
       archiveReplaced_('CC_Kpi', line[0] + '|' + period.start + '|' + period.end, current, 'store month through ' + through, 'A newer store-period snapshot replaced this row.');

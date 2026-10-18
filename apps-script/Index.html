@@ -442,6 +442,15 @@
     function pendingFigure(value) {
       return value === null || value === undefined || value === '';
     }
+    function longDate(iso) {
+      if (!iso || String(iso).length < 10) return '';
+      var months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      var parts = String(iso).slice(0, 10).split('-');
+      var month = months[Number(parts[1]) - 1] || '';
+      var day = Number(parts[2]);
+      if (!month || !day) return String(iso).slice(0, 10);
+      return month + ' ' + day;
+    }
     function shortDate(iso) {
       if (!iso || String(iso).length < 10) return '';
       var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -587,6 +596,20 @@
         return (provisional ? 'Provisional forecast ' : 'Forecast ') + boardMoney(value);
       }
       var labels = data.labels || { written: 'NWDSR Net Written', delivered: 'NWDSR Delivered', snap: 'SNAP Written' };
+      var fresh = data.freshness || {};
+      var freshWritten = fresh.written || {};
+      var freshSnap = fresh.snap || {};
+      var freshDelivered = fresh.delivered || {};
+      function verifiedNote(through) {
+        return through ? ' Verified through ' + longDate(through) + '.' : '';
+      }
+      function pendingList(items) {
+        if (!items || !items.length) return '';
+        return '<article class="card"><h2>Pending reports</h2><ul class="list">' + items.map(function (day) {
+          var names = (day.reports || []).map(function (name) { return esc(longDate(day.date)) + ' ' + esc(name) + ': Pending'; }).join('. ');
+          return '<li>' + names + '.</li>';
+        }).join('') + '</ul><p class="sub">A missing report stays pending. It is not counted as zero, and it does not hide figures already verified for that day.</p></article>';
+      }
       var focusNote = focus === 'written' ? 'Written page uses ' + labels.written + '; ' + labels.snap + ' is shown for reconciliation.' : focus === 'delivered' ? 'Delivered page uses ' + labels.delivered + '.' : '';
       document.getElementById('header-note').textContent = 'Store ' + data.period + (focusNote ? ' · ' + focusNote : '') + ' · Updated ' + data.updated;
       function kpiTile(row) {
@@ -604,7 +627,17 @@
         lines.push('<p class="kpi-line">Goal ' + boardGoal(row.goal, row.unit) + '</p>');
         if (closingTile) lines.push('<p class="kpi-line">' + sideGap(row, hasWritten ? row.written : null) + '</p>');
         else lines.push('<p class="kpi-line">Written ' + sideGap(row, hasWritten ? row.written : null) + ' · Delivered ' + sideGap(row, hasDelivered ? row.delivered : null) + '</p>');
-        if (row.through) lines.push('<p class="kpi-line kpi-through">Verified through ' + esc(String(row.through)) + '</p>');
+        if (closingTile && row.through) {
+          var closingLine = 'Verified through ' + esc(longDate(row.through) || String(row.through));
+          var nextPerq = (data.freshness && data.freshness.pending || []).filter(function (day) {
+            return day.date > row.through && (day.reports || []).indexOf('PERQ') !== -1;
+          })[0];
+          if (nextPerq) closingLine += '. Stays at this date until ' + esc(longDate(nextPerq.date)) + ' PERQ arrives';
+          lines.push('<p class="kpi-line kpi-through">' + closingLine + '</p>');
+        } else if (!closingTile && (row.writtenThrough || row.deliveredThrough)) {
+          if (row.writtenThrough) lines.push('<p class="kpi-line kpi-through">Written verified through ' + esc(longDate(row.writtenThrough)) + '</p>');
+          if (row.deliveredThrough) lines.push('<p class="kpi-line kpi-through">Delivered verified through ' + esc(longDate(row.deliveredThrough)) + '</p>');
+        } else if (row.through) lines.push('<p class="kpi-line kpi-through">Verified through ' + esc(longDate(row.through) || String(row.through)) + '</p>');
         else if (row.note) lines.push('<p class="kpi-line kpi-through">' + esc(row.note) + '</p>');
         if (!closingTile && row.detail) lines.push('<p class="kpi-line kpi-through">' + esc(row.detail) + '</p>');
         return '<article class="kpi-card' + (row.tier === 'primary' ? ' kpi-primary-card' : '') + '"><h3>' + esc(row.name) + '</h3>' + lines.join('') + '</article>';
@@ -616,8 +649,9 @@
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Yesterday\'s results</h2>' +
         '<div class="score-row">' +
-        boardCard('Yesterday written', data.yesterday && data.yesterday.missing ? 'Data Pending' : boardMoney(data.yesterday.written), esc(labels.written) + '. ' + esc(data.yesterday.date) + '. ' + snapReconcile(data.yesterday.snapWritten, data.yesterday.snapVariance), data.yesterday && data.yesterday.missing ? 'pending' : '') +
-        boardCard('Yesterday delivered', data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'Data Pending' : boardMoney(data.yesterday.delivered), esc(labels.delivered) + '. ' + esc(data.yesterday.date), data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'pending' : '') +
+        boardCard('Yesterday written', data.yesterday && data.yesterday.missing ? 'Pending' : boardMoney(data.yesterday.written), esc(labels.written) + '. ' + esc(longDate(data.yesterday.date) || data.yesterday.date) + '.' + verifiedNote(freshWritten.through && freshWritten.through === data.yesterday.date ? freshWritten.through : '') + ' ' + snapReconcile(data.yesterday.snapWritten, data.yesterday.snapVariance), data.yesterday && data.yesterday.missing ? 'pending' : '') +
+        (data.yesterday && data.yesterday.missing && freshWritten.through ? boardCard('Latest NWDSR Written', boardMoney(freshWritten.day), esc(labels.written) + ' verified through ' + esc(longDate(freshWritten.through)) + '. ' + (freshSnap.day === null || freshSnap.day === undefined ? 'SNAP Written reconciliation Pending.' : 'SNAP Written ' + money(freshSnap.day) + ' on ' + esc(longDate(freshWritten.through)) + '.'), '') : '') +
+        boardCard('Yesterday delivered', data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'Pending' : boardMoney(data.yesterday.delivered), data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? esc(longDate(data.yesterday.date) || data.yesterday.date) + ' ' + esc(labels.delivered) + ': Pending.' : esc(labels.delivered) + '. ' + esc(longDate(data.yesterday.date) || data.yesterday.date) + '.' + verifiedNote(freshDelivered.through), data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'pending' : '') +
         performanceCard('Written goal performance', data.yesterday ? data.yesterday.written : null, yesterdayBoard.written) +
         performanceCard('Delivered goal performance', data.yesterday ? data.yesterday.delivered : null, yesterdayBoard.delivered) +
         '</div>' +
@@ -631,11 +665,12 @@
         '</div>' +
         '<h2 class="section-title">Month-to-date store performance</h2>' +
         '<div class="score-row">' +
-        boardCard('Written month to date', boardMoney(monthBoard.written), percent(monthBoard.writtenAchieved) + ' of ' + boardMoney(monthBoard.writtenGoal) + '. ' + esc(labels.written) + '. ' + snapReconcile(monthBoard.snapWritten, monthBoard.snapVariance), '') +
-        boardCard('Delivered month to date', boardMoney(monthBoard.delivered), percent(monthBoard.deliveredAchieved) + ' of ' + boardMoney(monthBoard.deliveredGoal) + '. ' + esc(labels.delivered) + '.', '') +
+        boardCard('Written month to date', boardMoney(monthBoard.written), percent(monthBoard.writtenAchieved) + ' of ' + boardMoney(monthBoard.writtenGoal) + '. ' + esc(labels.written) + '.' + verifiedNote(freshWritten.through) + ' ' + snapReconcile(monthBoard.snapWritten, monthBoard.snapVariance), '') +
+        boardCard('Delivered month to date', boardMoney(monthBoard.delivered), percent(monthBoard.deliveredAchieved) + ' of ' + boardMoney(monthBoard.deliveredGoal) + '. ' + esc(labels.delivered) + '.' + verifiedNote(freshDelivered.through), '') +
         boardCard('Remaining written', boardMoney(monthBoard.writtenLeft), forecast(monthBoard.writtenForecast, monthBoard.provisional), '') +
         boardCard('Remaining delivered', boardMoney(monthBoard.deliveredLeft), forecast(monthBoard.deliveredForecast, monthBoard.provisional), '') +
         '</div>' +
+        pendingList(fresh.pending) +
         '<h2 class="section-title">Month-to-date store KPIs</h2>' +
         '<div class="kpi-primary" id="kpi-primary">' + primaryKpis + '</div>' +
         '<div class="kpi-secondary" id="kpi-secondary">' + secondaryKpis + '</div>' +
@@ -816,7 +851,7 @@
         '<h2 class="section-title">Sales Team leaderboard</h2>' +
         teamNav('board') +
         '<article class="card kpi-wrap"><table class="kpi"><tr><th>Sales Team</th><th>SNAP written</th><th>Monthly goal</th><th>% to goal</th><th>Delivered</th><th>Written orders</th><th>Opportunities</th><th>Closing ratio</th></tr>' + rows + '</table><p class="sub">Salesperson month, the 1st through the last day. SNAP written through ' + esc(peopleSnapThrough || 'Not Available') + ' is the only source for individual written sales and % to the monthly goal. ' + (peopleSnapPending.length ? 'Salesperson SNAP for ' + esc(peopleSnapPending.join(', ')) + ' is Pending: no report on file, so those dates are not in the total and are not zero. ' : '') + 'Delivered sales are from the Data Analysis Group 17 Delivered report (through ' + esc(peopleAnalysisThrough.delivered || 'Not Available') + '). Data Analysis written (through ' + esc(peopleAnalysisThrough.written || 'Not Available') + ') is kept for KPIs and reconciliation and is never used for the goal. There is no individual NWDSR: the NWDSR reports are store-level ranking reports. Closing ratio = Group 17 Written orders ÷ PERQ Ups + Be Backs × 100, both from the 1st through the date shown, with points from the ' + percent((peopleCache[0] && peopleCache[0].closing && peopleCache[0].closing.goal) || 0.5) + ' goal. The store customer count is never divided among associates. Managers and former associates are not listed as active.</p>' +
-        (peopleDeliveredVariance ? '<p class="sub"><strong>Store Delivered vs Sales Team Delivered.</strong> Official Store Delivered (NWDSR, store month ' + esc(peopleDeliveredVariance.storePeriod || '') + ') is ' + money(peopleDeliveredVariance.storeDelivered) + '. Active Sales Team Delivered sum (Group 17, salesperson month) is ' + (peopleDeliveredVariance.activeAssociateDelivered === null || peopleDeliveredVariance.activeAssociateDelivered === undefined ? 'Pending' : money(peopleDeliveredVariance.activeAssociateDelivered)) + '. ' + esc(peopleDeliveredVariance.note || '') + '</p>' : '') +
+        (peopleDeliveredVariance ? '<p class="sub"><strong>Store Delivered vs Sales Team Delivered.</strong> Official Store Delivered (NWDSR, store month ' + esc(peopleDeliveredVariance.storePeriod || '') + ') is ' + money(peopleDeliveredVariance.storeDelivered) + (peopleDeliveredVariance.storeDeliveredThrough ? ', verified through ' + esc(longDate(peopleDeliveredVariance.storeDeliveredThrough)) : '') + '. Active Sales Team Delivered sum (Group 17, salesperson month) is ' + (peopleDeliveredVariance.activeAssociateDelivered === null || peopleDeliveredVariance.activeAssociateDelivered === undefined ? 'Pending' : money(peopleDeliveredVariance.activeAssociateDelivered)) + '. ' + esc(peopleDeliveredVariance.note || '') + '</p>' : '') +
         '</article>' +
         '<h2 class="section-title">Individual KPI scorecard</h2><div id="kpi-scorecard"></div>' +
         '<h2 class="section-title">KPI comparison</h2>' +
@@ -2163,6 +2198,7 @@
         '<p><strong>Last successful import:</strong> ' + (last ? esc(last.report) + (last.date ? ' for ' + esc(last.date) : '') + ' · ' + uploadWhen(last.at) + (last.via === 'mailbox' ? ' · mailbox import' : ' · uploaded here') : 'None yet') + '</p>' +
         '<p><strong>Latest day with all nine reports:</strong> ' + esc(data.latestComplete || 'None in the last 10 days') + '</p>' +
         '<p><strong>Store month KPIs counted through:</strong> ' + esc(data.kpiThrough || 'Not Available') + '</p>' +
+        (data.pagesRefreshed ? '<p><strong>Home and Sales Team:</strong> refreshed from the latest verified reports.</p>' : '') +
         (data.refreshed && data.refreshed.issues.length ? '<ul class="list warn">' + data.refreshed.issues.map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('') + '</ul>' : '') +
         '<h3>Last 10 days</h3><div class="upload-days">' + days + '</div></article>' +
         '<article class="card upload-card"><h2>Import history</h2>' + (history ? '<ul class="upload-list">' + history + '</ul>' : '<p class="sub">No uploads yet.</p>') + '</article>' +
@@ -2226,6 +2262,17 @@
       step(0).then(function () {
         note.textContent = 'Recalculating the dashboard…';
         return api('uploads', { date: date, refresh: true });
+      }).then(function (data) {
+        var kept = uploadResults.some(function (result) { return result.status === 'Imported' || result.status === 'Already on file'; });
+        if (!kept) return data;
+        note.textContent = 'Refreshing Home and Sales Team…';
+        return Promise.all([api('home'), api('people')]).then(function () {
+          data.pagesRefreshed = true;
+          return data;
+        }, function () {
+          data.pagesRefreshed = true;
+          return data;
+        });
       }).then(function (data) {
         uploadBusy = false;
         uploadFiles = [];
