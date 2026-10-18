@@ -1655,7 +1655,7 @@
       var dates = data.span === 'week-to-date' ? '' : '<label>Week containing<input id="report-end" type="date" value="' + esc(reportQuery.end) + '"></label>';
       return { controls: who + span + dates, body: '<p class="report-badge ' + (data.partial ? 'partial' : 'complete') + '">' + esc(data.partialLabel || '') + (data.newHire ? ' · NEW HIRE' : '') + '</p><h1>' + esc(data.title) + '</h1><p class="report-verify">' + esc(data.verification) + '</p>' +
         '<h2>Performance</h2><table><thead><tr><th>Measure</th><th>Result</th><th>Goal</th><th>Versus goal</th><th>Source</th></tr></thead><tbody>' + rows(data.performance) + '</tbody></table>' +
-        '<h2>Sales quality · salesperson month, not this week</h2><table><tbody>' + rows(data.quality) + '</tbody></table>' +
+        '<h2>Sales quality · salesperson month, not this week</h2><table><thead><tr><th>Measure</th><th>Result</th><th>Goal</th><th>Versus goal</th><th>Source</th></tr></thead><tbody>' + rows(data.quality) + '</tbody></table>' +
         '<h2>Opportunity</h2><ol>' + (data.opportunity || []).map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ol>' +
         '<div class="report-cols"><div><h2>Strengths</h2>' + list(coaching.strengths) + '</div><div><h2>Improve</h2>' + list(coaching.improvements) + '</div><div><h2>Next week</h2><p>' + esc(coaching.goal || '') + '</p></div></div>' +
         '<h2>Manager notes</h2><p class="report-foot">' + esc(coaching.notes || '') + '</p><div class="report-notes"><i></i><i></i><i></i></div>' };
@@ -1684,7 +1684,7 @@
           '<h2>Sales winners · ' + esc(winners.date || '') + '</h2><p>' + esc(winners.status === 'pending' ? 'Pending' : winners.text) + '</p><p class="report-foot">' + esc(winners.source || '') + (winners.quiet && winners.quiet !== 'Pending' ? ' No written sale: ' + winners.quiet : '') + '</p>' +
           '<h2>Management priorities</h2>' + (priorities ? '<ol>' + priorities + '</ol>' : '<p>No additional priority is supported by verified data.</p>') +
           '<p class="report-foot">' + esc(data.prioritySource || '') + '</p>' : '<p>' + esc(data.notice || 'This report is not built yet.') + '</p>'))) +
-        '<p class="report-foot">' + esc(data.calendarNote || '') + ' Store month ' + esc(data.storePeriod || '') + '. Salesperson month ' + esc(data.individualPeriod || '') + '. No email sent.</p></article>';
+        '<p class="report-foot">' + esc(data.calendarNote || '') + (data.storePeriod ? ' Store month ' + esc(data.storePeriod) + '.' : '') + ' Salesperson month ' + esc(data.individualPeriod || '') + '. No email sent.</p></article>';
       Array.prototype.forEach.call(document.querySelectorAll('[data-report-kind]'), function (button) {
         button.addEventListener('click', function () {
           reportQuery.kind = button.getAttribute('data-report-kind');
