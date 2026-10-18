@@ -325,6 +325,7 @@ function reportCatalog_(today) {
       { key: 'weekly', label: 'Weekly', ready: true },
       { key: 'monthly', label: 'Monthly', ready: true },
       { key: 'individual', label: 'Individual', ready: true },
+      { key: 'meeting', label: 'Generate Meeting Packet', ready: true },
     ],
     storePeriod: store.start + ' through ' + store.end,
     individualPeriod: individual.start + ' through ' + individual.end,
@@ -1221,19 +1222,391 @@ function reportMonthlyPdf_(page) {
   return reportPdfFinish_(commands, '0 0 792 612');
 }
 
+function reportMeetingPick_(lines, key) {
+  var found = null;
+  (lines || []).forEach(function (line) { if (line.key === key) found = line; });
+  return found;
+}
+
+function reportMeetingMoney_(text) {
+  var cleaned = String(text || '').replace(/[^0-9.\-]/g, '');
+  if (!cleaned || cleaned === '-' || cleaned === '.') return null;
+  var number = Number(cleaned);
+  return isFinite(number) ? number : null;
+}
+
+function reportMeetingPerson_(page) {
+  var performance = page.performance || [];
+  var quality = page.quality || [];
+  var ticket = reportMeetingPick_(performance, 'ticket');
+  var weekTicket = !!(ticket && ticket.status !== 'pending' && String(ticket.source || '').indexOf('This week.') === 0);
+  return {
+    name: page.name,
+    newHire: !!page.newHire,
+    employed: reportMeetingPick_(performance, 'snap-week') ? reportMeetingPick_(performance, 'snap-week').result !== 'Not employed' : false,
+    snapWeek: reportMeetingPick_(performance, 'snap-week'),
+    snapMtd: reportMeetingPick_(performance, 'snap-mtd'),
+    goal: reportMeetingPick_(performance, 'volume-goal'),
+    percent: reportMeetingPick_(performance, 'volume-pct'),
+    orders: reportMeetingPick_(performance, 'orders'),
+    ticket: ticket,
+    weekTicket: weekTicket,
+    closing: reportMeetingPick_(performance, 'closing'),
+    bedding: reportMeetingPick_(quality, 'bedding'),
+    fabric: reportMeetingPick_(quality, 'fabric'),
+    leather: reportMeetingPick_(quality, 'leather'),
+    power: reportMeetingPick_(quality, 'power'),
+    pads: reportMeetingPick_(quality, 'pads'),
+    rugs: reportMeetingPick_(quality, 'rugs'),
+    opportunity: (page.coaching && page.coaching.improvements && page.coaching.improvements[0]) || 'No verified coaching gap.',
+    nextGoal: (page.coaching && page.coaching.goal) || 'Pending',
+  };
+}
+
+function reportMeetingIllustrations_(session, weekly) {
+  var recovery = null;
+  var leak = null;
+  try { recovery = recovery_({ session: session }); } catch (error) { recovery = null; }
+  try { leak = leakage_({ session: session }); } catch (error) { leak = null; }
+  var hypothetical = 'Illustration only. Not guaranteed sales and not commission.';
+  var items = [];
+  function moneyOrPending(value) { return value === null || value === undefined ? 'Pending' : moneyText_(value); }
+  if (!recovery) {
+    items.push({ label: '50% closing', value: 'Pending', note: hypothetical + ' The Sales Recovery Simulator could not be read.' });
+    items.push({ label: '55% closing', value: 'Pending', note: hypothetical });
+  } else {
+    var at55 = recoveryScenario_(
+      '55% closing',
+      recovery.actual.written,
+      recovery.budget,
+      recovery.daysLeft,
+      recovery.economics.dailyOpportunities,
+      0.55,
+      recovery.economics.dollarsPerCustomer,
+      1,
+      'Remaining open store days at 55% closing, the recent daily PERQ rate, and the verified NWDSR dollars per purchasing customer.'
+    );
+    items.push({
+      label: '50% closing',
+      value: moneyOrPending(recovery.goal.remaining),
+      note: hypothetical + ' Remaining written dollars from the Sales Recovery Simulator if the rest of this store month closes at 50%. Month-end illustration ' + moneyOrPending(recovery.goal.monthEnd) + '. Not the meeting-week total.',
+    });
+    items.push({
+      label: '55% closing',
+      value: moneyOrPending(at55.remaining),
+      note: hypothetical + ' Same simulator at 55% closing. Month-end illustration ' + moneyOrPending(at55.monthEnd) + '. Not added to the 50% illustration.',
+    });
+  }
+  var ticket = leak && leak.store ? leak.store.ticket : null;
+  items.push({
+    label: '$2,500 average ticket',
+    value: moneyOrPending(ticket),
+    note: hypothetical + ' Sales Leakage Detector store ticket illustration. It is not added to the closing illustrations, and it is not the meeting-week ticket.',
+  });
+  var attachments = [];
+  ((leak && leak.people) || []).forEach(function (person) {
+    (person.attachments || []).forEach(function (row) {
+      if (row.needed === null || row.needed === undefined || Number(row.needed) <= 0) return;
+      attachments.push(person.name + ': ' + (row.label || row.key) + ' needs ' + row.needed + ' more on the verified eligible count. Dollar value Pending.');
+    });
+  });
+  if (!attachments.length) attachments.push('No verified attachment count gap is on file. Dollar amounts stay Pending because no missed-attachment price is on file.');
+  var pace = reportMeetingPick_(weekly.month, 'mtd-written-left');
+  var help = pace && pace.versus && pace.versus !== 'Pending'
+    ? ('The verified written pace on the weekly report is ' + pace.versus + '. That pace is not an illustration.')
+    : 'The verified written pace is Pending on the weekly report.';
+  if (recovery && recovery.goal && recovery.goal.reaches === true) help += ' The 50% closing illustration reaches the written budget. That result is not guaranteed.';
+  else if (recovery && recovery.goal && recovery.goal.gap !== null && recovery.goal.gap !== undefined) help += ' The 50% closing illustration is still ' + moneyText_(recovery.goal.gap) + ' short of the written budget. That result is not guaranteed.';
+  else help += ' Whether a closing illustration reaches the written budget stays Pending.';
+  return { items: items, attachments: attachments.slice(0, 3), help: help, notice: 'Hypothetical amounts are labeled Illustration. They are not guaranteed sales or commission earnings, and they are not added to NWDSR or SNAP.' };
+}
+
+function reportMeetingRecognition_(weekly, people) {
+  var items = [];
+  if (weekly.people && weekly.people.pending) items.push('Top weekly salesperson is Pending. SNAP Written for the week is not complete, so nobody is ranked.');
+  else if (weekly.people && weekly.people.top && weekly.people.top.length) items.push('Top weekly salesperson: ' + weekly.people.top[0].name + ', SNAP Written ' + moneyText_(weekly.people.top[0].written) + '. This is not NWDSR.');
+  else items.push('No associate has verified SNAP Written in this week.');
+  var best = null;
+  people.forEach(function (person) {
+    if (!person.weekTicket || !person.ticket) return;
+    var amount = reportMeetingMoney_(person.ticket.result);
+    if (amount === null) return;
+    if (!best || amount > best.amount) best = { name: person.name, amount: amount, result: person.ticket.result };
+  });
+  if (best) items.push('Strongest verified week average ticket: ' + best.name + ' at ' + best.result + '. Group 17 for this week. Not SNAP dollars.');
+  else items.push('No verified week average ticket is on file, so no ticket recognition is given.');
+  var attached = [];
+  people.forEach(function (person) {
+    ['bedding', 'fabric', 'leather', 'power', 'pads'].forEach(function (key) {
+      var line = person[key];
+      if (line && (line.status === 'hit' || line.status === 'even')) attached.push(person.name + ' ' + line.label + ' is at the goal (' + line.result + ').');
+    });
+  });
+  if (attached.length) items.push('Strong attachment: ' + attached.slice(0, 3).join(' '));
+  else items.push('No verified attachment result is at its goal.');
+  var lastYear = weekly.lastYear || {};
+  if (lastYear.written && lastYear.written !== 'Pending') items.push('Verified last-year store written is ' + lastYear.written + '. A week-versus-week improvement is not on file.');
+  else items.push('No prior comparable week is on file, so no improvement versus an earlier week is shown.');
+  return items.slice(0, 4);
+}
+
+function reportMeeting_(payload, today) {
+  var packet = String(payload && payload.packet || 'full') === 'executive' ? 'executive' : 'full';
+  var request = { session: payload.session, span: 'completed', end: payload && (payload.end || payload.date) };
+  var weekly = reportWeekly_(request, today);
+  var people = [];
+  if (packet === 'full') {
+    reportAssociates_(today).forEach(function (name) {
+      people.push(reportMeetingPerson_(reportIndividual_({ session: payload.session, span: 'completed', end: weekly.period.end, name: name }, today)));
+    });
+  }
+  var illustrations = packet === 'full' ? reportMeetingIllustrations_(payload.session, weekly) : { items: [], attachments: [], help: '', notice: '' };
+  var recognition = packet === 'full' ? reportMeetingRecognition_(weekly, people) : [];
+  var due = shiftDate_(weekly.period.end, 7);
+  var openActions = [];
+  if (packet === 'full') {
+    try { openActions = actionRank_(actionRows_(), today).slice(0, 3); } catch (error) { openActions = []; }
+  }
+  var followups = people.map(function (person) {
+    return { name: person.name, text: person.nextGoal, owner: 'Store manager', due: due };
+  });
+  var partialLabel = weekly.partialLabel || 'Completed week';
+  var verification = 'Monday Sales Meeting Packet · ' + partialLabel + ' · ' + weekly.displayDate + ' · prepared ' + briefDisplayDate_(today) +
+    '. Section 1 uses the weekly executive report. Salesperson lines use each weekly salesperson report. Store dollars are NWDSR. Individual dollars are SNAP. ' +
+    (packet === 'executive' ? 'Executive summary only. ' : '') + 'No email sent.';
+  return {
+    role: payload.session.role,
+    version: APP_VERSION_,
+    kind: 'meeting',
+    layout: 'meeting',
+    packet: packet,
+    ready: true,
+    title: packet === 'executive' ? 'Executive Summary' : 'Monday Sales Meeting Packet',
+    partial: !!weekly.partial,
+    partialLabel: partialLabel,
+    date: weekly.period.end,
+    displayDate: 'Store 17 · ' + weekly.displayDate,
+    today: today,
+    period: weekly.period,
+    storePeriod: weekly.storePeriod,
+    individualPeriod: weekly.individualPeriod,
+    calendarNote: 'Store week and store month use NWDSR Written and Delivered. Salesperson lines use SNAP Written for the salesperson month. The two calendars are not added together.',
+    mail: false,
+    verification: verification,
+    weekly: weekly.weekly,
+    month: weekly.month,
+    kpis: weekly.kpis,
+    lastYear: weekly.lastYear,
+    people: people,
+    illustrations: illustrations,
+    recognition: recognition,
+    priorities: (weekly.summary && weekly.summary.priorities) || [],
+    followups: followups,
+    actions: openActions,
+    actionDue: due,
+    notes: 'Meeting notes stay on this printed page. Nothing is saved or emailed.',
+    lines: weekly.lines,
+    winners: { status: 'pending', text: '', quiet: '', source: '', date: '' },
+    prioritySource: 'Store priorities come from the weekly executive report. Coaching goals come from each salesperson report. Open Action Center items are listed when they exist.',
+    notice: 'Preview, print, or download this packet. No email is sent.',
+  };
+}
+
+function reportPdfBook_(streams) {
+  var objects = [];
+  function add(body) { objects.push(body); return objects.length; }
+  var font1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  var font2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
+  var pageIds = [];
+  streams.forEach(function (commands) {
+    var stream = commands.join('\n');
+    var content = add('<< /Length ' + stream.length + ' >>\nstream\n' + stream + '\nendstream');
+    pageIds.push(add('<< /Type /Page /Parent PAGES 0 R /MediaBox [0 0 612 792] /Contents ' + content + ' 0 R /Resources << /Font << /F1 ' + font1 + ' 0 R /F2 ' + font2 + ' 0 R >> >> >>'));
+  });
+  var pages = add('<< /Type /Pages /Count ' + pageIds.length + ' /Kids [' + pageIds.map(function (id) { return id + ' 0 R'; }).join(' ') + '] >>');
+  var catalog = add('<< /Type /Catalog /Pages ' + pages + ' 0 R >>');
+  pageIds.forEach(function (id) {
+    objects[id - 1] = objects[id - 1].replace('Parent PAGES 0 R', 'Parent ' + pages + ' 0 R');
+  });
+  var body = '%PDF-1.4\n';
+  var offsets = [0];
+  objects.forEach(function (item, index) {
+    offsets.push(body.length);
+    body += (index + 1) + ' 0 obj\n' + item + '\nendobj\n';
+  });
+  var xref = body.length;
+  body += 'xref\n0 ' + (objects.length + 1) + '\n';
+  body += '0000000000 65535 f \n';
+  offsets.slice(1).forEach(function (offset) {
+    var textOffset = String(offset);
+    while (textOffset.length < 10) textOffset = '0' + textOffset;
+    body += textOffset + ' 00000 n \n';
+  });
+  body += 'trailer << /Size ' + (objects.length + 1) + ' /Root ' + catalog + ' 0 R >>\nstartxref\n' + xref + '\n%%EOF';
+  var bytes = [];
+  var i;
+  for (i = 0; i < body.length; i += 1) bytes.push(body.charCodeAt(i));
+  return Utilities.base64Encode(bytes);
+}
+
+function reportMeetingPdf_(page) {
+  var streams = [];
+  var commands = [];
+  var y = 720;
+  var section = 'Store 17';
+  function paint(r, g, b) { commands.push(r + ' ' + g + ' ' + b + ' rg'); }
+  function text(x, yy, size, value, bold) {
+    commands.push('BT /' + (bold ? 'F2' : 'F1') + ' ' + size + ' Tf ' + x.toFixed(1) + ' ' + yy.toFixed(1) + ' Td (' + reportPdfEscape_(value) + ') Tj ET');
+  }
+  function header() {
+    commands.push('0.06 0.13 0.16 rg 0 742 612 50 re f');
+    commands.push('0.05 0.50 0.53 rg 0 736 612 6 re f');
+    paint(1, 1, 1);
+    text(36, 766, 8, "KANE'S FURNITURE  ·  STORE 17", true);
+    text(36, 750, 13, reportAscii_(page.title), true);
+    paint(0.06, 0.13, 0.16);
+    text(36, y, 9, reportAscii_(page.displayDate) + '  ·  ' + reportAscii_(section), true);
+    y -= 16;
+  }
+  function finishPage() { streams.push(commands); }
+  function nextPage(name) {
+    if (commands.length) finishPage();
+    commands = [];
+    y = 720;
+    section = name;
+    header();
+  }
+  function need(height) { if (y < 40 + height) nextPage(section); }
+  function paragraph(value, width, size) {
+    reportWrap_(value, width).forEach(function (line) {
+      need(12);
+      text(36, y, size || 9, line, false);
+      y -= 11;
+    });
+  }
+  function row(label, result, extra) {
+    need(13);
+    paint(0.06, 0.13, 0.16);
+    text(36, y, 9, label, true);
+    text(168, y, 9, result, false);
+    if (extra) text(300, y, 8, extra, false);
+    y -= 12;
+  }
+  nextPage('Executive summary');
+  paragraph(page.verification, 108, 8);
+  y -= 2;
+  (page.weekly || []).forEach(function (line) { row(line.label, line.result, line.goal || ''); });
+  y -= 2;
+  text(36, y, 9, 'STORE-MONTH KPIs  ·  NOT THIS WEEK', true);
+  y -= 13;
+  (page.kpis || []).forEach(function (line) { row(line.label, line.result, line.goal || ''); });
+  y -= 2;
+  text(36, y, 9, 'STORE MONTH THROUGH THE WEEK', true);
+  y -= 13;
+  (page.month || []).forEach(function (line) { row(line.label, line.result, line.versus && line.versus !== 'Pending' ? line.versus : ''); });
+  var lastYear = page.lastYear || {};
+  row('NWDSR LY written', lastYear.written || 'Pending', '');
+  row('NWDSR LY delivered', lastYear.delivered || 'Pending', 'Not invented');
+  if (page.packet === 'executive') {
+    finishPage();
+  } else {
+    var index = 0;
+    while (index < (page.people || []).length) {
+      nextPage('Sales team');
+      var slot = 0;
+      while (slot < 2 && index < page.people.length) {
+        var person = page.people[index];
+        need(188);
+        paint(0.05, 0.50, 0.53);
+        text(36, y, 11, person.name + (person.newHire ? '  ·  NEW HIRE' : ''), true);
+        y -= 14;
+        paint(0.06, 0.13, 0.16);
+        [person.snapWeek, person.snapMtd, person.goal, person.percent, person.orders, person.ticket, person.closing, person.bedding, person.fabric, person.leather, person.power, person.pads, person.rugs].forEach(function (line) {
+          if (!line) return;
+          need(12);
+          text(36, y, 8, line.label, true);
+          text(170, y, 8, line.result, false);
+          text(280, y, 8, line.goal || '', false);
+          y -= 11;
+        });
+        paragraph('Coaching opportunity: ' + person.opportunity, 100, 8);
+        paragraph('Coming week: ' + person.nextGoal, 100, 8);
+        y -= 8;
+        index += 1;
+        slot += 1;
+      }
+    }
+    nextPage('Sales opportunities');
+    paragraph(page.illustrations.notice || '', 100, 8);
+    y -= 4;
+    (page.illustrations.items || []).forEach(function (item) {
+      row(item.label, item.value, '');
+      paragraph(item.note, 100, 8);
+    });
+    y -= 4;
+    text(36, y, 9, 'ATTACHMENT OPPORTUNITIES', true);
+    y -= 14;
+    (page.illustrations.attachments || []).forEach(function (item, itemIndex) { paragraph((itemIndex + 1) + '. ' + item, 100, 8); });
+    y -= 6;
+    paragraph(page.illustrations.help || '', 100, 8);
+    nextPage('Recognition');
+    (page.recognition || []).forEach(function (item, itemIndex) { paragraph((itemIndex + 1) + '. ' + item, 100, 9); y -= 4; });
+    nextPage('Management action plan');
+    text(36, y, 9, 'STORE PRIORITIES', true);
+    y -= 14;
+    var priorities = page.priorities || [];
+    if (!priorities.length) paragraph('No verified store priority is on the weekly report.', 100, 9);
+    priorities.forEach(function (item, itemIndex) {
+      paragraph((itemIndex + 1) + '. ' + item, 100, 9);
+      paragraph('Manager responsible: Store manager. Due ' + page.actionDue + '.', 100, 8);
+    });
+    y -= 6;
+    text(36, y, 9, 'COACHING FOLLOW-UP', true);
+    y -= 14;
+    (page.followups || []).forEach(function (item) {
+      paragraph(item.name + ': ' + item.text + ' Owner ' + item.owner + '. Due ' + item.due + '.', 100, 8);
+    });
+    y -= 6;
+    text(36, y, 9, 'ACTION CENTER', true);
+    y -= 14;
+    if (!(page.actions || []).length) paragraph('No open Action Center item is on file.', 100, 9);
+    (page.actions || []).forEach(function (action) {
+      paragraph(action.description + ' Owner ' + (action.assignee || 'Store manager') + '. Due ' + (action.due || 'Pending') + '. ' + action.status + '.', 100, 8);
+    });
+    y -= 8;
+    text(36, y, 9, 'MEETING NOTES', true);
+    y -= 16;
+    paragraph(page.notes, 100, 8);
+    var line = 0;
+    while (line < 4) {
+      need(16);
+      commands.push('0.7 0.76 0.78 RG 36 ' + (y).toFixed(1) + ' m 560 ' + y.toFixed(1) + ' l S');
+      y -= 16;
+      line += 1;
+    }
+    finishPage();
+  }
+  var total = streams.length;
+  streams.forEach(function (stream, streamIndex) {
+    stream.push('BT /F1 8 Tf 36 22 Td (' + reportPdfEscape_('Page ' + (streamIndex + 1) + ' of ' + total + '  ·  No email sent') + ') Tj ET');
+  });
+  return reportPdfBook_(streams);
+}
+
 function reportCenter_(payload) {
   var today = todayNy_();
   var kind = String(payload && payload.kind || 'daily');
-  if (kind !== 'daily' && kind !== 'weekly' && kind !== 'monthly' && kind !== 'individual') kind = 'daily';
+  if (kind !== 'daily' && kind !== 'weekly' && kind !== 'monthly' && kind !== 'individual' && kind !== 'meeting') kind = 'daily';
   var locked = reportGuard_(payload, kind);
   if (locked) payload.name = locked;
-  var page = kind === 'daily' ? reportDaily_(payload, today) : (kind === 'weekly' ? reportWeekly_(payload, today) : (kind === 'individual' ? reportIndividual_(payload, today) : (kind === 'monthly' ? reportMonthly_(payload, today) : reportUnbuilt_(payload, today, kind))));
+  var page = kind === 'daily' ? reportDaily_(payload, today) : (kind === 'weekly' ? reportWeekly_(payload, today) : (kind === 'individual' ? reportIndividual_(payload, today) : (kind === 'monthly' ? reportMonthly_(payload, today) : (kind === 'meeting' ? reportMeeting_(payload, today) : reportUnbuilt_(payload, today, kind)))));
   page.catalog = reportCatalog_(today);
   if (payload.session && payload.session.role === 'sales') page.catalog.kinds = [{ key: 'individual', label: 'My report', ready: true }];
   var pdf = '';
   if (page.ready && page.layout === 'weekly') pdf = reportWeeklyPdf_(page);
   else if (page.ready && page.layout === 'individual') pdf = reportIndividualPdf_(page);
   else if (page.ready && page.layout === 'monthly') pdf = reportMonthlyPdf_(page);
+  else if (page.ready && page.layout === 'meeting') pdf = reportMeetingPdf_(page);
   else if (page.ready) pdf = reportPdf_(page);
   page.pdf = pdf;
   return page;
