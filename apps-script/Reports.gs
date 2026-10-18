@@ -1145,7 +1145,7 @@ function reportMonthly_(payload, today) {
     today: today,
     period: { start: store.start, end: store.end },
     storePeriod: store.start + ' through ' + store.end,
-    individualPeriod: individualPeriodContaining_(store.end).start + ' through ' + individualPeriodContaining_(store.end).end,
+    individualPeriod: individualPeriodContaining_(store.start).start + ' through ' + individualPeriodContaining_(store.start).end,
     calendarNote: 'Store month is the 2nd through the 1st and uses NWDSR Written and Delivered. The salesperson month is the 1st through the last calendar day and is not this report. SNAP is not Store Written.',
     mail: false,
     verification: verification,

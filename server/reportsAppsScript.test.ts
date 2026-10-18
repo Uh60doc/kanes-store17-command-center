@@ -194,6 +194,7 @@ test('the monthly executive scorecard uses NWDSR store dollars and does not inve
   assert.equal(page.period.start, '2026-10-02');
   assert.equal(page.period.end, '2026-11-01');
   assert.match(page.displayDate, /October 2026/);
+  assert.match(page.individualPeriod, /2026-10-01 through 2026-10-31/);
   assert.match(page.summary.priorities[0], /Written sales/);
   const facts = plain(gs.dailyFacts_());
   const closed = plain(gs.closedDates_());

@@ -1684,7 +1684,7 @@
       var rows = (data.rows || []).map(function (row) {
         return '<tr class="' + esc(row.status) + '"><td class="measure">' + esc(row.label) + '</td><td class="' + esc(row.status) + '">' + esc(row.actual) + '</td><td>' + esc(row.progress) + '</td><td>' + esc(row.variance) + '</td><td>' + esc(row.budget) + '</td><td>' + esc(row.ly) + '</td></tr>';
       }).join('');
-      return { controls: '<label>Month containing<input id="report-date" type="date" value="' + esc(reportQuery.date) + '"></label>', body: '<p class="report-badge ' + (data.partial ? 'partial' : 'complete') + '">' + esc(data.partialLabel || '') + '</p><h1>' + esc(data.title) + '</h1><p class="report-verify">' + esc(data.verification) + '</p>' +
+      return { controls: '<label>Month containing<input id="report-date" type="date" value="' + esc(reportQuery.date) + '"></label>', body: '<p class="report-badge ' + (data.partial ? 'partial' : 'complete') + '">' + esc(data.partialLabel || '') + '</p><h1>' + esc(data.title) + '</h1><p class="report-foot">' + esc(data.displayDate || '') + '</p><p class="report-verify">' + esc(data.verification) + '</p>' +
         '<table><thead><tr><th>Measure</th><th>Actual</th><th>Progress</th><th>Variance</th><th>BUDGET</th><th>NWDSR LY</th></tr></thead><tbody>' + rows + '</tbody></table>' +
         '<p class="report-assess">' + esc(data.assessment || '') + '</p>' +
         '<div class="report-cols"><div><h2>Strengths</h2>' + list(summary.strengths) + '</div><div><h2>Improve</h2>' + list(summary.priorities) + '</div><div><h2>Next month</h2><p>' + esc(summary.focus || '') + '</p></div></div>' };
