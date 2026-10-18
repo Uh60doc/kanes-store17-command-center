@@ -424,6 +424,21 @@ function briefStartupInner_(pack) {
     briefFooter_(pack, 'Morning Start-Up');
 }
 
+function briefThroughNote_(pack, side) {
+  var freshness = pack.home && pack.home.freshness;
+  var through = freshness && freshness[side] ? freshness[side].through : '';
+  return through ? ' · verified through ' + through : '';
+}
+
+function briefKpiCutoff_(row) {
+  if (row.name === 'Closing Ratio') return row.through || (row.note ? 'Pending' : '');
+  var written = row.writtenThrough || '';
+  var delivered = row.deliveredThrough || '';
+  if (!written && !delivered) return row.through || (row.note ? 'Pending' : '');
+  if (written && delivered && written !== delivered) return 'Written ' + written + ' · Delivered ' + delivered;
+  return written || delivered;
+}
+
 function briefKpiCell_(value, unit) {
   if (briefBlank_(value)) return 'Pending';
   if (unit === 'percent') return percentText_(value);
@@ -443,8 +458,8 @@ function briefMtdInner_(pack) {
   var month = pack.month;
   var ly = pack.lastYear;
   var sales = '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">' +
-    briefRow_('Written MTD versus $400,000 goal', briefBlank_(month.written) ? 'Pending' : (briefMoney_(month.written) + ' vs ' + briefMoney_(month.writtenGoal) + ' · ' + briefPercent_(month.writtenAchieved)), pack.labels.written + ' · store month ' + pack.storePeriod) +
-    briefRow_('Delivered MTD versus $320,000 goal', briefBlank_(month.delivered) ? 'Pending' : (briefMoney_(month.delivered) + ' vs ' + briefMoney_(month.deliveredGoal) + ' · ' + briefPercent_(month.deliveredAchieved)), pack.labels.delivered + ' · store month ' + pack.storePeriod) +
+    briefRow_('Written MTD versus $400,000 goal', briefBlank_(month.written) ? 'Pending' : (briefMoney_(month.written) + ' vs ' + briefMoney_(month.writtenGoal) + ' · ' + briefPercent_(month.writtenAchieved)), pack.labels.written + ' · store month ' + pack.storePeriod + briefThroughNote_(pack, 'written')) +
+    briefRow_('Delivered MTD versus $320,000 goal', briefBlank_(month.delivered) ? 'Pending' : (briefMoney_(month.delivered) + ' vs ' + briefMoney_(month.deliveredGoal) + ' · ' + briefPercent_(month.deliveredAchieved)), pack.labels.delivered + ' · store month ' + pack.storePeriod + briefThroughNote_(pack, 'delivered')) +
     briefRow_('Remaining to written goal', briefMoney_(month.writtenLeft), 'Written goal minus NWDSR written') +
     briefRow_('Remaining to delivered goal', briefMoney_(month.deliveredLeft), 'Delivered goal minus NWDSR delivered') +
     briefRow_('Required daily written pace', briefMoney_(pack.todayWritten), pack.daysLeft === null ? 'Open days left are not on file' : pack.daysLeft + ' open days left including today') +
@@ -468,7 +483,7 @@ function briefMtdInner_(pack) {
       '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(row.name === 'Closing Ratio' ? '—' : briefKpiCell_(row.delivered, row.unit)) + '</td>' +
       '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(row.name === 'Closing Ratio' ? '—' : deliveredGoal) + '</td>' +
       '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(row.name === 'Closing Ratio' ? '—' : briefKpiDiff_(row.delivered, row.goal, row.unit)) + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(row.through || (row.note ? 'Pending' : '')) + '</td>' +
+      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(briefKpiCutoff_(row)) + '</td>' +
       '</tr>';
   }).join('');
   var teamHead = '<tr>' +

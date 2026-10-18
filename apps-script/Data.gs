@@ -1474,7 +1474,75 @@ function homeKpiSpecs_(goals, actuals) {
   return specs;
 }
 
-function homeKpiStrip_(goals, actuals, closing) {
+function latestFactDate_(facts, field, start, end, today) {
+  var latest = '';
+  facts.forEach(function (row) {
+    if (!row.date || row.date < start || row.date > end || row.date >= today) return;
+    if (row[field] === null || row[field] === undefined) return;
+    if (row.date > latest) latest = row.date;
+  });
+  return latest;
+}
+
+function factAmount_(facts, date, field) {
+  var amount = null;
+  facts.forEach(function (row) {
+    if (row.date === date) amount = row[field];
+  });
+  return amount;
+}
+
+/** Written and delivered Data Analysis coverage, from the same store-KPI coverage the refresh uses. */
+function analysisCoverageThrough_(period, today) {
+  var coverage = { group17: { written: '', delivered: '' }, asl: { written: '', delivered: '' } };
+  if (typeof storeKpiCoverage_ !== 'function' || typeof ledgerRows_ !== 'function') return coverage;
+  try {
+    var ledger = ledgerRows_();
+    var facts = {};
+    dailyFacts_().forEach(function (row) { facts[row.date] = row; });
+    var closed = closedDates_();
+    ['group17', 'asl'].forEach(function (family) {
+      var written = storeKpiCoverage_(ledger, family, 'written', period, facts, closed, today);
+      var delivered = storeKpiCoverage_(ledger, family, 'delivered', period, facts, closed, today);
+      coverage[family] = { written: written.through || '', delivered: delivered.through || '' };
+    });
+  } catch (error) {
+    try { appendException_('Update Failed', 'Data Analysis verified-through dates could not be read. Stored KPI figures were left in place.'); } catch (ignore) {}
+  }
+  return coverage;
+}
+
+/**
+ * Open days that are only partly verified. A day with NWDSR Written on file is not treated as missing.
+ * PERQ stays pending after the closing ratio's verified-through date.
+ */
+function pendingSourceReports_(facts, period, today, closed, closingThrough) {
+  var pending = [];
+  var yesterday = shiftDate_(today, -1);
+  if (yesterday < period.start) return pending;
+  eachDate_(period.start, yesterday).forEach(function (date) {
+    if (closed[date]) return;
+    var fact = null;
+    facts.forEach(function (row) { if (row.date === date) fact = row; });
+    var reports = [];
+    if (!fact || fact.nwdsrWritten === null) reports.push('NWDSR Written');
+    if (!fact || fact.snapWritten === null) reports.push('SNAP Written');
+    if (!fact || fact.nwdsrDelivered === null) reports.push('NWDSR Delivered');
+    if (closingThrough && date > closingThrough) reports.push('PERQ');
+    if (!reports.length) return;
+    var anyOnFile = !!(fact && (fact.nwdsrWritten !== null || fact.snapWritten !== null || fact.nwdsrDelivered !== null));
+    if (!anyOnFile && date !== yesterday) return;
+    pending.push({ date: date, reports: reports });
+  });
+  return pending;
+}
+
+function homeKpiFamily_(name) {
+  if (name === 'Rugs' || name === 'Adjustable Base Attachment' || name === 'Pillows' || name === 'Wood / Furniture Protection') return 'asl';
+  return 'group17';
+}
+
+function homeKpiStrip_(goals, actuals, closing, analysis) {
   return homeKpiSpecs_(goals, actuals).map(function (spec) {
     var name = spec[0];
     var tier = spec[4];
@@ -1490,6 +1558,8 @@ function homeKpiStrip_(goals, actuals, closing) {
         written: closing.ratio,
         delivered: null,
         through: closing.ratio !== null ? (closing.through || '') : '',
+        writtenThrough: closing.ratio !== null ? (closing.through || '') : '',
+        deliveredThrough: '',
         detail: closing.ratio !== null && closing.customers !== null && closing.opportunities !== null
           ? closing.customers + ' customers ÷ ' + closing.opportunities + ' opportunities'
           : dailyDetail,
@@ -1503,7 +1573,23 @@ function homeKpiStrip_(goals, actuals, closing) {
     if (name === 'Adjustable Base Attachment' && powerBase && (powerBase.written !== null || powerBase.delivered !== null)) {
       detail = 'ADJ PWR % written ' + (powerBase.written === null ? 'Pending' : percentText_(powerBase.written)) + ', delivered ' + (powerBase.delivered === null ? 'Pending' : percentText_(powerBase.delivered));
     }
-    return { name: name, tier: tier, unit: spec[2], goal: spec[3], written: row.written, delivered: row.delivered, through: row.through || '', detail: detail, note: row.note || '', reconcile: false };
+    var family = analysis && analysis[homeKpiFamily_(name)];
+    var writtenThrough = family ? (family.written || '') : (row.through || '');
+    var deliveredThrough = family ? (family.delivered || '') : (row.through || '');
+    return {
+      name: name,
+      tier: tier,
+      unit: spec[2],
+      goal: spec[3],
+      written: row.written,
+      delivered: row.delivered,
+      through: row.through || writtenThrough || deliveredThrough || '',
+      writtenThrough: writtenThrough,
+      deliveredThrough: deliveredThrough,
+      detail: detail,
+      note: row.note || '',
+      reconcile: false,
+    };
   });
 }
 
@@ -1628,11 +1714,10 @@ function home_(payload) {
     return day.date < today && !closed[day.date] && (day.snapWritten === null || day.nwdsrWritten === null || day.nwdsrDelivered === null);
   });
   var attention = attention_(facts, config, payload.session.role);
-  if (missing.length) {
-    attention.unshift(missing.length <= 4
-      ? 'Store reports are incomplete for ' + missing.map(function (day) { return day.date; }).join(', ') + '. Blank is not zero.'
-      : missing.length + ' store days are missing a verified report. Blank is not zero.');
-  }
+  var deliveredThrough = latestFactDate_(facts, 'nwdsrDelivered', start, end, today);
+  var snapThrough = latestFactDate_(facts, 'snapWritten', start, end, today);
+  var analysisThrough = analysisCoverageThrough_(store, today);
+  var pendingReports = pendingSourceReports_(facts, store, today, closed, monthClosing.through);
   var savedGoals = {};
   try {
     ensureSavedDailyGoals_(store, today, closed, facts, writtenGoal, deliveredGoal);
@@ -1686,7 +1771,7 @@ function home_(payload) {
       deliveredForecast: verifiedRunRate_(days, 'nwdsrDelivered', closed),
       provisional: missing.length > 0,
     },
-    kpis: homeKpiStrip_(goals, kpiActuals, monthClosing),
+    kpis: homeKpiStrip_(goals, kpiActuals, monthClosing, analysisThrough),
   };
   var winnersPack = { winners: { date: priorBusinessDay_(today), status: 'pending', reason: 'PERQ Report Pending', detail: '', people: [] }, roster: { notes: [] } };
   try {
@@ -1738,10 +1823,23 @@ function home_(payload) {
       delivered: verifiedRunRate_(days, 'nwdsrDelivered', closed),
       provisional: missing.length > 0,
       note: missing.length
-        ? 'Provisional. Built only from days that have a verified figure. ' + missing.length + ' store days are incomplete and were not counted as zero.'
+        ? 'Provisional. Built only from days that have a verified figure for that measure. A missing report is pending and was not counted as zero.'
         : 'From verified store days only. The official monthly budget is unchanged.',
     },
     closing: { goal: closingGoal, mtd: monthClosing, yesterday: yesterdayClosing },
+    freshness: {
+      written: { through: latest, day: factAmount_(facts, latest, 'nwdsrWritten'), mtd: written },
+      snap: { through: snapThrough, day: factAmount_(facts, latest, 'snapWritten'), mtd: snap },
+      delivered: { through: deliveredThrough, day: factAmount_(facts, latest, 'nwdsrDelivered'), mtd: delivered },
+      analysis: {
+        written: analysisThrough.group17.written,
+        delivered: analysisThrough.group17.delivered,
+        aslWritten: analysisThrough.asl.written,
+        aslDelivered: analysisThrough.asl.delivered,
+      },
+      closing: { through: monthClosing.through || '' },
+      pending: pendingReports,
+    },
     goals: goals,
     board: board,
     attention: attention.slice(0, 8),
@@ -2004,16 +2102,18 @@ function salesTeamDeliveredVariance_(people, individual, today) {
   var store = storePeriodContaining_(today);
   var storeDelivered = sumField_(dailyFacts_(), 'nwdsrDelivered', store.start, store.end);
   var through = (people[0] && people[0].deliveredThrough) || '';
+  var storeDeliveredThrough = latestFactDate_(dailyFacts_(), 'nwdsrDelivered', store.start, store.end, today);
   var differs = counted > 0 && storeDelivered !== null && Math.abs(activeSum - storeDelivered) > 0.009;
   return {
     activeAssociateDelivered: counted ? activeSum : null,
     activeAssociateCount: counted,
     storeDelivered: storeDelivered,
+    storeDeliveredThrough: storeDeliveredThrough || null,
     storePeriod: store.start + ' through ' + store.end,
     salespersonPeriod: individual.start + ' through ' + individual.end,
     deliveredThrough: through || null,
     differs: differs,
-    note: 'Official Store Delivered is NWDSR Delivered for the store month (' + store.start + ' through ' + store.end + ') and remains the authoritative store measure. Current Sales Team Delivered is the sum of active associates from Group 17 Delivered for the salesperson month (' + individual.start + ' through ' + individual.end + '). It does not include former employees, unmatched names, or management, and those dollars are never reassigned to another associate. The calendars also differ (store 2nd–1st vs salesperson 1st–last day). The two figures are not forced to match.',
+    note: 'Official Store Delivered is NWDSR Delivered for the store month (' + store.start + ' through ' + store.end + ')' + (storeDeliveredThrough ? ', verified through ' + storeDeliveredThrough : '') + ', and remains the authoritative store measure. Current Sales Team Delivered is the sum of active associates from Group 17 Delivered for the salesperson month (' + individual.start + ' through ' + individual.end + '). It does not include former employees, unmatched names, or management, and those dollars are never reassigned to another associate. The calendars also differ (store 2nd–1st vs salesperson 1st–last day). The two figures are not forced to match.',
   };
 }
 
