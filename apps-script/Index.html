@@ -174,6 +174,30 @@
     .eval-fields .eval-wide { grid-column: 1 / -1; }
     .eval-fields select { width: 100%; }
     .eval-print { display: none; }
+    .opp-banner { margin: 0 0 12px; padding: 12px 14px; border-radius: 12px; background: #14343c; border: 1px solid #1d8a90; color: #f3f6f8; }
+    .opp-banner strong { color: #f3d48a; }
+    .opp-layout { display: grid; gap: 12px; }
+    .opp-pick label { display: block; color: #c9d4e3; font-size: 13px; margin-bottom: 4px; }
+    .opp-pick select { max-width: 360px; }
+    .opp-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    .opp-card { background: #101920; border: 1px solid #245c66; border-radius: 14px; padding: 14px; }
+    .opp-card h3 { margin: 0 0 6px; color: #f3d48a; text-transform: none; letter-spacing: 0; font-size: 18px; }
+    .opp-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+    .opp-side { background: #0c141b; border-radius: 10px; padding: 8px 10px; }
+    .opp-side .opp-amt { font-size: 26px; font-weight: 750; margin: 2px 0; }
+    .opp-side.now .opp-amt { color: #d5e4ea; }
+    .opp-side.next .opp-amt { color: #f3d48a; }
+    .opp-meter { height: 12px; background: #1c2a33; border-radius: 99px; overflow: hidden; margin-top: 6px; }
+    .opp-meter span { display: block; height: 100%; border-radius: 99px; }
+    .opp-meter .now { background: #2f7d88; }
+    .opp-meter .next { background: #d4a017; }
+    .opp-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-top: 8px; }
+    .opp-controls label { display: grid; gap: 4px; color: #c9d4e3; font-size: 13px; }
+    .opp-controls input { width: 140px; }
+    .opp-result { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: #17262c; }
+    .opp-take { margin: 0; padding-left: 18px; }
+    .opp-take li { margin: 4px 0; }
+    @media (max-width: 720px) { .opp-compare { grid-template-columns: 1fr; } }
     body.print-eval .eval-print { display: block; margin-top: 16px; }
     .ep-page { background: white; color: #1b2833; font-family: Calibri, "Segoe UI", Arial, sans-serif; font-size: 11pt; line-height: 1.3; max-width: 8.5in; margin: 0 auto 16px; padding: 0.4in; }
     .ep-band { display: flex; align-items: center; gap: 14px; background: #0f2a3a; color: white; padding: 8px 12px; border-bottom: 4px solid #0e7c86; }
@@ -451,8 +475,8 @@
       document.getElementById('login-error').textContent = message || '';
     }
     function navItems() {
-      var items = [['home', 'Home'], ['daily', 'Daily'], ['closing', 'Closing'], ['written', 'Written'], ['delivered', 'Delivered'], ['people', 'Sales Team'], ['morning', 'Morning meeting'], ['documents', 'Documents']];
-      if (role !== 'sales') items.splice(7, 0, ['brief', 'Manager brief']);
+      var items = [['home', 'Home'], ['daily', 'Daily'], ['closing', 'Closing'], ['written', 'Written'], ['delivered', 'Delivered'], ['people', 'Sales Team'], ['coach', 'Goal coach'], ['morning', 'Morning meeting'], ['documents', 'Documents']];
+      if (role !== 'sales') items.splice(8, 0, ['brief', 'Manager brief']);
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['orders', 'Open orders'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
@@ -872,6 +896,109 @@
     var peopleSnapPending = [];
     var peopleAnalysisThrough = {};
     var peopleDeliveredVariance = null;
+    var coachDirty = false;
+    function coachMoney(value) {
+      if (value === null || value === undefined || value === '') return 'Pending';
+      return money(value);
+    }
+    function coachRate(dollars) {
+      if (dollars === null || dollars === undefined || dollars === '') return { status: 'Pay rule confirmation needed', rate: null, amount: null };
+      var amount = Math.round(Number(dollars) * 100) / 100;
+      if (amount > 4500) return { status: 'estimate', rate: 0.25, amount: amount, band: 'Above $4,500', next: null };
+      if (amount >= 3000) return { status: 'estimate', rate: 0.2, amount: amount, band: '$3,000 through $4,500', next: 4500.01 };
+      return { status: 'Pay rule confirmation needed', rate: null, amount: amount, band: 'Under $3,000', next: 3000 };
+    }
+    function coachBar(value, max) {
+      var width = !max || value === null ? 0 : Math.max(4, Math.min(100, Math.round(Number(value) / max * 100)));
+      return width;
+    }
+    function renderCoach(data) {
+      coachDirty = false;
+      var rules = data.rules || {};
+      document.getElementById('header-note').textContent = 'Goal coach · salesperson month ' + (data.period || '') + ' · not payroll';
+      if (data.access !== 'management') {
+        document.getElementById('screen').innerHTML = '<section class="opp-layout"><p class="opp-banner"><strong>Here\'s what reaching your goal could mean to you.</strong> ' + esc(data.message || '') + '</p><article class="opp-card"><h3>Your results stay private</h3><p>Managers can review each current associate. This login cannot open another person\'s commission estimates.</p></article></section>';
+        return;
+      }
+      var people = data.people || [];
+      var options = people.map(function (person) { return '<option>' + esc(person.name) + '</option>'; }).join('');
+      document.getElementById('screen').innerHTML = '<section class="opp-layout"><p class="opp-banner"><strong>Here\'s what reaching your goal could mean to you.</strong> ' + esc(data.message || '') + ' ' + esc(rules.source || '') + '</p>' +
+        '<div class="opp-pick"><label for="opp-person">Associate</label><select id="opp-person">' + options + '</select><p class="sub">' + esc(data.calendar || '') + '</p></div>' +
+        '<div id="opp-body"></div></section>';
+      function selected() {
+        var name = document.getElementById('opp-person').value;
+        for (var i = 0; i < people.length; i += 1) if (people[i].name === name) return people[i];
+        return people[0];
+      }
+      function paint() {
+        var person = selected();
+        var ticket = person.ticket || {};
+        var orderCount = Number(document.getElementById('opp-orders').value);
+        var ticketAmount = Number(document.getElementById('opp-ticket').value);
+        var extraRugs = Number(document.getElementById('opp-rugs').value || 0);
+        var rugRaw = document.getElementById('opp-rug-price').value;
+        var rugEach = rugRaw === '' ? null : Number(rugRaw);
+        var protectRaw = document.getElementById('opp-protect').value;
+        var protectInput = protectRaw === '' ? null : Number(protectRaw);
+        var scenarioSales = orderCount && ticketAmount ? Math.round(orderCount * ticketAmount * 100) / 100 : null;
+        var actualSales = ticket.sales;
+        var gap = scenarioSales === null || actualSales === null || actualSales === undefined ? null : Math.round((scenarioSales - actualSales) * 100) / 100;
+        var maxBar = Math.max(actualSales || 0, scenarioSales || 0, 1);
+        var rugSales = extraRugs && rugEach !== null ? Math.round(extraRugs * rugEach * 100) / 100 : null;
+        var rugPay = rugSales === null ? null : Math.round(rugSales * Number(rules.rugRate || 0.06) * 100) / 100;
+        var protectView = coachRate(protectInput);
+        var protectPay = protectView.rate === null || protectView.amount === null ? null : Math.round(protectView.amount * protectView.rate * 100) / 100;
+        document.getElementById('opp-actual').textContent = coachMoney(actualSales);
+        document.getElementById('opp-actual-note').textContent = ticket.orders === null || ticket.orders === undefined ? 'Orders pending' : ticket.orders + ' orders at ' + coachMoney(ticket.average);
+        document.getElementById('opp-scenario').textContent = coachMoney(scenarioSales);
+        document.getElementById('opp-gap').textContent = gap === null ? 'Pending' : (gap >= 0 ? '+' : '') + money(gap) + ' written sales';
+        document.getElementById('opp-bar-now').style.width = coachBar(actualSales, maxBar) + '%';
+        document.getElementById('opp-bar-next').style.width = coachBar(scenarioSales, maxBar) + '%';
+        var impact = person.goalImpact || {};
+        document.getElementById('opp-snap').textContent = 'SNAP written ' + coachMoney(person.snapWritten) + ' of the ' + coachMoney(person.monthlyGoal) + ' monthly goal (' + (impact.actualPercent === null || impact.actualPercent === undefined ? 'Pending' : percent(impact.actualPercent)) + '). The illustration is not added to SNAP. Verified through ' + (person.writtenThrough || 'Pending') + '.';
+        document.getElementById('opp-rug-result').textContent = extraRugs ? (rugPay === null ? 'Pay rule confirmation needed until a qualifying price is entered. 6% is not applied to a guessed price.' : 'Illustration: ' + extraRugs + ' rugs at ' + coachMoney(rugEach) + ' = ' + coachMoney(rugSales) + '. Estimated 6% commission ' + coachMoney(rugPay) + '. Not payroll, and not added to a verified rug count.') : 'Add a rug to illustrate the 6% agreement rate.';
+        var protectText = 'Pay rule confirmation needed until qualifying dollars are on file or you enter an illustration. An illustration is not this associate\'s sales.';
+        if (protectInput !== null && protectView.status === 'estimate') protectText = protectView.band + ' lists ' + percent(protectView.rate) + '. Estimated earnings ' + coachMoney(protectPay) + ' if that rate applies to the whole amount. Not payroll.' + (protectView.next ? ' The next listed band starts just above $4,500 at 25%.' : '');
+        else if (protectInput !== null) protectText = protectView.band + '. Pay rule confirmation needed.' + (protectView.next === 3000 ? ' ' + coachMoney(3000 - protectView.amount) + ' more reaches the $3,000 band, listed at 20%.' : '');
+        document.getElementById('opp-protect-result').textContent = protectText;
+      }
+      function mount() {
+        var person = selected();
+        if (!person) { document.getElementById('opp-body').innerHTML = '<p>No current associate is on the roster.</p>'; return; }
+        var ticket = person.ticket || {};
+        document.getElementById('opp-body').innerHTML =
+          '<div class="opp-grid"><article class="opp-card"><h3>Average ticket</h3>' +
+          '<p class="sub">Actual written sales use Group 17 for the ticket. SNAP stays the official goal figure. Hypothetical written sales are not commission.</p>' +
+          '<div class="opp-compare"><div class="opp-side now"><p class="sub">Actual</p><p class="opp-amt" id="opp-actual"></p><p class="sub" id="opp-actual-note"></p><div class="opp-meter"><span class="now" id="opp-bar-now"></span></div></div>' +
+          '<div class="opp-side next"><p class="sub">At the scenario ticket</p><p class="opp-amt" id="opp-scenario"></p><p class="sub" id="opp-gap"></p><div class="opp-meter"><span class="next" id="opp-bar-next"></span></div></div></div>' +
+          '<div class="opp-controls"><label>Transactions<input id="opp-orders" type="number" min="0" step="1" value="' + (ticket.orders || '') + '"></label>' +
+          '<label>Average ticket<input id="opp-ticket" type="number" min="0" step="50" value="' + (rules.ticketGoal || 2500) + '"></label></div>' +
+          '<p class="opp-result" id="opp-snap"></p></article>' +
+          '<article class="opp-card"><h3>Quarterly rugs</h3><p class="sub">Actual rugs this quarter: Pending. ' + esc(person.rugs.reason) + '</p>' +
+          '<p class="sub">Agreement rate: ' + esc(person.rugs.rateLabel) + ' Next tier: ' + esc(person.rugs.nextStatus) + '. ' + esc(person.rugs.nextReason) + '</p>' +
+          '<div class="opp-controls"><label>Additional rugs<input id="opp-rugs" type="number" min="0" step="1" value="0"></label>' +
+          '<label>Average qualifying price<input id="opp-rug-price" type="number" min="0" step="1"></label>' +
+          '<button type="button" id="opp-one-rug">What if I sell one more rug?</button></div><p class="opp-result" id="opp-rug-result"></p></article>' +
+          '<article class="opp-card"><h3>Protection plans</h3><p class="sub">Actual qualifying dollars: Pending. ' + esc(person.protection.reason) + '</p>' +
+          '<p class="sub">' + esc(person.protection.bands) + '</p>' +
+          '<div class="opp-controls"><label>Illustrate qualifying dollars<input id="opp-protect" type="number" min="0" step="100"></label></div>' +
+          '<p class="opp-result" id="opp-protect-result"></p></article></div>' +
+          '<article class="opp-card"><h3>Coaching</h3><ul class="opp-take">' + person.takeaways.map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('') + '</ul>' +
+          '<p class="sub">Delivered sales on file: ' + coachMoney(person.deliveredSales) + (person.deliveredThrough ? ' through ' + esc(person.deliveredThrough) : '') + '. Commission eligibility follows delivered sales. Former employees are not on this list.</p></article>';
+        ['opp-orders', 'opp-ticket', 'opp-rugs', 'opp-rug-price', 'opp-protect'].forEach(function (id) {
+          document.getElementById(id).addEventListener('input', function () { coachDirty = true; paint(); });
+        });
+        document.getElementById('opp-one-rug').addEventListener('click', function () {
+          coachDirty = true;
+          var field = document.getElementById('opp-rugs');
+          field.value = String(Number(field.value || 0) + 1);
+          paint();
+        });
+        paint();
+      }
+      document.getElementById('opp-person').addEventListener('change', function () { coachDirty = true; mount(); });
+      mount();
+    }
     function renderPeople(data) {
       peopleCache = data.people || [];
       peopleSnapThrough = data.snapThrough || '';
@@ -3205,6 +3332,7 @@
       if (viewer && !viewer.classList.contains('hidden')) return true;
       if (document.getElementById('eval-editor')) return true;
       if (screen === 'brief' || screen === 'admin' || screen === 'documents' || screen === 'upload') return true;
+      if (screen === 'coach' && coachDirty) return true;
       var pillow = document.getElementById('pillow-goal');
       if (pillow && String(pillow.value || '').trim()) return true;
       var active = document.activeElement;
@@ -3226,6 +3354,7 @@
       } else if (name === 'daily') renderDaily(data);
       else if (name === 'closing') renderClosing(data);
       else if (name === 'people') renderPeople(data);
+      else if (name === 'coach') renderCoach(data);
       else if (name === 'morning') renderMorning(data);
       else if (name === 'brief') renderBrief(data);
       else if (name === 'health') renderHealth(data);
