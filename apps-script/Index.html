@@ -99,6 +99,25 @@
     .report-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 0 0 12px; }
     .report-controls label { margin: 0; color: #9eb0c9; font-size: 12px; }
     .report-controls input, .report-controls select { min-height: 36px; width: auto; }
+    .report-badge { display: inline-block; margin: 0 0 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 750; letter-spacing: 0.04em; }
+    .report-badge.partial { color: #6a5208; background: #fff4d6; }
+    .report-badge.complete { color: #0b6b3a; background: #e5f6ec; }
+    .report-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 6px 0; }
+    .report-tile { border: 1px solid #d5dee3; border-left: 4px solid #8a8f93; border-radius: 6px; padding: 6px 8px; }
+    .report-tile.hit, .report-tile.even { border-left-color: #0b6b3a; }
+    .report-tile.short { border-left-color: #9b1c33; }
+    .report-tile.pending { border-left-color: #b8860b; }
+    .report-tile h3 { margin: 0; color: #3d5660; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+    .report-tile .figure { margin: 2px 0; color: #102027; font-size: 18px; font-weight: 750; line-height: 1.1; }
+    .report-tile .sub { margin: 0; color: #3d5660; font-size: 11px; }
+    .report-kpis { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
+    .report-chip { border: 1px solid #d5dee3; border-radius: 999px; padding: 3px 8px; font-size: 11px; color: #102027; }
+    .report-chip.hit, .report-chip.even { color: #0b6b3a; border-color: #0b6b3a; }
+    .report-chip.short { color: #9b1c33; border-color: #9b1c33; }
+    .report-chip.pending { color: #6a5208; border-color: #b8860b; }
+    .report-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .report-cols ol { margin: 2px 0 0; padding-left: 16px; font-size: 12px; }
+    .report-sheet h2 { margin: 8px 0 2px; }
     @media (max-width: 980px) {
       .score-row, .kpi-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
@@ -409,7 +428,15 @@
       body.print-report #report-sheet .report-verify { font-size: 11px; line-height: 1.3; margin: 4px 0; padding: 4px 6px; }
       body.print-report #report-sheet h2 { margin: 6px 0 2px; }
       body.print-report #report-sheet ol, body.print-report #report-sheet .report-foot { font-size: 11px; line-height: 1.3; margin: 2px 0; }
-      body.print-report #report-sheet h1 { font-size: 18px; }
+      body.print-report #report-sheet h1 { font-size: 16px; }
+      body.print-report #report-sheet .report-tiles { gap: 3px; margin: 2px 0; }
+      body.print-report #report-sheet .report-tile { padding: 2px 5px; }
+      body.print-report #report-sheet .report-tile .figure { font-size: 13px; }
+      body.print-report #report-sheet .report-tile h3, body.print-report #report-sheet .report-tile .sub, body.print-report #report-sheet .report-chip, body.print-report #report-sheet .report-cols ol, body.print-report #report-sheet .report-cols p { font-size: 11px; line-height: 1.25; }
+      body.print-report #report-sheet .report-cols { gap: 6px; }
+      body.print-report #report-sheet .report-cols p, body.print-report #report-sheet .report-foot { margin: 1px 0; }
+      body.print-report #report-sheet .report-kpis { margin: 2px 0; gap: 3px; }
+      body.print-report #report-sheet h2 { margin: 3px 0 1px; font-size: 11px; }
       body.print-report #report-sheet { break-inside: avoid; page-break-after: avoid; }
       html:has(body.print-mtd), body.print-mtd { background: white !important; }
       body.print-mtd .wrap { padding: 0; max-width: 7.6in; }
@@ -485,7 +512,7 @@
     var token = '';
     var role = '';
     var screen = 'home';
-    var reportQuery = { kind: 'daily', date: '', start: '', end: '' };
+    var reportQuery = { kind: 'daily', date: '', start: '', end: '', span: 'completed' };
     var DISPLAY_REFRESH_MS = 30 * 60 * 1000;
     var displayVersion = '';
     var displayStamp = '';
@@ -1549,14 +1576,51 @@
     function reportRequest() {
       var extra = { kind: reportQuery.kind || 'daily' };
       if (extra.kind === 'daily' && reportQuery.date) extra.date = reportQuery.date;
-      if (reportQuery.start) extra.start = reportQuery.start;
-      if (reportQuery.end) extra.end = reportQuery.end;
+      if (extra.kind === 'weekly') {
+        extra.span = reportQuery.span || 'completed';
+        if (extra.span !== 'week-to-date') {
+          if (reportQuery.start) extra.start = reportQuery.start;
+          if (reportQuery.end) extra.end = reportQuery.end;
+        }
+      }
       return extra;
     }
     function reportMark(line) {
       var word = line.status === 'hit' ? 'Hit' : (line.status === 'short' ? 'Short' : (line.status === 'even' ? 'At goal' : (line.status === 'pending' ? 'Pending' : line.versus)));
       var bar = line.bar === null || line.bar === undefined ? '' : '<span class="report-bar' + (line.status === 'short' ? ' short' : '') + '"><i style="width:' + Math.round(Number(line.bar) * 100) + '%"></i></span>';
       return '<span class="report-status ' + esc(line.status) + '">' + esc(word) + '</span>' + bar;
+    }
+    function reportTile(line) {
+      var note = line.caption || '';
+      var extra = line.versus && line.versus !== 'On file' && line.versus !== 'Pending' ? line.versus : '';
+      if (!note) note = extra || line.goal || '';
+      else if (extra) note += ' · ' + extra;
+      return '<article class="report-tile ' + esc(line.status) + '"><h3>' + esc(line.label) + '</h3><p class="figure">' + esc(line.result) + '</p><p class="sub">' + esc(note) + '</p></article>';
+    }
+    function renderWeeklyReport(data) {
+      reportQuery.span = data.span || 'completed';
+      reportQuery.start = data.period && data.period.start || '';
+      reportQuery.end = data.period && data.period.end || '';
+      var people = data.people || {};
+      var summary = data.summary || {};
+      var top = people.pending ? '<p>Pending. ' + esc(people.source || '') + '</p>' : ((people.top || []).map(function (person, index) {
+        return '<p>' + (index + 1) + '. ' + esc(person.name) + ' · ' + esc(money(person.written)) + '</p>';
+      }).join('') || '<p>No associate has SNAP Written in this period.</p>');
+      var coach = (people.coaching || []).map(function (item) { return '<p>' + esc(item.name) + ': ' + esc(item.text) + '</p>'; }).join('') || '<p>No verified coaching gap.</p>';
+      var hires = (people.hires || []).length ? people.hires.map(function (item) { return esc(item); }).join('; ') : 'None in the 90-day window.';
+      function list(items) { return (items || []).length ? '<ol>' + items.map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ol>' : '<p>None verified.</p>'; }
+      var span = '<label>Period<select id="report-span"><option value="completed"' + (data.span === 'completed' ? ' selected' : '') + '>Completed week</option><option value="week-to-date"' + (data.span === 'week-to-date' ? ' selected' : '') + '>Week to date</option><option value="custom"' + (data.span === 'custom' ? ' selected' : '') + '>Custom range</option></select></label>';
+      var dates = data.span === 'week-to-date' ? '' : (data.span === 'custom'
+        ? '<label>Start<input id="report-start" type="date" value="' + esc(reportQuery.start) + '"></label><label>End<input id="report-end" type="date" value="' + esc(reportQuery.end) + '"></label>'
+        : '<label>Week containing<input id="report-end" type="date" value="' + esc(reportQuery.end) + '"></label>');
+      return { controls: span + dates, body: '<p class="report-badge ' + (data.partial ? 'partial' : 'complete') + '">' + esc(data.partialLabel || '') + '</p><h1>' + esc(data.title) + '</h1><p class="report-verify">' + esc(data.verification) + '</p>' +
+        '<h2>This week</h2><div class="report-tiles">' + (data.weekly || []).map(reportTile).join('') + '</div>' +
+        '<h2>Store month to date</h2><div class="report-tiles">' + (data.month || []).map(reportTile).join('') + '</div>' +
+        '<h2>Store-month KPIs · not this week</h2><div class="report-kpis">' + (data.kpis || []).map(function (line) {
+          return '<span class="report-chip ' + esc(line.status) + '">' + esc(line.label) + ' ' + esc(line.result) + (line.goal ? ' / ' + esc(line.goal) : '') + '</span>';
+        }).join('') + '</div>' +
+        '<h2>People</h2><div class="report-cols"><div><h3>Top associates</h3>' + top + '<p class="report-foot">' + esc(people.source || '') + '</p></div><div><h3>Coaching</h3>' + coach + '<p class="report-foot">' + esc(people.coachingSource || '') + '</p></div><div><h3>New hires</h3><p>' + hires + '</p></div></div>' +
+        '<div class="report-cols"><div><h2>Wins</h2>' + list(summary.wins) + '</div><div><h2>Needs attention</h2>' + list(summary.attention) + '</div><div><h2>Coming week</h2>' + list(summary.priorities) + '</div></div>' };
     }
     function renderReports(data) {
       reportQuery.kind = data.kind || reportQuery.kind || 'daily';
@@ -1569,18 +1633,19 @@
       }).join('');
       var priorities = (data.priorities || []).map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('');
       var winners = data.winners || {};
-      var period = data.kind === 'daily'
+      var weekly = data.layout === 'weekly' ? renderWeeklyReport(data) : null;
+      var period = weekly ? weekly.controls : (data.kind === 'daily'
         ? '<label>Business day<input id="report-date" type="date" value="' + esc(data.date || '') + '"></label>'
-        : '<label>Period start<input id="report-start" type="date" value="' + esc((data.period && data.period.start) || reportQuery.start || '') + '"></label><label>Period end<input id="report-end" type="date" value="' + esc((data.period && data.period.end) || reportQuery.end || '') + '"></label>';
+        : '<label>Period start<input id="report-start" type="date" value="' + esc((data.period && data.period.start) || reportQuery.start || '') + '"></label><label>Period end<input id="report-end" type="date" value="' + esc((data.period && data.period.end) || reportQuery.end || '') + '"></label>');
       document.getElementById('header-note').textContent = 'Reports · ' + (data.displayDate || data.kind) + ' · no email sent';
       document.getElementById('screen').innerHTML = '<div class="report-controls noprint"><div class="nav" id="report-kinds">' + kinds + '</div>' + period +
         '<button type="button" id="report-apply">Show report</button><button type="button" id="report-print"' + (data.ready ? '' : ' disabled') + '>Print</button><button type="button" id="report-pdf"' + (data.pdf ? '' : ' disabled') + '>Download PDF</button></div>' +
-        '<article id="report-sheet" class="report-sheet"><p class="report-kicker">KANE\'S FURNITURE · STORE 17</p><h1>' + esc(data.title || 'Report') + '</h1>' +
-        '<p class="report-verify">' + esc(data.verification || '') + '</p>' +
+        '<article id="report-sheet" class="report-sheet"><p class="report-kicker">KANE\'S FURNITURE · STORE 17</p>' +
+        (weekly ? weekly.body : ('<h1>' + esc(data.title || 'Report') + '</h1><p class="report-verify">' + esc(data.verification || '') + '</p>' +
         (data.ready ? '<table><thead><tr><th>Measure</th><th>Result</th><th>Goal</th><th>Versus goal</th><th>Source</th></tr></thead><tbody>' + rows + '</tbody></table>' +
           '<h2>Sales winners · ' + esc(winners.date || '') + '</h2><p>' + esc(winners.status === 'pending' ? 'Pending' : winners.text) + '</p><p class="report-foot">' + esc(winners.source || '') + (winners.quiet && winners.quiet !== 'Pending' ? ' No written sale: ' + winners.quiet : '') + '</p>' +
           '<h2>Management priorities</h2>' + (priorities ? '<ol>' + priorities + '</ol>' : '<p>No additional priority is supported by verified data.</p>') +
-          '<p class="report-foot">' + esc(data.prioritySource || '') + '</p>' : '<p>' + esc(data.notice || 'This report is not built yet.') + '</p>') +
+          '<p class="report-foot">' + esc(data.prioritySource || '') + '</p>' : '<p>' + esc(data.notice || 'This report is not built yet.') + '</p>'))) +
         '<p class="report-foot">' + esc(data.calendarNote || '') + ' Store month ' + esc(data.storePeriod || '') + '. Salesperson month ' + esc(data.individualPeriod || '') + '. No email sent.</p></article>';
       Array.prototype.forEach.call(document.querySelectorAll('[data-report-kind]'), function (button) {
         button.addEventListener('click', function () {
@@ -1593,9 +1658,11 @@
         var day = document.getElementById('report-date');
         var start = document.getElementById('report-start');
         var end = document.getElementById('report-end');
+        var span = document.getElementById('report-span');
         if (day) reportQuery.date = day.value;
         if (start) reportQuery.start = start.value;
         if (end) reportQuery.end = end.value;
+        if (span) reportQuery.span = span.value;
         api('reports', reportRequest()).then(renderReports).catch(function (error) { document.getElementById('header-note').textContent = error.message; });
       });
       var print = document.getElementById('report-print');
@@ -1614,7 +1681,7 @@
         var url = URL.createObjectURL(blob);
         var link = document.createElement('a');
         link.href = url;
-        link.download = 'Store17-Daily-Management-Summary-' + (data.date || 'report') + '.pdf';
+        link.download = (data.layout === 'weekly' ? 'Store17-Weekly-Executive-Report-' : 'Store17-Daily-Management-Summary-') + ((data.period && data.period.end) || data.date || 'report') + '.pdf';
         link.click();
         setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
       });
