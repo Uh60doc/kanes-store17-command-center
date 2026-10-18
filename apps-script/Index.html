@@ -530,7 +530,7 @@
       var customers = yesterday.customers;
       var opportunities = yesterday.opportunities;
       var ratio = yesterday.closingRatio;
-      if (Number(opportunities) === 0) {
+      if (opportunities === 0 || opportunities === '0') {
         return '<article class="card"><h2>Store closing · ' + esc(day) + '</h2><p class="figure pending">Pending</p><p class="sub">PERQ Store opportunities for ' + esc(yesterday.date) + ' are 0, so the ratio is not calculated.</p></article>';
       }
       var customersMissing = pendingFigure(customers);
