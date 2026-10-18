@@ -315,6 +315,12 @@
       body.print-brief header.brand, body.print-brief .section-title, body.print-brief .noprint, body.print-brief #brief-mtd, body.print-brief #brief-admin { display: none !important; }
       body.print-brief #brief-startup { margin: 0; border: 0; padding: 0; border-radius: 0; background: white; overflow: visible; }
       body.print-brief #brief-startup, body.print-brief #brief-startup * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html:has(body.print-mtd), body.print-mtd { background: white !important; }
+      body.print-mtd .wrap { padding: 0; max-width: 7.6in; }
+      body.print-mtd #screen > :not(#brief-mtd) { display: none !important; }
+      body.print-mtd header.brand, body.print-mtd .section-title, body.print-mtd .noprint, body.print-mtd #brief-startup, body.print-mtd #brief-admin { display: none !important; }
+      body.print-mtd #brief-mtd { margin: 0; border: 0; padding: 0; border-radius: 0; background: white; overflow: visible; }
+      body.print-mtd #brief-mtd, body.print-mtd #brief-mtd * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       #doc-print img { display: block; width: auto; height: auto; max-width: 100%; max-height: 10.2in; margin: 0 auto; break-after: page; }
       #doc-print img:last-child { break-after: auto; }
       body { background: white; color: black; }
@@ -1370,7 +1376,7 @@
       });
       bindEvalImport();
     }
-    window.addEventListener('afterprint', function () { document.body.classList.remove('print-eval', 'print-brief'); });
+    window.addEventListener('afterprint', function () { document.body.classList.remove('print-eval', 'print-brief', 'print-mtd'); });
     var summaryCache = null;
     function drawSummary(name, start, end) {
       document.getElementById('screen').innerHTML = '<h2 class="section-title">Summary</h2>' + teamNav('summary') + '<p class="sub">Loading the associate summary…</p>';
@@ -1531,16 +1537,18 @@
           '<label>Test address</label><input id="brief-test-to" value="" placeholder="Type the test recipient, then confirm" />' +
           '<p id="brief-admin-error" class="error"></p>' +
           '<p class="summary-actions"><button type="button" id="brief-save-mail">Save delivery settings</button> ' +
-          '<button type="button" class="secondary" id="brief-test-startup">Send Start-Up test</button></p></article>';
+          '<button type="button" class="secondary" id="brief-test-startup">Send Start-Up test</button> ' +
+          '<button type="button" class="secondary" id="brief-test-mtd">Send month-to-date test</button></p></article>';
       }
-      var resend = mail.canResend
-        ? '<p class="summary-actions noprint"><button type="button" id="print-brief">Print Morning Start-Up</button></p>'
-        : '<p class="summary-actions noprint"><button type="button" id="print-brief">Print Morning Start-Up</button></p>';
+      var resend = '<p class="summary-actions noprint"><button type="button" id="print-brief">Print Morning Start-Up</button> <button type="button" id="print-mtd">Print month-to-date</button></p>';
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Morning Start-Up</h2>' +
         '<p class="sub">One printable page. Yesterday uses verified Home figures for that date. A missing report shows Pending. Store month ' + esc(data.storePeriod || '') + '.</p>' +
         (missing ? '<article class="card noprint"><p class="sub"><strong>Partial report — not final.</strong></p><ul class="list">' + missing + '</ul></article>' : '') +
         '<div class="brief-mail" id="brief-startup"><div class="brief-mail-inner">' + (data.startup && data.startup.html ? data.startup.html : '') + '</div></div>' +
+        '<h2 class="section-title noprint">Month-to-date performance</h2>' +
+        '<p class="sub noprint">The second morning report for ' + esc(mail.liveList || 'Store17MGMT-Mail@kanesfurniture.onmicrosoft.com') + '. Managers review it here. It does not change sales figures, and it is not emailed unless an Admin confirms a test address. Automatic delivery stays off.</p>' +
+        '<div class="brief-mail" id="brief-mtd"><div class="brief-mail-inner">' + (data.mtd && data.mtd.html ? data.mtd.html : '') + '</div></div>' +
         '<h2 class="section-title noprint">Today\'s management plan</h2>' +
         '<article class="card noprint"><p class="sub">Up to three actions print on the Start-Up email. Blank lines stay off the email. Notes never change sales figures.</p>' +
         '<label>Priority 1</label><input id="brief-a1" value="' + esc(actions[0] || '') + '" />' +
@@ -1555,6 +1563,10 @@
         resend;
       document.getElementById('print-brief').addEventListener('click', function () {
         document.body.classList.add('print-brief');
+        window.print();
+      });
+      document.getElementById('print-mtd').addEventListener('click', function () {
+        document.body.classList.add('print-mtd');
         window.print();
       });
       var savePlan = document.getElementById('brief-save-plan');
@@ -1593,7 +1605,8 @@
           error.textContent = 'That is the live management list. Automatic delivery is off, so this test was not sent.';
           return;
         }
-        if (!window.confirm('Send the Morning Start-Up test only to ' + to + '? The management distribution list will not be copied.')) {
+        var label = kind === 'mtd' ? 'month-to-date performance report' : 'Morning Start-Up';
+        if (!window.confirm('Send the ' + label + ' test only to ' + to + '? The management distribution list will not be copied.')) {
           error.textContent = 'Test send cancelled. Nothing was emailed.';
           return;
         }
@@ -1604,6 +1617,8 @@
       }
       var testStartup = document.getElementById('brief-test-startup');
       if (testStartup) testStartup.addEventListener('click', function () { sendTest('startup'); });
+      var testMtd = document.getElementById('brief-test-mtd');
+      if (testMtd) testMtd.addEventListener('click', function () { sendTest('mtd'); });
     }
 
     function renderMorning(data) {

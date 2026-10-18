@@ -535,64 +535,139 @@ function briefKpiDiff_(actual, goal, unit) {
   return (delta > 0 ? '+' : '') + String(delta);
 }
 
+function briefStatusWord_(actual, goal) {
+  if (briefBlank_(actual) || briefBlank_(goal)) return 'Pending';
+  var delta = Number(actual) - Number(goal);
+  var tolerance = Math.abs(Number(goal)) > 2 ? 0.5 : 0.0005;
+  if (Math.abs(delta) <= tolerance) return 'At goal';
+  return delta > 0 ? 'Above' : 'Below';
+}
+
+function briefHire_(name, today) {
+  var hired = '';
+  try {
+    sheet_('CC_People').forEach(function (row) {
+      if (String(row.name || '') === name) hired = isoDate_(row.hire_date);
+    });
+  } catch (error) { hired = ''; }
+  var days = null;
+  if (hired && today) {
+    var start = Date.parse(hired + 'T12:00:00Z');
+    var end = Date.parse(today + 'T12:00:00Z');
+    if (isFinite(start) && isFinite(end)) days = Math.round((end - start) / 86400000);
+  }
+  var newHire = days !== null && days >= 0 && days < 90;
+  return {
+    newHire: newHire,
+    hired: hired,
+    days: days,
+    ramp: newHire ? 'Ramp goals: average ticket $2,100, bedding 15%, mattress protector 60%, rugs 6. No separate written ramp budget is saved, so SNAP uses the associate monthly goal.' : '',
+  };
+}
+
+function briefPersonStrengths_(person) {
+  var items = [];
+  if (!briefBlank_(person.monthlyGoal) && !briefBlank_(person.snapWritten) && Number(person.snapWritten) >= Number(person.monthlyGoal)) {
+    items.push('Written at the monthly goal');
+  }
+  if (!briefBlank_(person.closingRatio) && person.closing && !briefBlank_(person.closing.goal) && Number(person.closingRatio) >= Number(person.closing.goal)) {
+    items.push('Closing at ' + briefPercent_(person.closingRatio));
+  }
+  (person.kpis || []).forEach(function (kpi) {
+    if (!kpi || kpi.name === 'Closing Ratio' || kpi.name === 'Orders' || kpi.name === 'Average Ticket') return;
+    if (briefBlank_(kpi.written) || briefBlank_(kpi.goal)) return;
+    if (Number(kpi.written) < Number(kpi.goal)) return;
+    items.push(kpi.name + ' at goal');
+  });
+  var unique = [];
+  items.forEach(function (item) { if (unique.indexOf(item) === -1 && unique.length < 2) unique.push(item); });
+  return unique;
+}
+
+function briefHead_(labels) {
+  return '<tr>' + labels.map(function (label) {
+    return '<th style="text-align:left;padding:4px 6px;border-bottom:2px solid #0b7f88;font:700 11px/1.2 Segoe UI,Helvetica,Arial,sans-serif;color:#0b7f88">' + briefEsc_(label) + '</th>';
+  }).join('') + '</tr>';
+}
+
+function briefTd_(value, extra) {
+  return '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6;vertical-align:top' + (extra || '') + '">' + value + '</td>';
+}
+
+function briefMtdCoaching_(pack) {
+  var lines = [];
+  (pack.kpis || []).forEach(function (row) {
+    if (lines.length >= 3) return;
+    if (row.name === 'Orders') return;
+    if (briefBlank_(row.written) || briefBlank_(row.goal)) return;
+    if (Number(row.written) >= Number(row.goal)) return;
+    lines.push(row.name + ' ' + briefKpiCell_(row.written, row.unit) + ' vs ' + briefKpiCell_(row.goal, row.unit) + (row.through ? ' through ' + row.through : '') + '.');
+  });
+  return lines;
+}
+
 function briefMtdInner_(pack) {
   var month = pack.month;
   var ly = pack.lastYear;
-  var sales = '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">' +
-    briefRow_('Written MTD versus $400,000 goal', briefBlank_(month.written) ? 'Pending' : (briefMoney_(month.written) + ' vs ' + briefMoney_(month.writtenGoal) + ' · ' + briefPercent_(month.writtenAchieved)), pack.labels.written + ' · store month ' + pack.storePeriod + briefThroughNote_(pack, 'written')) +
-    briefRow_('Delivered MTD versus $320,000 goal', briefBlank_(month.delivered) ? 'Pending' : (briefMoney_(month.delivered) + ' vs ' + briefMoney_(month.deliveredGoal) + ' · ' + briefPercent_(month.deliveredAchieved)), pack.labels.delivered + ' · store month ' + pack.storePeriod + briefThroughNote_(pack, 'delivered')) +
-    briefRow_('Remaining to written goal', briefMoney_(month.writtenLeft), 'Written goal minus NWDSR written') +
-    briefRow_('Remaining to delivered goal', briefMoney_(month.deliveredLeft), 'Delivered goal minus NWDSR delivered') +
-    briefRow_('Required daily written pace', briefMoney_(pack.todayWritten), pack.daysLeft === null ? 'Open days left are not on file' : pack.daysLeft + ' open days left including today') +
-    briefRow_('Required daily delivered pace', briefMoney_(pack.todayDelivered), pack.daysLeft === null ? 'Open days left are not on file' : pack.daysLeft + ' open days left including today') +
-    briefRow_('Last-year written', briefBlank_(ly.written.value) ? 'Pending' : moneyText_(ly.written.value), ly.written.basis) +
-    briefRow_('Last-year delivered', briefBlank_(ly.delivered.value) ? 'Pending' : moneyText_(ly.delivered.value), ly.delivered.basis) +
-    '</table>';
-  var kpiHead = '<tr>' +
-    ['KPI', 'Written', 'W Goal', 'W Diff', 'Delivered', 'D Goal', 'D Diff', 'Cutoff'].map(function (h) {
-      return '<th style="text-align:left;padding:4px 6px;border-bottom:2px solid #0b7f88;font:700 11px/1.2 Segoe UI,Helvetica,Arial,sans-serif;color:#0b7f88">' + h + '</th>';
-    }).join('') + '</tr>';
-  var kpiRows = pack.kpis.map(function (row) {
-    var deliveredGoal = row.name === 'Closing Ratio' ? '' : briefKpiCell_(row.goal, row.unit);
-    var delivered = row.name === 'Closing Ratio' ? '—' : briefKpiCell_(row.written && row.name === 'Closing Ratio' ? null : row.delivered, row.unit);
-    if (row.name === 'Closing Ratio') delivered = '—';
+  var paceNote = pack.daysLeft === null || pack.daysLeft === undefined ? 'Open days left are not on file' : (pack.daysLeft + ' open days left, including today');
+  var closing = briefKpiByName_(pack.kpis, 'Closing Ratio');
+  var ticket = briefKpiByName_(pack.kpis, 'Average Ticket');
+  function storeRow(cells) {
+    return '<tr>' + cells.map(function (cell) { return briefTd_(briefEsc_(cell)); }).join('') + '</tr>';
+  }
+  var sales = '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:12px">' +
+    briefHead_(['Measure', 'Actual', 'Budget', 'To goal', 'Remaining', 'Daily pace', 'Verified']) +
+    storeRow(['Written sales', briefMoney_(month.written), briefMoney_(month.writtenGoal), briefPercent_(month.writtenAchieved), briefMoney_(month.writtenLeft), briefMoney_(pack.todayWritten), (pack.labels.written || 'NWDSR Written') + briefThroughNote_(pack, 'written')]) +
+    storeRow(['Delivered sales', briefMoney_(month.delivered), briefMoney_(month.deliveredGoal), briefPercent_(month.deliveredAchieved), briefMoney_(month.deliveredLeft), briefMoney_(pack.todayDelivered), (pack.labels.delivered || 'NWDSR Delivered') + briefThroughNote_(pack, 'delivered')]) +
+    storeRow(['Closing ratio', closing ? briefKpiCell_(closing.written, 'percent') : 'Pending', closing ? briefKpiCell_(closing.goal, 'percent') : '50%', closing ? briefStatusWord_(closing.written, closing.goal) : 'Pending', closing ? briefKpiDiff_(closing.written, closing.goal, 'percent') : 'Pending', '—', closing && closing.through ? 'through ' + closing.through : 'Pending']) +
+    storeRow(['Average ticket', ticket ? briefKpiCell_(ticket.written, 'dollars') : 'Pending', ticket ? briefKpiCell_(ticket.goal, 'dollars') : '$2,500', ticket ? briefStatusWord_(ticket.written, ticket.goal) : 'Pending', ticket ? briefKpiDiff_(ticket.written, ticket.goal, 'dollars') : 'Pending', '—', ticket ? (briefKpiCutoff_(ticket) || 'Pending') : 'Pending']) +
+    '</table><p style="margin:4px 0 0;color:#3d5660;font-size:12px">Required daily pace uses the remaining store budget divided by open days left. ' + briefEsc_(paceNote) + '.</p>';
+  var kpiRows = (pack.kpis || []).filter(function (row) { return row.name !== 'Closing Ratio' && row.name !== 'Average Ticket' && row.name !== 'Orders'; }).map(function (row) {
     return '<tr>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(row.name) + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(briefKpiCell_(row.written, row.unit)) + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(briefKpiCell_(row.goal, row.unit)) + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(briefKpiDiff_(row.written, row.goal, row.unit)) + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(row.name === 'Closing Ratio' ? '—' : briefKpiCell_(row.delivered, row.unit)) + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(row.name === 'Closing Ratio' ? '—' : deliveredGoal) + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(row.name === 'Closing Ratio' ? '—' : briefKpiDiff_(row.delivered, row.goal, row.unit)) + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(briefKpiCutoff_(row)) + '</td>' +
+      briefTd_(briefEsc_(row.name)) +
+      briefTd_(briefEsc_(briefKpiCell_(row.written, row.unit))) +
+      briefTd_(briefEsc_(briefKpiCell_(row.goal, row.unit))) +
+      briefTd_(briefEsc_(briefStatusWord_(row.written, row.goal))) +
+      briefTd_(briefEsc_(briefKpiCell_(row.delivered, row.unit))) +
+      briefTd_(briefEsc_(briefKpiCutoff_(row) || 'Pending')) +
       '</tr>';
   }).join('');
-  var teamHead = '<tr>' +
-    ['Associate', 'SNAP Written MTD', 'Monthly Written goal', '% to goal', 'Data Analysis Delivered MTD', 'Written orders', 'PERQ opportunities', 'Closing Ratio', 'Key KPI shortfalls'].map(function (h) {
-      return '<th style="text-align:left;padding:4px 6px;border-bottom:2px solid #0b7f88;font:700 11px/1.2 Segoe UI,Helvetica,Arial,sans-serif;color:#0b7f88">' + h + '</th>';
-    }).join('') + '</tr>';
-  var teamRows = pack.people.map(function (person) {
+  var coaching = briefMtdCoaching_(pack);
+  var coachHtml = coaching.length
+    ? '<ul style="margin:4px 0 0;padding-left:18px">' + coaching.map(function (line) { return '<li>' + briefEsc_(line) + '</li>'; }).join('') + '</ul>'
+    : '<p style="margin:4px 0 0">No verified store KPI is below its goal.</p>';
+  var teamRows = (pack.people || []).map(function (person) {
+    var hire = person.hire || {};
     var pct = briefBlank_(person.snapWritten) || briefBlank_(person.monthlyGoal) ? 'Pending' : percentText_(person.snapWritten / person.monthlyGoal);
-    var shortfalls = (person.shortfalls || []).join('; ') || 'None verified';
+    var strengths = (person.strengths || []).join('; ');
+    var gaps = (person.shortfalls || []).join('; ');
+    var coach = (strengths ? 'Strength: ' + strengths + '. ' : '') + (gaps ? 'Coach: ' + gaps + '.' : (strengths ? '' : 'Coaching waits on verified metrics.'));
+    var name = briefEsc_(person.name) + (hire.newHire ? ' <strong>NEW HIRE</strong>' : '');
+    if (hire.newHire) name += '<div style="color:#3d5660;font-size:11px">Hired ' + briefEsc_(hire.hired) + ' · day ' + hire.days + ' of 90. ' + briefEsc_(hire.ramp) + '</div>';
+    var closingText = briefPercent_(person.closingRatio) + (person.closingThrough ? '<div style="color:#3d5660;font-size:11px">through ' + briefEsc_(person.closingThrough) + '</div>' : '');
     return '<tr>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(person.name) + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(briefMoney_(person.snapWritten)) + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(briefMoney_(person.monthlyGoal)) + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(pct) + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(briefMoney_(person.deliveredSales)) + (person.deliveredThrough ? '<div style="color:#3d5660;font-size:11px">through ' + briefEsc_(person.deliveredThrough) + '</div>' : '') + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(briefBlank_(person.writtenOrders) ? 'Pending' : String(person.writtenOrders)) + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(briefBlank_(person.opportunities) ? 'Pending' : String(person.opportunities)) + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6">' + briefEsc_(briefPercent_(person.closingRatio)) + (person.closingThrough ? '<div style="color:#3d5660;font-size:11px">through ' + briefEsc_(person.closingThrough) + '</div>' : '') + '</td>' +
-      '<td style="padding:4px 6px;border-bottom:1px solid #d7e2e6;font-size:12px">' + briefEsc_(shortfalls) + '</td>' +
+      briefTd_(name) +
+      briefTd_(briefEsc_(briefMoney_(person.snapWritten))) +
+      briefTd_(briefEsc_(briefMoney_(person.monthlyGoal))) +
+      briefTd_(briefEsc_(pct)) +
+      briefTd_(closingText) +
+      briefTd_(briefEsc_(coach)) +
       '</tr>';
   }).join('');
-  return '<p style="margin:0 0 8px;color:#3d5660"><strong>Store reporting period:</strong> ' + briefEsc_(pack.storePeriod) +
-    ' (2nd of the month through the 1st of the following month).<br /><strong>Individual salesperson period:</strong> ' +
-    briefEsc_(pack.individualPeriod) + ' (1st through the last calendar day). ' + briefEsc_(pack.goalEffective) + '</p>' +
-    briefSection_('Store sales', sales) +
-    briefSection_('Store performance', '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:12px">' + kpiHead + kpiRows + '</table>') +
-    briefSection_('Sales team', '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:12px">' + teamHead + teamRows + '</table>') +
-    briefFooter_(pack, 'MTD Performance');
+  var comparisons = '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">' +
+    briefRow_('Store versus last year, written', briefBlank_(ly.written.value) ? 'Pending' : moneyText_(ly.written.value), ly.written.basis) +
+    briefRow_('Store versus last year, delivered', briefBlank_(ly.delivered.value) ? 'Pending' : moneyText_(ly.delivered.value), ly.delivered.basis) +
+    '</table>';
+  return '<p style="margin:0 0 8px;color:#3d5660"><strong>Store month:</strong> ' + briefEsc_(pack.storePeriod) +
+    ' (2nd through the 1st). NWDSR Written and NWDSR Delivered.<br /><strong>Salesperson month:</strong> ' +
+    briefEsc_(pack.individualPeriod) + ' (1st through the last calendar day). Individual written sales are SNAP.</p>' +
+    briefSection_('Store performance', sales) +
+    briefSection_('Key performance indicators', '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:12px">' + briefHead_(['KPI', 'Written', 'Goal', 'Status', 'Delivered', 'Verified through']) + kpiRows + '</table>') +
+    briefSection_('Coaching', coachHtml) +
+    briefSection_('Sales team', '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:12px">' + briefHead_(['Associate', 'SNAP Written', 'Monthly goal', '% to goal', 'Closing', 'Coaching']) + teamRows + '</table>' +
+      '<p style="margin:6px 0 0;color:#3d5660;font-size:12px">Active sales associates only. Former employees stay in the store delivered total and are not ranked here. Closing is Group 17 written orders divided by that salesperson\'s PERQ opportunities.</p>') +
+    briefSection_('Comparisons', comparisons) +
+    briefFooter_(pack, 'Month-to-date performance');
 }
 
 function briefStartupHtml_(pack, useCid) {
@@ -601,7 +676,7 @@ function briefStartupHtml_(pack, useCid) {
 }
 
 function briefMtdHtml_(pack, useCid) {
-  return briefEmailWrap_('STORE 17 | MTD PERFORMANCE', pack.today, briefMtdInner_(pack), useCid, briefBanner_(pack.missing, pack.partial));
+  return briefEmailWrap_('STORE 17 — MONTH-TO-DATE PERFORMANCE', pack.today, briefMtdInner_(pack), useCid, briefBanner_(pack.missing, pack.partial));
 }
 
 function briefStartupText_(pack) {
@@ -645,38 +720,51 @@ function briefStartupText_(pack) {
 
 function briefMtdText_(pack) {
   var month = pack.month;
+  var closing = briefKpiByName_(pack.kpis, 'Closing Ratio');
+  var ticket = briefKpiByName_(pack.kpis, 'Average Ticket');
   var lines = [
-    'STORE 17 | MTD PERFORMANCE | ' + briefSubjectDate_(pack.today),
+    'STORE 17 — MONTH-TO-DATE PERFORMANCE | ' + briefSubjectDate_(pack.today),
     'Kane\'s Furniture · Store 17 · America/New_York',
-    'Store period: ' + pack.storePeriod + ' (2nd through the 1st).',
-    'Salesperson period: ' + pack.individualPeriod + ' (1st through the last day).',
+    'Store month: ' + pack.storePeriod + ' (2nd through the 1st). NWDSR Written and NWDSR Delivered.',
+    'Salesperson month: ' + pack.individualPeriod + ' (1st through the last day). Individual written sales are SNAP.',
     pack.partial ? 'PARTIAL REPORT — NOT FINAL' : '',
     '',
-    'STORE SALES',
-    'Written MTD: ' + briefMoney_(month.written) + ' vs ' + briefMoney_(month.writtenGoal) + ' (' + briefPercent_(month.writtenAchieved) + ')',
-    'Delivered MTD: ' + briefMoney_(month.delivered) + ' vs ' + briefMoney_(month.deliveredGoal) + ' (' + briefPercent_(month.deliveredAchieved) + ')',
-    'Remaining written: ' + briefMoney_(month.writtenLeft) + ' · daily pace ' + briefMoney_(pack.todayWritten),
-    'Remaining delivered: ' + briefMoney_(month.deliveredLeft) + ' · daily pace ' + briefMoney_(pack.todayDelivered),
-    'Last-year written: ' + (briefBlank_(pack.lastYear.written.value) ? 'Pending' : moneyText_(pack.lastYear.written.value)) + ' — ' + pack.lastYear.written.basis,
-    'Last-year delivered: ' + (briefBlank_(pack.lastYear.delivered.value) ? 'Pending' : moneyText_(pack.lastYear.delivered.value)) + ' — ' + pack.lastYear.delivered.basis,
-    '',
     'STORE PERFORMANCE',
+    'Written sales MTD: ' + briefMoney_(month.written) + ' of ' + briefMoney_(month.writtenGoal) + ' (' + briefPercent_(month.writtenAchieved) + '), ' + briefMoney_(month.writtenLeft) + ' remaining, daily pace ' + briefMoney_(pack.todayWritten),
+    'Delivered sales MTD: ' + briefMoney_(month.delivered) + ' of ' + briefMoney_(month.deliveredGoal) + ' (' + briefPercent_(month.deliveredAchieved) + '), ' + briefMoney_(month.deliveredLeft) + ' remaining, daily pace ' + briefMoney_(pack.todayDelivered),
+    'Closing ratio: ' + (closing ? briefKpiCell_(closing.written, 'percent') : 'Pending') + ' vs ' + (closing ? briefKpiCell_(closing.goal, 'percent') : '50%') + (closing && closing.through ? ' through ' + closing.through : ''),
+    'Average ticket: ' + (ticket ? briefKpiCell_(ticket.written, 'dollars') : 'Pending') + ' vs ' + (ticket ? briefKpiCell_(ticket.goal, 'dollars') : '$2,500'),
+    '',
+    'KEY PERFORMANCE INDICATORS',
   ];
-  pack.kpis.forEach(function (row) {
+  (pack.kpis || []).forEach(function (row) {
+    if (row.name === 'Closing Ratio' || row.name === 'Average Ticket' || row.name === 'Orders') return;
     lines.push(row.name + ': written ' + briefKpiCell_(row.written, row.unit) + ' vs ' + briefKpiCell_(row.goal, row.unit) +
-      (row.name === 'Closing Ratio' ? '' : ' · delivered ' + briefKpiCell_(row.delivered, row.unit)) +
-      (row.through ? ' · through ' + row.through : ''));
+      ' · delivered ' + briefKpiCell_(row.delivered, row.unit) + (briefKpiCutoff_(row) ? ' · through ' + briefKpiCutoff_(row) : ''));
   });
+  var coaching = briefMtdCoaching_(pack);
+  lines.push('');
+  lines.push('COACHING');
+  if (!coaching.length) lines.push('No verified store KPI is below its goal.');
+  coaching.forEach(function (line) { lines.push(line); });
   lines.push('');
   lines.push('SALES TEAM');
-  pack.people.forEach(function (person) {
+  (pack.people || []).forEach(function (person) {
+    var hire = person.hire || {};
     var pct = briefBlank_(person.snapWritten) || briefBlank_(person.monthlyGoal) ? 'Pending' : percentText_(person.snapWritten / person.monthlyGoal);
-    lines.push(person.name + ': SNAP ' + briefMoney_(person.snapWritten) + ' / goal ' + briefMoney_(person.monthlyGoal) + ' (' + pct +
-      ') · DA delivered ' + briefMoney_(person.deliveredSales) + ' · orders ' + (briefBlank_(person.writtenOrders) ? 'Pending' : person.writtenOrders) +
-      ' · PERQ ' + (briefBlank_(person.opportunities) ? 'Pending' : person.opportunities) +
-      ' · closing ' + briefPercent_(person.closingRatio) +
-      (person.shortfalls && person.shortfalls.length ? ' · shortfalls: ' + person.shortfalls.join('; ') : ''));
+    var strengths = (person.strengths || []).join('; ');
+    var gaps = (person.shortfalls || []).join('; ');
+    lines.push(person.name + (hire.newHire ? ' NEW HIRE' : '') + ': SNAP ' + briefMoney_(person.snapWritten) + ' / goal ' + briefMoney_(person.monthlyGoal) + ' (' + pct +
+      ') · closing ' + briefPercent_(person.closingRatio) +
+      (strengths ? ' · strength: ' + strengths : '') +
+      (gaps ? ' · coach: ' + gaps : '') +
+      (hire.ramp ? ' · ' + hire.ramp : ''));
   });
+  lines.push('Former employees stay in the store delivered total and are not ranked here.');
+  lines.push('');
+  lines.push('COMPARISONS');
+  lines.push('Last-year written: ' + (briefBlank_(pack.lastYear.written.value) ? 'Pending' : moneyText_(pack.lastYear.written.value)) + ' — ' + pack.lastYear.written.basis);
+  lines.push('Last-year delivered: ' + (briefBlank_(pack.lastYear.delivered.value) ? 'Pending' : moneyText_(pack.lastYear.delivered.value)) + ' — ' + pack.lastYear.delivered.basis);
   if (pack.missing.length) {
     lines.push('');
     lines.push('Missing sources: ' + pack.missing.join('; '));
@@ -711,6 +799,8 @@ function briefPack_(payload) {
     var copy = {};
     Object.keys(person).forEach(function (key) { copy[key] = person[key]; });
     copy.shortfalls = briefPersonShortfalls_(person);
+    copy.strengths = briefPersonStrengths_(person);
+    copy.hire = briefHire_(copy.name, today);
     return copy;
   });
   var winners = home.winners || { date: priorBusinessDay_(today), status: 'pending', reason: 'PERQ Report Pending', people: [] };
@@ -769,13 +859,13 @@ function briefPack_(payload) {
   };
   pack.version = briefVersion_(pack);
   pack.startupSubject = 'STORE 17 | MORNING START-UP | ' + briefSubjectDate_(today);
-  pack.mtdSubject = 'STORE 17 | MTD PERFORMANCE | ' + briefSubjectDate_(today);
+  pack.mtdSubject = 'STORE 17 — MONTH-TO-DATE PERFORMANCE | ' + briefSubjectDate_(today);
   pack.startupInner = briefEmailWrap_('STORE 17 | MORNING START-UP', pack.today, briefStartupInner_(pack), false, briefBanner_(pack.startupMissing, (pack.startupMissing || []).length > 0, true), true)
     .replace(/^<!DOCTYPE html><html><head>[\s\S]*?<\/head><body style="margin:0;padding:0;background:#ffffff;color:#102027">/, '')
     .replace(/<\/body><\/html>$/, '');
   pack.mtdInner = '<div style="padding:8px 4px">' + briefBrandHeader_(false) +
     '<p style="margin:12px 0 0;color:#0b7f88;font:700 11px/1.2 Segoe UI,Helvetica,Arial,sans-serif;letter-spacing:0.08em">KANE\'S FURNITURE · STORE 17</p>' +
-    '<h1 style="margin:4px 0 2px;font:700 22px/1.15 Segoe UI,Helvetica,Arial,sans-serif;color:#102027">STORE 17 | MTD PERFORMANCE</h1>' +
+    '<h1 style="margin:4px 0 2px;font:700 22px/1.15 Segoe UI,Helvetica,Arial,sans-serif;color:#102027">STORE 17 — MONTH-TO-DATE PERFORMANCE</h1>' +
     '<p style="margin:0 0 10px;color:#3d5660">America/New_York · ' + briefEsc_(briefDisplayDate_(pack.today)) + '</p>' +
     briefBanner_(pack.missing, pack.partial) + briefMtdInner_(pack) + '</div>';
   pack.startupHtml = briefStartupHtml_(pack, false);
