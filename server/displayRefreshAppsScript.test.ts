@@ -80,6 +80,11 @@ test('the website waits 30 minutes, keeps verified figures, and skips a form', (
   const html = readFileSync(new URL('../apps-script/Index.html', import.meta.url), 'utf8');
   assert.match(html, /var DISPLAY_REFRESH_MS = 30 \* 60 \* 1000;/);
   assert.match(html, /api\('dataPulse'\)/);
+  assert.match(html, /↻ Data Refresh/);
+  assert.match(html, /Checks automatically every 30 minutes/);
+  assert.match(html, /Connection Issue/);
+  assert.match(html, /paintDisplayStatus\('updating'\)/);
+  assert.match(html, /paintDisplayStatus\('connected'\)/);
   assert.doesNotMatch(html.slice(html.indexOf('function refreshDisplayed'), html.indexOf('function startDisplayRefresh')), /scheduledImport_|uploadReport|retry/);
   const start = html.indexOf('/* display-refresh-policy */');
   const end = html.indexOf('/* end-display-refresh-policy */');
