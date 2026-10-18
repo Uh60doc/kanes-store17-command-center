@@ -29,7 +29,7 @@ test('a suggestion is not saved until a manager approves it, and sales figures s
   assert.deepEqual(plain(gs.ROUTES_).actions, ['manager', 'admin']);
   assert.equal(page.priorities.length, 0);
   assert.equal(page.history.length, 0);
-  assert.ok(page.suggestions.length > 0);
+  assert.ok(page.suggestions.some((item: { key: string }) => item.key.indexOf('kpi-') === 0));
   assert.match(page.notice, /emails an employee/);
   assert.equal(page.suggestions.some((item: { key: string }) => item.key.indexOf('rescue-') === 0), false);
   page.suggestions.forEach((item: { lane: string }) => assert.ok(item.lane === 'sales' || item.lane === 'operations'));

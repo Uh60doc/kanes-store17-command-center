@@ -103,7 +103,7 @@ function actionSuggestPerq_(home, today) {
 }
 
 function actionSuggestKpi_(home, today) {
-  var kpis = home && home.kpis ? home.kpis : [];
+  var kpis = home && home.board && home.board.kpis ? home.board.kpis : [];
   var best = null;
   kpis.forEach(function (kpi) {
     if (kpi.written === null || kpi.written === undefined || kpi.goal === null || kpi.goal === undefined || Number(kpi.goal) === 0) return;
