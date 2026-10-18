@@ -35,8 +35,10 @@ function actionStatus_(value) {
 }
 
 function actionDue_(value) {
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) return isoDate_(value);
   var text = actionText_(value);
-  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : '';
+  var iso = /^(\d{4}-\d{2}-\d{2})/.exec(text);
+  return iso ? iso[1] : '';
 }
 
 function actionRows_() {

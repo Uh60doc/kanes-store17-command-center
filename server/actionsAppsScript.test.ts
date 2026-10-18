@@ -14,6 +14,7 @@ test('open actions rank overdue first and keep completed history', () => {
   ], '2026-10-17'));
   assert.deepEqual(ranked.map((action: { description: string }) => action.description), ['overdue', 'today', 'later']);
   assert.equal(plain(gs.actionOverdue_(ranked, '2026-10-17')).length, 1);
+  assert.equal(gs.actionDue_(new Date('2026-10-18T16:00:00Z')), '2026-10-18');
   const history = plain(gs.actionHistory_([
     { status: 'Completed', completedAt: '2026-10-02', description: 'older' },
     { status: 'Completed', completedAt: '2026-10-10', description: 'newer' },
