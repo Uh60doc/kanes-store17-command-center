@@ -103,7 +103,7 @@ function coachCard_(person, hire, period) {
     return coachLine_(key, label, actual, goal, 'percent',
       coachBlank_(actual) ? label + ' is Pending. No qualifying items are on the Group 17 written report for this associate.' : label + ' is ' + percentText_(actual) + (row.sold !== null ? ' (' + row.sold + ' of ' + row.qualified + ').' : '.'),
       coachBlank_(goal) ? label + ' goal is Pending.' : (newHireNote || label + ' goal ') + percentText_(goal) + '.',
-      needed === null ? 'Additional attachments are Pending.' : (needed ? needed + ' more attachments on the qualified items already on file would reach the goal.' : 'The attachment count on file is already at the goal.'));
+      needed === null ? 'Additional attachments are Pending.' : (needed ? needed + ' more attachment' + (Number(needed) === 1 ? '' : 's') + ' on the qualified items already on file would reach the goal.' : 'The attachment count on file is already at the goal.'));
   }
   lines.push(attachLine('fabric', 'Fabric maintenance', fabric, fabricGoal, ''));
   lines.push(attachLine('leather', 'Leather maintenance', leather, leatherGoal, ''));
