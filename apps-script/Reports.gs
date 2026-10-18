@@ -493,7 +493,10 @@ function reportWeekly_(payload, today) {
     reportLine_('week-closing', 'Store closing', ratio === null ? 'Pending' : percentText_(ratio), briefBlank_(closingGoal) ? '' : percentText_(closingGoal), reportVersus_(ratio, closingGoal, 'percent'), reportStatus_(ratio, closingGoal), ratio === null ? 'Store closing needs purchasing customers and PERQ for every open day in this period.' : (closing.customers + ' customers ÷ ' + closing.opportunities + ' opportunities.'), reportBar_(ratio, closingGoal)),
     reportLine_('week-ticket', 'Average ticket', 'Pending', '', 'Pending', 'pending', 'A weekly average ticket is not on a verified file. The store-month ticket is with the KPIs.', null),
   ];
-  weekly.forEach(function (line) { line.scope = 'week'; });
+  weekly.forEach(function (line) {
+    line.scope = 'week';
+    line.caption = line.status === 'pending' ? 'Missing day stays Pending' : (briefDisplayDate_(start) + ' – ' + briefDisplayDate_(end));
+  });
 
   var writtenThrough = latestFactDate_(facts, 'nwdsrWritten', store.start, shiftDate_(end, 1), shiftDate_(end, 1));
   var deliveredThrough = latestFactDate_(facts, 'nwdsrDelivered', store.start, shiftDate_(end, 1), shiftDate_(end, 1));
@@ -520,7 +523,12 @@ function reportWeekly_(payload, today) {
     reportMoneyLine_('mtd-written-projection', 'Written projection', writtenProjection, budgets.written, 'Projection. Verified daily run rate × open store days. Days after ' + end + ' are not in the average. Missing days are not zero.'),
     reportMoneyLine_('mtd-delivered-projection', 'Delivered projection', deliveredProjection, budgets.delivered, 'Projection. Verified daily run rate × open store days. Days after ' + end + ' are not in the average. Missing days are not zero.'),
   ];
-  month.forEach(function (line) { line.scope = 'store-month'; });
+  month.forEach(function (line) {
+    line.scope = 'store-month';
+    var through = line.key.indexOf('delivered') !== -1 ? deliveredThrough : writtenThrough;
+    var prefix = line.key.indexOf('projection') !== -1 ? 'Projection through ' : 'Store month through ';
+    line.caption = prefix + (through ? briefDisplayDate_(through) : 'Pending');
+  });
 
   var kpis = sameMonth && home.board ? home.board.kpis : [];
   var kpiSpecs = [
@@ -804,7 +812,7 @@ function reportWeeklyPdf_(page) {
       text(36, y, 8, line.label, true);
       var tone = reportTone_(line.status);
       paint(tone[0], tone[1], tone[2]);
-      text(150, y, 8, line.result + (line.goal ? '  /  ' + line.goal : '') + (line.versus && line.versus !== 'On file' && line.versus !== 'Pending' ? '  ' + line.versus : ''), true);
+      text(150, y, 8, line.result + (line.goal ? '  /  ' + line.goal : '') + (line.versus && line.versus !== 'On file' && line.versus !== 'Pending' ? '  ' + line.versus : '') + (line.caption ? '  ·  ' + line.caption : ''), true);
       y -= 10;
     });
     y -= 4;

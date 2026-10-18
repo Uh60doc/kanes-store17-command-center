@@ -429,11 +429,14 @@
       body.print-report #report-sheet h2 { margin: 6px 0 2px; }
       body.print-report #report-sheet ol, body.print-report #report-sheet .report-foot { font-size: 11px; line-height: 1.3; margin: 2px 0; }
       body.print-report #report-sheet h1 { font-size: 16px; }
-      body.print-report #report-sheet .report-tiles { gap: 4px; margin: 4px 0; }
-      body.print-report #report-sheet .report-tile { padding: 3px 6px; }
+      body.print-report #report-sheet .report-tiles { gap: 3px; margin: 2px 0; }
+      body.print-report #report-sheet .report-tile { padding: 2px 5px; }
       body.print-report #report-sheet .report-tile .figure { font-size: 13px; }
-      body.print-report #report-sheet .report-tile h3, body.print-report #report-sheet .report-tile .sub, body.print-report #report-sheet .report-chip, body.print-report #report-sheet .report-cols ol { font-size: 11px; }
-      body.print-report #report-sheet h2 { margin: 4px 0 2px; font-size: 11px; }
+      body.print-report #report-sheet .report-tile h3, body.print-report #report-sheet .report-tile .sub, body.print-report #report-sheet .report-chip, body.print-report #report-sheet .report-cols ol, body.print-report #report-sheet .report-cols p { font-size: 11px; line-height: 1.25; }
+      body.print-report #report-sheet .report-cols { gap: 6px; }
+      body.print-report #report-sheet .report-cols p, body.print-report #report-sheet .report-foot { margin: 1px 0; }
+      body.print-report #report-sheet .report-kpis { margin: 2px 0; gap: 3px; }
+      body.print-report #report-sheet h2 { margin: 3px 0 1px; font-size: 11px; }
       body.print-report #report-sheet { break-inside: avoid; page-break-after: avoid; }
       html:has(body.print-mtd), body.print-mtd { background: white !important; }
       body.print-mtd .wrap { padding: 0; max-width: 7.6in; }
@@ -1588,7 +1591,10 @@
       return '<span class="report-status ' + esc(line.status) + '">' + esc(word) + '</span>' + bar;
     }
     function reportTile(line) {
-      var note = line.versus && line.versus !== 'On file' ? line.versus : (line.goal || '');
+      var note = line.caption || '';
+      var extra = line.versus && line.versus !== 'On file' && line.versus !== 'Pending' ? line.versus : '';
+      if (!note) note = extra || line.goal || '';
+      else if (extra) note += ' · ' + extra;
       return '<article class="report-tile ' + esc(line.status) + '"><h3>' + esc(line.label) + '</h3><p class="figure">' + esc(line.result) + '</p><p class="sub">' + esc(note) + '</p></article>';
     }
     function renderWeeklyReport(data) {
@@ -1610,7 +1616,7 @@
       return { controls: span + dates, body: '<p class="report-badge ' + (data.partial ? 'partial' : 'complete') + '">' + esc(data.partialLabel || '') + '</p><h1>' + esc(data.title) + '</h1><p class="report-verify">' + esc(data.verification) + '</p>' +
         '<h2>This week</h2><div class="report-tiles">' + (data.weekly || []).map(reportTile).join('') + '</div>' +
         '<h2>Store month to date</h2><div class="report-tiles">' + (data.month || []).map(reportTile).join('') + '</div>' +
-        '<h2>Store-month KPIs</h2><div class="report-kpis">' + (data.kpis || []).map(function (line) {
+        '<h2>Store-month KPIs · not this week</h2><div class="report-kpis">' + (data.kpis || []).map(function (line) {
           return '<span class="report-chip ' + esc(line.status) + '">' + esc(line.label) + ' ' + esc(line.result) + (line.goal ? ' / ' + esc(line.goal) : '') + '</span>';
         }).join('') + '</div>' +
         '<h2>People</h2><div class="report-cols"><div><h3>Top associates</h3>' + top + '<p class="report-foot">' + esc(people.source || '') + '</p></div><div><h3>Coaching</h3>' + coach + '<p class="report-foot">' + esc(people.coachingSource || '') + '</p></div><div><h3>New hires</h3><p>' + hires + '</p></div></div>' +

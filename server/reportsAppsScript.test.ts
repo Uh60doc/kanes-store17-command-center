@@ -111,6 +111,11 @@ test('the weekly executive report uses a completed Monday-Sunday week and keeps 
   assert.ok(page.summary.priorities.length <= 3);
   const mtd = page.month.find((item: { key: string }) => item.key === 'mtd-written');
   assert.match(mtd.source, /Store month/);
+  assert.match(mtd.caption, /Store month through/);
+  assert.equal(String(mtd.caption).includes('Oct 16'), false);
+  assert.equal(String(mtd.caption).includes('Oct 17'), false);
+  assert.match(page.month.find((item: { key: string }) => item.key === 'mtd-written-projection').caption, /Projection through/);
+  assert.match(page.weekly.find((item: { key: string }) => item.key === 'week-written').caption, /Oct 5, 2026/);
   assert.equal(mtd.source.includes('2026-10-16'), false);
   assert.equal(mtd.source.includes('2026-10-17'), false);
   const wtd = plain(gs.reportCenter_({ session, kind: 'weekly', span: 'week-to-date' }));
