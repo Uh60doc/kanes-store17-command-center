@@ -1306,6 +1306,33 @@ function withDayClosing_(days, view) {
   });
 }
 
+function homeWeekTargets_(store, today, closed, facts, writtenGoal, deliveredGoal, savedGoals) {
+  var weekday = reportWeekday_(today);
+  var monday = shiftDate_(today, weekday === 0 ? -6 : 1 - weekday);
+  var sunday = shiftDate_(monday, 6);
+  var written = 0;
+  var delivered = 0;
+  var days = 0;
+  eachDate_(monday, sunday).forEach(function (date) {
+    if (date < store.start || date > store.end || closed[date]) return;
+    var daysLeft = operatingDaysRemaining_(store, date, closed);
+    var saved = savedGoals[date] || {};
+    var dayWritten = saved.written !== undefined && saved.written !== null ? saved.written : savedPace_(writtenGoal, sumBefore_(facts, 'nwdsrWritten', store.start, date), daysLeft);
+    var dayDelivered = saved.delivered !== undefined && saved.delivered !== null ? saved.delivered : savedPace_(deliveredGoal, sumBefore_(facts, 'nwdsrDelivered', store.start, date), daysLeft);
+    if (dayWritten === null || dayDelivered === null) return;
+    written += dayWritten;
+    delivered += dayDelivered;
+    days += 1;
+  });
+  return {
+    start: monday,
+    end: sunday,
+    days: days,
+    written: days ? Math.round(written * 100) / 100 : null,
+    delivered: days ? Math.round(delivered * 100) / 100 : null,
+  };
+}
+
 function savedPace_(budget, actualBefore, daysLeft) {
   if (budget === null || actualBefore === null || daysLeft === null || daysLeft <= 0) return null;
   return Math.round(((Number(budget) - actualBefore) / daysLeft) * 100) / 100;
@@ -1860,6 +1887,7 @@ function home_(payload) {
     chart: days.filter(function (day) { return day.date < today; }).map(function (day) {
       return { date: day.date, written: day.nwdsrWritten, delivered: day.nwdsrDelivered, snap: day.snapWritten, closed: !!day.closed };
     }),
+    week: homeWeekTargets_(store, today, closed, facts, writtenGoal, deliveredGoal, savedGoals),
   };
 }
 

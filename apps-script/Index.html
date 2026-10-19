@@ -116,10 +116,33 @@
     .meter.bad i { background: linear-gradient(90deg, #8a3048, #ff8ea3); }
     .meter.warn i { background: linear-gradient(90deg, #8a6a2f, #f3d48a); }
     .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .stretch { border-color: #c6a15a; box-shadow: 0 0 22px rgba(198, 161, 90, 0.16); }
-    .person-card { cursor: pointer; text-align: left; width: 100%; }
-    .person-card h3 { margin: 0; font-size: 15px; }
-    .rank { color: #7ee7f0; font-size: 12px; letter-spacing: 0.08em; }
+    .kpi-hero { min-height: 196px; }
+    .kpi-hero .figure { color: #f8fbff; font-size: 34px; font-weight: 780; margin: 8px 0 4px; }
+    .kpi-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .kpi-hero .goal-line, .kpi-hero .need { margin: 0; color: #d5e2f0; font-size: 13px; }
+    .kpi-icon.lg { width: 36px; height: 36px; border-radius: 12px; font-size: 16px; font-weight: 800; }
+    .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+    .pill.good { color: #04210f; background: #3dde8a; }
+    .pill.bad { color: #2a1016; background: #ff8ea3; }
+    .pill.pending { color: #d5e4f5; background: #243446; }
+    .tone-written { box-shadow: 0 0 28px rgba(20, 196, 212, 0.2); }
+    .tone-delivered { box-shadow: 0 0 28px rgba(255, 142, 163, 0.18); }
+    .tone-bedding { box-shadow: 0 0 28px rgba(61, 222, 138, 0.16); }
+    .tone-closing { box-shadow: 0 0 28px rgba(140, 170, 255, 0.16); }
+    .tone-attach { box-shadow: 0 0 28px rgba(226, 194, 122, 0.2); }
+    .stretch { border: 1px solid #e2c27a; background: radial-gradient(120% 90% at 100% 0%, rgba(226, 194, 122, 0.2), transparent 55%), #14180f; box-shadow: 0 0 28px rgba(226, 194, 122, 0.16); }
+    .stretch h2 { color: #f3d48a; }
+    .stretch-line { display: block; margin: 14px 0 0; }
+    .stretch-line .label { display: block; color: #f3d48a; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .stretch-line strong { display: block; color: #ffffff; font-size: 32px; font-weight: 780; line-height: 1.1; }
+    .stretch-line .meta { display: block; color: #d5e2f0; font-size: 14px; text-align: left; }
+    .target-grid .figure { color: #ffffff; font-size: 28px; }
+    .target-grid h2 { min-height: 0; }
+    .person-card { cursor: pointer; text-align: left; width: 100%; color: #f7fbff; background: radial-gradient(120% 80% at 0% 0%, rgba(20, 196, 212, 0.16), transparent 55%), #122033; }
+    .person-card h3 { margin: 4px 0 0; font-size: 18px; font-weight: 750; color: #f7fbff; }
+    .person-card .figure { color: #ffffff; font-size: 34px; }
+    .person-card .sub { color: #d7e4f2; font-size: 14px; }
+    .rank { color: #7ee7f0; font-size: 13px; font-weight: 750; letter-spacing: 0.08em; }
     .focus-note { margin: 0 0 12px; }
     @media (max-width: 1200px) {
       .home-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1193,13 +1216,14 @@
         var tone = !known(goal) ? '' : (Number(actual) >= Number(goal) ? 'good' : (Number(actual) >= Number(goal) * 0.9 ? 'warn' : 'bad'));
         return '<div class="meter ' + tone + '" aria-hidden="true"><i style="width:' + width + '%"></i></div>';
       }
-      function heroCard(icon, title, figure, goalLine, actual, goal, through) {
-        var tone = !known(actual) ? 'pending' : (!known(goal) ? '' : (Number(actual) >= Number(goal) ? 'good' : 'bad'));
-        return '<article class="card glow-card"><p class="kicker"><span>' + esc(title) + '</span><span class="kpi-icon" aria-hidden="true">' + icon + '</span></p>' +
-          '<p class="figure">' + figure + '</p>' +
-          '<p class="sub">' + goalLine + '</p>' +
+      function heroCard(icon, toneName, title, figure, actual, goal, goalText, leftText, through, kind) {
+        var tone = !known(actual) ? 'pending' : (!known(goal) ? 'pending' : (Number(actual) >= Number(goal) ? 'good' : 'bad'));
+        var share = kind === 'rate' || !known(actual) || !known(goal) || !Number(goal) ? 'Goal ' + goalText : percent(Number(actual) / Number(goal)) + ' of ' + goalText;
+        return '<article class="card glow-card kpi-hero tone-' + toneName + '"><div class="kpi-hero-top"><span class="kpi-icon lg" aria-hidden="true">' + icon + '</span><span class="pill ' + tone + '">' + esc(paceWord(actual, goal)) + '</span></div>' +
+          '<p class="kicker">' + esc(title) + '</p><p class="figure">' + figure + '</p><p class="goal-line">' + share + '</p>' +
           meterHtml(actual, goal) +
-          '<p class="sub"><span class="' + tone + '">' + esc(paceWord(actual, goal)) + '</span>' + (through ? ' · Verified through ' + esc(through) : '') + '</p></article>';
+          (leftText ? '<p class="need">' + leftText + '</p>' : '') +
+          '<p class="need">' + (through ? 'Verified through ' + esc(through) : '') + '</p></article>';
       }
       function mini(title, figure, note) {
         return '<article class="card"><h2>' + esc(title) + '</h2><p class="figure">' + figure + '</p><p class="sub">' + note + '</p></article>';
@@ -1214,21 +1238,29 @@
       var heroUpdated = document.getElementById('hero-updated');
       if (heroUpdated) heroUpdated.textContent = data.updated && data.updated !== 'Not Available' ? ('Updated ' + data.updated) : '';
       var balance = (data.writtenBalance && data.writtenBalance.month) || {};
-      var five = heroCard('$', 'NWDSR Written', boardMoney(monthBoard.written), 'Goal ' + boardMoney(monthBoard.writtenGoal), monthBoard.written, monthBoard.writtenGoal, writtenThrough) +
-        heroCard('D', 'NWDSR Delivered', boardMoney(monthBoard.delivered), 'Goal ' + boardMoney(monthBoard.deliveredGoal), monthBoard.delivered, monthBoard.deliveredGoal, deliveredThrough) +
-        heroCard('B', 'Bedding', bedding && known(bedding.written) ? kpiValue(bedding.written, bedding.unit) : 'Pending', 'Goal ' + (bedding ? boardGoal(bedding.goal, bedding.unit) : 'Pending'), bedding ? bedding.written : null, bedding ? bedding.goal : null, bedding && bedding.writtenThrough ? longDate(bedding.writtenThrough) : '') +
-        heroCard('%', 'Closing Ratio', closingKpi && known(closingKpi.written) ? kpiValue(closingKpi.written, closingKpi.unit) : 'Pending', 'Goal ' + (closingKpi ? boardGoal(closingKpi.goal, closingKpi.unit) : 'Pending') + (closingKpi && closingKpi.detail ? ' · ' + esc(closingKpi.detail) : ''), closingKpi ? closingKpi.written : null, closingKpi ? closingKpi.goal : null, closingKpi && closingKpi.through ? longDate(closingKpi.through) : '') +
-        heroCard('A', 'Store Attachment', attachment && known(attachment.written) ? kpiValue(attachment.written, attachment.unit) : 'Pending', 'Goal ' + (attachment ? boardGoal(attachment.goal, attachment.unit) : 'Pending'), attachment ? attachment.written : null, attachment ? attachment.goal : null, attachment && attachment.writtenThrough ? longDate(attachment.writtenThrough) : '');
+      var five = heroCard('$', 'written', 'NWDSR Written', boardMoney(monthBoard.written), monthBoard.written, monthBoard.writtenGoal, boardMoney(monthBoard.writtenGoal) + ' goal', boardMoney(monthBoard.writtenLeft) + ' still needed', writtenThrough, 'money') +
+        heroCard('D', 'delivered', 'NWDSR Delivered', boardMoney(monthBoard.delivered), monthBoard.delivered, monthBoard.deliveredGoal, boardMoney(monthBoard.deliveredGoal) + ' goal', boardMoney(monthBoard.deliveredLeft) + ' still needed', deliveredThrough, 'money') +
+        heroCard('B', 'bedding', 'Bedding', bedding && known(bedding.written) ? kpiValue(bedding.written, bedding.unit) : 'Pending', bedding ? bedding.written : null, bedding ? bedding.goal : null, bedding ? boardGoal(bedding.goal, bedding.unit) : 'Pending', '', bedding && bedding.writtenThrough ? longDate(bedding.writtenThrough) : '', 'rate') +
+        heroCard('%', 'closing', 'Closing Ratio', closingKpi && known(closingKpi.written) ? kpiValue(closingKpi.written, closingKpi.unit) : 'Pending', closingKpi ? closingKpi.written : null, closingKpi ? closingKpi.goal : null, closingKpi ? boardGoal(closingKpi.goal, closingKpi.unit) : 'Pending', closingKpi && closingKpi.detail ? esc(closingKpi.detail) : '', closingKpi && closingKpi.through ? longDate(closingKpi.through) : '', 'rate') +
+        heroCard('A', 'attach', 'Store Attachment', attachment && known(attachment.written) ? kpiValue(attachment.written, attachment.unit) : 'Pending', attachment ? attachment.written : null, attachment ? attachment.goal : null, attachment ? boardGoal(attachment.goal, attachment.unit) : 'Pending', '', attachment && attachment.writtenThrough ? longDate(attachment.writtenThrough) : '', 'rate');
+      var week = data.week || {};
       var still = '<article class="card glow-card"><h2>Still needed this month</h2><p class="sub">' + esc(data.period || '') + '</p><div class="pair">' +
         '<div><p class="sub">Written still needed</p><p class="figure">' + boardMoney(monthBoard.writtenLeft) + '</p><p class="sub">of ' + boardMoney(monthBoard.writtenGoal) + '</p></div>' +
         '<div><p class="sub">Delivered still needed</p><p class="figure">' + boardMoney(monthBoard.deliveredLeft) + '</p><p class="sub">of ' + boardMoney(monthBoard.deliveredGoal) + '</p></div></div></article>';
-      var targets = '<article class="card glow-card"><h2>Today and this week</h2><div class="home-quad">' +
-        mini('Today written target', boardMoney(todayBoard.written), 'Remaining store written budget divided by days left.') +
-        mini('Today delivered target', boardMoney(todayBoard.delivered), 'Remaining store delivered budget divided by days left.') +
-        mini('This week written target', 'Pending', 'No verified weekly written target is on the home record.') +
-        mini('This week delivered target', 'Pending', 'No verified weekly delivered target is on the home record.') +
+      var targets = '<article class="card glow-card"><h2>Today and this week</h2><div class="home-quad target-grid">' +
+        mini('Today written target', boardMoney(todayBoard.written), 'Remaining written budget divided by days left.') +
+        mini('Today delivered target', boardMoney(todayBoard.delivered), 'Remaining delivered budget divided by days left.') +
+        mini('This week written target', boardMoney(week.written), week.start ? esc(week.start) + ' through ' + esc(week.end) + '. Sum of the daily written goals.' : '') +
+        mini('This week delivered target', boardMoney(week.delivered), 'Sum of the daily delivered goals for the same days.') +
         '</div></article>';
-      var stretch = '<article class="card glow-card stretch"><h2>Corporate stretch</h2><p class="figure pending">Pending</p><p class="sub">No corporate stretch figure is on the verified home record. The official monthly budget is unchanged.</p><p class="sub">Verified pace ' + boardMoney(monthBoard.writtenForecast) + ' written · ' + boardMoney(monthBoard.deliveredForecast) + ' delivered' + (monthBoard.provisional ? '. Provisional, missing days were not counted as zero.' : '.') + '</p></article>';
+      function stretchLine(label, budget, actual, left) {
+        var share = known(actual) && known(budget) && Number(budget) ? percent(Number(actual) / Number(budget)) : 'Pending';
+        return '<div class="stretch-line"><span class="label">' + label + '</span><strong>' + boardMoney(budget) + '</strong><span class="meta">' + share + ' of the goal · ' + boardMoney(left) + ' left</span></div>';
+      }
+      var stretch = '<article class="card glow-card stretch"><h2>Corporate stretch</h2><p class="sub">The corporate store-month budget. Written and delivered goals on the main page are these amounts.</p>' +
+        stretchLine('Written', monthBoard.writtenGoal, monthBoard.written, monthBoard.writtenLeft) +
+        stretchLine('Delivered', monthBoard.deliveredGoal, monthBoard.delivered, monthBoard.deliveredLeft) +
+        '</article>';
       var compare = '<article class="card glow-card"><h2>NWDSR and SNAP</h2><div class="home-quad">' +
         mini('NWDSR Written', esc(balance.nwdsr || 'Pending'), esc(balance.currentDates || '')) +
         mini('SNAP Written', esc(balance.snap || 'Pending'), 'Supplemental. Not the store written total.') +

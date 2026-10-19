@@ -101,4 +101,9 @@ test('home chart repeats the store calendar through yesterday', () => {
     assert.equal(day.snap, expected[index]!.snapWritten);
   });
   assert.ok(home.chart.length > 0);
+  assert.equal(home.month.writtenGoal, 400000);
+  assert.equal(home.month.deliveredGoal, 320000);
+  assert.equal(home.week.start <= '2026-10-17' && home.week.end >= '2026-10-17', true);
+  assert.ok(home.week.written > 0);
+  assert.ok(home.week.delivered > 0);
 });
