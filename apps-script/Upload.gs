@@ -1,6 +1,8 @@
 /**
  * UPLOAD REPORTS. A manager or admin uploads a business day's reports from the website. Each file is identified
- * from its contents (never from its name alone), checked for Store 17 and for the chosen business date, and written
+ * from its contents (never from its name alone). A PDF is filed on the FROM/TO dates it prints. A Data Analysis
+ * workbook is filed on the period in its file name. The DATE/TIME line and a PERQ "Active Deals" stamp are when the
+ * file was run, not the business date. The date selected on the page is used only when the file does not print one.
  * through the same import code the mailbox uses: a day already on file is never added again, a later file that
  * disagrees is held back for review, and nothing is deleted. Every attempt is logged in CC_Uploads.
  */
@@ -118,6 +120,8 @@ function classifyWorkbook_(bytes, fileName) {
   try {
     sheets = xlsxCells_(files).filter(function (sheet) { return !sheet.hidden; });
   } catch (error) {
+    var archived = !Object.keys(files).some(function (name) { return /(?:^|\/)xl\/workbook\.xml$/i.test(name); });
+    if (archived) return { problem: 'This is a ZIP archive, not an Excel .xlsx workbook. Choose the ZIP on Upload reports and each PDF or Excel file inside is imported on its own.' };
     return { problem: 'The file is not an Excel .xlsx workbook.' };
   }
   if (!sheets.length) return { problem: 'The workbook has no visible worksheet.' };
@@ -145,10 +149,10 @@ function uploadReport_(payload) {
   var bytes = Utilities.base64Decode(base64);
   if (bytes.length > UPLOAD_MAX_BYTES_) throw new Error(fileName + ' is larger than 15 MB.');
   var sha = sha256Hex_(bytes);
-  var context = { date: date, fileName: fileName, bytes: bytes, sha: sha, confirmed: isoDate_(payload.confirmDate) === date, role: payload.session.role };
+  var context = { date: date, fileName: fileName, bytes: bytes, sha: sha, confirmed: isoDate_(payload.confirmDate) === date, adoptDate: payload.adoptReportDate === true, deferRefresh: payload.deferRefresh === true, role: payload.session.role };
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(30000);
+    lock.waitLock(20000);
   } catch (error) {
     throw new Error('Another import is running. Wait a minute and import ' + fileName + ' again.');
   }
@@ -172,8 +176,24 @@ function uploadReport_(payload) {
     UPLOAD_QUIET_ = false;
     lock.releaseLock();
   }
-  uploadTab_().appendRow([new Date().toISOString(), date, context.role, fileName, sha, result.key ? uploadReportLabel_(result.key) : '', result.start || '', result.end || '', result.status, result.message]);
+  uploadTab_().appendRow([new Date().toISOString(), context.date, context.role, fileName, sha, result.key ? uploadReportLabel_(result.key) : '', result.start || '', result.end || '', result.status, result.message]);
   return { file: fileName, sha256: sha, status: result.status, report: result.key ? uploadReportLabel_(result.key) : '', reportKey: result.key || '', start: result.start || '', end: result.end || '', message: result.message };
+}
+
+/** File this upload on the date printed in the report. A date after today is refused. */
+function adoptUploadDate_(context, reportDate) {
+  var date = isoDate_(reportDate);
+  if (!date || date > todayNy_()) return false;
+  context.date = date;
+  return true;
+}
+
+/** The page date is not the business date when the report prints a different one. A run stamp is never the business date. */
+function uploadFilingNote_(chosen, filed, runStamp) {
+  var note = '';
+  if (chosen && filed && chosen !== filed) note += ' Filed on ' + filed + ', the date printed in the report. The date selected on the page was ' + chosen + '.';
+  if (runStamp) note += ' Ran ' + runStamp + '. That is when the report was run, not the business date.';
+  return note;
 }
 
 function processUpload_(context) {
@@ -188,7 +208,7 @@ function processUpload_(context) {
   }
   if (bytesStartWith_(context.bytes, [37, 80, 68, 70])) return uploadPdf_(context);
   if (bytesStartWith_(context.bytes, [80, 75])) return uploadWorkbook_(context);
-  return { status: 'Failed', key: '', message: 'This is not a PDF or an Excel .xlsx file, so it is not one of the nine daily reports. Nothing was changed.' };
+  return { status: 'Ignored', key: '', message: 'This is not a PDF or an Excel .xlsx file, so it is not one of the nine daily reports. Ignored. Nothing was changed.' };
 }
 
 // An answer that depends only on the business date chosen on screen (wrong date, date not confirmed) is
@@ -215,16 +235,17 @@ function uploadPdf_(context) {
     return finishImport_(context, { status: 'Failed', key: '', message: 'The PDF could not be read. Try saving it again from the reporting site. Nothing was changed.' }, 'failed');
   }
   if (/SNAP\s*-\s*DELIVERED/i.test(text)) {
-    return finishImport_(context, { status: 'Failed', key: '', message: 'This is SNAP Delivered, which is not one of the nine daily reports (delivered sales come from NWDSR Delivered). Nothing was changed.' }, 'not-used');
+    return { status: 'Ignored', key: '', message: 'This is SNAP Delivered, which is not one of the nine daily reports. Delivered sales come from NWDSR Delivered. Ignored. Nothing was changed.' };
   }
   var parsed = parseCloudReport_(text);
   if (!parsed) {
     if (/SNAP\s*-\s*WRITTEN|NET WRITTEN STORE SALES|DELIVERED STORE SALES/i.test(text)) {
       return finishImport_(context, { status: 'Needs Review', key: '', message: 'The report type was found but the Store 17 total line was not. Check that the report was run for Store 17. Nothing was changed.' }, 'needs-review');
     }
-    return finishImport_(context, { status: 'Failed', key: '', message: 'This PDF is not SNAP Written, NWDSR Written or NWDSR Delivered. Nothing was changed.' }, 'failed');
+    return { status: 'Ignored', key: '', message: 'This PDF is not SNAP Written, NWDSR Written or NWDSR Delivered. Ignored. Nothing was changed.' };
   }
   var key = parsed.reportType === 'SNAP Written' ? 'snapWritten' : parsed.reportType === 'NWDSR Written' ? 'nwdsrWritten' : 'nwdsrDelivered';
+  var chosen = context.date;
   var base = { key: key, start: parsed.start, end: parsed.end };
   if (!parsed.singleDay) {
     var final = recordPdfFinal_(parsed, text, context.fileName);
@@ -233,9 +254,10 @@ function uploadPdf_(context) {
     }
     return finishImport_(context, uploadOutcome_(base, 'Needs Review', 'This ' + parsed.reportType + ' report covers ' + parsed.start + ' through ' + parsed.end + '. Month-to-date reports are not added to daily figures. Upload the single-day report for ' + context.date + '. Nothing was changed.'), 'needs-review');
   }
-  if (parsed.start !== context.date) {
-    return uploadOutcome_(base, 'Failed', 'This ' + parsed.reportType + ' report is for ' + parsed.start + ', not the business date ' + context.date + '. Choose ' + parsed.start + ' as the business date to import it. Nothing was changed.');
+  if (parsed.start !== context.date && !adoptUploadDate_(context, parsed.start)) {
+    return uploadOutcome_(base, 'Failed', 'This ' + parsed.reportType + ' report prints ' + parsed.start + ', which is after today, so it was not filed. Nothing was changed.');
   }
+  var filing = uploadFilingNote_(chosen, context.date, parsed.runStamp);
   var field = key === 'snapWritten' ? 'snapWritten' : key === 'nwdsrWritten' ? 'nwdsrWritten' : 'nwdsrDelivered';
   var before = dailyFacts_().filter(function (row) { return row.date === context.date; })[0];
   var existing = before ? before[field] : null;
@@ -248,13 +270,13 @@ function uploadPdf_(context) {
   }
   if (key === 'nwdsrWritten' && parsed.purchasingCustomers !== null) extra = ' Purchasing customers: ' + parsed.purchasingCustomers + '.';
   if (decision === 'conflict') {
-    return finishImport_(context, uploadOutcome_(base, 'Needs Review', parsed.reportType + ' for ' + context.date + ' shows ' + moneyPlain_(parsed.storeTotal) + ', but ' + moneyPlain_(existing) + ' is already on file. The recorded figure was kept and this file was not applied.'), 'needs-review');
+    return finishImport_(context, uploadOutcome_(base, 'Needs Review', parsed.reportType + ' for ' + context.date + ' shows ' + moneyPlain_(parsed.storeTotal) + ', but ' + moneyPlain_(existing) + ' is already on file. The recorded figure was kept and this file was not applied.' + filing), 'needs-review');
   }
-  if (key !== 'snapWritten') refreshStoreKpiQuietly_(context.date);
+  if (key !== 'snapWritten' && !context.deferRefresh) refreshStoreKpiQuietly_(context.date);
   if (decision === 'same' || (existing !== null && existing === parsed.storeTotal)) {
-    return finishImport_(context, uploadOutcome_(base, 'Already on file', parsed.reportType + ' for ' + context.date + ' (Store 17 total ' + moneyPlain_(parsed.storeTotal) + ') was already on file with the same figure. Nothing was added. Reconciled to the existing row; a manual backfill or earlier import was not overwritten. Original file ' + context.fileName + '; source date ' + parsed.start + '.' + extra), 'duplicate');
+    return finishImport_(context, uploadOutcome_(base, 'Already on file', parsed.reportType + ' for ' + context.date + ' (Store 17 total ' + moneyPlain_(parsed.storeTotal) + ') was already on file with the same figure. Nothing was added. Reconciled to the existing row; a manual backfill or earlier import was not overwritten. Original file ' + context.fileName + '; source date ' + parsed.start + '.' + extra + filing), 'duplicate');
   }
-  return finishImport_(context, uploadOutcome_(base, 'Imported', parsed.reportType + ' for ' + context.date + ': Store 17 total ' + moneyPlain_(parsed.storeTotal) + ' saved.' + extra), 'imported', parsed.reportType + ' ' + parsed.start);
+  return finishImport_(context, uploadOutcome_(base, 'Imported', parsed.reportType + ' for ' + context.date + ': Store 17 total ' + moneyPlain_(parsed.storeTotal) + ' saved.' + extra + filing), 'imported', parsed.reportType + ' ' + parsed.start);
 }
 
 function uploadOutcome_(base, status, message) {
@@ -263,7 +285,10 @@ function uploadOutcome_(base, status, message) {
 
 function uploadWorkbook_(context) {
   var info = classifyWorkbook_(context.bytes, context.fileName);
-  if (!info.key) return finishImport_(context, { status: 'Failed', key: '', message: info.problem + ' Nothing was changed.' }, 'failed');
+  if (!info.key) {
+    if (/not one of the nine daily reports/i.test(info.problem || '')) return { status: 'Ignored', key: '', message: info.problem + ' Ignored. Nothing was changed.' };
+    return finishImport_(context, { status: 'Failed', key: '', message: info.problem + ' Nothing was changed.' }, 'failed');
+  }
   if (info.key === 'perqLocation' || info.key === 'perqSalesperson') return uploadPerq_(context, info);
   return uploadKpiWorkbook_(context, info);
 }
@@ -274,6 +299,7 @@ function canonicalKpiName_(family, side, date) {
 
 function uploadKpiWorkbook_(context, info) {
   var label = uploadReportLabel_(info.key);
+  var chosen = context.date;
   var named = /DATA_ANALYSIS_KPI_(17|ASL)_(WRITTEN|DELIVERED)_(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})/i.exec(context.fileName);
   var period = /(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})/.exec(context.fileName);
   var base = { key: info.key, start: context.date, end: context.date };
@@ -294,13 +320,15 @@ function uploadKpiWorkbook_(context, info) {
       }
       return finishImport_(context, uploadOutcome_(base, 'Needs Review', label + ' covers ' + period[1] + ' through ' + period[2] + '. Month-to-date reports are not added to the daily figures, so nothing was changed. Upload the single-day report for ' + context.date + '.'), 'needs-review');
     }
-    if (period[1] !== context.date) {
-      return uploadOutcome_(base, 'Failed', label + ' is for ' + period[1] + ', not the business date ' + context.date + '. Choose ' + period[1] + ' as the business date to import it. Nothing was changed.');
+    if (period[1] !== context.date && !(period[1] === period[2] && adoptUploadDate_(context, period[1]))) {
+      return uploadOutcome_(base, 'Failed', label + ' prints ' + period[1] + ', which is after today, so it was not filed. Nothing was changed.');
     }
-  } else if (!context.confirmed) {
-    return uploadOutcome_(base, 'Failed', 'This ' + label + ' file name has no report date and the workbook does not print one. Tick "These Excel files are for ' + context.date + '" and import it again. Nothing was changed.');
+  } else {
+    base.start = context.date;
+    base.end = context.date;
   }
   var date = context.date;
+  var filing = uploadFilingNote_(chosen, date, '');
   var source = canonicalKpiName_(info.family, info.side, date);
   var records = kpiRecords_(info.grid, info.family, info.side, date, date, source);
   var storeView = info.family === 'asl' ? 'RUGS_STORE' : 'DA_SALES_STORE';
@@ -349,7 +377,7 @@ function uploadKpiWorkbook_(context, info) {
   records.forEach(function (record) {
     if (record[0] === 'BEDDING_STORE' && record[14] !== '') upsertDailyBedding_(date, info.side, record[14], source);
   });
-  refreshStoreKpiQuietly_(date);
+  if (!context.deferRefresh) refreshStoreKpiQuietly_(date);
   var people = {};
   records.forEach(function (record) { if (/_PERSON$/.test(record[0])) people[record[8]] = true; });
   var listed = Object.keys(people).length;
@@ -358,15 +386,15 @@ function uploadKpiWorkbook_(context, info) {
     ? 'Store 17 line' + (rugs ? ', rugs sold ' + (rugs[11] === '' ? 0 : rugs[11]) : '') + '.'
     : (total !== null ? 'Store 17 sales ' + moneyPlain_(total) + ', ' : '') + listed + ' salesperson line' + (listed === 1 ? '' : 's') + '.');
   if (outcome.heldBack.length) {
-    return finishImport_(context, uploadOutcome_(base, 'Needs Review', summary + ' ' + outcome.heldBack.length + ' figure' + (outcome.heldBack.length === 1 ? '' : 's') + ' differ from the figures already recorded for ' + date + '. The recorded figures were kept and logged in CC_History for review. ' + notes.join(' ')), 'needs-review');
+    return finishImport_(context, uploadOutcome_(base, 'Needs Review', summary + ' ' + outcome.heldBack.length + ' figure' + (outcome.heldBack.length === 1 ? '' : 's') + ' differ from the figures already recorded for ' + date + '. The recorded figures were kept and logged in CC_History for review. ' + notes.join(' ') + filing), 'needs-review');
   }
   if (unmatched.length) {
-    return finishImport_(context, uploadOutcome_(base, 'Needs Review', summary + ' Saved. Not on the roster: ' + unmatched.join(', ') + '. Their figures are saved under the printed name; add them (or an alias) in Admin > Manage Associates. ' + notes.join(' ')), 'imported');
+    return finishImport_(context, uploadOutcome_(base, 'Needs Review', summary + ' Saved. Not on the roster: ' + unmatched.join(', ') + '. Their figures are saved under the printed name; add them (or an alias) in Admin > Manage Associates. ' + notes.join(' ') + filing), 'imported');
   }
   if (!outcome.added && !outcome.replaced) {
-    return finishImport_(context, uploadOutcome_(base, 'Already on file', summary + ' Every figure was already on file with the same values. Nothing was added. Reconciled to the existing rows; a manual backfill or earlier import was not overwritten. Original file ' + context.fileName + '; source date ' + date + '. ' + notes.join(' ')), 'duplicate');
+    return finishImport_(context, uploadOutcome_(base, 'Already on file', summary + ' Every figure was already on file with the same values. Nothing was added. Reconciled to the existing rows; a manual backfill or earlier import was not overwritten. Original file ' + context.fileName + '; source date ' + date + '. ' + notes.join(' ') + filing), 'duplicate');
   }
-  return finishImport_(context, uploadOutcome_(base, 'Imported', summary + ' ' + outcome.added + ' figures saved' + (outcome.same ? ', ' + outcome.same + ' already on file' : '') + '. ' + notes.join(' ')), 'imported', label + ' ' + date);
+  return finishImport_(context, uploadOutcome_(base, 'Imported', summary + ' ' + outcome.added + ' figures saved' + (outcome.same ? ', ' + outcome.same + ' already on file' : '') + '. ' + notes.join(' ') + filing), 'imported', label + ' ' + date);
 }
 
 /** "Active Deals 10/15/26 08:15pm" → 2026-10-15. */
@@ -447,23 +475,19 @@ function uploadPerq_(context, info) {
   var label = uploadReportLabel_(info.key);
   var date = context.date;
   var base = { key: info.key, start: date, end: date };
-  if (!context.confirmed) {
-    return uploadOutcome_(base, 'Failed', 'PERQ exports do not print the day they cover, so the business date must be confirmed. Tick "These Excel files are for ' + date + '" and import again. Nothing was changed.');
-  }
+  context.confirmed = true;
   var parsed = parsePerqGrid_(info.key, info.grid);
   if (parsed.problem) return finishImport_(context, uploadOutcome_(base, 'Failed', parsed.problem + ' Nothing was changed.'), 'failed');
-  if (parsed.exported && parsed.exported < date) {
-    return uploadOutcome_(base, 'Failed', 'This export was saved ' + parsed.exportedText + ', before the business date ' + date + ', so it cannot hold that day. Nothing was changed.');
-  }
   var onFile = perqOnFile_(date);
-  var stamp = ' Uploaded as ' + context.fileName + ' (sha256 ' + context.sha.slice(0, 12) + '); business date confirmed by ' + context.role + '.';
+  var stamp = ' Uploaded as ' + context.fileName + ' (sha256 ' + context.sha.slice(0, 12) + '); business date ' + uploadDayText_(date) + ', the date selected on Upload reports. PERQ does not print the day it covers.';
+  if (parsed.exportedText) stamp += ' Active Deals ' + parsed.exportedText + ' is when the file was run, not the business date.';
   var outcomes = [];
   var message = '';
   var flags = [];
   if (info.key === 'perqLocation') {
     if (parsed.store17 === null) return finishImport_(context, uploadOutcome_(base, 'Needs Review', 'Store 17 is not listed in this location export. Check the location filter. Nothing was changed.'), 'needs-review');
     outcomes.push(recordPerqFact_({ scope: 'store', code: '', name: '', opportunities: parsed.store17, date: date, note: 'Store 17 Ups + Be Backs for ' + date + ' only. Not added to any snapshot.' + stamp }, context.fileName));
-    message = 'Store 17 opportunities for ' + date + ': ' + parsed.store17 + '.';
+    message = 'Store 17 opportunities for ' + uploadDayText_(date) + ': ' + parsed.store17 + '. Filed on ' + uploadDayText_(date) + ', the date selected on Upload reports. PERQ does not print the day it covers.';
     if (onFile.listed && onFile.people > parsed.store17) flags.push('Salesperson opportunities on file for ' + date + ' add to ' + onFile.people + ', more than the store count of ' + parsed.store17 + '.');
     else if (onFile.listed && onFile.people < parsed.store17) message += ' Salesperson rows on file add to ' + onFile.people + ', so ' + (parsed.store17 - onFile.people) + ' not assigned to a salesperson.';
   } else {
@@ -476,8 +500,8 @@ function uploadPerq_(context, info) {
     matched.forEach(function (person) {
       outcomes.push(recordPerqFact_({ scope: 'person', code: person.code, name: person.name, opportunities: person.opportunities, date: date, note: 'Ups + Be Backs for ' + date + ' only. Not added to any snapshot.' + stamp }, context.fileName));
     });
-    message = 'Salesperson opportunities for ' + date + ': ' + (matched.map(function (person) { return person.name + ' ' + person.opportunities; }).join(', ') || 'no salesperson rows') + '.';
-    if (parsed.exportedText) message += ' Exported ' + parsed.exportedText + '.';
+    message = 'Salesperson opportunities for ' + uploadDayText_(date) + ': ' + (matched.map(function (person) { return person.name + ' ' + person.opportunities; }).join(', ') || 'no salesperson rows') + '. Filed on ' + uploadDayText_(date) + ', the date selected on Upload reports. PERQ does not print the day it covers.';
+    if (parsed.exportedText) message += ' Active Deals ' + parsed.exportedText + ' is when the file was run, not the business date.';
     if (unmatched.length) flags.push('Employee code' + (unmatched.length === 1 ? '' : 's') + ' not on the roster: ' + unmatched.map(function (person) { return person.code + (person.printed ? ' (' + person.printed + ')' : '') + ' ' + person.opportunities; }).join(', ') + '. Add the employee ID in Admin > Manage Associates, then upload this file again; the rows already saved will not be added twice.');
     if (onFile.store !== null && sum < onFile.store) {
       appendException_('Needs Review', 'PERQ ' + date + ': Store 17 shows ' + onFile.store + ' opportunities but the salesperson export adds to ' + sum + '. ' + (onFile.store - sum) + ' not assigned to anyone.');
@@ -807,7 +831,9 @@ function uploadEvidence_() {
   var facts = {};
   dailyFacts_().forEach(function (row) { facts[row.date] = row; });
   var ledger = {};
+  var cumulative = [];
   ledgerRows_().forEach(function (row) {
+    if (row.grain === 'cumulative' && row.fitsTrack) cumulative.push(row);
     if (row.grain !== 'daily' || !row.reportDate || row.code && row.view !== 'PERQ_PERSON') return;
     var key = row.view + '|' + row.side + '|' + row.reportDate;
     if (row.view === 'PERQ_PERSON') {
@@ -824,7 +850,28 @@ function uploadEvidence_() {
     if (!key) return;
     attempts[key + '|' + row.date] = row;
   });
-  return { facts: facts, ledger: ledger, attempts: attempts, uploads: uploads };
+  return { facts: facts, ledger: ledger, cumulative: cumulative, attempts: attempts, uploads: uploads };
+}
+
+/** A day inside an imported month-to-date report is already provided. It is not a missing daily file. */
+function uploadCover_(evidence, date, key) {
+  var views = [];
+  var side = '';
+  var track = 'STORE';
+  if (key === 'g17Written' || key === 'g17Delivered') { views = ['DA_SALES_STORE']; side = key === 'g17Written' ? 'written' : 'delivered'; }
+  else if (key === 'aslWritten' || key === 'aslDelivered') { views = ['RUGS_STORE', 'PILLOWS_STORE', 'BASES_STORE', 'FP_STORE']; side = key === 'aslWritten' ? 'written' : 'delivered'; }
+  else if (key === 'perqLocation') views = ['PERQ_STORE'];
+  else if (key === 'perqSalesperson') { views = ['PERQ_PERSON']; track = 'PERSON'; }
+  else return '';
+  var period = track === 'STORE' ? storePeriodContaining_(date) : individualPeriodContaining_(date);
+  var best = '';
+  (evidence.cumulative || []).forEach(function (row) {
+    if (views.indexOf(row.view) === -1 || row.side !== side) return;
+    if (track === 'STORE' && (row.code || row.name)) return;
+    if (row.periodStart !== period.start || !row.verifiedThrough || row.verifiedThrough < date) return;
+    if (row.verifiedThrough > best) best = row.verifiedThrough;
+  });
+  return best;
 }
 
 function uploadChecklist_(evidence, date) {
@@ -868,11 +915,23 @@ function uploadChecklist_(evidence, date) {
     var last = evidence.attempts[item.key + '|' + date] || null;
     var status = onFile ? 'Imported' : 'Missing';
     var message = detail;
+    var dayText = uploadDayText_(date);
     if (check) { status = 'Needs Review'; message = check; }
     else if (last && last.status === 'Needs Review') { status = 'Needs Review'; message = last.message; }
+    else if (!onFile && last && last.status === 'Failed' && /must be confirmed|Tick "These Excel files are for|not the business date|before the business date|prints .* which is after today/i.test(last.message)) status = 'Missing';
     else if (!onFile && last && last.status === 'Failed') { status = 'Failed'; message = last.message; }
-    if (status === 'Missing') message = 'Not uploaded yet.';
-    return { key: item.key, label: item.label, format: item.format, use: item.use, status: status, message: message, lastFile: last ? last.file : '', lastAt: last ? last.at : '' };
+    if (item.key === 'g17Delivered' && fact.nwdsrDelivered === 0 && !onFile && !check) {
+      status = 'Not expected';
+      message = dayText + '. Delivered was $0, so there is no individual Data Analysis report for this date. No salesperson delivered amount is invented.';
+    }
+    if (status === 'Missing') {
+      var cover = uploadCover_(evidence, date, item.key);
+      if (cover) {
+        status = 'Covered';
+        message = 'Already provided. The month-to-date report is verified through ' + uploadDayText_(cover) + '.';
+      } else message = 'Missing for ' + dayText + '.';
+    }
+    return { key: item.key, label: item.label, format: item.format, use: item.use, status: status, message: message, date: date, dateText: dayText, lastFile: last ? last.file : '', lastAt: last ? last.at : '' };
   });
 }
 
@@ -913,7 +972,9 @@ function uploads_(payload) {
         try { refreshHistory_(); } catch (error) { appendException_('Update Failed', 'Permanent history could not be refreshed after an upload. Nothing already recorded was changed. ' + String(error && error.message ? error.message : error)); }
         try { refreshMetricRegistry_(); } catch (error) { appendException_('Update Failed', 'CC_MetricDefinitions could not be refreshed after an upload. ' + String(error && error.message ? error.message : error)); }
         noteHealth_('last_calculation', new Date().toISOString());
-        if (typeof qualityAfterUpdate_ === 'function') qualityAfterUpdate_('upload by ' + payload.session.role, false);
+        var quality = typeof qualityAfterUpdate_ === 'function' ? qualityAfterUpdate_('upload by ' + payload.session.role, false) : null;
+        if (!refreshed) refreshed = { issues: [], kpiUpdated: [], kpiAppended: [] };
+        refreshed.quality = quality;
       } finally {
         lock.releaseLock();
       }
@@ -926,7 +987,13 @@ function uploads_(payload) {
   var i;
   for (i = 0; i < 10; i += 1) {
     var items = uploadChecklist_(evidence, cursor);
-    recent.push({ date: cursor, imported: items.filter(function (item) { return item.status === 'Imported'; }).length, review: items.filter(function (item) { return item.status === 'Needs Review' || item.status === 'Failed'; }).length });
+    recent.push({
+      date: cursor,
+      dateText: uploadDayText_(cursor),
+      imported: items.filter(function (item) { return item.status === 'Imported'; }).length,
+      review: items.filter(function (item) { return item.status === 'Needs Review' || item.status === 'Failed'; }).length,
+      missing: items.filter(function (item) { return item.status === 'Missing' || item.status === 'Failed' || item.status === 'Needs Review'; }).map(function (item) { return item.label; }),
+    });
     cursor = shiftDate_(cursor, -1);
   }
   var complete = '';
@@ -937,6 +1004,7 @@ function uploads_(payload) {
   var mailbox = lastMailboxImport_(evidence.uploads);
   if (mailbox && (!last || mailbox.at > last.at)) last = mailbox;
   var storeKpi = sheet_('CC_Kpi').filter(function (row) { return String(row.metric) === 'Bedding' && isoDate_(row.period_start) === storePeriodContaining_(date).start; })[0];
+  var audit = refreshed && refreshed.quality && refreshed.quality.consistency;
   return {
     role: payload.session.role,
     today: today,
@@ -950,7 +1018,9 @@ function uploads_(payload) {
     latestComplete: complete,
     lastSuccess: last,
     kpiThrough: storeKpi ? isoDate_(storeKpi.verified_through) : '',
-    refreshed: refreshed ? { issues: refreshed.issues, updated: refreshed.kpiUpdated.length + refreshed.kpiAppended.length } : null,
+    refreshed: refreshed ? { issues: refreshed.issues || [], updated: (refreshed.kpiUpdated || []).length + (refreshed.kpiAppended || []).length } : null,
+    dashboardRefreshed: payload.refresh === true && !!refreshed,
+    consistency: audit ? { status: String(audit.status || ''), checked: audit.checked || 0, matched: audit.matched || 0, discrepancies: audit.discrepancies || 0 } : null,
     history: evidence.uploads.slice(-40).reverse(),
   };
 }
