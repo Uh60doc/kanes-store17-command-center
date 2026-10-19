@@ -360,6 +360,12 @@ function trend_(payload, today) {
   var verifiedWritten = 0;
   series.forEach(function (item) { if (item.key === 'written') verifiedWritten = item.verified; });
   var coverage = verifiedWritten + ' of ' + weeks.length + ' completed weeks ' + (verifiedWritten === 1 ? 'has' : 'have') + ' verified NWDSR Written. A week with a missing open day stays Pending. Older months that are not on file are not estimated, and they do not remove the weeks that are on file.';
+  var balanceWeek = null;
+  var writtenBalance = { nwdsr: 'Pending', snap: 'Pending', current: 'Pending', variance: 'Pending', nwdsrLy: 'Pending', ly: 'Pending', dollars: 'Pending', percent: 'Pending', currentDates: 'Pending', lyDates: 'Pending', note: '' };
+  try {
+    balanceWeek = String(payload && payload.view || 'completed') === 'partial' ? partialWeek : (weeks.length ? weeks[weeks.length - 1] : null);
+    if (balanceWeek) writtenBalance = reportWeekSnapLy_(facts, closed, balanceWeek.start, balanceWeek.end);
+  } catch (error) { writtenBalance = writtenBalance; }
   var viewName = String(payload && payload.view || 'completed') === 'partial' ? 'partial' : 'completed';
   var metric = String(payload && payload.metric || 'written');
   var selected = null;
@@ -389,6 +395,7 @@ function trend_(payload, today) {
     selected: selected,
     insights: trendInsights_(series),
     alerts: trendAlerts_(series, weeks, closed),
+    writtenBalance: writtenBalance,
     notice: 'Preview, print, or download this one-page summary. No email is sent.',
     verification: '13 completed Monday–Sunday weeks requested. Prepared ' + briefDisplayDate_(today) + '. ' + coverage,
   };
@@ -424,7 +431,11 @@ function trendPdf_(page) {
   text(36, y, 8, reportAscii_(page.selected.source), false);
   y -= 12;
   text(36, y, 8, page.selected.comparison && page.selected.comparison.text ? page.selected.comparison.text : '', false);
-  y -= 14;
+  y -= 12;
+  if (page.writtenBalance) {
+    reportBalanceCompact_(page.writtenBalance).slice(0, 2).forEach(function (line) { text(36, y, 8, line, false); y -= 10; });
+  }
+  y -= 2;
   (page.selected.points || []).forEach(function (point) {
     if (y < 70 || point.value === null) return;
     text(36, y, 8, point.display, true);

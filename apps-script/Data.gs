@@ -1773,6 +1773,16 @@ function home_(payload) {
     },
     kpis: homeKpiStrip_(goals, kpiActuals, monthClosing, analysisThrough),
   };
+  var writtenBalance = {
+    yesterday: { nwdsr: 'Pending', snap: 'Pending', current: 'Pending', variance: 'Pending', nwdsrLy: 'Pending', ly: 'Pending', snapLy: 'Pending', dollars: 'Pending', percent: 'Pending', currentDates: 'Pending', lyDates: 'Pending', note: 'LAST YEAR is the prior year, not last month.' },
+    month: { nwdsr: 'Pending', snap: 'Pending', current: 'Pending', variance: 'Pending', nwdsrLy: 'Pending', ly: 'Pending', snapLy: 'Pending', dollars: 'Pending', percent: 'Pending', currentDates: 'Pending', lyDates: 'Pending', note: 'LAST YEAR is the prior year, not last month.' },
+  };
+  try {
+    writtenBalance.yesterday = reportDayBalance_(facts, closed, yesterday);
+    writtenBalance.month = reportMonthSnapLy_(facts, closed, store, today);
+  } catch (error) {
+    try { appendException_('Update Failed', 'The written comparison could not be read. Store totals were left in place.'); } catch (ignore) {}
+  }
   var winnersPack = { winners: { date: priorBusinessDay_(today), status: 'pending', reason: 'PERQ Report Pending', detail: '', people: [] }, roster: { notes: [] } };
   try {
     winnersPack = salesWinnersPack_(today, yesterdayWrittenGoal, payload && payload.day);
@@ -1846,6 +1856,7 @@ function home_(payload) {
     people: peopleRows_(individual.start, individual.end).slice(0, 8),
     winners: winnersPack.winners,
     rosterNotes: winnersPack.roster.notes || [],
+    writtenBalance: writtenBalance,
   };
 }
 
@@ -2781,6 +2792,7 @@ function morning_(payload) {
       written: writtenPerf,
       snapWritten: home.yesterday.snapWritten,
       snapVariance: home.yesterday.snapVariance,
+      writtenBalance: home.writtenBalance ? home.writtenBalance.yesterday : null,
       delivered: home.board.yesterday.delivered,
       customers: home.yesterday.customers,
       opportunities: home.yesterday.opportunities,

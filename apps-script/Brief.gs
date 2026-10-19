@@ -473,6 +473,30 @@ function briefStartupPromo_(pack) {
     (notes ? '<ul style="margin:4px 0 0;padding-left:18px">' + notes + '</ul>' : '');
 }
 
+function briefBalanceRows_(block) {
+  block = block || {};
+  var rows = [
+    ['NWDSR Written', block.nwdsr || 'Pending', block.currentDates || ''],
+    ['SNAP Written', block.snap || block.current || 'Pending', 'Supplemental. Not the store budget.'],
+    ['NWDSR minus SNAP', block.variance || 'Pending', 'Not removed from the store total.'],
+    ['NWDSR Written LAST YEAR', block.nwdsrLy || 'Pending', block.lyDates || 'LAST YEAR is the prior year, not last month.'],
+    ['SNAP Written LAST YEAR', block.ly || 'Pending', ''],
+  ];
+  return '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">' +
+    rows.map(function (row) { return briefRow_(row[0], row[1], row[2], true); }).join('') + '</table>';
+}
+
+function briefBalanceText_(block) {
+  block = block || {};
+  return [
+    'NWDSR Written: ' + (block.nwdsr || 'Pending') + (block.currentDates ? ' (' + block.currentDates + ')' : ''),
+    'SNAP Written: ' + (block.snap || block.current || 'Pending'),
+    'NWDSR minus SNAP: ' + (block.variance || 'Pending') + ' (not removed from the store total)',
+    'NWDSR Written LAST YEAR: ' + (block.nwdsrLy || 'Pending') + (block.lyDates ? ' (' + block.lyDates + ')' : ''),
+    'SNAP Written LAST YEAR: ' + (block.ly || 'Pending'),
+  ];
+}
+
 function briefStartupInner_(pack) {
   var y = pack.yesterday;
   var written = briefVsGoal_(y.written, (pack.labels.written || 'NWDSR Net Written') + ' · ' + (y.date || ''));
@@ -495,6 +519,7 @@ function briefStartupInner_(pack) {
       briefRow_('Worked, no written sales', quiet.text, quiet.source, true) +
       briefRow_('Shout-out', pack.shout.text, pack.shout.source, true) +
       '</table>', true) +
+    briefSection_('Written comparison', briefBalanceRows_(pack.dayBalance), true) +
     briefSection_('Today · ' + briefDisplayDate_(pack.today),
       '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">' +
       briefRow_('Today\'s Written goal', briefMoney_(pack.todayWritten), 'Remaining store written budget ÷ open days left, including today. NWDSR Net Written.', true) +
@@ -655,9 +680,9 @@ function briefMtdInner_(pack) {
       '</tr>';
   }).join('');
   var comparisons = '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">' +
-    briefRow_('Store versus last year, written', briefBlank_(ly.written.value) ? 'Pending' : moneyText_(ly.written.value), ly.written.basis) +
-    briefRow_('Store versus last year, delivered', briefBlank_(ly.delivered.value) ? 'Pending' : moneyText_(ly.delivered.value), ly.delivered.basis) +
-    '</table>';
+    briefRow_('NWDSR Written LAST YEAR', briefBlank_(ly.written.value) ? 'Pending' : moneyText_(ly.written.value), ly.written.basis) +
+    briefRow_('NWDSR Delivered LAST YEAR', briefBlank_(ly.delivered.value) ? 'Pending' : moneyText_(ly.delivered.value), ly.delivered.basis) +
+    '</table>' + briefBalanceRows_(pack.monthBalance);
   return '<p style="margin:0 0 8px;color:#3d5660"><strong>Store month:</strong> ' + briefEsc_(pack.storePeriod) +
     ' (2nd through the 1st). NWDSR Written and NWDSR Delivered.<br /><strong>Salesperson month:</strong> ' +
     briefEsc_(pack.individualPeriod) + ' (1st through the last calendar day). Individual written sales are SNAP.</p>' +
@@ -699,11 +724,16 @@ function briefStartupText_(pack) {
     'Worked, no written sales: ' + (pack.noWritten ? pack.noWritten.text : 'Pending') + (pack.noWritten && pack.noWritten.source ? ' (' + pack.noWritten.source + ')' : ''),
     'Shout-out: ' + pack.shout.text + (pack.shout.source ? ' (' + pack.shout.source + ')' : ''),
     '',
+    'WRITTEN COMPARISON',
+  ];
+  briefBalanceText_(pack.dayBalance).forEach(function (line) { lines.push(line); });
+  lines.push(
+    '',
     'TODAY · ' + pack.today,
     'Today\'s Written goal: ' + briefMoney_(pack.todayWritten),
     'Today\'s Delivered goal: ' + briefMoney_(pack.todayDelivered),
     'Management priorities:',
-  ];
+  );
   if (!pack.priorities.length) lines.push('Pending. No verified management priorities are saved for today.');
   pack.priorities.forEach(function (line, i) { lines.push((i + 1) + '. ' + line); });
   lines.push('');
@@ -763,8 +793,9 @@ function briefMtdText_(pack) {
   lines.push('Former employees stay in the store delivered total and are not ranked here.');
   lines.push('');
   lines.push('COMPARISONS');
-  lines.push('Last-year written: ' + (briefBlank_(pack.lastYear.written.value) ? 'Pending' : moneyText_(pack.lastYear.written.value)) + ' — ' + pack.lastYear.written.basis);
-  lines.push('Last-year delivered: ' + (briefBlank_(pack.lastYear.delivered.value) ? 'Pending' : moneyText_(pack.lastYear.delivered.value)) + ' — ' + pack.lastYear.delivered.basis);
+  lines.push('NWDSR Written LAST YEAR: ' + (briefBlank_(pack.lastYear.written.value) ? 'Pending' : moneyText_(pack.lastYear.written.value)) + ' — ' + pack.lastYear.written.basis);
+  lines.push('NWDSR Delivered LAST YEAR: ' + (briefBlank_(pack.lastYear.delivered.value) ? 'Pending' : moneyText_(pack.lastYear.delivered.value)) + ' — ' + pack.lastYear.delivered.basis);
+  briefBalanceText_(pack.monthBalance).forEach(function (line) { lines.push(line); });
   if (pack.missing.length) {
     lines.push('');
     lines.push('Missing sources: ' + pack.missing.join('; '));
@@ -851,6 +882,8 @@ function briefPack_(payload) {
     coaching: briefCoaching_(home, people),
     promotion: promotion,
     lastYear: briefLastYearStore_(config_(), store),
+    dayBalance: home.writtenBalance ? home.writtenBalance.yesterday : {},
+    monthBalance: home.writtenBalance ? home.writtenBalance.month : {},
     missing: missing,
     startupMissing: startupMissing,
     partial: missing.length > 0,

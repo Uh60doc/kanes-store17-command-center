@@ -55,7 +55,7 @@ test('Morning Start-Up and MTD figures match Home and Sales Team, and missing Oc
   assert.match(brief.startup.text, /PARTIAL REPORT/);
   assert.doesNotMatch(brief.startup.text, /\$0 vs/, 'a missing written day is not shown as zero');
 
-  assert.match(brief.mtd.text, /Last-year written: Pending/);
+  assert.match(brief.mtd.text, /NWDSR Written LAST YEAR: Pending/);
   assert.match(brief.mtd.text, /CC_LastYear|Pending GM confirmation|last-year/i);
   assert.equal(brief.mail.enabled, false);
   assert.equal(brief.mail.to, LIVE);

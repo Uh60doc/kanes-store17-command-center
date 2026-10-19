@@ -581,6 +581,16 @@
       var gap = variance === null || variance === undefined ? 'Pending' : (Number(variance) > 0 ? '+' : '') + money(variance);
       return 'SNAP Written ' + money(snapValue) + ', variance ' + gap + ' vs NWDSR (reconciliation only).';
     }
+    function writtenBalanceNote(block, snapValue, variance) {
+      if (!block) return snapReconcile(snapValue, variance);
+      return 'SNAP Written ' + (block.snap || block.current || 'Pending') + '. NWDSR minus SNAP ' + (block.variance || 'Pending') + '. SNAP Written LAST YEAR ' + (block.ly || 'Pending') + '. NWDSR Written LAST YEAR ' + (block.nwdsrLy || 'Pending') + '.';
+    }
+    function signedGap(nwdsr, snap) {
+      if (nwdsr === null || nwdsr === undefined || nwdsr === '' || snap === null || snap === undefined || snap === '') return 'Pending';
+      var gap = Number(nwdsr) - Number(snap);
+      if (!isFinite(gap)) return 'Pending';
+      return (gap > 0 ? '+' : '') + money(gap);
+    }
     function money(value) {
       if (value === null || value === undefined || value === '') return 'Not Available';
       var number = Number(value);
@@ -909,7 +919,7 @@
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Yesterday\'s results</h2>' +
         '<div class="score-row">' +
-        boardCard('Yesterday written', data.yesterday && data.yesterday.missing ? 'Pending' : boardMoney(data.yesterday.written), esc(labels.written) + '. ' + esc(longDate(data.yesterday.date) || data.yesterday.date) + '.' + verifiedNote(freshWritten.through && freshWritten.through === data.yesterday.date ? freshWritten.through : '') + ' ' + snapReconcile(data.yesterday.snapWritten, data.yesterday.snapVariance), data.yesterday && data.yesterday.missing ? 'pending' : '') +
+        boardCard('Yesterday written', data.yesterday && data.yesterday.missing ? 'Pending' : boardMoney(data.yesterday.written), esc(labels.written) + '. ' + esc(longDate(data.yesterday.date) || data.yesterday.date) + '.' + verifiedNote(freshWritten.through && freshWritten.through === data.yesterday.date ? freshWritten.through : '') + ' ' + writtenBalanceNote(data.writtenBalance && data.writtenBalance.yesterday, data.yesterday.snapWritten, data.yesterday.snapVariance), data.yesterday && data.yesterday.missing ? 'pending' : '') +
         (data.yesterday && data.yesterday.missing && freshWritten.through ? boardCard('Latest NWDSR Written', boardMoney(freshWritten.day), esc(labels.written) + ' verified through ' + esc(longDate(freshWritten.through)) + '. ' + (freshSnap.day === null || freshSnap.day === undefined ? 'SNAP Written reconciliation Pending.' : 'SNAP Written ' + money(freshSnap.day) + ' on ' + esc(longDate(freshWritten.through)) + '.'), '') : '') +
         boardCard('Yesterday delivered', data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'Pending' : boardMoney(data.yesterday.delivered), data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? esc(longDate(data.yesterday.date) || data.yesterday.date) + ' ' + esc(labels.delivered) + ': Pending.' : esc(labels.delivered) + '. ' + esc(longDate(data.yesterday.date) || data.yesterday.date) + '.' + verifiedNote(freshDelivered.through), data.yesterday && (data.yesterday.delivered === null || data.yesterday.delivered === undefined) ? 'pending' : '') +
         performanceCard('Written goal performance', data.yesterday ? data.yesterday.written : null, yesterdayBoard.written) +
@@ -925,7 +935,7 @@
         '</div>' +
         '<h2 class="section-title">Month-to-date store performance</h2>' +
         '<div class="score-row">' +
-        boardCard('Written month to date', boardMoney(monthBoard.written), percent(monthBoard.writtenAchieved) + ' of ' + boardMoney(monthBoard.writtenGoal) + '. ' + esc(labels.written) + '.' + verifiedNote(freshWritten.through) + ' ' + snapReconcile(monthBoard.snapWritten, monthBoard.snapVariance), '') +
+        boardCard('Written month to date', boardMoney(monthBoard.written), percent(monthBoard.writtenAchieved) + ' of ' + boardMoney(monthBoard.writtenGoal) + '. ' + esc(labels.written) + '.' + verifiedNote(freshWritten.through) + ' ' + writtenBalanceNote(data.writtenBalance && data.writtenBalance.month, monthBoard.snapWritten, monthBoard.snapVariance), '') +
         boardCard('Delivered month to date', boardMoney(monthBoard.delivered), percent(monthBoard.deliveredAchieved) + ' of ' + boardMoney(monthBoard.deliveredGoal) + '. ' + esc(labels.delivered) + '.' + verifiedNote(freshDelivered.through), '') +
         boardCard('Remaining written', boardMoney(monthBoard.writtenLeft), forecast(monthBoard.writtenForecast, monthBoard.provisional), '') +
         boardCard('Remaining delivered', boardMoney(monthBoard.deliveredLeft), forecast(monthBoard.deliveredForecast, monthBoard.provisional), '') +
@@ -943,9 +953,9 @@
       var mtd = data.closing || {};
       var rows = data.days.map(function (day) {
         var ratioTone = day.closingReconcile ? 'warn' : '';
-        return '<tr><td>' + esc(day.date) + '</td><td>' + money(day.snapWritten) + '</td><td>' + money(day.nwdsrWritten) + '</td><td>' + money(day.nwdsrDelivered) + '</td><td>' + count(day.purchasingCustomers) + '</td><td>' + count(day.opportunities) + '</td><td class="' + ratioTone + '">' + percent(day.closingRatio) + '</td><td class="' + ratioTone + '">' + esc(day.closingVersus || day.closingStatus || 'Pending') + '</td></tr>';
+        return '<tr><td>' + esc(day.date) + '</td><td>' + money(day.snapWritten) + '</td><td>' + money(day.nwdsrWritten) + '</td><td>' + signedGap(day.nwdsrWritten, day.snapWritten) + '</td><td>' + money(day.nwdsrDelivered) + '</td><td>' + count(day.purchasingCustomers) + '</td><td>' + count(day.opportunities) + '</td><td class="' + ratioTone + '">' + percent(day.closingRatio) + '</td><td class="' + ratioTone + '">' + esc(day.closingVersus || day.closingStatus || 'Pending') + '</td></tr>';
       }).join('');
-      document.getElementById('screen').innerHTML = '<article class="card"><h2>Daily performance</h2><p class="sub">' + standardText(data) + ' Month to date purchasing customers ' + count(mtd.customers) + ' · opportunities ' + count(mtd.opportunities) + ' · closing ratio ' + percent(mtd.ratio) + ' · ' + versusText(mtd) + '. Goal ' + percent(data.goal) + '.</p><table><tr><th>Date</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR delivered</th><th>Purchasing customers</th><th>Opportunities</th><th>Closing ratio</th><th>Versus goal</th></tr>' + rows + '</table><p class="sub">Store month, the 2nd through the 1st. A day uses Net Written # OF CUST and PERQ Ups + Be Backs printed for that same date, from CC_ClosingDaily. Month to date is on CC_ClosingMTD. A missing report is Pending, not zero. ' + esc(mtd.note || '') + '</p></article>';
+      document.getElementById('screen').innerHTML = '<article class="card"><h2>Daily performance</h2><p class="sub">' + standardText(data) + ' Month to date purchasing customers ' + count(mtd.customers) + ' · opportunities ' + count(mtd.opportunities) + ' · closing ratio ' + percent(mtd.ratio) + ' · ' + versusText(mtd) + '. Goal ' + percent(data.goal) + '.</p><table><tr><th>Date</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR minus SNAP</th><th>NWDSR delivered</th><th>Purchasing customers</th><th>Opportunities</th><th>Closing ratio</th><th>Versus goal</th></tr>' + rows + '</table><p class="sub">NWDSR Written stays the store total. The difference is not removed from it. Store month, the 2nd through the 1st. A day uses Net Written # OF CUST and PERQ Ups + Be Backs printed for that same date, from CC_ClosingDaily. Month to date is on CC_ClosingMTD. A missing report is Pending, not zero. ' + esc(mtd.note || '') + '</p></article>';
     }
     function statusTone(status) {
       if (status === 'Above Goal') return 'good';
@@ -1661,7 +1671,17 @@
       block = block || {};
       var difference = esc(block.dollars || 'Pending');
       if (block.percent && block.percent !== 'Pending') difference += ' · ' + esc(block.percent);
-      return '<aside class="report-snap"><h2>SNAP Written LY</h2><p><strong>SNAP Written</strong> ' + esc(block.current || 'Pending') + ' · ' + esc(block.currentDates || '') + '</p><p><strong>SNAP Written LY</strong> ' + esc(block.ly || 'Pending') + ' · ' + esc(block.lyDates || '') + '</p><p><strong>Difference</strong> ' + difference + '</p><p class="report-foot">' + esc(block.note || '') + ' ' + esc(block.source || '') + '</p></aside>';
+      function item(label, value) {
+        return '<p><strong>' + esc(label) + '</strong> ' + esc(value || 'Pending') + '</p>';
+      }
+      return '<aside class="report-snap"><h2>Written comparison</h2>' +
+        item('NWDSR Written', block.nwdsr) +
+        item('SNAP Written', block.snap || block.current) +
+        item('NWDSR minus SNAP', block.variance) +
+        item('NWDSR Written LAST YEAR', block.nwdsrLy) +
+        item('SNAP Written LAST YEAR', block.ly) +
+        '<p><strong>SNAP versus SNAP LAST YEAR</strong> ' + difference + '</p>' +
+        '<p class="report-foot">' + esc(block.currentDates || '') + (block.lyDates ? ' · LAST YEAR ' + esc(block.lyDates) : '') + '. ' + esc(block.note || '') + '</p></aside>';
     }
     function renderWeeklyReport(data) {
       reportQuery.span = data.span || 'completed';
@@ -1726,7 +1746,7 @@
         return '<h2>' + esc(person.name) + (person.newHire ? ' · NEW HIRE' : '') + '</h2>' + table(lines) + '<p>Coaching opportunity: ' + esc(person.opportunity) + '</p><p>Coming week: ' + esc(person.nextGoal) + '</p>';
       }
       var pages = [];
-      pages.push('<h1>' + esc(data.title) + '</h1><p class="report-foot">' + esc(data.displayDate || '') + '</p><p class="report-verify">' + esc(data.verification) + '</p><h2>This week · NWDSR</h2>' + table(data.weekly) + renderSnapCompare(data.snapLy) + '<h2>Store-month KPIs · not this week</h2>' + table(data.kpis) + '<h2>Store month through this week</h2>' + table(data.month) + '<p>Last year written ' + esc((data.lastYear && data.lastYear.written) || 'Pending') + '. Last year delivered ' + esc((data.lastYear && data.lastYear.delivered) || 'Pending') + '. ' + esc((data.lastYear && data.lastYear.note) || '') + '</p>');
+      pages.push('<h1>' + esc(data.title) + '</h1><p class="report-foot">' + esc(data.displayDate || '') + '</p><p class="report-verify">' + esc(data.verification) + '</p><h2>This week · NWDSR</h2>' + table(data.weekly) + renderSnapCompare(data.snapLy) + '<h2>Store-month KPIs · not this week</h2>' + table(data.kpis) + '<h2>Store month through this week</h2>' + table(data.month) + '<p>NWDSR Written LAST YEAR ' + esc((data.lastYear && data.lastYear.written) || 'Pending') + '. NWDSR Delivered LAST YEAR ' + esc((data.lastYear && data.lastYear.delivered) || 'Pending') + '. ' + esc((data.lastYear && data.lastYear.note) || '') + '</p>');
       if (data.packet !== 'executive') {
         var people = data.people || [];
         var index = 0;
@@ -1845,7 +1865,7 @@
       var insights = (data.insights || []).map(function (item) { return '<p class="trend-note"><strong>' + esc(item.label) + '.</strong> ' + esc(item.text) + '</p>'; }).join('');
       var alerts = (data.alerts || []).map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('');
       var controls = '<label>KPI<select id="report-metric">' + options + '</select></label><label>View<select id="report-view"><option value="completed"' + (data.view === 'completed' ? ' selected' : '') + '>13 completed weeks</option><option value="partial"' + (data.view === 'partial' ? ' selected' : '') + '>Current partial week</option></select></label>';
-      var body = '<h1>' + esc(data.title) + '</h1><p class="report-foot">' + esc(data.view === 'partial' ? data.partialPeriod.label : data.displayDate) + '</p><p class="report-verify">' + esc(data.verification) + '</p>' + insights +
+      var body = '<h1>' + esc(data.title) + '</h1><p class="report-foot">' + esc(data.view === 'partial' ? data.partialPeriod.label : data.displayDate) + '</p><p class="report-verify">' + esc(data.verification) + '</p>' + renderSnapCompare(data.writtenBalance) + insights +
         '<h2>' + esc(selected.label) + '</h2><p class="trend-note">' + esc(selected.source) + (selected.goalText ? ' Goal ' + esc(selected.goalText) + '.' : '') + '</p>' +
         trendChart(selected, 'line') + trendChart(selected, 'bar') +
         '<p class="trend-note">' + esc(selected.comparison && selected.comparison.text || '') + '</p>' +
@@ -1872,7 +1892,7 @@
       document.getElementById('screen').innerHTML = '<div class="report-controls noprint"><div class="nav" id="report-kinds">' + kinds + '</div>' + period +
         '<button type="button" id="report-apply">Show report</button><button type="button" id="report-print"' + (data.ready ? '' : ' disabled') + '>Print</button><button type="button" id="report-pdf"' + (data.pdf ? '' : ' disabled') + '>Download PDF</button></div>' +
         '<article id="report-sheet" class="report-sheet' + (data.layout === 'individual' ? ' report-individual' : '') + (data.layout === 'monthly' ? ' report-monthly' : '') + (data.layout === 'meeting' ? ' report-meeting' : '') + (data.layout === 'trend' ? ' report-trend' : '') + '"><p class="report-kicker">KANE\'S FURNITURE · STORE 17</p>' +
-        (weekly ? weekly.body : ('<h1>' + esc(data.title || 'Report') + '</h1><p class="report-verify">' + esc(data.verification || '') + '</p>' +
+        (weekly ? weekly.body : ('<h1>' + esc(data.title || 'Report') + '</h1><p class="report-verify">' + esc(data.verification || '') + '</p>' + (data.writtenBalance ? renderSnapCompare(data.writtenBalance) : '') +
         (data.ready ? '<table><thead><tr><th>Measure</th><th>Result</th><th>Goal</th><th>Versus goal</th><th>Source</th></tr></thead><tbody>' + rows + '</tbody></table>' +
           '<h2>Sales winners · ' + esc(winners.date || '') + '</h2><p>' + esc(winners.status === 'pending' ? 'Pending' : winners.text) + '</p><p class="report-foot">' + esc(winners.source || '') + (winners.quiet && winners.quiet !== 'Pending' ? ' No written sale: ' + winners.quiet : '') + '</p>' +
           '<h2>Management priorities</h2>' + (priorities ? '<ol>' + priorities + '</ol>' : '<p>No additional priority is supported by verified data.</p>') +
@@ -3113,7 +3133,7 @@
       document.getElementById('screen').innerHTML =
         '<div class="morning">' +
         '<h2 class="section-title">Results</h2><div class="morning-five">' +
-        resultCard('Yesterday written', yesterday.written, esc((data.labels && data.labels.written) || 'NWDSR Net Written') + '. ' + snapReconcile(yesterday.snapWritten, yesterday.snapVariance)) +
+        resultCard('Yesterday written', yesterday.written, esc((data.labels && data.labels.written) || 'NWDSR Net Written') + '. ' + writtenBalanceNote(yesterday.writtenBalance, yesterday.snapWritten, yesterday.snapVariance)) +
         resultCard('Yesterday delivered', yesterday.delivered, esc((data.labels && data.labels.delivered) || 'NWDSR Delivered') + '.') +
         figureCard('Closing ratio', closingFigure, closingDetail) +
         figureCard('Bedding written', yesterday.beddingWritten, '') +
