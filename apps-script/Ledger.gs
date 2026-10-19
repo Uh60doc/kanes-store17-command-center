@@ -254,6 +254,82 @@ function sources_(payload) {
   };
 }
 
+function scopeBlockerIdentity_(row) {
+  var date = isoDate_(row[2]) || isoDate_(row[3]);
+  return [String(row[0] || ''), String(row[1] || ''), date, String(row[9] || ''), String(row[7] || ''), String(row[8] || '')].join('|');
+}
+
+/** Name match ignores a code that one copy has and the other does not. Amounts within a cent are the same reported figure. */
+function scopeBlockerName_(row) {
+  var date = isoDate_(row[2]) || isoDate_(row[3]);
+  return [String(row[0] || ''), String(row[1] || ''), date, String(row[9] || ''), String(row[8] || '').trim().toUpperCase()].join('|');
+}
+
+function sameReportedAmount_(left, right) {
+  var a = fineNumber_(left);
+  var b = fineNumber_(right);
+  if (a === null || b === null) return String(left || '') === String(right || '');
+  return Math.abs(a - b) < 0.015;
+}
+
+/**
+ * STORE and PERSON tabs are one formula in A1. A typed row below that formula stops the result from expanding, so A1
+ * shows #REF!. Those tabs are not a second copy of the ledger. A typed row already on CC_Ledger is removed. A typed
+ * row that is not on CC_Ledger is appended there first, so a historical or negative line is not dropped.
+ */
+function repairScopeViewSheets_() {
+  if (typeof LEDGER_VIEWS_ === 'undefined') return [];
+  var book = book_();
+  var ledgerTab = ledgerSheet_();
+  var ledgerValues = ledgerTab.getDataRange().getValues();
+  var known = {};
+  var r;
+  for (r = 1; r < ledgerValues.length; r += 1) {
+    var existingKey = String(ledgerValues[r][17] || '');
+    if (existingKey) known['key:' + existingKey] = ledgerValues[r];
+    known['id:' + scopeBlockerIdentity_(ledgerValues[r])] = ledgerValues[r];
+    known['name:' + scopeBlockerName_(ledgerValues[r])] = ledgerValues[r];
+  }
+  var repaired = [];
+  LEDGER_VIEWS_.forEach(function (name) {
+    var tab = book.getSheetByName(name);
+    if (!tab || !tab.getRange) return;
+    var origin = tab.getRange(1, 1);
+    var formula = String(origin.getFormula() || '');
+    if (formula.indexOf('CC_Ledger') === -1) return;
+    if (String(origin.getDisplayValue() || '') !== '#REF!') return;
+    var last = tab.getLastRow();
+    if (last < 2) return;
+    var width = Math.max(tab.getLastColumn ? tab.getLastColumn() : 18, 18);
+    var values = tab.getRange(2, 1, last - 1, width).getValues();
+    var kept = [];
+    values.forEach(function (row) {
+      if (!String(row[0] || '').trim()) return;
+      var key = String(row[17] || '');
+      var id = scopeBlockerIdentity_(row);
+      var prior = (key && known['key:' + key]) || known['id:' + id] || known['name:' + scopeBlockerName_(row)];
+      if (!prior) {
+        var copy = row.slice(0, 18);
+        while (copy.length < 18) copy.push('');
+        if (!copy[17]) copy[17] = [copy[0], copy[1], isoDate_(copy[2]) || isoDate_(copy[3]), isoDate_(copy[3]), isoDate_(copy[4]), copy[9], copy[7] || copy[8] || 'STORE'].join('|');
+        ledgerTab.appendRow(copy);
+        known['key:' + copy[17]] = copy;
+        known['id:' + id] = copy;
+        known['name:' + scopeBlockerName_(copy)] = copy;
+        kept.push(String(copy[17]));
+        return;
+      }
+      if (!sameReportedAmount_(prior[10], row[10]) && typeof appendException_ === 'function') {
+        appendException_('Needs Review', name + ' had a typed row for ' + id + ' of ' + row[10] + '. CC_Ledger already has ' + prior[10] + ' for that record and was kept. The typed row was only blocking the calculated tab.');
+      }
+    });
+    tab.getRange(2, 1, last - 1, width).clearContent();
+    repaired.push(name + (kept.length ? ' (saved to CC_Ledger: ' + kept.join(', ') + ')' : ''));
+  });
+  if (repaired.length) forgetRead_('CC_Ledger');
+  return repaired;
+}
+
 function upsertLedgerDaily_(view, side, date, dollars, source) {
   if (dollars === null || dollars === undefined || dollars === '') return;
   var key = [view, 'daily', date, date, date, side, 'STORE'].join('|');

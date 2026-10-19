@@ -1145,6 +1145,11 @@ function runQualityChecks_(trigger) {
   var started = Date.now();
   var now = new Date().toISOString();
   var today = todayNy_();
+  try {
+    if (typeof repairScopeViewSheets_ === 'function') repairScopeViewSheets_();
+  } catch (error) {
+    appendException_('Update Failed', 'A calculated STORE or PERSON tab could not be repaired. No ledger figure was changed. ' + String(error && error.message ? error.message : error));
+  }
   var ctx;
   var packages;
   var checks;
