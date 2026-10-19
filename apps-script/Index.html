@@ -4258,12 +4258,8 @@
       uploadCache = data;
       if (screen !== 'upload') return;
       document.getElementById('header-note').textContent = 'Upload reports · business date ' + data.dateText;
-      var checklist = data.checklist.map(function (item) {
-        return '<li>' + uploadPill(item.status) + '<strong>' + esc(item.label) + '</strong> <span class="pending">' + esc(item.format) + '</span>' +
-          '<p class="sub">' + esc(item.message) + '</p>' +
-          (item.lastFile ? '<p class="sub">Last file: ' + esc(item.lastFile) + (item.lastAt ? ' · ' + uploadWhen(item.lastAt) : '') + '</p>' : '') + '</li>';
-      }).join('');
-      var missing = data.checklist.filter(function (item) { return item.status === 'Missing'; }).map(function (item) { return item.label; });
+      var needed = function (item) { return item.status === 'Missing' || item.status === 'Failed' || item.status === 'Needs Review'; };
+      var missing = data.checklist.filter(needed);
       var selected = uploadFiles.map(function (file) {
         return '<li>' + esc(file.name) + ' <span class="pending">' + uploadSize(file.size) + (file.fromZip ? ' · from ' + esc(file.fromZip) : '') + '</span></li>';
       }).join('');
@@ -4281,13 +4277,14 @@
           '<p class="sub"><strong>Data consistency:</strong> ' + esc(uploadSummary.audit) + '</p>'
         : '';
       var canRetry = !uploadBusy && uploadFiles.some(function (file) { return uploadResults.some(function (result) { return result.status === 'Failed' && result.file === file.name; }); });
-      var days = data.recent.map(function (day) {
-        return '<button type="button" class="' + (day.date === data.date ? '' : 'secondary') + '" data-upload-day="' + esc(day.date) + '">' + esc(day.date.slice(5)) + ' · ' + day.imported + '/' + data.total + (day.review ? ' · ' + day.review + ' to review' : '') + '</button>';
+      var gapDays = (data.recent || []).filter(function (day) { return day.missing && day.missing.length; });
+      var completeDays = (data.recent || []).filter(function (day) { return !day.missing || !day.missing.length; });
+      var gaps = gapDays.map(function (day) {
+        var lines = day.missing.map(function (label) {
+          return '<li><strong>' + esc(day.dateText || day.date) + '</strong> ' + esc(label) + '</li>';
+        }).join('');
+        return '<li><button type="button" class="' + (day.date === data.date ? '' : 'secondary') + '" data-upload-day="' + esc(day.date) + '">' + esc(day.dateText || day.date) + '</button><ul class="upload-list">' + lines + '</ul></li>';
       }).join('');
-      var history = data.history.map(function (row) {
-        return '<li>' + uploadPill(row.status) + '<strong>' + esc(row.file) + '</strong> <span class="pending">' + esc(row.report || (row.status === 'Already on file' ? 'Same file as an earlier import' : 'Not identified')) + ' · business date ' + esc(row.date) + ' · ' + esc(row.role) + ' · ' + uploadWhen(row.at) + '</span><p class="sub">' + esc(row.message) + '</p></li>';
-      }).join('');
-      var last = data.lastSuccess;
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Upload reports</h2>' +
         '<div class="upload-grid">' +
@@ -4306,21 +4303,11 @@
         summary +
         (results ? '<h3>This import</h3><ul class="upload-list">' + results + '</ul>' : '') +
         '</article>' +
-        '<article class="card upload-card"><h2>Reports for ' + esc(data.dateText) + '</h2>' +
-        '<p class="upload-count ' + (data.imported === data.total ? 'good' : 'warn') + '">' + data.imported + ' of ' + data.total + ' imported for ' + esc(data.dateText) + '</p>' +
-        (missing.length ? '<p class="sub"><strong>Missing for ' + esc(data.dateText) + ':</strong> ' + esc(missing.join(', ')) + '.</p>' : '<p class="sub">Nothing is missing for ' + esc(data.dateText) + '.</p>') +
-        (data.recent && data.recent.some(function (day) { return day.missing && day.missing.length && day.date !== data.date; }) ? '<h3>Other days still missing a report</h3><ul class="upload-list">' + data.recent.filter(function (day) { return day.missing && day.missing.length && day.date !== data.date; }).map(function (day) { return '<li><strong>' + esc(day.dateText || day.date) + '</strong><p class="sub">' + esc(day.missing.join(', ')) + '</p></li>'; }).join('') + '</ul>' : '') +
-        '<ul class="upload-list">' + checklist + '</ul></article>' +
-        '</div>' +
-        '<div class="upload-grid" style="margin-top:12px">' +
-        '<article class="card upload-card"><h2>Status</h2>' +
-        '<p><strong>Last successful import:</strong> ' + (last ? esc(last.report) + (last.date ? ' for ' + esc(last.date) : '') + ' · ' + uploadWhen(last.at) + (last.via === 'mailbox' ? ' · mailbox import' : ' · uploaded here') : 'None yet') + '</p>' +
-        '<p><strong>Latest day with all nine reports:</strong> ' + esc(data.latestComplete || 'None in the last 10 days') + '</p>' +
-        '<p><strong>Store month KPIs counted through:</strong> ' + esc(data.kpiThrough || 'Not Available') + '</p>' +
-        (data.pagesRefreshed ? '<p><strong>Home and Sales Team:</strong> refreshed from the latest verified reports.</p>' : '') +
-        (data.refreshed && data.refreshed.issues.length ? '<ul class="list warn">' + data.refreshed.issues.map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('') + '</ul>' : '') +
-        '<h3>Last 10 days</h3><div class="upload-days">' + days + '</div></article>' +
-        '<article class="card upload-card"><h2>Import history</h2>' + (history ? '<ul class="upload-list">' + history + '</ul>' : '<p class="sub">No uploads yet.</p>') + '</article>' +
+        '<article class="card upload-card"><h2>Reports to run and upload</h2>' +
+        (missing.length ? '<p class="upload-count warn">' + missing.length + ' still needed for ' + esc(data.dateText) + '</p><ul class="upload-list">' + missing.map(function (item) { return '<li>' + uploadPill(item.status) + '<strong>' + esc(data.dateText) + '</strong> ' + esc(item.label) + ' <span class="pending">' + esc(item.format) + '</span><p class="sub">' + esc(item.message) + '</p></li>'; }).join('') + '</ul>' : '<p class="upload-count good">Nothing is missing for ' + esc(data.dateText) + '.</p>') +
+        (gaps ? '<h3>By date</h3><ul class="upload-list">' + gaps + '</ul>' : '<p class="sub">None of the last 10 days is missing a report.</p>') +
+        (completeDays.length ? '<p class="sub">On file: ' + esc(completeDays.map(function (day) { return day.dateText || day.date; }).join(', ')) + '.</p>' : '') +
+        '</article>' +
         '</div>';
       document.getElementById('upload-date').addEventListener('change', function (event) {
         if (!event.target.value) return;

@@ -951,7 +951,7 @@ function uploads_(payload) {
       dateText: uploadDayText_(cursor),
       imported: items.filter(function (item) { return item.status === 'Imported'; }).length,
       review: items.filter(function (item) { return item.status === 'Needs Review' || item.status === 'Failed'; }).length,
-      missing: items.filter(function (item) { return item.status === 'Missing' || item.status === 'Failed'; }).map(function (item) { return item.label; }),
+      missing: items.filter(function (item) { return item.status !== 'Imported'; }).map(function (item) { return item.label; }),
     });
     cursor = shiftDate_(cursor, -1);
   }
