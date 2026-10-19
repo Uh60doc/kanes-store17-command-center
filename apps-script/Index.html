@@ -258,15 +258,16 @@
     .report-sheet.report-meeting { max-width: 8.5in; }
     .packet-page { margin: 0 0 18px; padding: 0 0 12px; border-bottom: 1px solid #d5dee3; }
     .packet-page .page-no { margin: 8px 0 0; font-size: 11px; color: #3d5660; }
-    .trend-chart { width: 100%; height: 250px; display: block; }
+    .trend-chart { width: 100%; height: 228px; display: block; }
     .trend-chart text { font-family: "Segoe UI", Helvetica, Arial, sans-serif; }
-    .trend-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
-    .trend-head h2 { margin: 0; }
-    .trend-legend { display: flex; gap: 14px; color: #d5e2f0; font-size: 12px; white-space: nowrap; }
-    .trend-legend .swatch { display: inline-block; width: 22px; height: 3px; margin-right: 6px; border-radius: 99px; vertical-align: middle; }
-    .trend-legend .swatch.nw { background: #14c4d4; }
-    .trend-legend .swatch.ly { background: repeating-linear-gradient(90deg, #8eb4ff 0 4px, transparent 4px 7px); }
-    .trend-note { margin: 6px 0; font-size: 13px; line-height: 1.4; }
+    .trend-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 2px; }
+    .trend-head h2 { margin: 0; color: #d5e2f0; }
+    .trend-legend { display: flex; gap: 16px; color: #d5e2f0; font-size: 12px; font-weight: 650; white-space: nowrap; letter-spacing: 0.01em; text-transform: none; }
+    .trend-legend .swatch { display: inline-block; width: 18px; height: 3px; margin-right: 6px; border-radius: 99px; vertical-align: middle; }
+    .trend-legend .swatch.nw { background: #14c4d4; box-shadow: 0 0 8px rgba(20, 196, 212, 0.85); }
+    .trend-legend .swatch.ly { height: 0; background: none; border-top: 2px dashed #8eb4ff; border-radius: 0; }
+    .trend-legend .is-pending { color: #9eb0c9; font-weight: 550; }
+    .trend-card { padding-bottom: 8px; }
     @media (max-width: 800px) {
       .report-sheet.report-trend table { font-size: 12px; }
     }
@@ -1355,7 +1356,7 @@
         '<h2 class="section-title">Store performance</h2><div class="home-kpis">' + five + '</div>' +
         '<div class="home-targets">' + still + targets + stretch + '</div>' +
         '<h2 class="section-title">Year over year</h2><div class="home-compare">' + compare +
-        '<article class="card glow-card trend-card"><div class="trend-head"><div><h2>NWDSR this year and SNAP last year</h2><p class="sub">Store month, cumulative. A missing day is a gap, not zero.</p></div><div class="trend-legend"><span><i class="swatch nw"></i>NWDSR this year</span><span><i class="swatch ly"></i>SNAP last year</span></div></div>' + homeTrend(data.chart, data.today) + '</article></div>' +
+        '<article class="card glow-card trend-card"><div class="trend-head"><h2>NWDSR this year and SNAP last year</h2><div class="trend-legend"><span><i class="swatch nw"></i>NWDSR this year</span><span class="' + (homeTrendHasLy(data.chart) ? '' : 'is-pending') + '"><i class="swatch ly"></i>SNAP last year' + (homeTrendHasLy(data.chart) ? '' : ' · Pending') + '</span></div></div>' + homeTrend(data.chart, data.today) + '</article></div>' +
         pendingList(fresh.pending) +
         '<h2 class="section-title">Sales team performance</h2>' + quick +
         '<div class="team-grid">' + (teamCards || '<article class="card"><p class="pending">Pending. No active salesperson is on the home record.</p></article>') + '</div>' +
@@ -1370,11 +1371,48 @@
       });
       if (winnersHtml) bindWinnersPicker('home', function (next) { renderHome(next, focus); });
     }
+    function homeTrendHasLy(chart) {
+      return (chart || []).some(function (day) { return day.snapLy !== null && day.snapLy !== undefined && day.snapLy !== ''; });
+    }
+    function softenTrend(group) {
+      var n = group.length;
+      if (n < 4) return group.map(function (point) { return { index: point.index, value: point.value }; });
+      var values = group.map(function (point) { return point.value; });
+      var pass, i;
+      for (pass = 0; pass < 3; pass++) {
+        var next = values.slice();
+        for (i = 1; i < n - 1; i++) {
+          var prev = values[Math.max(0, i - 2)];
+          var left = values[i - 1];
+          var right = values[Math.min(n - 1, i + 1)];
+          var far = values[Math.min(n - 1, i + 2)];
+          next[i] = prev * 0.1 + left * 0.2 + values[i] * 0.4 + right * 0.2 + far * 0.1;
+        }
+        values = next;
+      }
+      values[0] = group[0].value;
+      values[n - 1] = group[n - 1].value;
+      var end = group[n - 1].value;
+      var startEase = Math.max(1, n - 4);
+      var base = values[startEase - 1];
+      for (i = startEase; i < n; i++) {
+        var t = (i - (startEase - 1)) / (n - (startEase - 1));
+        var ramp = base + (end - base) * t;
+        values[i] = values[i] * (1 - t) + ramp * t;
+      }
+      values[n - 1] = end;
+      var low = values[0];
+      for (i = 1; i < n; i++) {
+        if (values[i] < low) values[i] = low;
+        low = values[i];
+      }
+      values[n - 1] = end;
+      return group.map(function (point, index) { return { index: point.index, value: values[index] }; });
+    }
     function homeTrend(chart, today) {
       var rows = chart || [];
       var hasWritten = rows.some(function (day) { return day.written !== null && day.written !== undefined && day.written !== ''; });
       if (!rows.length || !hasWritten) return '<p class="pending">Pending. No verified NWDSR days are on this month yet.</p>';
-      var hasLy = rows.some(function (day) { return day.snapLy !== null && day.snapLy !== undefined && day.snapLy !== ''; });
       var max = 0;
       rows.forEach(function (day) {
         [day.written, day.snapLy].forEach(function (value) {
@@ -1382,11 +1420,11 @@
           if (Number(value) > max) max = Number(value);
         });
       });
-      var rough = Math.max(max * 1.08, 1);
+      var rough = Math.max(max * 1.12, 1);
       var pow = Math.pow(10, Math.floor(Math.log(rough) / Math.LN10));
       var axis = [1, 2, 2.5, 5, 10].map(function (step) { return step * pow; }).filter(function (step) { return step >= rough; })[0] || rough;
-      var left = 48, right = 16, top = 18, bottom = 28;
-      var width = 640, height = 250;
+      var left = 46, right = 18, top = 22, bottom = 26;
+      var width = 720, height = 228;
       var plot = height - top - bottom;
       var step = (width - left - right) / Math.max(1, rows.length - 1);
       function y(value) { return top + plot * (1 - (Number(value) / axis)); }
@@ -1396,13 +1434,17 @@
         var parts = String(date || '').split('-');
         return months[Number(parts[1]) - 1] + ' ' + Number(parts[2]);
       }
-      var svg = [];
+      function moneyTick(amount) {
+        if (!amount) return '$0';
+        if (amount >= 1000) return '$' + Math.round(amount / 1000) + 'k';
+        return '$' + Math.round(amount);
+      }
+      var svg = ['<defs><linearGradient id="nwArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#14c4d4" stop-opacity="0.42"/><stop offset="1" stop-color="#14c4d4" stop-opacity="0.02"/></linearGradient></defs>'];
       [0, 0.25, 0.5, 0.75, 1].forEach(function (tick) {
         var amount = axis * tick;
         var yy = y(amount);
-        svg.push('<line x1="' + left + '" x2="' + (width - right) + '" y1="' + yy.toFixed(1) + '" y2="' + yy.toFixed(1) + '" stroke="rgba(20,196,212,0.18)"/>');
-        var tickLabel = amount === 0 ? '$0' : '$' + Math.round(amount / 1000) + 'k';
-        svg.push('<text x="' + (left - 8) + '" y="' + (yy + 4) + '" text-anchor="end" fill="#9eb0c9" font-size="11">' + tickLabel + '</text>');
+        svg.push('<line x1="' + left + '" x2="' + (width - right) + '" y1="' + yy.toFixed(1) + '" y2="' + yy.toFixed(1) + '" stroke="rgba(158,176,201,0.16)"/>');
+        svg.push('<text x="' + (left - 8) + '" y="' + (yy + 3.5) + '" text-anchor="end" fill="#8ea0b8" font-size="11">' + moneyTick(amount) + '</text>');
       });
       function segments(field) {
         var groups = [];
@@ -1419,38 +1461,69 @@
         if (current.length) groups.push(current);
         return groups;
       }
-      function linePath(group) {
-        return group.map(function (point, index) {
-          return (index ? 'L' : 'M') + x(point.index).toFixed(1) + ' ' + y(point.value).toFixed(1);
-        }).join(' ');
+      function smooth(group) {
+        var n = group.length;
+        if (n === 1) return 'M' + x(group[0].index).toFixed(1) + ' ' + y(group[0].value).toFixed(1);
+        var slope = [];
+        var i;
+        for (i = 0; i < n - 1; i++) {
+          var dx = x(group[i + 1].index) - x(group[i].index) || 1;
+          slope[i] = (y(group[i + 1].value) - y(group[i].value)) / dx;
+        }
+        var tangent = [slope[0]];
+        for (i = 1; i < n - 1; i++) tangent[i] = slope[i - 1] * slope[i] <= 0 ? 0 : (slope[i - 1] + slope[i]) / 2;
+        tangent[n - 1] = slope[n - 2];
+        for (i = 0; i < n - 1; i++) {
+          if (Math.abs(slope[i]) < 1e-6) { tangent[i] = 0; tangent[i + 1] = 0; continue; }
+          var a = tangent[i] / slope[i];
+          var b = tangent[i + 1] / slope[i];
+          var scale = a * a + b * b;
+          if (scale > 9) {
+            var tau = 3 / Math.sqrt(scale);
+            tangent[i] = tau * a * slope[i];
+            tangent[i + 1] = tau * b * slope[i];
+          }
+        }
+        var path = 'M' + x(group[0].index).toFixed(1) + ' ' + y(group[0].value).toFixed(1);
+        for (i = 0; i < n - 1; i++) {
+          var x0 = x(group[i].index);
+          var y0 = y(group[i].value);
+          var x1 = x(group[i + 1].index);
+          var y1 = y(group[i + 1].value);
+          var span = (x1 - x0) / 3;
+          path += ' C' + (x0 + span).toFixed(1) + ' ' + (y0 + tangent[i] * span).toFixed(1) + ' ' + (x1 - span).toFixed(1) + ' ' + (y1 - tangent[i + 1] * span).toFixed(1) + ' ' + x1.toFixed(1) + ' ' + y1.toFixed(1);
+        }
+        return path;
       }
       segments('written').forEach(function (group) {
-        var line = linePath(group);
+        var line = smooth(softenTrend(group));
         var area = line + ' L' + x(group[group.length - 1].index).toFixed(1) + ' ' + y(0).toFixed(1) + ' L' + x(group[0].index).toFixed(1) + ' ' + y(0).toFixed(1) + ' Z';
-        svg.push('<path d="' + area + '" fill="rgba(20,196,212,0.22)" stroke="none"/>');
-        svg.push('<path d="' + line + '" fill="none" stroke="#14c4d4" stroke-width="2.5" stroke-linejoin="round"/>');
+        svg.push('<path d="' + area + '" fill="url(#nwArea)" stroke="none"/>');
+        svg.push('<path d="' + line + '" fill="none" stroke="#14c4d4" stroke-opacity="0.35" stroke-width="6" stroke-linecap="round"/>');
+        svg.push('<path d="' + line + '" fill="none" stroke="#7eecf6" stroke-width="2.2" stroke-linecap="round"/>');
+        var end = group[group.length - 1];
+        svg.push('<circle cx="' + x(end.index).toFixed(1) + '" cy="' + y(end.value).toFixed(1) + '" r="3.5" fill="#e8fbff" stroke="#14c4d4" stroke-width="1.5"/>');
       });
       segments('snapLy').forEach(function (group) {
-        svg.push('<path d="' + linePath(group) + '" fill="none" stroke="#8eb4ff" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round"/>');
+        svg.push('<path d="' + smooth(softenTrend(group)) + '" fill="none" stroke="#8eb4ff" stroke-width="1.8" stroke-dasharray="4 4" stroke-linecap="round"/>');
       });
-      var todayIndex = -1;
-      rows.forEach(function (day, index) { if (day.date === today) todayIndex = index; });
-      if (todayIndex < 0) {
-        rows.forEach(function (day, index) {
-          if (day.written !== null && day.written !== undefined && day.written !== '') todayIndex = index;
-        });
-      }
-      if (todayIndex >= 0) {
-        svg.push('<line x1="' + x(todayIndex).toFixed(1) + '" x2="' + x(todayIndex).toFixed(1) + '" y1="' + top + '" y2="' + y(0).toFixed(1) + '" stroke="#9eb0c9" stroke-dasharray="3 3"/>');
-        svg.push('<text x="' + x(todayIndex).toFixed(1) + '" y="' + (top - 4) + '" text-anchor="middle" fill="#d5e2f0" font-size="11">Today ' + label(rows[todayIndex].date) + '</text>');
-      }
-      var marks = Math.min(6, rows.length);
+      var marker = -1;
       rows.forEach(function (day, index) {
-        if (index % Math.ceil(rows.length / marks) !== 0 && index !== rows.length - 1) return;
-        svg.push('<text x="' + x(index).toFixed(1) + '" y="' + (height - 8) + '" text-anchor="middle" fill="#9eb0c9" font-size="11">' + label(day.date) + '</text>');
+        if (day.written !== null && day.written !== undefined && day.written !== '') marker = index;
       });
-      var note = hasLy ? '' : '<p class="sub">SNAP last year stays Pending until those verified days are on file. It is not drawn as a guess.</p>';
-      return '<div class="kpi-wrap"><svg class="trend-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Cumulative NWDSR this year and SNAP last year">' + svg.join('') + '</svg></div>' + note;
+      if (marker >= 0) {
+        var markX = x(marker);
+        var labelX = Math.max(left + 46, Math.min(width - right - 46, markX));
+        svg.push('<line x1="' + markX.toFixed(1) + '" x2="' + markX.toFixed(1) + '" y1="' + (top - 2) + '" y2="' + y(0).toFixed(1) + '" stroke="rgba(215,227,240,0.55)" stroke-dasharray="2 3"/>');
+        var markWord = rows[marker].date === today ? 'Today ' : 'Through ';
+        svg.push('<text x="' + labelX.toFixed(1) + '" y="13" text-anchor="middle" fill="#d7e3f0" font-size="11">' + markWord + label(rows[marker].date) + '</text>');
+      }
+      var tickEvery = Math.max(1, Math.round((rows.length - 1) / 7));
+      rows.forEach(function (day, index) {
+        if (index % tickEvery !== 0 && index !== rows.length - 1) return;
+        svg.push('<text x="' + x(index).toFixed(1) + '" y="' + (height - 8) + '" text-anchor="middle" fill="#8ea0b8" font-size="11">' + label(day.date) + '</text>');
+      });
+      return '<div class="kpi-wrap"><svg class="trend-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Cumulative NWDSR this year and SNAP last year">' + svg.join('') + '</svg></div>';
     }
     function openPersonFromHome(name) {
       screen = 'people';

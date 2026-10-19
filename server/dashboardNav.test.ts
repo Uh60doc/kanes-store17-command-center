@@ -114,3 +114,35 @@ test('home chart repeats the store calendar through yesterday', () => {
   assert.ok(home.week.written > 0);
   assert.ok(home.week.delivered > 0);
 });
+
+test('home trend draws a smooth area and leaves last year off until those days exist', () => {
+  const page = client() as {
+    homeTrend: (chart: unknown, today: string) => string;
+    homeTrendHasLy: (chart: unknown) => boolean;
+    softenTrend: (group: { index: number; value: number }[]) => { index: number; value: number }[];
+  };
+  const chart = [];
+  for (let day = 2; day <= 31; day += 1) {
+    const date = `2026-10-${String(day).padStart(2, '0')}`;
+    chart.push({ date, written: day < 16 ? day * 8000 : null, snapLy: day < 10 ? day * 5000 : null });
+  }
+  chart.push({ date: '2026-11-01', written: null, snapLy: null });
+  const svg = page.homeTrend(chart, '2026-10-19');
+  assert.match(svg, /linearGradient/);
+  assert.match(svg, / C/);
+  assert.match(svg, /stroke-dasharray="4 4"/);
+  assert.match(svg, /Through Oct 15/);
+  assert.equal(svg.includes('not drawn as a guess'), false);
+  assert.equal(page.homeTrendHasLy(chart.map((day) => ({ ...day, snapLy: null }))), false);
+  const pending = page.homeTrend(chart.map((day) => ({ ...day, snapLy: null })), '2026-10-15');
+  assert.equal(pending.includes('stroke-dasharray="4 4"'), false);
+  assert.match(pending, /Today Oct 15/);
+  const jagged = [0, 40, 41, 90, 92, 93, 140].map((value, index) => ({ index, value }));
+  const soft = page.softenTrend(jagged);
+  assert.equal(soft[0].value, 0);
+  assert.equal(soft[soft.length - 1].value, 140);
+  assert.ok(soft[1].value < 40);
+  soft.forEach((point, index) => {
+    if (index) assert.ok(point.value >= soft[index - 1].value - 0.001);
+  });
+});
