@@ -4413,9 +4413,16 @@
       };
       var refreshedPage = null;
       step(0).then(function () {
-        uploadProgress = 'Recalculating the dashboard…';
+        var imported = uploadResults.some(function (result) { return result.status === 'Imported' || result.status === 'Already on file'; });
+        uploadSummary = uploadBatchSummary(uploadResults, []);
+        uploadSummary.missing = 'Checking which reports are still missing…';
+        uploadSummary.refresh = imported ? 'Recalculating the dashboard…' : 'Nothing new was imported, so the dashboard was not recalculated.';
+        uploadSummary.audit = imported ? 'Running…' : 'Not run. No figure was changed.';
+        uploadProgress = imported ? 'Recalculating the dashboard…' : '';
         renderUpload(uploadCache);
-        return api('uploads', { date: date, refresh: true });
+        var box = document.getElementById('upload-confirm');
+        if (box) box.checked = confirmed;
+        return api('uploads', { date: date, refresh: imported });
       }).then(function (data) {
         refreshedPage = data;
         var dates = [];
@@ -4441,13 +4448,19 @@
         describe(refreshedPage);
         pages.forEach(describe);
         uploadSummary = uploadBatchSummary(uploadResults, missing);
-        uploadSummary.refresh = refreshedPage.dashboardRefreshed
-          ? 'Recalculated. Report readiness was updated from the latest verified reports.'
-          : 'The recalculation did not run. Open Upload reports again and import any file that is still missing. Figures already saved were not changed.';
-        uploadSummary.audit = refreshedPage.consistency
-          ? refreshedPage.consistency.status + ' (' + refreshedPage.consistency.matched + ' of ' + refreshedPage.consistency.checked + ' matched, ' + refreshedPage.consistency.discrepancies + ' discrepancies).'
-          : 'The consistency check did not return a result. No figure was invented.';
         var keptWork = uploadResults.some(function (result) { return result.status === 'Imported' || result.status === 'Already on file'; });
+        if (refreshedPage.dashboardRefreshed) {
+          uploadSummary.refresh = 'Recalculated. Report readiness was updated from the latest verified reports.';
+          uploadSummary.audit = refreshedPage.consistency
+            ? refreshedPage.consistency.status + ' (' + refreshedPage.consistency.matched + ' of ' + refreshedPage.consistency.checked + ' matched, ' + refreshedPage.consistency.discrepancies + ' discrepancies).'
+            : 'The consistency check did not return a result. No figure was invented.';
+        } else if (!keptWork) {
+          uploadSummary.refresh = 'Nothing new was imported, so the dashboard was not recalculated.';
+          uploadSummary.audit = 'Not run. No figure was changed.';
+        } else {
+          uploadSummary.refresh = 'The recalculation did not run. Open Upload reports again and import any file that is still missing. Figures already saved were not changed.';
+          uploadSummary.audit = 'The consistency check did not return a result. No figure was invented.';
+        }
         if (!keptWork) return refreshedPage;
         uploadProgress = 'Refreshing Home and Sales Team…';
         renderUpload(uploadCache);
@@ -4468,11 +4481,17 @@
       }).catch(function (error) {
         uploadBusy = false;
         uploadProgress = '';
-        uploadSummary = uploadBatchSummary(uploadResults, []);
-        uploadSummary.refresh = 'The batch stopped before the dashboard refresh. Files already imported are on file and will not be added again. Retry the files that failed.';
-        uploadSummary.audit = 'Not run.';
+        uploadSummary = uploadSummary || uploadBatchSummary(uploadResults, []);
+        uploadSummary.missing = uploadSummary.missing && uploadSummary.missing !== 'Checking which reports are still missing…' ? uploadSummary.missing : 'The missing-report list was not reloaded.';
+        var saved = uploadResults.some(function (result) { return result.status === 'Imported' || result.status === 'Already on file'; });
+        uploadSummary.refresh = saved
+          ? 'The dashboard refresh did not finish. Files already imported stay on file and are not added again. Retry the files that failed.'
+          : 'Nothing new was imported, so the dashboard was not recalculated.';
+        uploadSummary.audit = saved ? 'Not run.' : 'Not run. No figure was changed.';
         renderUpload(uploadCache);
-        uploadFailed(error);
+        var note = document.getElementById('upload-error');
+        if (note && uploadResults.length) note.textContent = 'The file results are listed above. ' + error.message;
+        else uploadFailed(error);
       });
     }
     var DOC_LIB_URLS = {
