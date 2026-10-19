@@ -198,10 +198,12 @@
       .eod-step span { font-size: 18px; }
       .train-step { flex-wrap: wrap; }
       .train-step .train-copy { font-size: 18px; }
+      .wrap, #screen, .card { max-width: 100%; min-width: 0; }
+      .wrap { overflow-x: clip; }
     }
     button, input, textarea { font: inherit; }
     textarea { width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid #1d5c66; background: #070b10; color: white; }
-    .brief-mail { border: 1px solid #1d5c66; border-radius: 14px; padding: 8px; background: #ffffff; color: #102027; overflow: auto; }
+    .brief-mail { border: 1px solid #1d5c66; border-radius: 14px; padding: 8px; background: #ffffff; color: #102027; display: block; width: 100%; max-width: 100%; overflow-x: auto; }
     .brief-mail-inner { max-width: 720px; margin: 0 auto; }
     .brief-log td, .brief-log th { font-size: 13px; }
     .morning .figure { font-size: 32px; }
