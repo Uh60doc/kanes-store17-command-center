@@ -4393,19 +4393,26 @@
       uploadSummary = null;
       uploadProgress = 'Processing 1 of ' + files.length + ' files…';
       renderUpload(uploadCache);
-      var step = function (index) {
-        if (index >= files.length) return Promise.resolve();
-        var file = files[index];
-        uploadProgress = 'Processing ' + (index + 1) + ' of ' + files.length + ' files… ' + file.name;
+      var wait = function (ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); };
+      var sendFile = function (file, base64, index, attempt) {
+        uploadProgress = attempt
+          ? 'Waiting for the previous import to finish, then retrying ' + (index + 1) + ' of ' + files.length + '… ' + file.name
+          : 'Processing ' + (index + 1) + ' of ' + files.length + ' files… ' + file.name;
         renderUpload(uploadCache);
-        return readBase64(file.blob || file).then(function (base64) {
-          return api('uploadReport', { date: date, fileName: file.name, base64: base64, confirmDate: date, adoptReportDate: !!file.fromZip });
-        }).then(function (result) {
+        return api('uploadReport', { date: date, fileName: file.name, base64: base64, confirmDate: date, adoptReportDate: !!file.fromZip, deferRefresh: true }).then(function (result) {
           result.file = result.file || file.name;
           uploadResults.push(result);
         }, function (error) {
           if (/sign in/i.test(error.message)) throw error;
+          if (attempt < 10 && /another import is running/i.test(error.message || '')) return wait(12000).then(function () { return sendFile(file, base64, index, attempt + 1); });
           uploadResults.push({ file: file.name, status: 'Failed', report: '', message: error.message });
+        });
+      };
+      var step = function (index) {
+        if (index >= files.length) return Promise.resolve();
+        var file = files[index];
+        return readBase64(file.blob || file).then(function (base64) {
+          return sendFile(file, base64, index, 0);
         }).then(function () { return step(index + 1); });
       };
       var refreshedPage = null;

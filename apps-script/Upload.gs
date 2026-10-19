@@ -147,10 +147,10 @@ function uploadReport_(payload) {
   var bytes = Utilities.base64Decode(base64);
   if (bytes.length > UPLOAD_MAX_BYTES_) throw new Error(fileName + ' is larger than 15 MB.');
   var sha = sha256Hex_(bytes);
-  var context = { date: date, fileName: fileName, bytes: bytes, sha: sha, confirmed: isoDate_(payload.confirmDate) === date, adoptDate: payload.adoptReportDate === true, role: payload.session.role };
+  var context = { date: date, fileName: fileName, bytes: bytes, sha: sha, confirmed: isoDate_(payload.confirmDate) === date, adoptDate: payload.adoptReportDate === true, deferRefresh: payload.deferRefresh === true, role: payload.session.role };
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(30000);
+    lock.waitLock(20000);
   } catch (error) {
     throw new Error('Another import is running. Wait a minute and import ' + fileName + ' again.');
   }
@@ -261,7 +261,7 @@ function uploadPdf_(context) {
   if (decision === 'conflict') {
     return finishImport_(context, uploadOutcome_(base, 'Needs Review', parsed.reportType + ' for ' + context.date + ' shows ' + moneyPlain_(parsed.storeTotal) + ', but ' + moneyPlain_(existing) + ' is already on file. The recorded figure was kept and this file was not applied.'), 'needs-review');
   }
-  if (key !== 'snapWritten') refreshStoreKpiQuietly_(context.date);
+  if (key !== 'snapWritten' && !context.deferRefresh) refreshStoreKpiQuietly_(context.date);
   if (decision === 'same' || (existing !== null && existing === parsed.storeTotal)) {
     return finishImport_(context, uploadOutcome_(base, 'Already on file', parsed.reportType + ' for ' + context.date + ' (Store 17 total ' + moneyPlain_(parsed.storeTotal) + ') was already on file with the same figure. Nothing was added. Reconciled to the existing row; a manual backfill or earlier import was not overwritten. Original file ' + context.fileName + '; source date ' + parsed.start + '.' + extra), 'duplicate');
   }
@@ -364,7 +364,7 @@ function uploadKpiWorkbook_(context, info) {
   records.forEach(function (record) {
     if (record[0] === 'BEDDING_STORE' && record[14] !== '') upsertDailyBedding_(date, info.side, record[14], source);
   });
-  refreshStoreKpiQuietly_(date);
+  if (!context.deferRefresh) refreshStoreKpiQuietly_(date);
   var people = {};
   records.forEach(function (record) { if (/_PERSON$/.test(record[0])) people[record[8]] = true; });
   var listed = Object.keys(people).length;
