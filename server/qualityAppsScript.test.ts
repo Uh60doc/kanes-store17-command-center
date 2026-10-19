@@ -215,6 +215,112 @@ test('a duplicated import and lost history are flagged; the alert clears once co
   assert.ok(cleared.every((row) => row.status === 'Resolved' && /The check passed/.test(row.resolution)));
 });
 
+function monthEndRow(tabs: ReturnType<typeof verifiedOctober>, metric: string) {
+  const head = tabs.CC_MonthEnd![0] as string[];
+  const row = tabs.CC_MonthEnd!.find((line) => line[1] === 'STORE-2026-10' && line[4] === metric)!;
+  return { head, row };
+}
+
+test('closing math uses the dates both reports share, and a later customer count is not divided by earlier opportunities', () => {
+  const tabs = verifiedOctober();
+  const customers = monthEndRow(tabs, 'Purchasing customers');
+  const ratio = monthEndRow(tabs, 'Closing ratio');
+  assert.equal(customers.row[customers.head.indexOf('verified_mtd')], 54);
+  assert.equal(ratio.row[ratio.head.indexOf('verified_mtd')], 0.486);
+  customers.row[customers.head.indexOf('verified_mtd')] = 59;
+  customers.row[customers.head.indexOf('verified_through')] = '2026-10-16';
+  const dailyBefore = JSON.stringify(cells(tabs.CC_Daily));
+  const ledgerBefore = JSON.stringify(cells(tabs.CC_Ledger));
+  const ratioBefore = JSON.stringify(cells(tabs.CC_MonthEnd));
+  const { gs } = harness(tabs);
+  gs.runQualityChecks_('matched closing dates');
+  const closing = table(tabs, 'CC_QualityChecks').find((check) => check.check_id === 'closing-math')!;
+  assert.equal(closing.status, 'PASS', closing.explanation);
+  assert.match(closing.explanation, /same dates/);
+  assert.equal(JSON.stringify(cells(tabs.CC_Daily)), dailyBefore);
+  assert.equal(JSON.stringify(cells(tabs.CC_Ledger)), ledgerBefore);
+  assert.equal(JSON.stringify(cells(tabs.CC_MonthEnd)), ratioBefore, '48.6% is not rewritten to 59 ÷ 111');
+  const prior = statusOf(tabs, 'store-month-prior');
+  assert.equal(prior.status, 'PARTIAL');
+  assert.match(prior.explanation, /Pending/);
+  assert.match(prior.explanation, /Locked is not the same as verified/);
+  assert.equal(statusOf(tabs, 'person-month-prior').status, 'MISSING');
+  assert.ok(table(tabs, 'CC_MonthlyHistory').filter((row) => String(row.period_key).startsWith('STORE-2026-09')).every((row) => /^Pending/i.test(String(row.verified_total))));
+  assert.equal(gs.integrityOverall_('PASS', 'FAIL', 'WARNING'), 'FAIL');
+  assert.equal(gs.integrityOverall_('PASS', 'PASS', 'WARNING'), 'WARNING');
+  assert.equal(gs.integrityOverall_('PASS', 'PASS', 'PASS'), 'PASS');
+  const board = plain(gs.integrityBoard_());
+  assert.equal(board.integrity, 'PASS');
+  assert.equal(board.completeness, 'WARNING');
+  assert.equal(gs.integrityOverall_('PASS', board.integrity, board.completeness), 'WARNING');
+});
+
+test('a 53.2% ratio is flagged against the matching 54 ÷ 111 and the stored ratio is left alone', () => {
+  const tabs = verifiedOctober();
+  const customers = monthEndRow(tabs, 'Purchasing customers');
+  const ratio = monthEndRow(tabs, 'Closing ratio');
+  customers.row[customers.head.indexOf('verified_mtd')] = 59;
+  customers.row[customers.head.indexOf('verified_through')] = '2026-10-16';
+  ratio.row[ratio.head.indexOf('verified_mtd')] = 0.532;
+  const stored = JSON.stringify(cells(tabs.CC_MonthEnd));
+  const { gs } = harness(tabs);
+  gs.runQualityChecks_('wrong closing ratio');
+  const closing = table(tabs, 'CC_QualityChecks').find((check) => check.check_id === 'closing-math')!;
+  assert.equal(closing.status, 'FLAG');
+  assert.match(closing.explanation, /54/);
+  assert.match(closing.explanation, /111/);
+  assert.match(closing.explanation, /48\.6%/);
+  assert.doesNotMatch(closing.explanation, /59 ÷ 111 is 53\.2%/);
+  assert.equal(JSON.stringify(cells(tabs.CC_MonthEnd)), stored);
+});
+
+test('Filepe Chaves keeps the original negative SNAP line; an alias is not a second ledger row', () => {
+  const tabs = verifiedOctober();
+  const historyHead = tabs.CC_DailyHistory![0] as string[];
+  const history = tabs.CC_DailyHistory!.find((line) => String(line[0]).includes('2026-10-11') && /CHAVES/i.test(String(line[historyHead.indexOf('employee_name')])))!;
+  history[historyHead.indexOf('record_key')] = 'SNAP_PERSON|2026-10-11|written|FILEPE CHAVES';
+  history[historyHead.indexOf('employee_name')] = 'Filepe Chaves';
+  const associate = tabs.CC_AssociateDays!.find((line) => String(line[1]).toUpperCase() === 'CHAVES, FELIPE' && String(line[0]).slice(0, 10) === '2026-10-11')!;
+  associate[2] = 'Filepe Chaves';
+  const ledgerHead = tabs.CC_Ledger![0] as string[];
+  const snap = () => tabs.CC_Ledger!.filter((line) => line[0] === 'SNAP_PERSON' && String(line[2]).slice(0, 10) === '2026-10-11' && /CHAVES|FILEPE/i.test(String(line[ledgerHead.indexOf('employee_name')])));
+  assert.equal(snap().length, 1);
+  assert.equal(Number(snap()[0]![ledgerHead.indexOf('sales_dollars')]), -180);
+  const sourceName = String(associate[1]);
+  const dailyBefore = JSON.stringify(cells(tabs.CC_Daily));
+  const { gs } = harness(tabs);
+  gs.runQualityChecks_('alias history');
+  const historyCheck = table(tabs, 'CC_QualityChecks').find((check) => check.check_id === 'history-retained')!;
+  assert.equal(historyCheck.status, 'PASS', historyCheck.explanation);
+  assert.equal(snap().length, 1, 'the confirmed alias is not copied a second time');
+  assert.equal(String(snap()[0]![ledgerHead.indexOf('employee_name')]), 'Chaves Felipe');
+  assert.equal(Number(snap()[0]![ledgerHead.indexOf('sales_dollars')]), -180);
+  assert.equal(String(associate[1]), sourceName);
+  assert.equal(JSON.stringify(cells(tabs.CC_Daily)), dailyBefore);
+});
+
+test('a SNAP day that is on the source and missing from the ledger is restored once', () => {
+  const tabs = verifiedOctober();
+  const ledgerHead = tabs.CC_Ledger![0] as string[];
+  const index = tabs.CC_Ledger!.findIndex((line) => line[0] === 'SNAP_PERSON' && String(line[2]).slice(0, 10) === '2026-10-11' && /CHAVES/i.test(String(line[ledgerHead.indexOf('employee_name')])));
+  assert.ok(index > 0);
+  tabs.CC_Ledger!.splice(index, 1);
+  const dailyBefore = JSON.stringify(cells(tabs.CC_Daily));
+  const { gs } = harness(tabs);
+  gs.runQualityChecks_('restore missing snap');
+  const restored = tabs.CC_Ledger!.filter((line) => line[0] === 'SNAP_PERSON' && String(line[2]).slice(0, 10) === '2026-10-11' && /CHAVES|FILEPE/i.test(String(line[ledgerHead.indexOf('employee_name')])));
+  assert.equal(restored.length, 1);
+  assert.equal(Number(restored[0]![ledgerHead.indexOf('sales_dollars')]), -180);
+  assert.match(String(restored[0]![ledgerHead.indexOf('source_report')]), /CC_AssociateDays CHAVES, FELIPE/);
+  const historyCheck = table(tabs, 'CC_QualityChecks').find((check) => check.check_id === 'history-retained')!;
+  assert.equal(historyCheck.status, 'PASS', historyCheck.explanation);
+  assert.equal(JSON.stringify(cells(tabs.CC_Daily)), dailyBefore);
+  gs.runQualityChecks_('second pass');
+  const again = tabs.CC_Ledger!.filter((line) => line[0] === 'SNAP_PERSON' && String(line[2]).slice(0, 10) === '2026-10-11' && /CHAVES|FILEPE/i.test(String(line[ledgerHead.indexOf('employee_name')])));
+  assert.equal(again.length, 1);
+  assert.equal(Number(again[0]![ledgerHead.indexOf('sales_dollars')]), -180);
+});
+
 test('a manual upload stays quiet and the checks never block it', () => {
   const { gs, mail } = harness();
   (gs as unknown as Record<string, unknown>).UPLOAD_QUIET_ = true;

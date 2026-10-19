@@ -50,4 +50,13 @@ test('canonical October figures match across the screens that share them', () =>
   assert.equal(plain(gs.home_({ session })).month.written, 120488);
   const daily = cells(tabs.CC_Daily);
   assert.ok(daily.some((row) => String(row[0]).slice(0, 10) === '2026-10-16' && Number(row[2]) === 10495));
+
+  gs.runQualityChecks_('after the cross-page audit');
+  const page = plain(gs.consistency_({ session }));
+  assert.equal(page.consistency, 'PASS');
+  assert.equal(page.integrity, 'PASS');
+  assert.equal(page.completeness, 'WARNING');
+  assert.equal(page.status, 'WARNING');
+  assert.equal(page.qualityFlags.length, 0);
+  assert.ok(page.periods.some((row: { key: string; status: string }) => row.key === 'store-month-prior' && row.status === 'PARTIAL'));
 });

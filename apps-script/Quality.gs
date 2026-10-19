@@ -565,6 +565,58 @@ function checkKpiMath_(ctx, add) {
   if (!problems) add('kpi-math', 'PASS', 'Attachment counts and rates', checked + ' KPI rates (report rows, CC_Kpi and CC_MonthEnd) equal sold ÷ qualified from their own counts, recalculated rather than averaged.');
 }
 
+/** Two report spellings of one confirmed employee. Blank names never match. */
+function samePerson_(left, right) {
+  var a = String(left || '').trim();
+  var b = String(right || '').trim();
+  if (!a || !b) return false;
+  if (a.toUpperCase() === b.toUpperCase()) return true;
+  if (sameNameTokens_(a, b)) return true;
+  var leftMatch = rosterMatch_(a, a);
+  var rightMatch = rosterMatch_(b, b);
+  return !!(leftMatch && rightMatch && leftMatch.name && leftMatch.name === rightMatch.name);
+}
+
+/**
+ * A SNAP_PERSON daily row is a copy of CC_AssociateDays. Add one only when that source line has no ledger row
+ * under the source name, the confirmed alias, or the employee id. An existing row is never given a second copy.
+ */
+function repairMissingSnapLedger_(ctx) {
+  var added = [];
+  (ctx.associateDays || []).forEach(function (line) {
+    var date = isoDate_(line.date);
+    var amount = fineNumber_(line.amount);
+    var source = String(line.source_name || '').trim();
+    var display = String(line.display_name || '').trim();
+    if (!date || amount === null || (!source && !display)) return;
+    var found = (ctx.ledger || []).some(function (row) {
+      if (row.view !== 'SNAP_PERSON' || row.grain !== 'daily' || String(row.side || '') !== 'written') return false;
+      if ((row.reportDate || row.periodStart) !== date) return false;
+      return samePerson_(row.name, display) || samePerson_(row.name, source) || samePerson_(row.code, source) || samePerson_(row.code, display);
+    });
+    if (found) return;
+    var name = display || source;
+    var key = ['SNAP_PERSON', 'daily', date, date, date, 'written', name].join('|');
+    added.push(['SNAP_PERSON', 'daily', date, date, date, date, '17', '', name, 'written', amount, '', '', '', '', 'CC_AssociateDays ' + source, new Date().toISOString(), key]);
+    ctx.ledger.push({
+      view: 'SNAP_PERSON', grain: 'daily', reportDate: date, periodStart: date, periodEnd: date, side: 'written',
+      code: '', name: name, sales: amount, units: null, eligible: null, attachments: null, percent: null, source: 'CC_AssociateDays ' + source,
+    });
+  });
+  if (added.length && typeof upsertKpiRecords_ === 'function') upsertKpiRecords_(added);
+  return added.length;
+}
+
+function matchedClosingCounts_(ctx, start, through) {
+  var day = null;
+  (ctx.closingDaily || []).forEach(function (row) { if (isoDate_(row.Date) === through) day = row; });
+  if (!day) return null;
+  var customers = closingNumber_(day['MTD purchasing customers']);
+  var opportunities = closingNumber_(day['MTD opportunities']);
+  if (customers === null || !opportunities) return null;
+  return { customers: customers, opportunities: opportunities, through: through, start: start };
+}
+
 function checkClosingMath_(ctx, add) {
   var checked = 0;
   var problems = 0;
@@ -596,11 +648,27 @@ function checkClosingMath_(ctx, add) {
     var opportunities = fineNumber_(rows['PERQ opportunities'].verified_mtd);
     var ratio = fineNumber_(rows['Closing ratio'].verified_mtd);
     if (customers === null || !opportunities || ratio === null) return;
+    var customerThrough = isoDate_(rows['Purchasing customers'].verified_through);
+    var opportunityThrough = isoDate_(rows['PERQ opportunities'].verified_through);
+    var ratioThrough = isoDate_(rows['Closing ratio'].verified_through);
+    var matchedThrough = customerThrough && opportunityThrough ? (customerThrough < opportunityThrough ? customerThrough : opportunityThrough) : '';
+    var matched = matchedThrough && customerThrough !== opportunityThrough ? matchedClosingCounts_(ctx, start, matchedThrough) : null;
+    var useCustomers = matched ? matched.customers : customers;
+    var useOpportunities = matched ? matched.opportunities : opportunities;
+    if (useCustomers === null || !useOpportunities) return;
     checked += 1;
-    var expected = Math.round((customers / opportunities) * 1000) / 1000;
+    var expected = Math.round((useCustomers / useOpportunities) * 1000) / 1000;
+    if (ratioThrough && matchedThrough && ratioThrough !== matchedThrough) {
+      problems += 1;
+      add('closing-math', 'FLAG', 'CC_MonthEnd store closing ' + start, 'The closing ratio is dated through ' + ratioThrough + ' but purchasing customers and PERQ opportunities only share coverage through ' + matchedThrough + '. Those dates are not divided together.', ['store_closing']);
+      return;
+    }
     if (near_(ratio, expected, 0.0006)) return;
     problems += 1;
-    add('closing-math', 'FLAG', 'CC_MonthEnd store closing ' + start, 'CC_MonthEnd store closing for the month from ' + start + ' is ' + percentText_(ratio) + ' but ' + customers + ' ÷ ' + opportunities + ' is ' + percentText_(expected) + '.', ['store_closing']);
+    var coverage = matched
+      ? ('matching coverage through ' + matchedThrough + ' is ' + useCustomers + ' ÷ ' + useOpportunities + '. Customers through ' + customerThrough + ' (' + customers + ') are not divided by opportunities that stop on ' + opportunityThrough + '.')
+      : (useCustomers + ' ÷ ' + useOpportunities);
+    add('closing-math', 'FLAG', 'CC_MonthEnd store closing ' + start, 'CC_MonthEnd store closing for the month from ' + start + ' is ' + percentText_(ratio) + ' but ' + coverage + ' is ' + percentText_(expected) + '.', ['store_closing']);
   });
   if (!problems) add('closing-math', 'PASS', 'Store closing ratio', checked + ' closing ratios equal purchasing customers ÷ PERQ opportunities for the same dates' + (ctx.closingMtd['Closing ratio'] !== undefined ? ' (month to date ' + closingNumber_(ctx.closingMtd['Purchasing customers']) + ' ÷ ' + closingNumber_(ctx.closingMtd.Opportunities) + ')' : '') + '.');
 }
@@ -654,6 +722,7 @@ function qualityBaseline_() {
 
 function checkHistoryRetained_(ctx, add) {
   var problems = 0;
+  repairMissingSnapLedger_(ctx);
   var ledgerIndex = {};
   ctx.ledger.forEach(function (row) {
     if (row.grain !== 'daily') return;
@@ -679,7 +748,16 @@ function checkHistoryRetained_(ctx, add) {
       }
       return;
     }
-    var source = ledgerIndex[[view, date, String(row.side || ''), entity].join('|')] || ledgerIndex[[view, date, String(row.side || ''), String(row.employee_name || '') || 'STORE'].join('|')];
+    var side = String(row.side || '');
+    var named = String(row.employee_name || '');
+    var source = ledgerIndex[[view, date, side, entity].join('|')] || ledgerIndex[[view, date, side, named || 'STORE'].join('|')];
+    if (!source && (named || entity !== 'STORE')) {
+      ctx.ledger.forEach(function (ledgerRow) {
+        if (source || ledgerRow.grain !== 'daily' || ledgerRow.view !== view) return;
+        if ((ledgerRow.reportDate || ledgerRow.periodStart) !== date || String(ledgerRow.side || '') !== side) return;
+        if (samePerson_(ledgerRow.name, named) || samePerson_(ledgerRow.code, named) || samePerson_(ledgerRow.name, entity) || samePerson_(ledgerRow.code, entity)) source = ledgerRow;
+      });
+    }
     var figures = ['sales_dollars', 'unit_count', 'eligible', 'attachments', 'kpi_percent'];
     var sourceFigures = source ? [source.sales, source.units, source.eligible, source.attachments, source.percent] : null;
     var changed = !source || figures.some(function (field, i) { return fineNumber_(row[field]) !== sourceFigures[i]; });
@@ -838,8 +916,16 @@ function closedPeriodStatus_(ctx, label, key, track, period) {
     status = 'NEEDS REVIEW';
     explanation = 'An official final differs from the verified month to date and the explanation is pending (CC_MonthEnd).';
   } else if (rows.every(function (row) { return String(row.history_status) === 'Final'; })) {
-    status = 'COMPLETE';
-    explanation = rows.length + ' month-end figures are Final on CC_MonthlyHistory.';
+    var pending = rows.filter(function (row) {
+      return ['verified_total', 'verified_through', 'last_year', 'official_final'].some(function (field) { return /^Pending/i.test(String(row[field] || '').trim()); });
+    });
+    if (pending.length) {
+      status = 'PARTIAL';
+      explanation = 'The month is locked on CC_MonthlyHistory, but ' + pending.length + ' of ' + rows.length + ' figures are still Pending. Locked is not the same as verified. Pending figures stay Pending until a verified report supports them.';
+    } else {
+      status = 'COMPLETE';
+      explanation = rows.length + ' month-end figures are Final on CC_MonthlyHistory and none of those verified fields are Pending.';
+    }
   } else {
     status = 'PARTIAL';
     explanation = rows.filter(function (row) { return String(row.history_status) !== 'Final'; }).length + ' of ' + rows.length + ' month-end figures are not Final yet.';
@@ -1110,6 +1196,29 @@ function runQualityChecks_(trigger) {
 }
 
 /** Report Missing while a required report is outstanding, Needs Review while a check is flagged, otherwise Current. */
+/** Cross-page agreement, source integrity, and reporting completeness stay separate. Overall PASS requires all three. */
+function integrityOverall_(consistency, integrity, completeness) {
+  var ranks = { FAIL: 2, WARNING: 1, PASS: 0 };
+  var worst = [consistency, integrity, completeness].reduce(function (rank, status) { return Math.max(rank, ranks[status] === undefined ? 1 : ranks[status]); }, 0);
+  return worst === 2 ? 'FAIL' : (worst === 1 ? 'WARNING' : 'PASS');
+}
+
+function integrityBoard_() {
+  var checks = [];
+  var periods = [];
+  try { checks = sheet_('CC_QualityChecks'); } catch (error) { checks = []; }
+  try { periods = sheet_('CC_DataStatus').filter(function (row) { return String(row.kind) === 'Period'; }); } catch (error) { periods = []; }
+  var flags = checks.filter(function (row) { return String(row.status) === 'FLAG'; });
+  var integrity = checks.length ? (flags.length ? 'FAIL' : 'PASS') : 'WARNING';
+  var completeness = !periods.length ? 'WARNING' : (periods.some(function (row) { return String(row.status) === 'NEEDS REVIEW'; }) ? 'FAIL' : (periods.some(function (row) { return String(row.status) === 'PARTIAL' || String(row.status) === 'MISSING'; }) ? 'WARNING' : 'PASS'));
+  return {
+    integrity: integrity,
+    completeness: completeness,
+    flags: flags.map(function (row) { return { id: String(row.check_id || ''), subject: String(row.subject || ''), explanation: String(row.explanation || '') }; }),
+    periods: periods.map(function (row) { return { key: String(row.key || ''), name: String(row.name || ''), status: String(row.status || ''), periodDates: String(row.period_dates || ''), explanation: String(row.explanation || '') }; }),
+  };
+}
+
 function alertStatus_(rows) {
   var active = rows.filter(function (row) { return row.status === 'Active'; });
   if (active.some(function (row) { return row.severity === 'Missing'; })) return 'Report Missing';
