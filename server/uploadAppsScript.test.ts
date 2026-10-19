@@ -394,6 +394,20 @@ test('a $0 delivered day does not expect an individual Data Analysis report', ()
   assert.equal(sold.checklist.find((row: any) => row.key === 'g17Delivered').status, 'Missing');
 });
 
+test('a day inside an imported month-to-date report is not listed as missing', () => {
+  const tabs = store();
+  const row = (side: string) => ['DA_SALES_STORE', 'cumulative', '', '2026-10-02', '2026-10-13', '2026-10-13', '17', '', '', side, 1000, '', '', '', '', 'snapshot', '2026-10-14T00:00:00Z', 'cover-' + side];
+  tabs.CC_Ledger!.push(row('written'), row('delivered'));
+  const { gs } = boot(tabs);
+  const view = plain(gs.uploads_({ date: '2026-10-12', session: manager }));
+  assert.equal(view.checklist.find((item: any) => item.key === 'g17Written').status, 'Covered');
+  assert.equal(view.checklist.find((item: any) => item.key === 'g17Delivered').status, 'Covered');
+  assert.match(view.checklist.find((item: any) => item.key === 'g17Written').message, /verified through October 13, 2026/);
+  assert.equal(view.recent.find((day: any) => day.date === '2026-10-12').missing.includes('Group 17 Written'), false);
+  const later = plain(gs.uploads_({ date: '2026-10-16', session: manager }));
+  assert.equal(later.checklist.find((item: any) => item.key === 'g17Written').status, 'Missing');
+});
+
 test('only a manager or admin can open the page or import', () => {
   const { gs } = boot();
   assert.deepEqual(plain([gs.ROUTES_.uploads, gs.ROUTES_.uploadReport]), [['manager', 'admin'], ['manager', 'admin']]);

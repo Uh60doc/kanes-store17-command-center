@@ -822,7 +822,9 @@ function uploadEvidence_() {
   var facts = {};
   dailyFacts_().forEach(function (row) { facts[row.date] = row; });
   var ledger = {};
+  var cumulative = [];
   ledgerRows_().forEach(function (row) {
+    if (row.grain === 'cumulative' && row.fitsTrack) cumulative.push(row);
     if (row.grain !== 'daily' || !row.reportDate || row.code && row.view !== 'PERQ_PERSON') return;
     var key = row.view + '|' + row.side + '|' + row.reportDate;
     if (row.view === 'PERQ_PERSON') {
@@ -839,7 +841,28 @@ function uploadEvidence_() {
     if (!key) return;
     attempts[key + '|' + row.date] = row;
   });
-  return { facts: facts, ledger: ledger, attempts: attempts, uploads: uploads };
+  return { facts: facts, ledger: ledger, cumulative: cumulative, attempts: attempts, uploads: uploads };
+}
+
+/** A day inside an imported month-to-date report is already provided. It is not a missing daily file. */
+function uploadCover_(evidence, date, key) {
+  var views = [];
+  var side = '';
+  var track = 'STORE';
+  if (key === 'g17Written' || key === 'g17Delivered') { views = ['DA_SALES_STORE']; side = key === 'g17Written' ? 'written' : 'delivered'; }
+  else if (key === 'aslWritten' || key === 'aslDelivered') { views = ['RUGS_STORE', 'PILLOWS_STORE', 'BASES_STORE', 'FP_STORE']; side = key === 'aslWritten' ? 'written' : 'delivered'; }
+  else if (key === 'perqLocation') views = ['PERQ_STORE'];
+  else if (key === 'perqSalesperson') { views = ['PERQ_PERSON']; track = 'PERSON'; }
+  else return '';
+  var period = track === 'STORE' ? storePeriodContaining_(date) : individualPeriodContaining_(date);
+  var best = '';
+  (evidence.cumulative || []).forEach(function (row) {
+    if (views.indexOf(row.view) === -1 || row.side !== side) return;
+    if (track === 'STORE' && (row.code || row.name)) return;
+    if (row.periodStart !== period.start || !row.verifiedThrough || row.verifiedThrough < date) return;
+    if (row.verifiedThrough > best) best = row.verifiedThrough;
+  });
+  return best;
 }
 
 function uploadChecklist_(evidence, date) {
@@ -892,7 +915,13 @@ function uploadChecklist_(evidence, date) {
       status = 'Not expected';
       message = dayText + '. Delivered was $0, so there is no individual Data Analysis report for this date. No salesperson delivered amount is invented.';
     }
-    if (status === 'Missing') message = 'Missing for ' + dayText + '.';
+    if (status === 'Missing') {
+      var cover = uploadCover_(evidence, date, item.key);
+      if (cover) {
+        status = 'Covered';
+        message = 'Already provided. The month-to-date report is verified through ' + uploadDayText_(cover) + '.';
+      } else message = 'Missing for ' + dayText + '.';
+    }
     return { key: item.key, label: item.label, format: item.format, use: item.use, status: status, message: message, date: date, dateText: dayText, lastFile: last ? last.file : '', lastAt: last ? last.at : '' };
   });
 }
@@ -954,7 +983,7 @@ function uploads_(payload) {
       dateText: uploadDayText_(cursor),
       imported: items.filter(function (item) { return item.status === 'Imported'; }).length,
       review: items.filter(function (item) { return item.status === 'Needs Review' || item.status === 'Failed'; }).length,
-      missing: items.filter(function (item) { return item.status !== 'Imported' && item.status !== 'Not expected'; }).map(function (item) { return item.label; }),
+      missing: items.filter(function (item) { return item.status === 'Missing' || item.status === 'Failed' || item.status === 'Needs Review'; }).map(function (item) { return item.label; }),
     });
     cursor = shiftDate_(cursor, -1);
   }
