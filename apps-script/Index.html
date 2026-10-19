@@ -148,11 +148,22 @@
     button.sort { background: #10161c; border: 1px solid #1d5c66; color: #f3f6f8; }
     button.sort.active { background: #14c4d4; color: #041014; }
     button.linkish { background: transparent; border: 0; color: #7ee7f0; min-height: 0; padding: 0; font-weight: 700; cursor: pointer; }
+    .ready-banner { margin: 0 0 12px; padding: 14px 16px; border-radius: 14px; border: 1px solid #1d5c66; background: #10161c; }
+    .ready-banner.READY { border-color: #3dde8a; }
+    .ready-banner.PARTIAL, .ready-banner.NOT { border-color: #f3d48a; }
+    .ready-banner.MISSING, .ready-banner.ERROR { border-color: #ff8ea3; }
+    .ready-banner h2 { margin: 0; color: #f3f6f8; font-size: 28px; letter-spacing: 0; text-transform: none; }
+    .ready-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+    .ready-row { display: grid; grid-template-columns: minmax(160px, 1.5fr) repeat(4, minmax(90px, 1fr)); gap: 8px; align-items: start; padding: 10px 0; border-bottom: 1px solid #1d5c66; }
+    .ready-row strong { display: block; }
+    .ready-label { color: #9eb0c9; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
     @media (max-width: 720px) {
       h1 { font-size: 24px; }
       .figure { font-size: 32px; }
       .brand { align-items: flex-start; flex-wrap: wrap; }
       .data-refresh { flex-basis: 100%; margin-left: 0; }
+      .ready-banner h2 { font-size: 22px; }
+      .ready-row { grid-template-columns: 1fr 1fr; }
     }
     button, input, textarea { font: inherit; }
     textarea { width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid #1d5c66; background: #070b10; color: white; }
@@ -652,6 +663,11 @@
       if (role !== 'sales') items.splice(14, 0, ['actions', 'Actions']);
       if (role !== 'sales') items.splice(15, 0, ['reports', 'Reports']);
       else if (ownReport) items.push(['reports', 'My report']);
+      if (role !== 'sales') {
+        var morningAt = items.length;
+        items.forEach(function (item, index) { if (item[0] === 'morning') morningAt = index + 1; });
+        items.splice(morningAt, 0, ['readiness', 'Readiness']);
+      }
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['delivery', 'Delivery rescue'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
@@ -3224,6 +3240,47 @@
         (recent ? '<ul class="list">' + recent + '</ul>' : '') +
         (role === 'admin' ? '<p class="noprint"><button id="backup-now" type="button">Back up now</button> <button id="restore-drill" type="button">Test restore</button></p><p id="backup-error" class="error"></p>' : '') + '</article>';
     }
+    function renderReadiness(data) {
+      var tone = data.status === 'READY' ? 'good' : (data.status === 'PARTIAL' || data.status === 'NOT DUE' ? 'warn' : 'bad');
+      var rows = (data.items || []).map(function (item) {
+        var arrival = item.received === 'Received' ? 'good' : (item.received === 'Not due' ? 'warn' : 'bad');
+        var brought = item.imported === 'Imported' ? 'good' : (item.imported === 'Failed' ? 'bad' : 'pending');
+        var source = item.url ? '<a href="' + esc(item.url) + '" target="_blank" rel="noopener">Open ' + esc(item.file || 'source') + '</a>' : (item.file ? esc(item.file) : 'No original on file');
+        return '<div class="ready-row"><div><strong>' + esc(item.label) + '</strong><span class="sub">' + esc(item.detail || '') + '</span></div>' +
+          '<div><span class="ready-label">Business date</span><strong>' + esc(data.displayDate || item.date) + '</strong></div>' +
+          '<div><span class="ready-label">Received</span><strong class="' + arrival + '">' + esc(item.received) + '</strong></div>' +
+          '<div><span class="ready-label">Imported</span><strong class="' + brought + '">' + esc(item.imported) + '</strong><div class="sub">Verified through ' + esc(item.through || 'Pending') + '</div></div>' +
+          '<div><span class="ready-label">Last update</span><strong>' + esc(item.updated ? String(item.updated).slice(0, 16).replace('T', ' ') : (data.lastUpdate || 'Pending')) + '</strong><div class="sub">' + source + '</div></div></div>';
+      }).join('');
+      var waiting = (data.waiting || []).map(function (line) {
+        return '<li><strong>' + esc(line.report) + '</strong> · ' + esc(line.waiting) + '<div class="sub">' + esc(line.metrics) + '</div></li>';
+      }).join('');
+      document.getElementById('header-note').textContent = 'Morning readiness · ' + (data.displayDate || '') + ' · ' + (data.status || '');
+      document.getElementById('screen').innerHTML = '<article class="ready-banner ' + esc(data.status || '') + '"><p class="ready-label">Morning report readiness</p><h2 class="' + tone + '">' + esc(data.status || '') + '</h2><p>' + esc(data.headline || '') + '</p><p class="sub">' + esc(data.dueText || '') + ' Website last updated ' + esc(data.lastUpdate || 'Pending') + '.</p><div class="ready-actions noprint"><label>Business date<input id="ready-date" type="date" max="' + esc(data.today || '') + '" value="' + esc(data.date || '') + '"></label><button type="button" id="ready-show">Show day</button><button type="button" id="ready-upload">Upload reports</button><button type="button" id="ready-recheck">Recheck Reports</button></div><p id="ready-error" class="error"></p></article>' +
+        '<article class="card"><h2>Expected reports</h2>' + (rows || '<p>No report is expected for this day.</p>') + '</article>' +
+        '<article class="card"><h2>What is waiting</h2>' + (waiting ? '<ul class="list">' + waiting + '</ul>' : '<p class="good">Nothing on the dashboard is waiting on a missing report for this day.</p>') +
+        '<p class="sub">' + esc(data.notice || '') + '</p></article>';
+      document.getElementById('ready-show').addEventListener('click', function () {
+        var picked = document.getElementById('ready-date').value;
+        api('readiness', { date: picked }).then(renderReadiness).catch(function (error) {
+          if (/sign in/i.test(error.message)) return showLogin(error.message);
+          document.getElementById('ready-error').textContent = error.message;
+        });
+      });
+      document.getElementById('ready-upload').addEventListener('click', function () { openScreen('upload'); });
+      document.getElementById('ready-recheck').addEventListener('click', function () {
+        var button = document.getElementById('ready-recheck');
+        button.disabled = true;
+        button.textContent = 'Checking…';
+        document.getElementById('ready-error').textContent = '';
+        api('recheckReports', { date: data.date }).then(function (page) { renderReadiness(page); }).catch(function (error) {
+          if (/sign in/i.test(error.message)) return showLogin(error.message);
+          button.disabled = false;
+          button.textContent = 'Recheck Reports';
+          document.getElementById('ready-error').textContent = error.message;
+        });
+      });
+    }
     function renderHealth(data) {
       var rows = data.rows.map(function (row) { return '<tr><td>' + esc(row.key) + '</td><td>' + esc(row.value) + '</td></tr>'; }).join('');
       var imports = data.imports.map(function (row) { return '<li>' + esc(row.status) + ' · ' + esc(row.file) + ' · ' + esc(row.note) + '</li>'; }).join('');
@@ -4612,6 +4669,7 @@
       else if (name === 'morning') renderMorning(data);
       else if (name === 'brief') renderBrief(data);
       else if (name === 'health') renderHealth(data);
+      else if (name === 'readiness') renderReadiness(data);
       else if (name === 'coverage') renderCoverage(data);
     }
     function reloadCurrentScreen() {
