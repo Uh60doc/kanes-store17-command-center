@@ -4305,6 +4305,7 @@
         '</article>' +
         '<article class="card upload-card"><h2>Reports to run and upload</h2>' +
         (missing.length ? '<p class="upload-count warn">' + missing.length + ' still needed for ' + esc(data.dateText) + '</p><ul class="upload-list">' + missing.map(function (item) { return '<li>' + uploadPill(item.status) + '<strong>' + esc(data.dateText) + '</strong> ' + esc(item.label) + ' <span class="pending">' + esc(item.format) + '</span><p class="sub">' + esc(item.message) + '</p></li>'; }).join('') + '</ul>' : '<p class="upload-count good">Nothing is missing for ' + esc(data.dateText) + '.</p>') +
+        data.checklist.filter(function (item) { return item.status === 'Not expected'; }).map(function (item) { return '<p class="sub">' + esc(item.message) + '</p>'; }).join('') +
         (gaps ? '<h3>By date</h3><ul class="upload-list">' + gaps + '</ul>' : '<p class="sub">None of the last 10 days is missing a report.</p>') +
         (completeDays.length ? '<p class="sub">On file: ' + esc(completeDays.map(function (day) { return day.dateText || day.date; }).join(', ')) + '.</p>' : '') +
         '</article>' +

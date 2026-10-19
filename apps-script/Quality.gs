@@ -231,7 +231,7 @@ function dayPackages_(ctx) {
     var keys = requiredReports_(ctx, date);
     if (!keys.length) return;
     var items = keys.map(function (key) { return packageItem_(ctx, date, key); });
-    var onFile = items.filter(function (item) { return item.status === 'Imported' || item.status === 'Covered'; });
+    var onFile = items.filter(function (item) { return item.status === 'Imported' || item.status === 'Covered' || item.status === 'Not expected'; });
     var review = items.filter(function (item) { return item.status === 'Needs Review' || item.status === 'Failed'; });
     var missing = items.filter(function (item) { return item.status === 'Missing'; });
     var awaiting = items.filter(function (item) { return item.status === 'Awaiting'; });

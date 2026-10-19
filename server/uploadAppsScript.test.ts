@@ -379,6 +379,21 @@ test('the checklist shows Imported, Missing, Failed and Needs Review for the cho
   assert.deepEqual([mailbox.report, mailbox.via, mailbox.at], ['Group 17 Delivered', 'mailbox', '2099-01-01T07:00:00Z'], 'a newer mailbox import of one of the nine reports counts; other reports and held files do not');
 });
 
+test('a $0 delivered day does not expect an individual Data Analysis report', () => {
+  const { send, gs } = boot();
+  const before = plain(gs.uploads_({ date: '2026-10-14', session: manager }));
+  assert.equal(before.checklist.find((item: any) => item.key === 'g17Delivered').status, 'Missing');
+  assert.equal(send('2026-10-14', 'nwd.pdf', nwdsrPdf('delivered', '2026-10-14', '2026-10-14', 0)).status, 'Imported');
+  const zero = plain(gs.uploads_({ date: '2026-10-14', session: manager }));
+  const item = zero.checklist.find((row: any) => row.key === 'g17Delivered');
+  assert.equal(item.status, 'Not expected');
+  assert.match(item.message, /October 14, 2026\. Delivered was \$0, so there is no individual Data Analysis report/);
+  assert.equal(zero.recent.find((day: any) => day.date === '2026-10-14').missing.includes('Group 17 Delivered'), false);
+  assert.equal(send('2026-10-15', 'nwd15.pdf', nwdsrPdf('delivered', '2026-10-15', '2026-10-15', 10)).status, 'Imported');
+  const sold = plain(gs.uploads_({ date: '2026-10-15', session: manager }));
+  assert.equal(sold.checklist.find((row: any) => row.key === 'g17Delivered').status, 'Missing');
+});
+
 test('only a manager or admin can open the page or import', () => {
   const { gs } = boot();
   assert.deepEqual(plain([gs.ROUTES_.uploads, gs.ROUTES_.uploadReport]), [['manager', 'admin'], ['manager', 'admin']]);

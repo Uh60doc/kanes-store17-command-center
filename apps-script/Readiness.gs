@@ -64,10 +64,11 @@ function readinessItem_(ctx, date, key, archive) {
   var packed = packageItem_(ctx, date, key);
   var checklist = ctx.packageMemo[date] && ctx.packageMemo[date][key] ? ctx.packageMemo[date][key] : { status: packed.status, message: packed.detail, lastAt: '', lastFile: '' };
   var attempt = ctx.evidence && ctx.evidence.attempts ? ctx.evidence.attempts[key + '|' + date] : null;
-  var onFile = packed.status === 'Imported' || packed.status === 'Covered' || packed.status === 'Needs Review';
+  var notExpected = packed.status === 'Not expected';
+  var onFile = packed.status === 'Imported' || packed.status === 'Covered' || packed.status === 'Needs Review' || notExpected;
   var failed = packed.status === 'Failed' || packed.status === 'Needs Review';
-  var received = onFile ? 'Received' : (packed.status === 'Awaiting' ? 'Not due' : 'Missing');
-  var imported = onFile && !failed ? 'Imported' : (failed ? 'Failed' : 'Pending');
+  var received = notExpected ? 'Not expected' : (onFile ? 'Received' : (packed.status === 'Awaiting' ? 'Not due' : 'Missing'));
+  var imported = notExpected ? 'Not expected' : (onFile && !failed ? 'Imported' : (failed ? 'Failed' : 'Pending'));
   var through = onFile ? date : (readinessCover_(ctx, key, date) || '');
   var source = readinessSource_(attempt, archive);
   if (!source.file && checklist.lastFile) source.file = checklist.lastFile;

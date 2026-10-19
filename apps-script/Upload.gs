@@ -888,8 +888,11 @@ function uploadChecklist_(evidence, date) {
     else if (last && last.status === 'Needs Review') { status = 'Needs Review'; message = last.message; }
     else if (!onFile && last && last.status === 'Failed' && /must be confirmed|Tick "These Excel files are for/i.test(last.message)) status = 'Missing';
     else if (!onFile && last && last.status === 'Failed') { status = 'Failed'; message = last.message; }
+    if (item.key === 'g17Delivered' && fact.nwdsrDelivered === 0 && !onFile && !check) {
+      status = 'Not expected';
+      message = dayText + '. Delivered was $0, so there is no individual Data Analysis report for this date. No salesperson delivered amount is invented.';
+    }
     if (status === 'Missing') message = 'Missing for ' + dayText + '.';
-    else if (message && message.indexOf(dayText) === -1 && message.indexOf(date) === -1) message = dayText + '. ' + message;
     return { key: item.key, label: item.label, format: item.format, use: item.use, status: status, message: message, date: date, dateText: dayText, lastFile: last ? last.file : '', lastAt: last ? last.at : '' };
   });
 }
@@ -951,7 +954,7 @@ function uploads_(payload) {
       dateText: uploadDayText_(cursor),
       imported: items.filter(function (item) { return item.status === 'Imported'; }).length,
       review: items.filter(function (item) { return item.status === 'Needs Review' || item.status === 'Failed'; }).length,
-      missing: items.filter(function (item) { return item.status !== 'Imported'; }).map(function (item) { return item.label; }),
+      missing: items.filter(function (item) { return item.status !== 'Imported' && item.status !== 'Not expected'; }).map(function (item) { return item.label; }),
     });
     cursor = shiftDate_(cursor, -1);
   }
