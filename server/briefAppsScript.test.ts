@@ -112,17 +112,20 @@ test('automatic production delivery stays off and never emails the live list dur
   assert.equal(mail.length, 0);
 
   enableMail(gs);
-  setHour(5);
+  setHour(6);
   const early = plain(gs.maybeSendBriefEmails_());
   assert.equal(early.sent, false);
-  assert.match(early.reason, /before 6:00 AM/);
+  assert.match(early.reason, /before 7:00 AM/);
   assert.equal(mail.length, 0);
 });
 
-test('after 6:00 AM ET an enabled store sends Start-Up first, then MTD, and will not duplicate that day', () => {
+test('after 7:00 AM ET an approved and enabled store sends Start-Up first, then MTD, and will not duplicate that day', () => {
   const { gs, mail, setHour } = harness();
-  enableMail(gs);
+  plain(gs.approveBriefFormat_({ session: admin }));
+  plain(gs.saveBriefMailSettings_({ session: admin, startup: 'yes', mtd: 'yes' }));
   setHour(6);
+  assert.equal(plain(gs.maybeSendBriefEmails_()).sent, false);
+  setHour(7);
   const first = plain(gs.maybeSendBriefEmails_());
   assert.equal(first.sent, true);
   assert.equal(mail.length, 2);
@@ -142,17 +145,20 @@ test('after 6:00 AM ET an enabled store sends Start-Up first, then MTD, and will
 test('a test send needs an explicit address and refuses the live management list', () => {
   const { gs, mail } = harness();
   assert.throws(() => gs.sendBriefTest_({ session: admin, kind: 'startup' }), /test address explicitly/);
-  assert.throws(() => gs.sendBriefTest_({ session: admin, kind: 'startup', to: LIVE }), /live management list/);
-  assert.throws(() => gs.sendBriefTest_({ session: manager, kind: 'startup', to: 'owner@example.com' }), /Only an Admin/);
+  assert.throws(() => gs.sendBriefTest_({ session: admin, kind: 'startup', to: LIVE }), /live management list|Confirm the exact recipient/);
+  assert.throws(() => gs.sendBriefTest_({ session: manager, kind: 'startup', to: LIVE, confirmRecipient: 'yes' }), /Only an Admin/);
+  assert.throws(() => gs.sendBriefTest_({ session: admin, kind: 'startup', to: 'owner@example.com', confirmRecipient: 'yes' }), /approved management recipient/);
   assert.equal(mail.length, 0);
 
-  const sent = plain(gs.sendBriefTest_({ session: admin, kind: 'startup', to: 'gm-test@example.com' }));
+  const sent = plain(gs.sendBriefTest_({ session: admin, kind: 'startup', to: LIVE, confirmRecipient: 'yes' }));
   assert.equal(sent.sent, true);
+  assert.equal(sent.automatic, false);
   assert.equal(mail.length, 1);
-  assert.equal(mail[0]!.to, 'gm-test@example.com');
+  assert.equal(mail[0]!.to, LIVE);
   assert.match(mail[0]!.subject, /MORNING START-UP/);
+  assert.equal(plain(gs.maybeSendBriefEmails_()).sent, false);
 
-  const mtd = plain(gs.sendBriefTest_({ session: admin, kind: 'mtd', to: 'gm-test@example.com' }));
+  const mtd = plain(gs.sendBriefTest_({ session: admin, kind: 'mtd', to: LIVE, confirmRecipient: 'yes' }));
   assert.equal(mtd.sent, true);
   assert.equal(mail.length, 2);
   assert.match(mail[1]!.subject, /MONTH-TO-DATE PERFORMANCE/);
@@ -171,7 +177,7 @@ test('an unchanged promotion prints only its name after the first recorded Start
   const { gs } = harness();
   const first = plain(gs.brief_({ session: admin }));
   assert.match(first.startup.text, /78th Anniversary Sale/);
-  gs.sendBriefTest_({ session: admin, kind: 'startup', to: 'promo@example.com' });
+  gs.sendBriefTest_({ session: admin, kind: 'startup', to: LIVE, confirmRecipient: 'yes' });
   const second = plain(gs.brief_({ session: admin }));
   assert.match(second.startup.text, /78th Anniversary Sale/);
   assert.match(second.startup.text, /name only; the promotion has not changed/);

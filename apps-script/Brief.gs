@@ -84,12 +84,44 @@ function briefEnsureTab_(name, headers) {
 function ensureBriefMailDefaults_() {
   var config = config_();
   if (configBlank_(config, 'brief_mail_enabled')) putConfig_('brief_mail_enabled', 'no');
+  if (configBlank_(config, 'brief_startup_enabled')) putConfig_('brief_startup_enabled', 'no');
+  if (configBlank_(config, 'brief_mtd_enabled')) putConfig_('brief_mtd_enabled', 'no');
   if (configBlank_(config, 'brief_mail_to')) putConfig_('brief_mail_to', BRIEF_MAIL_TO_);
 }
 
-function briefMailEnabled_() {
+function briefFlag_(value) {
+  return String(value || '').trim().toLowerCase() === 'yes';
+}
+
+function briefReportEnabled_(kind) {
   try { ensureBriefMailDefaults_(); } catch (error) {}
-  return String(config_().brief_mail_enabled || '').trim().toLowerCase() === 'yes';
+  var key = kind === BRIEF_KIND_MTD_ ? 'brief_mtd_enabled' : 'brief_startup_enabled';
+  return briefFlag_(config_()[key]);
+}
+
+function briefMailEnabled_() {
+  return briefReportEnabled_(BRIEF_KIND_STARTUP_) || briefReportEnabled_(BRIEF_KIND_MTD_);
+}
+
+function briefFormatApproval_() {
+  var config = config_();
+  return {
+    version: String(config.brief_format_version || ''),
+    at: String(config.brief_format_at || ''),
+    by: String(config.brief_format_by || ''),
+  };
+}
+
+function briefTriggerInstalled_() {
+  try {
+    var found = false;
+    ScriptApp.getProjectTriggers().forEach(function (trigger) {
+      if (trigger.getHandlerFunction() === 'scheduledImport_') found = true;
+    });
+    return found;
+  } catch (error) {
+    return false;
+  }
 }
 
 function briefMailTo_() {
@@ -1009,29 +1041,27 @@ function sendBriefKind_(pack, kind, to, channel, by) {
 }
 
 /**
- * After 6:00 AM ET, send Start-Up then MTD once per New York business date when production is enabled.
- * Incomplete figures still send as a clearly labeled partial report.
+ * After 7:00 AM ET, and only after the overnight import has called this, send each approved report once.
+ * A missing figure stays Pending in the existing template. It is not rewritten as a verified number.
+ * The desktop does not run this. Google Apps Script runs scheduledImport_ on its own timer.
  */
 function maybeSendBriefEmails_() {
+  if (nowHourNy_() < 7) return { sent: false, reason: 'before 7:00 AM America/New_York' };
   if (!briefMailEnabled_()) return { sent: false, reason: 'production delivery is off' };
-  if (nowHourNy_() < 6) return { sent: false, reason: 'before 6:00 AM America/New_York' };
   var lock = typeof LockService !== 'undefined' ? LockService.getScriptLock() : null;
   if (lock && !lock.tryLock(5000)) return { sent: false, reason: 'another send is in progress' };
   try {
     var payload = { session: { role: 'admin' } };
     var pack = briefPack_(payload);
-    var to = briefMailTo_();
-    var results = [];
-    if (briefAlreadySent_(pack.today, BRIEF_KIND_STARTUP_)) {
-      results.push({ sent: false, kind: BRIEF_KIND_STARTUP_, reason: 'already sent today' });
-    } else {
-      results.push(sendBriefKind_(pack, BRIEF_KIND_STARTUP_, to, 'automatic', 'scheduler'));
+    var approval = briefFormatApproval_();
+    var to = BRIEF_MAIL_TO_;
+    function one(kind) {
+      if (!briefReportEnabled_(kind)) return { sent: false, kind: kind, reason: 'that report is off' };
+      if (approval.version !== pack.version) return { sent: false, kind: kind, reason: 'format is not approved' };
+      if (briefAlreadySent_(pack.today, kind)) return { sent: false, kind: kind, reason: 'already sent today' };
+      return sendBriefKind_(pack, kind, to, 'automatic', 'scheduler');
     }
-    if (briefAlreadySent_(pack.today, BRIEF_KIND_MTD_)) {
-      results.push({ sent: false, kind: BRIEF_KIND_MTD_, reason: 'already sent today' });
-    } else {
-      results.push(sendBriefKind_(pack, BRIEF_KIND_MTD_, to, 'automatic', 'scheduler'));
-    }
+    var results = [one(BRIEF_KIND_STARTUP_), one(BRIEF_KIND_MTD_)];
     return { sent: results.some(function (row) { return row.sent; }), results: results, date: pack.today, partial: pack.partial };
   } finally {
     if (lock) lock.releaseLock();
@@ -1083,6 +1113,7 @@ function brief_(payload) {
       canEnable: role === 'admin',
       canResend: role === 'manager' || role === 'admin',
     },
+    sourceDate: pack.yesterday.date,
     homeWritten: pack.home.yesterday.written,
     homeDelivered: pack.home.yesterday.delivered,
     homeMonthWritten: pack.home.month.written,
@@ -1128,25 +1159,102 @@ function sendBriefTest_(payload) {
   if (payload.session.role !== 'admin') throw new Error('Only an Admin can send a test management email.');
   var to = String(payload.to || '').trim();
   if (!briefValidEmail_(to)) throw new Error('Enter the test address explicitly. The live management list is not used automatically.');
-  if (briefNormalizeEmail_(to) === briefNormalizeEmail_(BRIEF_MAIL_TO_) && payload.allowProduction !== true) {
-    throw new Error('That is the live management list. Enter a different test address, or confirm a live send after enabling production delivery.');
-  }
+  var confirmed = payload.confirmRecipient === true || payload.confirmRecipient === 'yes';
+  if (!confirmed) throw new Error('Confirm the exact recipient before a test send. The live management list is not used automatically.');
+  if (briefNormalizeEmail_(to) !== briefNormalizeEmail_(BRIEF_MAIL_TO_)) throw new Error('Only the approved management recipient can receive this report.');
   var kind = String(payload.kind || BRIEF_KIND_STARTUP_);
   if (kind !== BRIEF_KIND_STARTUP_ && kind !== BRIEF_KIND_MTD_) throw new Error('Choose Morning Start-Up or MTD Performance.');
   var pack = briefPack_(payload);
-  return sendBriefKind_(pack, kind, to, 'test', payload.session.role);
+  var result = sendBriefKind_(pack, kind, BRIEF_MAIL_TO_, 'test', payload.session.role);
+  result.automatic = false;
+  return result;
+}
+
+function approveBriefFormat_(payload) {
+  if (payload.session.role !== 'admin') throw new Error('Only an Admin can approve the email format.');
+  var pack = briefPack_(payload);
+  putConfig_('brief_format_version', pack.version);
+  putConfig_('brief_format_at', new Date().toISOString());
+  putConfig_('brief_format_by', String(payload.session.username || payload.session.role));
+  return emailControl_(payload);
 }
 
 function saveBriefMailSettings_(payload) {
   if (payload.session.role !== 'admin') throw new Error('Only an Admin can change automatic delivery.');
-  var enabled = payload.enabled === true || payload.enabled === 'yes' || payload.enabled === 'on';
-  putConfig_('brief_mail_enabled', enabled ? 'yes' : 'no');
-  if (payload.to !== undefined && String(payload.to).trim()) {
-    var to = String(payload.to).trim();
-    if (!briefValidEmail_(to)) throw new Error('Enter a valid production recipient address.');
-    putConfig_('brief_mail_to', to);
+  var pack = briefPack_(payload);
+  var approved = briefFormatApproval_().version === pack.version;
+  function turn(value, key, label) {
+    if (value === undefined) return;
+    var on = value === true || value === 'yes' || value === 'on';
+    if (on && !approved) throw new Error('Approve this format before enabling the ' + label + '.');
+    putConfig_(key, on ? 'yes' : 'no');
   }
-  return brief_(payload);
+  turn(payload.startup, 'brief_startup_enabled', 'Morning Start-Up');
+  turn(payload.mtd, 'brief_mtd_enabled', 'MTD Performance report');
+  if (payload.to !== undefined && String(payload.to).trim() && briefNormalizeEmail_(payload.to) !== briefNormalizeEmail_(BRIEF_MAIL_TO_)) {
+    throw new Error('The only approved recipient is ' + BRIEF_MAIL_TO_ + '.');
+  }
+  putConfig_('brief_mail_to', BRIEF_MAIL_TO_);
+  putConfig_('brief_mail_enabled', 'no');
+  return emailControl_(payload);
+}
+
+function emailLast_(logs, kind, channel) {
+  var found = null;
+  (logs || []).forEach(function (row) {
+    if (found) return;
+    if (row.kind !== kind) return;
+    if (channel && row.channel !== channel) return;
+    found = row;
+  });
+  return found;
+}
+
+function emailControl_(payload) {
+  var page = brief_(payload);
+  var approval = briefFormatApproval_();
+  var approved = !!(approval.version && approval.version === page.version);
+  var startupOn = briefReportEnabled_(BRIEF_KIND_STARTUP_);
+  var mtdOn = briefReportEnabled_(BRIEF_KIND_MTD_);
+  function card(kind, preview, on) {
+    return {
+      kind: kind,
+      subject: preview.subject,
+      html: preview.html,
+      text: preview.text,
+      enabled: on,
+      test: emailLast_(page.mail.logs, kind, 'test'),
+      automatic: emailLast_(page.mail.logs, kind, 'automatic'),
+    };
+  }
+  return {
+    role: page.role,
+    version: page.version,
+    generatedAt: new Date().toISOString(),
+    recipient: BRIEF_MAIL_TO_,
+    today: page.today,
+    sourceDate: page.sourceDate,
+    storePeriod: page.storePeriod,
+    individualPeriod: page.individualPeriod,
+    partial: page.partial,
+    missing: page.missing,
+    startupMissing: page.startupMissing,
+    completeness: page.partial ? 'Partial. Missing reports stay Pending and are not shown as verified numbers.' : 'The sources on this preview are complete.',
+    homeWritten: page.homeWritten,
+    homeDelivered: page.homeDelivered,
+    homeMonthWritten: page.homeMonthWritten,
+    homeMonthDelivered: page.homeMonthDelivered,
+    startup: card(BRIEF_KIND_STARTUP_, page.startup, startupOn),
+    mtd: card(BRIEF_KIND_MTD_, page.mtd, mtdOn),
+    approval: { approved: approved, version: approval.version, at: approval.at, by: approval.by },
+    automatic: startupOn || mtdOn ? 'A report switch is on' : 'Off',
+    schedule: 'Google Apps Script runs the overnight import on its own timer, not on a desktop. After that run finishes the prior business day, each report can send only at or after 7:00 AM Eastern, and only when its switch is on and this format is approved. A later retry the same day does not send a second copy.',
+    triggerInstalled: briefTriggerInstalled_(),
+    triggerHandler: 'scheduledImport_',
+    logs: page.mail.logs,
+    canApprove: page.role === 'admin',
+    mailSent: false,
+  };
 }
 
 function resendBriefEmail_(payload) {
