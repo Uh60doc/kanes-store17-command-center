@@ -4107,7 +4107,7 @@
         var nestedZip = /\.zip$/i.test(base);
         var supported = /\.pdf$/i.test(base) || /\.xlsx$/i.test(base) || nestedZip;
         if (!supported) {
-          skipped.push({ name: base, status: 'Unsupported', message: 'Only PDF and Excel .xlsx reports are imported. This file was skipped.' });
+          skipped.push({ name: base, status: 'Ignored', message: 'Not one of the daily reports. Ignored. Nothing was imported from it.' });
           continue;
         }
         if (flags & 1) {
@@ -4178,7 +4178,7 @@
           if (/\.pdf$/i.test(file.name) || /\.xlsx$/i.test(file.name)) {
             files.push({ name: uniqueUploadName(file.name, seen), size: file.size, blob: file, fromZip: source });
           } else {
-            skipped.push({ file: file.name, status: 'Unsupported', report: '', message: 'Only PDF, Excel .xlsx, and ZIP files can be uploaded. Nothing was changed.' });
+            skipped.push({ file: file.name, status: 'Ignored', report: '', message: 'Not one of the daily reports. Ignored. Nothing was changed.' });
           }
           return Promise.resolve();
         }
@@ -4236,6 +4236,7 @@
         already: count('Already on file'),
         failed: count('Failed'),
         review: count('Needs Review'),
+        ignored: count('Ignored'),
         unsupported: count('Unsupported'),
         dates: dates.length ? dates.join(', ') : 'None. No report was added.',
         missing: missingByDate.length ? missingByDate.join(' ') : 'None of the checked days is missing a report.',
@@ -4273,7 +4274,7 @@
           '<p class="sub">' + esc(result.message) + '</p></li>';
       }).join('');
       var summary = uploadSummary
-        ? '<h3>Batch summary</h3><p class="upload-count">' + uploadSummary.found + ' files found · ' + uploadSummary.imported + ' imported · ' + uploadSummary.already + ' already on file · ' + uploadSummary.failed + ' failed' + (uploadSummary.review ? ' · ' + uploadSummary.review + ' need review' : '') + (uploadSummary.unsupported ? ' · ' + uploadSummary.unsupported + ' unsupported' : '') + '</p>' +
+        ? '<h3>Batch summary</h3><p class="upload-count">' + uploadSummary.found + ' files found · ' + uploadSummary.imported + ' imported · ' + uploadSummary.already + ' already on file · ' + uploadSummary.failed + ' failed' + (uploadSummary.review ? ' · ' + uploadSummary.review + ' need review' : '') + (uploadSummary.ignored ? ' · ' + uploadSummary.ignored + ' ignored' : '') + (uploadSummary.unsupported ? ' · ' + uploadSummary.unsupported + ' unsupported' : '') + '</p>' +
           '<p class="sub"><strong>Business dates updated:</strong> ' + esc(uploadSummary.dates) + '</p>' +
           '<p class="sub"><strong>Still missing:</strong> ' + esc(uploadSummary.missing) + '</p>' +
           '<p class="sub"><strong>Dashboard:</strong> ' + esc(uploadSummary.refresh) + '</p>' +
@@ -4292,11 +4293,11 @@
         '<div class="upload-grid">' +
         '<article class="card upload-card"><h2>1 · Business date</h2>' +
         '<label for="upload-date">The day these reports cover</label><input id="upload-date" type="date" max="' + esc(data.today) + '" value="' + esc(data.date) + '" />' +
-        '<p class="sub">Each PDF prints its own report date. A ZIP can hold several days of PDF and Excel reports; each file is filed on the date printed in that file. PERQ exports do not print a date, so confirm the date below for those.</p>' +
+        '<p class="sub">Each PDF prints its own report date. A ZIP can hold several days of PDF and Excel reports; each file is filed on the date printed in that file. PERQ does not print a date, so it is filed on the business date selected above. A file that is not one of the nine daily reports is ignored.</p>' +
         '<h3>2 · Choose the files</h3>' +
         '<input id="upload-files" type="file" multiple accept=".pdf,.xlsx,.zip,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip"' + (uploadBusy ? ' disabled' : '') + ' />' +
         (selected ? '<ul class="upload-list">' + selected + '</ul>' : '<p class="sub">No files chosen. Choose the day’s PDFs and Excel files, or one ZIP that contains them. A ZIP may include more than one day.</p>') +
-        '<label class="upload-confirm"><input id="upload-confirm" type="checkbox" /> <span>These Excel files are for ' + esc(data.dateText) + '. Required for PERQ exports and for an Excel file that does not print its own date.</span></label>' +
+        '<p class="sub">PERQ and any Excel file that does not print its own date are filed on <strong>' + esc(data.dateText) + '</strong>.</p>' +
         (uploadProgress ? '<p class="sub" id="upload-progress">' + esc(uploadProgress) + '</p>' : '') +
         '<p id="upload-error" class="error"></p>' +
         '<p class="summary-actions"><button id="upload-go" type="button"' + (uploadFiles.length && !uploadBusy ? '' : ' disabled') + '>' + (uploadBusy ? 'Importing…' : 'Import reports') + '</button>' +
@@ -4306,8 +4307,9 @@
         (results ? '<h3>This import</h3><ul class="upload-list">' + results + '</ul>' : '') +
         '</article>' +
         '<article class="card upload-card"><h2>Reports for ' + esc(data.dateText) + '</h2>' +
-        '<p class="upload-count ' + (data.imported === data.total ? 'good' : 'warn') + '">' + data.imported + ' of ' + data.total + ' imported</p>' +
-        (missing.length ? '<p class="sub">Missing: ' + esc(missing.join(', ')) + '.</p>' : '') +
+        '<p class="upload-count ' + (data.imported === data.total ? 'good' : 'warn') + '">' + data.imported + ' of ' + data.total + ' imported for ' + esc(data.dateText) + '</p>' +
+        (missing.length ? '<p class="sub"><strong>Missing for ' + esc(data.dateText) + ':</strong> ' + esc(missing.join(', ')) + '.</p>' : '<p class="sub">Nothing is missing for ' + esc(data.dateText) + '.</p>') +
+        (data.recent && data.recent.some(function (day) { return day.missing && day.missing.length && day.date !== data.date; }) ? '<h3>Other days still missing a report</h3><ul class="upload-list">' + data.recent.filter(function (day) { return day.missing && day.missing.length && day.date !== data.date; }).map(function (day) { return '<li><strong>' + esc(day.dateText || day.date) + '</strong><p class="sub">' + esc(day.missing.join(', ')) + '</p></li>'; }).join('') + '</ul>' : '') +
         '<ul class="upload-list">' + checklist + '</ul></article>' +
         '</div>' +
         '<div class="upload-grid" style="margin-top:12px">' +
@@ -4384,7 +4386,6 @@
     function runUpload(kept) {
       if (uploadBusy || !uploadFiles.length) return;
       var date = document.getElementById('upload-date').value;
-      var confirmed = document.getElementById('upload-confirm').checked;
       var files = uploadOrder(uploadFiles);
       var prior = Array.isArray(kept) ? kept : [];
       uploadBusy = true;
@@ -4392,17 +4393,13 @@
       uploadSummary = null;
       uploadProgress = 'Processing 1 of ' + files.length + ' files…';
       renderUpload(uploadCache);
-      var confirmBox = document.getElementById('upload-confirm');
-      if (confirmBox) confirmBox.checked = confirmed;
       var step = function (index) {
         if (index >= files.length) return Promise.resolve();
         var file = files[index];
         uploadProgress = 'Processing ' + (index + 1) + ' of ' + files.length + ' files… ' + file.name;
         renderUpload(uploadCache);
-        var box = document.getElementById('upload-confirm');
-        if (box) box.checked = confirmed;
         return readBase64(file.blob || file).then(function (base64) {
-          return api('uploadReport', { date: date, fileName: file.name, base64: base64, confirmDate: confirmed ? date : '', adoptReportDate: !!file.fromZip });
+          return api('uploadReport', { date: date, fileName: file.name, base64: base64, confirmDate: date, adoptReportDate: !!file.fromZip });
         }).then(function (result) {
           result.file = result.file || file.name;
           uploadResults.push(result);
@@ -4420,8 +4417,6 @@
         uploadSummary.audit = imported ? 'Running…' : 'Not run. No figure was changed.';
         uploadProgress = imported ? 'Recalculating the dashboard…' : '';
         renderUpload(uploadCache);
-        var box = document.getElementById('upload-confirm');
-        if (box) box.checked = confirmed;
         return api('uploads', { date: date, refresh: imported });
       }).then(function (data) {
         refreshedPage = data;

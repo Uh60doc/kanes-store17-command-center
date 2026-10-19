@@ -72,7 +72,7 @@ test('a ZIP of PDF and Excel files across two days opens, and unsafe entries do 
   const opened = unzip(archive);
   assert.equal(opened.error, undefined);
   assert.equal(opened.files.length, 21);
-  assert.ok(opened.skipped.some((item) => item.name === 'notes.txt' && item.status === 'Unsupported'));
+  assert.ok(opened.skipped.some((item) => item.name === 'notes.txt' && item.status === 'Ignored'));
   assert.ok(opened.skipped.some((item) => item.name === 'secret.pdf' && /not safe/.test(item.message)));
   assert.equal(opened.skipped.some((item) => item.name.startsWith('._')), false);
   const first = await inflate(opened.files[0]!);

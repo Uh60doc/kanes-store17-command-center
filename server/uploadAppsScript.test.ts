@@ -233,9 +233,9 @@ test('wrong dates, month-to-date files, unknown files and unconfirmed PERQ expor
   const monthToDate = send('2026-10-14', 'mtd.pdf', nwdsrPdf('written', '2026-10-02', '2026-10-14', 90000));
   assert.equal(monthToDate.status, 'Needs Review');
   assert.match(monthToDate.message, /Month-to-date reports are not added/);
-  assert.equal(send('2026-10-14', 'snapd.pdf', pdf('SNAP - DELIVERED\nFROM 14-OCT-2026 TO 14-OCT-2026\n17 - ORLANDO Totals: 1 2')).status, 'Failed');
-  assert.equal(send('2026-10-14', 'notes.txt', Buffer.from('hello')).status, 'Failed');
-  assert.equal(send('2026-10-14', 'budget.xlsx', xlsx([['Store Budget'], ['x', 1]])).status, 'Failed');
+  assert.equal(send('2026-10-14', 'snapd.pdf', pdf('SNAP - DELIVERED\nFROM 14-OCT-2026 TO 14-OCT-2026\n17 - ORLANDO Totals: 1 2')).status, 'Ignored');
+  assert.equal(send('2026-10-14', 'notes.txt', Buffer.from('hello')).status, 'Ignored');
+  assert.equal(send('2026-10-14', 'budget.xlsx', xlsx([['Store Budget'], ['x', 1]])).status, 'Ignored');
   const wrongKpiDay = send('2026-10-14', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-15_2026-10-15.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]]));
   assert.equal(wrongKpiDay.status, 'Failed');
   const mtdKpi = send('2026-10-14', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-10-14.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]]));
@@ -243,17 +243,18 @@ test('wrong dates, month-to-date files, unknown files and unconfirmed PERQ expor
   const mislabeled = send('2026-10-14', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-14_2026-10-14.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]]));
   assert.equal(mislabeled.status, 'Needs Review');
   assert.match(mislabeled.message, /file name says ASL written, but the contents are Group 17 Written/);
+  assert.equal(JSON.stringify([tabs.CC_Daily, tabs.CC_Ledger, tabs.CC_Closing]), before);
   const renamed = send('2026-10-14', 'report.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]]));
-  assert.equal(renamed.status, 'Failed');
-  assert.match(renamed.message, /Tick "These Excel files are for 2026-10-14"/);
+  assert.equal(renamed.status, 'Imported');
+  assert.match(renamed.message, /2026-10-14/);
   const perq = send('2026-10-14', 'loc.xlsx', perqLocation(7));
-  assert.equal(perq.status, 'Failed');
-  assert.match(perq.message, /business date must be confirmed/);
+  assert.equal(perq.status, 'Imported');
+  assert.match(perq.message, /October 14, 2026, the date selected on Upload reports/);
+  assert.deepEqual(tabs.CC_Closing!.filter((row) => row[1] === 'store' && row[8] === 'PERQ Ups + Be Backs').map((row) => [row[0], row[5]]), [['2026-10-14', 7]]);
   const stale = send('2026-10-15', 'people.xlsx', perqSalesperson([['TNASSI', 'Tarik', 'Nassif', 4]], '10/14/26 08:00pm'), true);
   assert.equal(stale.status, 'Failed');
   assert.match(stale.message, /saved 10\/14\/26 08:00pm, before the business date 2026-10-15/);
   assert.throws(() => send('2026-10-18', 'x.pdf', nwdsrPdf('written', '2026-10-18', '2026-10-18', 1)), /cannot be after today/);
-  assert.equal(JSON.stringify([tabs.CC_Daily, tabs.CC_Ledger, tabs.CC_Closing]), before);
 });
 
 test('importing the same PERQ salesperson file twice does not duplicate traffic', () => {
@@ -278,10 +279,10 @@ test('a file refused only for the chosen date stays usable, and a file the mailb
   const report = nwdsrPdf('written', '2026-10-14', '2026-10-14', 1000);
   assert.equal(send('2026-10-15', 'nw.pdf', report).status, 'Failed');
   const location = perqLocation(7);
-  assert.equal(send('2026-10-14', 'loc.xlsx', location).status, 'Failed');
-  assert.equal(tabs.CC_Imports!.length, 1, 'neither file is marked as seen, so the mailbox import would still read it');
+  assert.equal(send('2026-10-14', 'loc.xlsx', location).status, 'Imported');
+  assert.equal(tabs.CC_Imports!.filter((row) => String(row[1]) === 'nw.pdf').length, 0, 'a wrong-date PDF is not marked as seen, so the mailbox import would still read it');
   assert.equal(send('2026-10-14', 'nw.pdf', report).status, 'Imported');
-  assert.equal(send('2026-10-14', 'loc.xlsx', location, true).status, 'Imported');
+  assert.equal(send('2026-10-14', 'loc.xlsx', location, true).status, 'Already on file');
 
   const held = perqLocation(9, 'mailbox');
   const sha = createHash('sha256').update(held).digest('hex');
@@ -352,7 +353,7 @@ test('the checklist shows Imported, Missing, Failed and Needs Review for the cho
   send('2026-10-14', 'g17.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]]), true);
   send('2026-10-14', 'nwd.pdf', nwdsrPdf('delivered', '2026-10-15', '2026-10-15', 10));
   send('2026-10-14', 'aslw.xlsx', asl('WRITTEN'), true);
-  assert.equal(send('2026-10-14', 'aslw unconfirmed.xlsx', asl('WRITTEN', 'again')).status, 'Failed');
+  assert.equal(send('2026-10-14', 'aslw unconfirmed.xlsx', asl('WRITTEN', 'again')).status, 'Already on file');
   const view = plain(gs.uploads_({ date: '2026-10-14', session: manager }));
   const status = Object.fromEntries(view.checklist.map((item: any) => [item.label, item.status]));
   assert.deepEqual(status, {
@@ -362,6 +363,8 @@ test('the checklist shows Imported, Missing, Failed and Needs Review for the cho
   assert.equal(view.imported, 2);
   assert.equal(view.total, 9);
   assert.match(view.checklist.find((item: any) => item.label === 'NWDSR Delivered').message, /is for 2026-10-15, not the business date 2026-10-14/);
+  assert.match(view.checklist.find((item: any) => item.label === 'PERQ Performance Stats by Location').message, /Missing for October 14, 2026/);
+  assert.ok(view.recent.some((day: any) => day.date === '2026-10-14' && day.missing.includes('PERQ Performance Stats by Location')));
   assert.equal(view.history.length, 5);
   assert.equal(view.lastSuccess.report, 'ASL Written');
   assert.equal(view.lastSuccess.via, 'upload');
