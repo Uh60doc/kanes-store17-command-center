@@ -10,7 +10,7 @@ import { textGrid } from './snapshotGrid.ts';
  * nothing here can reach the production workbook.
  */
 export const FIXTURE_TODAY = '2026-10-17';
-export const ALL_FILES = ['Code.gs', 'Data.gs', 'Metrics.gs', 'Roster.gs', 'Ledger.gs', 'Import.gs', 'KpiImport.gs', 'EvalImport.gs', 'Evaluations.gs', 'Upload.gs', 'MonthEnd.gs', 'History.gs', 'Quality.gs', 'Backup.gs', 'Brief.gs', 'DevLog.gs', 'Opportunity.gs', 'Recovery.gs', 'Coaching.gs', 'EvalPrep.gs', 'Leakage.gs', 'DeliveryRadar.gs', 'Accelerator.gs', 'Actions.gs', 'Reports.gs', 'Trend.gs', 'Readiness.gs', 'Variance.gs', 'OrderQuality.gs', 'Closeout.gs'];
+export const ALL_FILES = ['Code.gs', 'Data.gs', 'Metrics.gs', 'Roster.gs', 'Ledger.gs', 'Import.gs', 'KpiImport.gs', 'EvalImport.gs', 'Evaluations.gs', 'Upload.gs', 'MonthEnd.gs', 'History.gs', 'Quality.gs', 'Backup.gs', 'Brief.gs', 'DevLog.gs', 'Opportunity.gs', 'Recovery.gs', 'Coaching.gs', 'EvalPrep.gs', 'Leakage.gs', 'DeliveryRadar.gs', 'Accelerator.gs', 'Actions.gs', 'Reports.gs', 'Trend.gs', 'Readiness.gs', 'Variance.gs', 'OrderQuality.gs', 'Closeout.gs', 'Training.gs', 'Documents.gs'];
 
 let fixtureText: string | null = null;
 export function verifiedOctober(): Record<string, Grid> {
