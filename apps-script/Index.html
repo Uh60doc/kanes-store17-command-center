@@ -270,7 +270,7 @@
     .trend-legend { display: flex; gap: 16px; color: #d5e2f0; font-size: 12px; font-weight: 650; white-space: nowrap; letter-spacing: 0.01em; text-transform: none; }
     .trend-legend .swatch { display: inline-block; width: 18px; height: 3px; margin-right: 6px; border-radius: 99px; vertical-align: middle; }
     .trend-legend .swatch.nw { background: #14c4d4; box-shadow: 0 0 8px rgba(20, 196, 212, 0.85); }
-    .trend-legend .swatch.ly { height: 0; background: none; border-top: 2px dashed #8eb4ff; border-radius: 0; }
+    .trend-legend .swatch.ly { height: 0; background: none; border-top: 2px dashed #f3d48a; border-radius: 0; }
     .trend-legend .is-pending { color: #9eb0c9; font-weight: 550; }
     .trend-card { padding-bottom: 8px; }
     @media (max-width: 800px) {
@@ -1513,7 +1513,7 @@
         svg.push('<circle cx="' + x(end.index).toFixed(1) + '" cy="' + y(end.value).toFixed(1) + '" r="3.5" fill="#e8fbff" stroke="#14c4d4" stroke-width="1.5"/>');
       });
       segments('snapLy').forEach(function (group) {
-        svg.push('<path d="' + smooth(softenTrend(group)) + '" fill="none" stroke="#8eb4ff" stroke-width="1.8" stroke-dasharray="4 4" stroke-linecap="round"/>');
+        svg.push('<path d="' + smooth(softenTrend(group)) + '" fill="none" stroke="#f3d48a" stroke-width="1.8" stroke-dasharray="4 4" stroke-linecap="round"/>');
       });
       var marker = -1;
       rows.forEach(function (day, index) {

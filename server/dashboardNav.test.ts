@@ -132,12 +132,14 @@ test('home trend draws a smooth area and leaves last year off until those days e
   const svg = page.homeTrend(chart, '2026-10-19');
   assert.match(svg, /linearGradient/);
   assert.match(svg, / C/);
-  assert.match(svg, /stroke-dasharray="4 4"/);
+  assert.match(svg, /stroke="#f3d48a" stroke-width="1.8" stroke-dasharray="4 4"/);
+  assert.match(svg, /#7eecf6/);
   assert.match(svg, /Through Oct 15/);
   assert.equal(svg.includes('not drawn as a guess'), false);
   assert.equal(page.homeTrendHasLy(chart.map((day) => ({ ...day, snapLy: null }))), false);
   const pending = page.homeTrend(chart.map((day) => ({ ...day, snapLy: null })), '2026-10-15');
   assert.equal(pending.includes('stroke-dasharray="4 4"'), false);
+  assert.equal(pending.includes('#f3d48a'), false);
   assert.match(pending, /Today Oct 15/);
   const jagged = [0, 40, 41, 90, 92, 93, 140].map((value, index) => ({ index, value }));
   const soft = page.softenTrend(jagged);
