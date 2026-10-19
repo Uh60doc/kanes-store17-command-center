@@ -1857,6 +1857,9 @@ function home_(payload) {
     winners: winnersPack.winners,
     rosterNotes: winnersPack.roster.notes || [],
     writtenBalance: writtenBalance,
+    chart: days.filter(function (day) { return day.date < today; }).map(function (day) {
+      return { date: day.date, written: day.nwdsrWritten, delivered: day.nwdsrDelivered, snap: day.snapWritten, closed: !!day.closed };
+    }),
   };
 }
 
