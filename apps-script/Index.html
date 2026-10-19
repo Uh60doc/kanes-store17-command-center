@@ -3514,7 +3514,13 @@
         return '<h2>Day ' + esc(String(group.day)) + '</h2>' + lines;
       }).join('');
       var open = ((current && current.open) || []).map(function (label) { return '<li>' + esc(label) + '</li>'; }).join('');
-      var tracks = current && current.tracks ? current.tracks : { practice: '0 of 0', roleplay: '0 of 0', ticket: '0 of 0' };
+      function trackCount(name) {
+        var items = data.steps || [];
+        var total = items.filter(function (item) { return item.track === name; }).length;
+        var done = ((current && current.items) || []).filter(function (item) { return item.track === name && item.done; }).length;
+        return done + ' of ' + total;
+      }
+      var tracks = { practice: trackCount('practice'), roleplay: trackCount('roleplay'), ticket: trackCount('ticket') };
       document.getElementById('header-note').textContent = 'New-hire training · ' + (current ? current.name + ' · ' + current.status : 'No associate selected');
       document.getElementById('screen').innerHTML = '<article class="card"><p class="ready-label">New-hire training</p><h2>Five-day progress</h2><p>' + esc(data.notice || '') + '</p><h2>Written goal schedule</h2><ul class="list">' + goals + '</ul><p class="sub">This page does not change a salesperson goal. It does not store a quiz score.</p><div class="ready-actions noprint"><button type="button" id="train-docs">Open Document Center</button><button type="button" id="train-new">New hire</button></div></article>' +
         '<article class="card noprint"><h2>Associates</h2>' + (roster ? '<ul class="list">' + roster + '</ul>' : '<p>No recent hire is on the roster.</p>') + (people ? '<h2>Training records</h2><ul class="list">' + people + '</ul>' : '') + '</article>' +
