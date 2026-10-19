@@ -1,5 +1,5 @@
 var SPREADSHEET_ID_ = '1KtsfQPQRdg3IdNXomlM5t47IyE1psouxvgW-D8VSLfw';
-var APP_VERSION_ = '1.0.28';
+var APP_VERSION_ = '1.0.29';
 
 var ROUTES_ = {
   login: null,
@@ -67,15 +67,17 @@ var ROUTES_ = {
   saveOrderCheck: ['manager', 'admin'],
   closeout: ['manager', 'admin'],
   saveCloseout: ['manager', 'admin'],
+  training: ['manager', 'admin'],
+  saveTraining: ['manager', 'admin'],
 };
 
 // Routes that only read. Every other route can change figures, so the cached pages are dropped after it runs.
-var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, previewBriefEmail: true, health: true, bedding: true, coverage: true, roster: true, evals: true, evalWorkbook: true, uploads: true, documents: true, docFile: true, devLog: true, dataPulse: true, coach: true, recovery: true, coaching: true, evalPrep: true, evalPrepWorkbook: true, leakage: true, delivery: true, previewRescue: true, accel: true, actions: true, reports: true, readiness: true, variance: true, orderQuality: true, closeout: true };
+var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, previewBriefEmail: true, health: true, bedding: true, coverage: true, roster: true, evals: true, evalWorkbook: true, uploads: true, documents: true, docFile: true, devLog: true, dataPulse: true, coach: true, recovery: true, coaching: true, evalPrep: true, evalPrepWorkbook: true, leakage: true, delivery: true, previewRescue: true, accel: true, actions: true, reports: true, readiness: true, variance: true, orderQuality: true, closeout: true, training: true };
 // Backups and restore drills write only their own logs, which no cached page reads; a problem they record moves the version itself.
 var LOG_ONLY_ROUTES_ = { runBackup: true };
 // Pages whose reply is reused until the data changes. Each reads every tab once while it is built.
 var CACHED_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true, coach: true, recovery: true, coaching: true, evalPrep: true, leakage: true, delivery: true, accel: true, actions: true };
-var MEMO_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true, health: true, coverage: true, coach: true, recovery: true, coaching: true, evalPrep: true, leakage: true, delivery: true, accel: true, actions: true, reports: true, readiness: true, variance: true, orderQuality: true, closeout: true };
+var MEMO_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true, health: true, coverage: true, coach: true, recovery: true, coaching: true, evalPrep: true, leakage: true, delivery: true, accel: true, actions: true, reports: true, readiness: true, variance: true, orderQuality: true, closeout: true, training: true };
 var PAGE_CACHE_SECONDS_ = 1800;
 var PAGE_CACHE_MAX_CHARS_ = 95000;
 
@@ -311,6 +313,8 @@ function route_(name, payload) {
   if (name === 'saveOrderCheck') return saveOrderCheck_(payload);
   if (name === 'closeout') return closeout_(payload);
   if (name === 'saveCloseout') return saveCloseout_(payload);
+  if (name === 'training') return training_(payload);
+  if (name === 'saveTraining') return saveTraining_(payload);
   if (name === 'previewRescue') return previewRescue_(payload);
   if (name === 'confirmRescueImport') return confirmRescueImport_(payload);
   if (name === 'saveRescueFlag') return saveRescueFlag_(payload);

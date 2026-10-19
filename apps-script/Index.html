@@ -177,6 +177,11 @@
     .eod-step.open { background: rgba(255, 142, 163, 0.14); }
     .eod-banner.Incomplete { border-color: #ff8ea3; }
     .eod-banner.Complete { border-color: #7dffa8; }
+    .train-step { display: flex; gap: 12px; align-items: flex-start; padding: 12px 4px; border-bottom: 1px solid #1d5c66; min-width: 0; }
+    .train-step input[type=checkbox] { width: 32px; height: 32px; min-width: 32px; min-height: 32px; margin: 2px 0 0; accent-color: #14c4d4; flex: none; }
+    .train-step .train-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 18px; line-height: 1.35; }
+    .train-step .train-initials { width: 88px; min-height: 44px; flex: none; }
+    .train-step.open { background: rgba(255, 142, 163, 0.14); }
     @media (max-width: 720px) {
       h1 { font-size: 24px; }
       .figure { font-size: 32px; }
@@ -188,6 +193,8 @@
       .var-row { grid-template-columns: 1fr 1fr; }
       .order-row { grid-template-columns: 1fr; }
       .eod-step span { font-size: 18px; }
+      .train-step { flex-wrap: wrap; }
+      .train-step .train-copy { font-size: 18px; }
     }
     button, input, textarea { font: inherit; }
     textarea { width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid #1d5c66; background: #070b10; color: white; }
@@ -491,6 +498,12 @@
       body.print-closeout #screen > :not(#eod-sheet) { display: none !important; }
       body.print-closeout #eod-sheet, body.print-closeout #eod-sheet * { color: #102027; background: white; }
       body.print-closeout #eod-sheet { border: 0; margin: 0; padding: 0; }
+      html:has(body.print-training), body.print-training { background: white !important; color: black !important; }
+      body.print-training .wrap { padding: 0; max-width: 8.5in; }
+      body.print-training header.brand, body.print-training .nav, body.print-training .section-title, body.print-training .noprint, body.print-training #data-refresh { display: none !important; }
+      body.print-training #screen > :not(#train-sheet) { display: none !important; }
+      body.print-training #train-sheet, body.print-training #train-sheet * { color: #102027; background: white; }
+      body.print-training #train-sheet { border: 0; margin: 0; padding: 0; }
       body.print-report #screen > :not(#report-sheet) { display: none !important; }
       body.print-report #report-sheet { margin: 0; border: 0; box-shadow: none; max-width: none; padding: 0; }
       body.print-report #report-sheet, body.print-report #report-sheet * { color: #102027; background: white; }
@@ -718,6 +731,9 @@
         var qualityAt = varianceAt + 1;
         items.forEach(function (item, index) { if (item[0] === 'orderQuality') qualityAt = index + 1; });
         items.splice(qualityAt, 0, ['closeout', 'Closeout']);
+        var closeAt = qualityAt + 1;
+        items.forEach(function (item, index) { if (item[0] === 'closeout') closeAt = index + 1; });
+        items.splice(closeAt, 0, ['training', 'Training']);
       }
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['delivery', 'Delivery rescue'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
@@ -3471,6 +3487,80 @@
         });
       });
     }
+    function renderTraining(data) {
+      var current = data.current;
+      var goals = (data.goals || []).map(function (goal) { return '<li>Month ' + esc(String(goal.month === 4 ? '4 onward' : goal.month)) + ' · ' + esc(goal.text) + ' · ' + esc(goal.note) + '</li>'; }).join('');
+      var roster = (data.roster || []).map(function (person) {
+        var existing = (data.people || []).filter(function (row) { return row.name === person.name; })[0];
+        return '<li><button type="button" class="linkish" data-train-roster="' + esc(person.name) + '" data-train-hire="' + esc(person.hireDate) + '">' + esc(person.name) + '</button> · hired ' + esc(person.hireDate) + (existing ? ' · ' + esc(existing.status) : ' · no training record') + '</li>';
+      }).join('');
+      var people = (data.people || []).map(function (row) {
+        return '<li><button type="button" class="linkish" data-train-open="' + esc(row.id) + '">' + esc(row.name) + '</button> · ' + esc(row.status) + (row.day && row.day.label ? ' · ' + esc(row.day.label) : '') + '</li>';
+      }).join('');
+      var saved = {};
+      ((current && current.items) || []).forEach(function (item) { saved[item.key] = item; });
+      var days = [];
+      ((data.steps && data.steps.length) ? data.steps : ((current && current.items) || [])).forEach(function (item) {
+        item = saved[item.key] || { key: item.key, day: item.day, label: item.label, done: false, initials: '', links: item.links || [], by: '' };
+        var group = days.filter(function (entry) { return entry.day === item.day; })[0];
+        if (!group) { group = { day: item.day, items: [] }; days.push(group); }
+        group.items.push(item);
+      });
+      var steps = days.map(function (group) {
+        var lines = group.items.map(function (item) {
+          var links = (item.links || []).map(function (doc) { return '<button type="button" class="linkish" data-train-doc="' + esc(doc.id) + '">' + esc(doc.title) + '</button>'; }).join(' · ');
+          return '<div class="train-step' + (item.done ? '' : ' open') + '" data-train-step="' + esc(item.key) + '"><input type="checkbox"' + (item.done ? ' checked' : '') + '><div class="train-copy"><strong>' + esc(item.label) + '</strong>' + (links ? '<div class="sub">' + links + '</div>' : '<div class="sub">No matching file is in the Document Center.</div>') + (item.by ? '<div class="sub">Acknowledged by ' + esc(item.by) + (item.at ? ' · ' + esc(String(item.at).slice(0, 16).replace('T', ' ')) : '') + '</div>' : '') + '</div><input class="train-initials" maxlength="4" placeholder="Initials" value="' + esc(item.initials || '') + '"></div>';
+        }).join('');
+        return '<h2>Day ' + esc(String(group.day)) + '</h2>' + lines;
+      }).join('');
+      var open = ((current && current.open) || []).map(function (label) { return '<li>' + esc(label) + '</li>'; }).join('');
+      var tracks = current && current.tracks ? current.tracks : { practice: '0 of 0', roleplay: '0 of 0', ticket: '0 of 0' };
+      document.getElementById('header-note').textContent = 'New-hire training · ' + (current ? current.name + ' · ' + current.status : 'No associate selected');
+      document.getElementById('screen').innerHTML = '<article class="card"><p class="ready-label">New-hire training</p><h2>Five-day progress</h2><p>' + esc(data.notice || '') + '</p><h2>Written goal schedule</h2><ul class="list">' + goals + '</ul><p class="sub">This page does not change a salesperson goal. It does not store a quiz score.</p><div class="ready-actions noprint"><button type="button" id="train-docs">Open Document Center</button><button type="button" id="train-new">New hire</button></div></article>' +
+        '<article class="card noprint"><h2>Associates</h2>' + (roster ? '<ul class="list">' + roster + '</ul>' : '<p>No recent hire is on the roster.</p>') + (people ? '<h2>Training records</h2><ul class="list">' + people + '</ul>' : '') + '</article>' +
+        '<article id="train-sheet" class="card"><p class="ready-label">Training progress summary</p><h2>' + esc(current ? current.name + ' · ' + current.status : 'Not saved yet') + '</h2><p id="train-error" class="error"></p><div class="ready-actions"><label>Name<input id="train-name" maxlength="40" value="' + esc(current ? current.name : '') + '"></label><label>Hire date<input id="train-hire" type="date" max="' + esc(data.today || '') + '" value="' + esc(current ? current.hireDate : '') + '"></label><label>Training start<input id="train-start" type="date" max="' + esc(data.today || '') + '" value="' + esc(current ? current.startDate : '') + '"></label></div><p><strong>' + esc(current && current.day ? current.day.label : 'Set the training start date.') + '</strong></p><p class="sub">' + esc(current && current.goal ? 'Current written goal ' + current.goal.text + '. ' + current.goal.note : '') + '</p><p>Supervised practice ' + esc(tracks.practice) + ' · Role-playing ' + esc(tracks.roleplay) + ' · Ticket writing ' + esc(tracks.ticket) + '</p>' + steps +
+        '<label class="train-step' + (current && current.ready ? '' : ' open') + '"><input id="train-ready" type="checkbox"' + (current && current.ready ? ' checked' : '') + '><div class="train-copy"><strong>Manager confirms floor readiness.</strong><span class="sub">Five calendar days do not make this associate ready. This confirmation is separate from the day count.</span></div><input id="train-ready-initials" class="train-initials" maxlength="4" placeholder="Initials" value="' + esc(current ? current.readyInitials : '') + '"></label><label>Notes<textarea id="train-notes" maxlength="240" rows="3" placeholder="Optional. Do not type a quiz score.">' + esc(current ? current.notes : '') + '</textarea></label><p class="noprint"><button type="button" id="train-save">Save progress</button> <button type="button" id="train-print">Print summary</button></p><p class="sub">Initials are the trainer or manager. The signed-in name is stored as the electronic acknowledgement.</p></article>' +
+        (open ? '<article class="card"><h2>Still open</h2><ul class="list">' + open + '</ul></article>' : '<article class="card"><h2>Still open</h2><p class="good">' + (current ? 'Every training block is marked. Floor readiness is confirmed only when the manager box is checked.' : 'Choose an associate or start a new hire.') + '</p></article>');
+      document.getElementById('train-docs').addEventListener('click', function () { openScreen('documents'); });
+      document.getElementById('train-new').addEventListener('click', function () { data.current = null; renderTraining(data); });
+      document.getElementById('train-save').addEventListener('click', function () {
+        var blocks = {};
+        Array.prototype.forEach.call(document.querySelectorAll('[data-train-step]'), function (line) {
+          blocks[line.getAttribute('data-train-step')] = { done: !!line.querySelector('input[type=checkbox]').checked, initials: line.querySelector('.train-initials').value };
+        });
+        document.getElementById('train-error').textContent = '';
+        api('saveTraining', { id: current ? current.id : '', name: document.getElementById('train-name').value, hireDate: document.getElementById('train-hire').value, startDate: document.getElementById('train-start').value, notes: document.getElementById('train-notes').value, ready: document.getElementById('train-ready').checked ? 'yes' : 'no', readyInitials: document.getElementById('train-ready-initials').value, blocks: blocks }).then(function (page) {
+          var saved = (page.people || []).filter(function (row) { return row.name === document.getElementById('train-name').value; })[0];
+          if (!page.current && saved) page.current = saved;
+          renderTraining(page);
+        }).catch(function (error) { document.getElementById('train-error').textContent = error.message; });
+      });
+      var print = document.getElementById('train-print');
+      if (print) print.addEventListener('click', function () { document.body.classList.add('print-training'); window.print(); document.body.classList.remove('print-training'); });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-train-open]'), function (button) {
+        button.addEventListener('click', function () {
+          var id = button.getAttribute('data-train-open');
+          var found = (data.people || []).filter(function (row) { return row.id === id; })[0];
+          data.current = found || null;
+          renderTraining(data);
+        });
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-train-roster]'), function (button) {
+        button.addEventListener('click', function () {
+          var name = button.getAttribute('data-train-roster');
+          var found = (data.people || []).filter(function (row) { return row.name === name; })[0];
+          if (found) { data.current = found; renderTraining(data); return; }
+          data.current = { name: name, hireDate: button.getAttribute('data-train-hire'), startDate: '', items: [], open: [], tracks: { practice: '0 of 2', roleplay: '0 of 2', ticket: '0 of 2' }, ready: false, readyInitials: '', notes: '', status: 'Incomplete', day: { label: 'Set the training start date.' }, goal: { text: 'Pending', note: '' } };
+          renderTraining(data);
+        });
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-train-doc]'), function (button) {
+        button.addEventListener('click', function () {
+          var id = button.getAttribute('data-train-doc');
+          api('documents', {}).then(function (library) { docCache = library; openDoc(id); }).catch(function (error) { document.getElementById('train-error').textContent = error.message; });
+        });
+      });
+    }
     function varianceChart(points) {
       var width = 720;
       var height = 200;
@@ -4937,7 +5027,7 @@
       var active = document.activeElement;
       if (active && active.id !== 'display-refresh' && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return true;
       var body = document.body;
-      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd') || body.classList.contains('print-evalprep') || body.classList.contains('print-actions') || body.classList.contains('print-report') || body.classList.contains('print-variance') || body.classList.contains('print-order') || body.classList.contains('print-closeout')) return true;
+      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd') || body.classList.contains('print-evalprep') || body.classList.contains('print-actions') || body.classList.contains('print-report') || body.classList.contains('print-variance') || body.classList.contains('print-order') || body.classList.contains('print-closeout') || body.classList.contains('print-training')) return true;
       return false;
     }
     function syncRefreshButton() {
@@ -4966,6 +5056,7 @@
       else if (name === 'variance') renderVariance(data);
       else if (name === 'orderQuality') renderOrderQuality(data);
       else if (name === 'closeout') renderCloseout(data);
+      else if (name === 'training') renderTraining(data);
       else if (name === 'coverage') renderCoverage(data);
     }
     function reloadCurrentScreen() {
