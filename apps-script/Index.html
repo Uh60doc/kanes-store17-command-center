@@ -743,7 +743,7 @@
         items.forEach(function (item, index) { if (item[0] === 'training') trainAt = index + 1; });
         items.splice(trainAt, 0, ['email', 'Email']);
       }
-      if (role !== 'sales') items.push(['bedding', 'Bedding'], ['delivery', 'Delivery rescue'], ['upload', 'Upload reports'], ['health', 'System health']);
+      if (role !== 'sales') items.push(['consistency', 'Consistency'], ['bedding', 'Bedding'], ['delivery', 'Delivery rescue'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
       return items;
     }
@@ -5054,6 +5054,38 @@
       var button = document.getElementById('display-refresh');
       if (button) button.classList.remove('hidden');
     }
+    function renderConsistency(data) {
+      var tone = data.status === 'PASS' ? 'good' : (data.status === 'FAIL' ? 'bad' : '');
+      var metrics = (data.metrics || []).map(function (metric) {
+        var value = metric.value === null || metric.value === undefined ? 'Pending' : (metric.id.indexOf('closing') !== -1 ? percent(metric.value) : money(metric.value));
+        var extra = metric.customers !== undefined && metric.customers !== null ? ' · ' + count(metric.customers) + ' customers / ' + count(metric.opportunities) + ' opportunities' : '';
+        return '<li><strong>' + esc(metric.id.replace(/_/g, ' ')) + '</strong> ' + esc(value) + esc(extra) + '<br><span class="sub">' + esc(metric.source) + ' · ' + esc(metric.scope) + ' · ' + esc(metric.periodStart) + ' through ' + esc(metric.periodEnd) + ' · through ' + esc(metric.verifiedThrough) + ' · ' + esc(metric.completeness) + '</span></li>';
+      }).join('');
+      var findings = (data.findings || []).map(function (row) {
+        return '<li class="' + (row.status === 'FAIL' ? 'bad' : '') + '"><strong>' + esc(row.status) + ' · ' + esc(row.page) + ' · ' + esc(row.metric) + '</strong><br>' + esc(row.expected) + ' expected, ' + esc(row.actual) + ' displayed. ' + esc(row.reason) + '</li>';
+      }).join('');
+      var history = (data.runs || []).map(function (run) {
+        return '<li>' + esc(run.at) + ' · ' + esc(run.status) + ' · ' + esc(String(run.matched)) + ' of ' + esc(String(run.checked)) + ' matched · ' + esc(String(run.discrepancies)) + ' discrepancies · ' + esc(run.trigger) + '</li>';
+      }).join('');
+      document.getElementById('screen').innerHTML = '<article class="card"><p class="ready-label">Data consistency</p><h2 class="' + tone + '">' + esc(data.status || 'WARNING') + '</h2><p>' + esc(data.notice || '') + '</p><p class="' + (data.stale ? 'bad' : 'sub') + '">' + esc(data.staleText || (data.last ? 'Last audit ' + data.last.at + '.' : '')) + '</p><p class="sub">' + esc(data.last ? (data.last.matched + ' of ' + data.last.checked + ' matching results · ' + data.last.discrepancies + ' discrepancies') : 'Run a check to compare every matching screen.') + '</p><div class="ready-actions"><button type="button" id="consist-run">Run Consistency Check</button></div><p id="consist-error" class="error"></p></article>' +
+        '<article class="card"><h2>Canonical figures</h2>' + (data.metricError ? '<p class="bad">' + esc(data.metricError) + '</p>' : '') + (metrics ? '<ul class="list">' + metrics + '</ul>' : '<p>Canonical figures appear after the page loads the shared metric service.</p>') + '</article>' +
+        '<article class="card"><h2>Discrepancies</h2>' + (findings ? '<ul class="list">' + findings + '</ul>' : '<p>No open discrepancy is on the latest audit.</p>') + '</article>' +
+        '<article class="card"><h2>Audit history</h2>' + (history ? '<ul class="list">' + history + '</ul>' : '<p>No audit has been saved.</p>') + '</article>';
+      document.getElementById('consist-run').addEventListener('click', function () {
+        var button = document.getElementById('consist-run');
+        button.disabled = true;
+        document.getElementById('consist-error').textContent = 'Checking every matching screen…';
+        api('runConsistency').then(function (page) {
+          if (screen !== 'consistency') return;
+          displayPayload = page;
+          renderConsistency(page);
+        }).catch(function (error) {
+          var note = document.getElementById('consist-error');
+          if (note) note.textContent = error.message;
+          if (button) button.disabled = false;
+        });
+      });
+    }
     function applyScreenData(name, data) {
       if (name === 'home' || name === 'written' || name === 'delivered') renderHome(data, name);
       else if (name === 'bedding') renderBedding(data);
@@ -5077,6 +5109,7 @@
       else if (name === 'orderQuality') renderOrderQuality(data);
       else if (name === 'closeout') renderCloseout(data);
       else if (name === 'training') renderTraining(data);
+      else if (name === 'consistency') renderConsistency(data);
       else if (name === 'email') renderEmail(data);
       else if (name === 'coverage') renderCoverage(data);
     }
