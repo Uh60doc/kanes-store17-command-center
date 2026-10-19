@@ -5056,6 +5056,7 @@
     }
     function renderConsistency(data) {
       var tone = data.status === 'PASS' ? 'good' : (data.status === 'FAIL' ? 'bad' : '');
+      function line(label, value) { return '<p><strong>' + esc(label) + '</strong> <span class="' + (value === 'PASS' ? 'good' : (value === 'FAIL' ? 'bad' : '')) + '">' + esc(value || 'WARNING') + '</span></p>'; }
       var metrics = (data.metrics || []).map(function (metric) {
         var value = metric.value === null || metric.value === undefined ? 'Pending' : (metric.id.indexOf('closing') !== -1 ? percent(metric.value) : money(metric.value));
         var extra = metric.customers !== undefined && metric.customers !== null ? ' · ' + count(metric.customers) + ' customers / ' + count(metric.opportunities) + ' opportunities' : '';
@@ -5067,9 +5068,12 @@
       var history = (data.runs || []).map(function (run) {
         return '<li>' + esc(run.at) + ' · ' + esc(run.status) + ' · ' + esc(String(run.matched)) + ' of ' + esc(String(run.checked)) + ' matched · ' + esc(String(run.discrepancies)) + ' discrepancies · ' + esc(run.trigger) + '</li>';
       }).join('');
-      document.getElementById('screen').innerHTML = '<article class="card"><p class="ready-label">Data consistency</p><h2 class="' + tone + '">' + esc(data.status || 'WARNING') + '</h2><p>' + esc(data.notice || '') + '</p><p class="' + (data.stale ? 'bad' : 'sub') + '">' + esc(data.staleText || (data.last ? 'Last audit ' + data.last.at + '.' : '')) + '</p><p class="sub">' + esc(data.last ? (data.last.matched + ' of ' + data.last.checked + ' matching results · ' + data.last.discrepancies + ' discrepancies') : 'Run a check to compare every matching screen.') + '</p><div class="ready-actions"><button type="button" id="consist-run">Run Consistency Check</button></div><p id="consist-error" class="error"></p></article>' +
+      var flags = (data.qualityFlags || []).map(function (row) { return '<li class="bad"><strong>' + esc(row.subject) + '</strong><br>' + esc(row.explanation) + '</li>'; }).join('');
+      var periods = (data.periods || []).map(function (row) { return '<li><strong>' + esc(row.name) + ' · ' + esc(row.status) + '</strong><br><span class="sub">' + esc(row.periodDates) + ' · ' + esc(row.explanation) + '</span></li>'; }).join('');
+      document.getElementById('screen').innerHTML = '<article class="card"><p class="ready-label">Data integrity</p><h2 class="' + tone + '">' + esc(data.status || 'WARNING') + '</h2>' + line('Cross-page consistency', data.consistency || data.status) + line('Source data integrity', data.integrity) + line('Reporting completeness', data.completeness) + '<p>' + esc(data.notice || '') + '</p><p class="' + (data.stale ? 'bad' : 'sub') + '">' + esc(data.staleText || (data.last ? 'Last audit ' + data.last.at + '.' : '')) + '</p><p class="sub">' + esc(data.last ? (data.last.matched + ' of ' + data.last.checked + ' matching results · ' + data.last.discrepancies + ' discrepancies') : 'Run a check to compare every matching screen.') + '</p><div class="ready-actions"><button type="button" id="consist-run">Run Consistency Check</button></div><p id="consist-error" class="error"></p></article>' +
         '<article class="card"><h2>Canonical figures</h2>' + (data.metricError ? '<p class="bad">' + esc(data.metricError) + '</p>' : '') + (metrics ? '<ul class="list">' + metrics + '</ul>' : '<p>Canonical figures appear after the page loads the shared metric service.</p>') + '</article>' +
-        '<article class="card"><h2>Discrepancies</h2>' + (findings ? '<ul class="list">' + findings + '</ul>' : '<p>No open discrepancy is on the latest audit.</p>') + '</article>' +
+        '<article class="card"><h2>Source flags</h2>' + (flags ? '<ul class="list">' + flags + '</ul>' : '<p>No source-data flag is open.</p>') + (periods ? '<h2>Reporting periods</h2><ul class="list">' + periods + '</ul>' : '') + '</article>' +
+        '<article class="card"><h2>Cross-page discrepancies</h2>' + (findings ? '<ul class="list">' + findings + '</ul>' : '<p>No open discrepancy is on the latest consistency audit.</p>') + '</article>' +
         '<article class="card"><h2>Audit history</h2>' + (history ? '<ul class="list">' + history + '</ul>' : '<p>No audit has been saved.</p>') + '</article>';
       document.getElementById('consist-run').addEventListener('click', function () {
         var button = document.getElementById('consist-run');

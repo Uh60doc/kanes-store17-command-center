@@ -441,9 +441,16 @@ function consistencyRead_() {
   var last = runs.length ? runs[runs.length - 1] : null;
   var age = last ? consistencyAge_(last.at) : null;
   var stale = !last || age === null || age > 45;
+  var board = typeof integrityBoard_ === 'function' ? integrityBoard_() : { integrity: 'WARNING', completeness: 'WARNING', flags: [], periods: [] };
+  var consistency = last ? last.status : 'WARNING';
   return {
     role: 'manager',
-    status: last ? last.status : 'WARNING',
+    consistency: consistency,
+    integrity: board.integrity,
+    completeness: board.completeness,
+    qualityFlags: board.flags,
+    periods: board.periods,
+    status: integrityOverall_(consistency, board.integrity, board.completeness),
     stale: stale,
     staleText: !last ? 'No consistency audit has run yet.' : (stale ? 'This audit is more than 45 minutes old.' : ''),
     last: last,
@@ -470,7 +477,8 @@ function runConsistency_(payload) {
   var result = runConsistencyAudit_('manual by ' + payload.session.role);
   var view = consistencyRead_();
   view.metrics = result.metrics;
-  view.status = result.status;
+  view.consistency = result.status;
+  view.status = integrityOverall_(result.status, view.integrity, view.completeness);
   view.stale = false;
   view.staleText = '';
   return view;
