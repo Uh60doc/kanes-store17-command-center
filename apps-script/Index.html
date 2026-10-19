@@ -154,7 +154,8 @@
     .ready-banner.MISSING, .ready-banner.ERROR { border-color: #ff8ea3; }
     .ready-banner h2 { margin: 0; color: #f3f6f8; font-size: 28px; letter-spacing: 0; text-transform: none; }
     .ready-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
-    .ready-row { display: grid; grid-template-columns: minmax(160px, 1.5fr) repeat(4, minmax(90px, 1fr)); gap: 8px; align-items: start; padding: 10px 0; border-bottom: 1px solid #1d5c66; }
+    .ready-row { display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start; padding: 10px 0; border-bottom: 1px solid #1d5c66; }
+    .ready-row > div { min-width: 0; overflow-wrap: anywhere; }
     .ready-row strong { display: block; }
     .ready-label { color: #9eb0c9; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
     @media (max-width: 720px) {
