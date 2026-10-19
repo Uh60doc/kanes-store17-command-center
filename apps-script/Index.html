@@ -177,6 +177,9 @@
     .eod-step.open { background: rgba(255, 142, 163, 0.14); }
     .eod-banner.Incomplete { border-color: #ff8ea3; }
     .eod-banner.Complete { border-color: #7dffa8; }
+    .mail-state { font-size: 28px; font-weight: 800; margin: 4px 0 8px; }
+    .mail-state.off { color: #ffb4c0; }
+    .mail-state.on { color: #b6f3c0; }
     .train-step { display: flex; gap: 12px; align-items: flex-start; padding: 12px 4px; border-bottom: 1px solid #1d5c66; min-width: 0; }
     .train-step input[type=checkbox] { width: 32px; height: 32px; min-width: 32px; min-height: 32px; margin: 2px 0 0; accent-color: #14c4d4; flex: none; }
     .train-step .train-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 18px; line-height: 1.35; }
@@ -195,10 +198,12 @@
       .eod-step span { font-size: 18px; }
       .train-step { flex-wrap: wrap; }
       .train-step .train-copy { font-size: 18px; }
+      .wrap, #screen, .card { max-width: 100%; min-width: 0; }
+      .wrap { overflow-x: clip; }
     }
     button, input, textarea { font: inherit; }
     textarea { width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid #1d5c66; background: #070b10; color: white; }
-    .brief-mail { border: 1px solid #1d5c66; border-radius: 14px; padding: 8px; background: #ffffff; color: #102027; overflow: auto; }
+    .brief-mail { border: 1px solid #1d5c66; border-radius: 14px; padding: 8px; background: #ffffff; color: #102027; display: block; width: 100%; max-width: 100%; overflow-x: auto; }
     .brief-mail-inner { max-width: 720px; margin: 0 auto; }
     .brief-log td, .brief-log th { font-size: 13px; }
     .morning .figure { font-size: 32px; }
@@ -734,6 +739,9 @@
         var closeAt = qualityAt + 1;
         items.forEach(function (item, index) { if (item[0] === 'closeout') closeAt = index + 1; });
         items.splice(closeAt, 0, ['training', 'Training']);
+        var trainAt = closeAt + 1;
+        items.forEach(function (item, index) { if (item[0] === 'training') trainAt = index + 1; });
+        items.splice(trainAt, 0, ['email', 'Email']);
       }
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['delivery', 'Delivery rescue'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
@@ -2979,6 +2987,53 @@
       document.getElementById('back-people').addEventListener('click', function () { drawPeopleTable(); });
       document.getElementById('print-person').addEventListener('click', function () { window.print(); });
     }
+    function renderEmail(data) {
+      var startup = data.startup || {};
+      var mtd = data.mtd || {};
+      var approval = data.approval || {};
+      function status(row) { return row ? esc(row.status) + (row.at ? ' · ' + esc(String(row.at).slice(0, 16).replace('T', ' ')) : '') : 'None'; }
+      var missing = (data.startupMissing || data.missing || []).map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('');
+      var logs = (data.logs || []).map(function (row) {
+        return '<tr><td>' + esc(String(row.at || '').replace('T', ' ').slice(0, 19)) + '</td><td>' + esc(row.kind) + '</td><td>' + esc(row.channel) + '</td><td>' + esc(row.status) + '</td><td>' + esc(row.to) + '</td><td>' + esc(row.reason || '') + '</td></tr>';
+      }).join('');
+      document.getElementById('header-note').textContent = 'Email control · automatic delivery ' + (data.automatic || 'Off');
+      document.getElementById('screen').innerHTML = '<article class="card"><p class="ready-label">Email control</p><h2 class="mail-state off">' + esc(data.automatic || 'Off') + '</h2><p>Both report switches start off. Automatic production mail stays off until a GM approves this format and turns a switch on.</p><p><strong>Recipient</strong> ' + esc(data.recipient || '') + '</p><p class="sub">Preview generated ' + esc(String(data.generatedAt || '').slice(0, 16).replace('T', ' ')) + ' · format ' + esc(data.version || '') + '</p><p><strong>Source date</strong> ' + esc(data.sourceDate || 'Pending') + ' · store month ' + esc(data.storePeriod || '') + '</p><p><strong>Completeness</strong> ' + esc(data.completeness || '') + '</p>' + (missing ? '<ul class="list">' + missing + '</ul>' : '') + '<p class="sub">' + esc(data.schedule || '') + (data.triggerInstalled ? ' The scheduled import trigger is installed.' : ' The scheduled import trigger is checked when the command center runs.') + '</p><p id="mail-error" class="error"></p>' + (data.canApprove ? '<p class="summary-actions noprint"><button type="button" id="mail-approve">Approve this format</button></p><p class="sub">Approval does not turn a switch on and does not send mail. Format approval: ' + (approval.approved ? 'approved by ' + esc(approval.by || '') : 'not approved') + '.</p><label class="train-step"><input id="mail-startup" type="checkbox"' + (startup.enabled ? ' checked' : '') + '><span>Morning Start-Up automatic delivery</span></label><label class="train-step"><input id="mail-mtd" type="checkbox"' + (mtd.enabled ? ' checked' : '') + '><span>MTD Performance automatic delivery</span></label><p class="noprint"><button type="button" id="mail-save">Save switches</button></p><label>Test recipient<input id="mail-to" placeholder="Type the exact recipient"></label><label class="train-step"><input id="mail-confirm" type="checkbox"><span>I confirm this exact recipient</span></label><p class="noprint"><button type="button" class="secondary" id="mail-test-startup">Test Morning Start-Up</button> <button type="button" class="secondary" id="mail-test-mtd">Test MTD Performance</button></p>' : '<p>An Admin approves the format and the switches.</p>') + '</article>' +
+        '<h2 class="section-title">Morning Start-Up</h2><p class="sub">' + esc(startup.subject || '') + ' · switch ' + (startup.enabled ? 'On' : 'Off') + ' · last test ' + status(startup.test) + ' · last automatic ' + status(startup.automatic) + '</p><div class="brief-mail"><div class="brief-mail-inner">' + (startup.html || '') + '</div></div>' +
+        '<h2 class="section-title">MTD Performance</h2><p class="sub">' + esc(mtd.subject || '') + ' · switch ' + (mtd.enabled ? 'On' : 'Off') + ' · last test ' + status(mtd.test) + ' · last automatic ' + status(mtd.automatic) + '</p><div class="brief-mail"><div class="brief-mail-inner">' + (mtd.html || '') + '</div></div>' +
+        '<article class="card noprint"><h2>Delivery log</h2><table class="kpi brief-log"><tr><th>When</th><th>Email</th><th>Channel</th><th>Status</th><th>To</th><th>Note</th></tr>' + (logs || '<tr><td colspan="6">No delivery attempts yet.</td></tr>') + '</table></article>';
+      function failed(error) {
+        var box = document.getElementById('mail-error');
+        if (box) box.textContent = error.message || String(error);
+      }
+      var approve = document.getElementById('mail-approve');
+      if (approve) approve.addEventListener('click', function () {
+        document.getElementById('mail-error').textContent = '';
+        api('approveBriefFormat', {}).then(renderEmail).catch(failed);
+      });
+      var save = document.getElementById('mail-save');
+      if (save) save.addEventListener('click', function () {
+        document.getElementById('mail-error').textContent = '';
+        api('saveBriefMailSettings', { startup: document.getElementById('mail-startup').checked ? 'yes' : 'no', mtd: document.getElementById('mail-mtd').checked ? 'yes' : 'no' }).then(renderEmail).catch(failed);
+      });
+      function testSend(kind) {
+        var box = document.getElementById('mail-error');
+        var typed = String(document.getElementById('mail-to').value || '').trim();
+        box.textContent = '';
+        if (!document.getElementById('mail-confirm').checked || typed !== String(data.recipient || '')) {
+          box.textContent = 'Type the exact recipient and check the confirmation. Nothing was sent.';
+          return;
+        }
+        if (!window.confirm('Send one test of this report only to ' + typed + '? Automatic delivery stays off.')) {
+          box.textContent = 'Test send cancelled. Nothing was emailed.';
+          return;
+        }
+        api('sendBriefTest', { kind: kind, to: typed, confirmRecipient: 'yes' }).then(function () { return api('emailControl'); }).then(renderEmail).catch(failed);
+      }
+      var testStartup = document.getElementById('mail-test-startup');
+      if (testStartup) testStartup.addEventListener('click', function () { testSend('startup'); });
+      var testMtd = document.getElementById('mail-test-mtd');
+      if (testMtd) testMtd.addEventListener('click', function () { testSend('mtd'); });
+    }
     function renderBrief(data) {
       document.getElementById('header-note').textContent = 'Manager brief · ' + (data.today || '') + ' · version ' + (data.version || '');
       document.body.classList.remove('print-brief');
@@ -2991,17 +3046,7 @@
       }).join('');
       var missing = (data.startupMissing || data.missing || []).map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('');
       var admin = '';
-      if (mail.canEnable) {
-        admin = '<article class="card noprint" id="brief-admin"><h2>Automatic delivery</h2>' +
-          '<p class="sub">Automatic production delivery is ' + (mail.enabled ? 'ON' : 'OFF') + '. It stays off. The management list ' + esc(mail.liveList || mail.to || '') + ' is not used for a test. Type a different address and confirm it before a test send.</p>' +
-          '<label><input id="brief-enabled" type="checkbox" ' + (mail.enabled ? 'checked' : '') + ' /> Enable automatic production delivery before 7:00 AM ET</label>' +
-          '<label>Production recipient</label><input id="brief-prod-to" value="' + esc(mail.to || '') + '" />' +
-          '<label>Test address</label><input id="brief-test-to" value="" placeholder="Type the test recipient, then confirm" />' +
-          '<p id="brief-admin-error" class="error"></p>' +
-          '<p class="summary-actions"><button type="button" id="brief-save-mail">Save delivery settings</button> ' +
-          '<button type="button" class="secondary" id="brief-test-startup">Send Start-Up test</button> ' +
-          '<button type="button" class="secondary" id="brief-test-mtd">Send month-to-date test</button></p></article>';
-      }
+      admin = '<article class="card noprint" id="brief-admin"><h2>Automatic delivery</h2><p>Automatic delivery stays off until a GM approves the format and turns on a report from Email Control.</p><p class="summary-actions"><button type="button" id="brief-open-email">Open Email Control</button></p></article>';
       var resend = '<p class="summary-actions noprint"><button type="button" id="print-brief">Print Morning Start-Up</button> <button type="button" id="print-mtd">Print month-to-date</button></p>';
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Morning Start-Up</h2>' +
@@ -3048,39 +3093,8 @@
         if (/sign in/i.test(error.message)) showLogin(error.message);
         else document.getElementById(id).textContent = error.message;
       }
-      var saveMail = document.getElementById('brief-save-mail');
-      if (saveMail) saveMail.addEventListener('click', function () {
-        document.getElementById('brief-admin-error').textContent = '';
-        api('saveBriefMailSettings', { enabled: document.getElementById('brief-enabled').checked, to: document.getElementById('brief-prod-to').value }).then(renderBrief).catch(function (error) { briefFailed(error, 'brief-admin-error'); });
-      });
-      function sendTest(kind) {
-        var input = document.getElementById('brief-test-to');
-        var to = String(input && input.value || '').trim();
-        var error = document.getElementById('brief-admin-error');
-        error.textContent = '';
-        if (!to) {
-          error.textContent = 'Type the test recipient, then confirm the send. The management list is not filled in for you.';
-          return;
-        }
-        var live = String(mail.liveList || mail.to || '').trim().toLowerCase();
-        if (live && to.toLowerCase() === live) {
-          error.textContent = 'That is the live management list. Automatic delivery is off, so this test was not sent.';
-          return;
-        }
-        var label = kind === 'mtd' ? 'month-to-date performance report' : 'Morning Start-Up';
-        if (!window.confirm('Send the ' + label + ' test only to ' + to + '? The management distribution list will not be copied.')) {
-          error.textContent = 'Test send cancelled. Nothing was emailed.';
-          return;
-        }
-        api('sendBriefTest', { kind: kind, to: to }).then(function (result) {
-          error.textContent = result.sent ? 'Test sent to ' + result.to + '.' : (result.reason || 'Test was not sent.');
-          api('brief').then(renderBrief);
-        }).catch(function (error) { briefFailed(error, 'brief-admin-error'); });
-      }
-      var testStartup = document.getElementById('brief-test-startup');
-      if (testStartup) testStartup.addEventListener('click', function () { sendTest('startup'); });
-      var testMtd = document.getElementById('brief-test-mtd');
-      if (testMtd) testMtd.addEventListener('click', function () { sendTest('mtd'); });
+      var openEmail = document.getElementById('brief-open-email');
+      if (openEmail) openEmail.addEventListener('click', function () { openScreen('email'); });
     }
 
     function renderMorning(data) {
@@ -5063,11 +5077,12 @@
       else if (name === 'orderQuality') renderOrderQuality(data);
       else if (name === 'closeout') renderCloseout(data);
       else if (name === 'training') renderTraining(data);
+      else if (name === 'email') renderEmail(data);
       else if (name === 'coverage') renderCoverage(data);
     }
     function reloadCurrentScreen() {
       var name = screen;
-      var request = name === 'written' || name === 'delivered' ? 'home' : name;
+      var request = name === 'written' || name === 'delivered' ? 'home' : (name === 'email' ? 'emailControl' : name);
       if (name === 'admin' || name === 'documents' || name === 'upload') return Promise.resolve({ applied: false, busy: true });
       return api(request, name === 'reports' ? reportRequest() : undefined).then(function (data) {
         if (screen !== name || displayHold || displayBusy()) return { applied: false, busy: true };
@@ -5125,7 +5140,7 @@
       document.body.classList.remove('print-summary', 'print-eval', 'print-doc', 'print-brief', 'print-coach', 'print-evalprep', 'print-actions', 'print-report');
       closeDocViewer();
       drawNav();
-      var request = name === 'written' || name === 'delivered' ? 'home' : name;
+      var request = name === 'written' || name === 'delivered' ? 'home' : (name === 'email' ? 'emailControl' : name);
       if (name === 'admin') { renderAdmin(); return; }
       if (name === 'documents') {
         docNotice = null;

@@ -1,5 +1,5 @@
 var SPREADSHEET_ID_ = '1KtsfQPQRdg3IdNXomlM5t47IyE1psouxvgW-D8VSLfw';
-var APP_VERSION_ = '1.0.29';
+var APP_VERSION_ = '1.0.30';
 
 var ROUTES_ = {
   login: null,
@@ -12,6 +12,8 @@ var ROUTES_ = {
   brief: ['manager', 'admin'],
   saveBriefPlan: ['manager', 'admin'],
   previewBriefEmail: ['manager', 'admin'],
+  emailControl: ['manager', 'admin'],
+  approveBriefFormat: ['admin'],
   sendBriefTest: ['admin'],
   saveBriefMailSettings: ['admin'],
   resendBriefEmail: ['manager', 'admin'],
@@ -72,12 +74,12 @@ var ROUTES_ = {
 };
 
 // Routes that only read. Every other route can change figures, so the cached pages are dropped after it runs.
-var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, previewBriefEmail: true, health: true, bedding: true, coverage: true, roster: true, evals: true, evalWorkbook: true, uploads: true, documents: true, docFile: true, devLog: true, dataPulse: true, coach: true, recovery: true, coaching: true, evalPrep: true, evalPrepWorkbook: true, leakage: true, delivery: true, previewRescue: true, accel: true, actions: true, reports: true, readiness: true, variance: true, orderQuality: true, closeout: true, training: true };
+var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, previewBriefEmail: true, emailControl: true, health: true, bedding: true, coverage: true, roster: true, evals: true, evalWorkbook: true, uploads: true, documents: true, docFile: true, devLog: true, dataPulse: true, coach: true, recovery: true, coaching: true, evalPrep: true, evalPrepWorkbook: true, leakage: true, delivery: true, previewRescue: true, accel: true, actions: true, reports: true, readiness: true, variance: true, orderQuality: true, closeout: true, training: true };
 // Backups and restore drills write only their own logs, which no cached page reads; a problem they record moves the version itself.
 var LOG_ONLY_ROUTES_ = { runBackup: true };
 // Pages whose reply is reused until the data changes. Each reads every tab once while it is built.
 var CACHED_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true, coach: true, recovery: true, coaching: true, evalPrep: true, leakage: true, delivery: true, accel: true, actions: true };
-var MEMO_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true, health: true, coverage: true, coach: true, recovery: true, coaching: true, evalPrep: true, leakage: true, delivery: true, accel: true, actions: true, reports: true, readiness: true, variance: true, orderQuality: true, closeout: true, training: true };
+var MEMO_PAGES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, bedding: true, health: true, emailControl: true, coverage: true, coach: true, recovery: true, coaching: true, evalPrep: true, leakage: true, delivery: true, accel: true, actions: true, reports: true, readiness: true, variance: true, orderQuality: true, closeout: true, training: true };
 var PAGE_CACHE_SECONDS_ = 1800;
 var PAGE_CACHE_MAX_CHARS_ = 95000;
 
@@ -261,6 +263,8 @@ function route_(name, payload) {
   if (name === 'brief') return brief_(payload);
   if (name === 'saveBriefPlan') return saveBriefPlan_(payload);
   if (name === 'previewBriefEmail') return previewBriefEmail_(payload);
+  if (name === 'emailControl') return emailControl_(payload);
+  if (name === 'approveBriefFormat') return approveBriefFormat_(payload);
   if (name === 'sendBriefTest') return sendBriefTest_(payload);
   if (name === 'saveBriefMailSettings') return saveBriefMailSettings_(payload);
   if (name === 'resendBriefEmail') return resendBriefEmail_(payload);
