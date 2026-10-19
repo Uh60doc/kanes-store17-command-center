@@ -4037,9 +4037,11 @@
     var uploadFiles = [];
     var uploadResults = [];
     var uploadBusy = false;
+    var uploadProgress = '';
+    var uploadSummary = null;
     function uploadTone(status) {
       if (status === 'Imported' || status === 'Already on file') return 'good';
-      if (status === 'Needs Review') return 'warn';
+      if (status === 'Needs Review' || status === 'Unsupported') return 'warn';
       if (status === 'Failed') return 'bad';
       return 'pending';
     }
@@ -4054,6 +4056,192 @@
     }
     function uploadSize(bytes) {
       return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB';
+    }
+    /* ZIP_BATCH_START */
+    function unzipStoreReports(buffer) {
+      var bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+      var MAX_ZIP = 40 * 1024 * 1024;
+      var MAX_FILE = 15 * 1024 * 1024;
+      var MAX_TOTAL = 80 * 1024 * 1024;
+      var MAX_FILES = 60;
+      if (bytes.length > MAX_ZIP) return { error: 'This ZIP is larger than 40 MB. Split it and upload the parts.' };
+      if (bytes.length < 22) return { error: 'This ZIP could not be opened.' };
+      var view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      var eocd = -1;
+      var scan = Math.max(0, bytes.length - 22 - 65535);
+      var i;
+      for (i = bytes.length - 22; i >= scan; i -= 1) {
+        if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+      }
+      if (eocd < 0) return { error: 'This ZIP could not be opened. Save it again and try once more.' };
+      var count = view.getUint16(eocd + 10, true);
+      var dirSize = view.getUint32(eocd + 12, true);
+      var dirOffset = view.getUint32(eocd + 16, true);
+      if (count === 0xffff || dirSize === 0xffffffff || dirOffset === 0xffffffff) return { error: 'This ZIP uses a format the uploader cannot open. Extract it on this computer and upload the PDF and Excel files.' };
+      if (dirOffset + 46 > bytes.length) return { error: 'This ZIP could not be opened. It may be incomplete.' };
+      var files = [];
+      var skipped = [];
+      var total = 0;
+      var cursor = dirOffset;
+      var n;
+      for (n = 0; n < count; n += 1) {
+        if (cursor + 46 > bytes.length || view.getUint32(cursor, true) !== 0x02014b50) return { error: 'This ZIP could not be opened. It may be incomplete.' };
+        var flags = view.getUint16(cursor + 8, true);
+        var method = view.getUint16(cursor + 10, true);
+        var compSize = view.getUint32(cursor + 20, true);
+        var rawSize = view.getUint32(cursor + 24, true);
+        var nameLen = view.getUint16(cursor + 28, true);
+        var extraLen = view.getUint16(cursor + 30, true);
+        var commentLen = view.getUint16(cursor + 32, true);
+        var localOffset = view.getUint32(cursor + 42, true);
+        var name = new TextDecoder('utf-8').decode(bytes.subarray(cursor + 46, cursor + 46 + nameLen));
+        cursor += 46 + nameLen + extraLen + commentLen;
+        if (!name || /\/$/.test(name)) continue;
+        var base = name.split('/').pop();
+        var lower = name.toLowerCase();
+        if (lower.indexOf('__macosx/') === 0 || base === '.DS_Store' || base === 'Thumbs.db' || base === 'desktop.ini' || base.charAt(0) === '.' || base.indexOf('~$') === 0) continue;
+        if (name.indexOf('..') !== -1 || name.charAt(0) === '/' || name.indexOf('\\') !== -1 || name.indexOf('\0') !== -1) {
+          skipped.push({ name: base, status: 'Unsupported', message: 'This entry was skipped because its path is not safe. Nothing was imported from it.' });
+          continue;
+        }
+        var nestedZip = /\.zip$/i.test(base);
+        var supported = /\.pdf$/i.test(base) || /\.xlsx$/i.test(base) || nestedZip;
+        if (!supported) {
+          skipped.push({ name: base, status: 'Unsupported', message: 'Only PDF and Excel .xlsx reports are imported. This file was skipped.' });
+          continue;
+        }
+        if (flags & 1) {
+          skipped.push({ name: base, status: 'Failed', message: 'This file is encrypted inside the ZIP. Remove the password and upload it again.' });
+          continue;
+        }
+        if (method !== 0 && method !== 8) {
+          skipped.push({ name: base, status: 'Failed', message: 'This file uses a compression method the uploader cannot read. Save the ZIP again with normal compression.' });
+          continue;
+        }
+        if (compSize === 0xffffffff || rawSize === 0xffffffff || rawSize > MAX_FILE || compSize > MAX_FILE) {
+          skipped.push({ name: base, status: 'Failed', message: base + ' is larger than 15 MB, so it was not imported.' });
+          continue;
+        }
+        if (files.length >= MAX_FILES) {
+          skipped.push({ name: base, status: 'Failed', message: 'A ZIP can hold 60 reports. This file was past that limit and was not imported.' });
+          continue;
+        }
+        total += rawSize;
+        if (total > MAX_TOTAL) return { error: 'The reports inside this ZIP expand past 80 MB. Split the ZIP and upload the parts.' };
+        if (localOffset + 30 > bytes.length || view.getUint32(localOffset, true) !== 0x04034b50) {
+          skipped.push({ name: base, status: 'Failed', message: base + ' could not be read from the ZIP. The other files can still be imported.' });
+          continue;
+        }
+        var localName = view.getUint16(localOffset + 26, true);
+        var localExtra = view.getUint16(localOffset + 28, true);
+        var dataStart = localOffset + 30 + localName + localExtra;
+        if (dataStart + compSize > bytes.length) {
+          skipped.push({ name: base, status: 'Failed', message: base + ' is incomplete inside the ZIP. The other files can still be imported.' });
+          continue;
+        }
+        files.push({ name: base, path: name, method: method, compressed: bytes.subarray(dataStart, dataStart + compSize), rawSize: rawSize });
+      }
+      return { files: files, skipped: skipped };
+    }
+    function inflateZipEntry(entry) {
+      if (entry.method === 0) return Promise.resolve(entry.compressed.slice());
+      if (typeof DecompressionStream !== 'function') return Promise.reject(new Error('This browser cannot open a ZIP. Upload the PDF and Excel files directly.'));
+      var stream = new Blob([entry.compressed]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      return new Response(stream).arrayBuffer().then(function (buffer) {
+        var out = new Uint8Array(buffer);
+        if (entry.rawSize && out.length !== entry.rawSize) throw new Error(entry.name + ' did not expand to the size stored in the ZIP.');
+        return out;
+      });
+    }
+    /* ZIP_BATCH_END */
+    function uniqueUploadName(name, seen) {
+      var candidate = name;
+      var n = 2;
+      while (seen[candidate]) {
+        var dot = name.lastIndexOf('.');
+        candidate = (dot > 0 ? name.slice(0, dot) : name) + ' (' + n + ')' + (dot > 0 ? name.slice(dot) : '');
+        n += 1;
+      }
+      seen[candidate] = true;
+      return candidate;
+    }
+    function expandUploadSelection(chosen) {
+      var files = [];
+      var skipped = [];
+      var seen = {};
+      var walk = function (file, source, depth) {
+        if (file.size > 40 * 1024 * 1024) {
+          skipped.push({ file: file.name, status: 'Failed', report: '', message: file.name + ' is larger than 40 MB. Split it and upload the parts.' });
+          return Promise.resolve();
+        }
+        if (!/\.zip$/i.test(file.name)) {
+          if (/\.pdf$/i.test(file.name) || /\.xlsx$/i.test(file.name)) {
+            files.push({ name: uniqueUploadName(file.name, seen), size: file.size, blob: file, fromZip: source });
+          } else {
+            skipped.push({ file: file.name, status: 'Unsupported', report: '', message: 'Only PDF, Excel .xlsx, and ZIP files can be uploaded. Nothing was changed.' });
+          }
+          return Promise.resolve();
+        }
+        return file.arrayBuffer().then(function (buffer) {
+          var opened = unzipStoreReports(buffer);
+          if (opened.error) {
+            skipped.push({ file: file.name, status: 'Failed', report: '', message: opened.error });
+            return;
+          }
+          (opened.skipped || []).forEach(function (item) {
+            skipped.push({ file: item.name, status: item.status, report: '', message: item.message });
+          });
+          if (!(opened.files || []).length && !(opened.skipped || []).length) {
+            skipped.push({ file: file.name, status: 'Failed', report: '', message: 'The ZIP has no PDF or Excel reports. Nothing was changed.' });
+            return;
+          }
+          var sequence = Promise.resolve();
+          opened.files.forEach(function (entry) {
+            sequence = sequence.then(function () {
+              return inflateZipEntry(entry).then(function (bytes) {
+                var type = /\.pdf$/i.test(entry.name) ? 'application/pdf' : (/\.zip$/i.test(entry.name) ? 'application/zip' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+                var inner = new File([bytes], entry.name, { type: type });
+                if (/\.zip$/i.test(entry.name)) {
+                  if (depth >= 1) {
+                    skipped.push({ file: entry.name, status: 'Unsupported', report: '', message: 'A ZIP inside a ZIP was skipped. Upload that ZIP on its own.' });
+                    return;
+                  }
+                  return walk(inner, file.name, depth + 1);
+                }
+                files.push({ name: uniqueUploadName(entry.name, seen), size: inner.size, blob: inner, fromZip: source || file.name });
+              }, function (error) {
+                skipped.push({ file: entry.name, status: 'Failed', report: '', message: (error && error.message) || (entry.name + ' could not be read from the ZIP. The other files can still be imported.') });
+              });
+            });
+          });
+          return sequence;
+        }, function () {
+          skipped.push({ file: file.name, status: 'Failed', report: '', message: file.name + ' could not be read from this device.' });
+        });
+      };
+      var chain = Promise.resolve();
+      chosen.forEach(function (file) { chain = chain.then(function () { return walk(file, '', 0); }); });
+      return chain.then(function () { return { files: files, skipped: skipped }; });
+    }
+    function uploadBatchSummary(results, missingByDate) {
+      var count = function (status) { return results.filter(function (result) { return result.status === status; }).length; };
+      var dates = [];
+      results.forEach(function (result) {
+        if ((result.status === 'Imported' || result.status === 'Already on file') && result.start && dates.indexOf(result.start) === -1) dates.push(result.start);
+      });
+      dates.sort();
+      return {
+        found: results.length,
+        imported: count('Imported'),
+        already: count('Already on file'),
+        failed: count('Failed'),
+        review: count('Needs Review'),
+        unsupported: count('Unsupported'),
+        dates: dates.length ? dates.join(', ') : 'None. No report was added.',
+        missing: missingByDate.length ? missingByDate.join(' ') : 'None of the checked days is missing a report.',
+        refresh: '',
+        audit: '',
+      };
     }
     function uploadOrder(files) {
       var rank = function (file) {
@@ -4076,11 +4264,22 @@
       }).join('');
       var missing = data.checklist.filter(function (item) { return item.status === 'Missing'; }).map(function (item) { return item.label; });
       var selected = uploadFiles.map(function (file) {
-        return '<li>' + esc(file.name) + ' <span class="pending">' + uploadSize(file.size) + '</span></li>';
+        return '<li>' + esc(file.name) + ' <span class="pending">' + uploadSize(file.size) + (file.fromZip ? ' · from ' + esc(file.fromZip) : '') + '</span></li>';
       }).join('');
       var results = uploadResults.map(function (result) {
-        return '<li>' + uploadPill(result.status) + '<strong>' + esc(result.file) + '</strong>' + (result.report ? ' <span class="pending">' + esc(result.report) + '</span>' : '') + '<p class="sub">' + esc(result.message) + '</p></li>';
+        return '<li>' + uploadPill(result.status) + '<strong>' + esc(result.file) + '</strong>' +
+          (result.report ? ' <span class="pending">' + esc(result.report) + '</span>' : '') +
+          (result.start ? ' <span class="pending">' + esc(result.start) + '</span>' : '') +
+          '<p class="sub">' + esc(result.message) + '</p></li>';
       }).join('');
+      var summary = uploadSummary
+        ? '<h3>Batch summary</h3><p class="upload-count">' + uploadSummary.found + ' files found · ' + uploadSummary.imported + ' imported · ' + uploadSummary.already + ' already on file · ' + uploadSummary.failed + ' failed' + (uploadSummary.review ? ' · ' + uploadSummary.review + ' need review' : '') + (uploadSummary.unsupported ? ' · ' + uploadSummary.unsupported + ' unsupported' : '') + '</p>' +
+          '<p class="sub"><strong>Business dates updated:</strong> ' + esc(uploadSummary.dates) + '</p>' +
+          '<p class="sub"><strong>Still missing:</strong> ' + esc(uploadSummary.missing) + '</p>' +
+          '<p class="sub"><strong>Dashboard:</strong> ' + esc(uploadSummary.refresh) + '</p>' +
+          '<p class="sub"><strong>Data consistency:</strong> ' + esc(uploadSummary.audit) + '</p>'
+        : '';
+      var canRetry = !uploadBusy && uploadFiles.some(function (file) { return uploadResults.some(function (result) { return result.status === 'Failed' && result.file === file.name; }); });
       var days = data.recent.map(function (day) {
         return '<button type="button" class="' + (day.date === data.date ? '' : 'secondary') + '" data-upload-day="' + esc(day.date) + '">' + esc(day.date.slice(5)) + ' · ' + day.imported + '/' + data.total + (day.review ? ' · ' + day.review + ' to review' : '') + '</button>';
       }).join('');
@@ -4093,14 +4292,17 @@
         '<div class="upload-grid">' +
         '<article class="card upload-card"><h2>1 · Business date</h2>' +
         '<label for="upload-date">The day these reports cover</label><input id="upload-date" type="date" max="' + esc(data.today) + '" value="' + esc(data.date) + '" />' +
-        '<p class="sub">Each PDF prints its own report date, and it must match this date. PERQ exports and renamed Excel files do not print a date, so you confirm it below.</p>' +
+        '<p class="sub">Each PDF prints its own report date. A ZIP can hold several days of PDF and Excel reports; each file is filed on the date printed in that file. PERQ exports do not print a date, so confirm the date below for those.</p>' +
         '<h3>2 · Choose the files</h3>' +
-        '<input id="upload-files" type="file" multiple accept=".pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />' +
-        (selected ? '<ul class="upload-list">' + selected + '</ul>' : '<p class="sub">No files chosen. You can choose some or all nine; the rest can be uploaded later.</p>') +
-        '<label class="upload-confirm"><input id="upload-confirm" type="checkbox" /> <span>These Excel files are for ' + esc(data.dateText) + '. Required for the PERQ exports.</span></label>' +
+        '<input id="upload-files" type="file" multiple accept=".pdf,.xlsx,.zip,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip"' + (uploadBusy ? ' disabled' : '') + ' />' +
+        (selected ? '<ul class="upload-list">' + selected + '</ul>' : '<p class="sub">No files chosen. Choose the day’s PDFs and Excel files, or one ZIP that contains them. A ZIP may include more than one day.</p>') +
+        '<label class="upload-confirm"><input id="upload-confirm" type="checkbox" /> <span>These Excel files are for ' + esc(data.dateText) + '. Required for PERQ exports and for an Excel file that does not print its own date.</span></label>' +
+        (uploadProgress ? '<p class="sub" id="upload-progress">' + esc(uploadProgress) + '</p>' : '') +
         '<p id="upload-error" class="error"></p>' +
         '<p class="summary-actions"><button id="upload-go" type="button"' + (uploadFiles.length && !uploadBusy ? '' : ' disabled') + '>' + (uploadBusy ? 'Importing…' : 'Import reports') + '</button>' +
+        (canRetry ? ' <button id="upload-retry" type="button" class="secondary">Retry files that did not import</button>' : '') +
         (uploadFiles.length && !uploadBusy ? ' <button id="upload-clear" type="button" class="secondary">Clear</button>' : '') + '</p>' +
+        summary +
         (results ? '<h3>This import</h3><ul class="upload-list">' + results + '</ul>' : '') +
         '</article>' +
         '<article class="card upload-card"><h2>Reports for ' + esc(data.dateText) + '</h2>' +
@@ -4124,13 +4326,42 @@
         loadUploads(event.target.value, false).catch(uploadFailed);
       });
       document.getElementById('upload-files').addEventListener('change', function (event) {
-        uploadFiles = Array.prototype.slice.call(event.target.files || []);
+        var chosen = Array.prototype.slice.call(event.target.files || []);
         uploadResults = [];
+        uploadSummary = null;
+        uploadFiles = [];
+        uploadProgress = chosen.some(function (file) { return /\.zip$/i.test(file.name); }) ? 'Opening the ZIP…' : '';
+        uploadBusy = !!uploadProgress;
         renderUpload(uploadCache);
+        expandUploadSelection(chosen).then(function (opened) {
+          uploadBusy = false;
+          uploadProgress = '';
+          uploadFiles = opened.files;
+          uploadResults = opened.skipped;
+          if (!opened.files.length && opened.skipped.length) {
+            uploadSummary = uploadBatchSummary(opened.skipped, []);
+            uploadSummary.refresh = 'Nothing was imported, so the dashboard was not recalculated.';
+            uploadSummary.audit = 'Not run. No figure was changed.';
+          }
+          renderUpload(uploadCache);
+        }).catch(function (error) {
+          uploadBusy = false;
+          uploadProgress = '';
+          renderUpload(uploadCache);
+          uploadFailed(error);
+        });
       });
       var clear = document.getElementById('upload-clear');
-      if (clear) clear.addEventListener('click', function () { uploadFiles = []; renderUpload(uploadCache); });
-      document.getElementById('upload-go').addEventListener('click', runUpload);
+      if (clear) clear.addEventListener('click', function () { uploadFiles = []; uploadResults = []; uploadSummary = null; uploadProgress = ''; renderUpload(uploadCache); });
+      document.getElementById('upload-go').addEventListener('click', function () { runUpload(); });
+      var retry = document.getElementById('upload-retry');
+      if (retry) retry.addEventListener('click', function () {
+        var failed = {};
+        uploadResults.forEach(function (result) { if (result.status === 'Failed') failed[result.file] = true; });
+        var keep = uploadResults.filter(function (result) { return result.status !== 'Failed'; });
+        uploadFiles = uploadFiles.filter(function (file) { return failed[file.name]; });
+        runUpload(keep);
+      });
       Array.prototype.forEach.call(document.querySelectorAll('[data-upload-day]'), function (button) {
         button.addEventListener('click', function () { uploadResults = []; loadUploads(button.getAttribute('data-upload-day'), false).catch(uploadFailed); });
       });
@@ -4150,50 +4381,96 @@
         reader.readAsDataURL(file);
       });
     }
-    function runUpload() {
+    function runUpload(kept) {
       if (uploadBusy || !uploadFiles.length) return;
       var date = document.getElementById('upload-date').value;
       var confirmed = document.getElementById('upload-confirm').checked;
       var files = uploadOrder(uploadFiles);
+      var prior = Array.isArray(kept) ? kept : [];
       uploadBusy = true;
-      uploadResults = [];
+      uploadResults = prior.slice();
+      uploadSummary = null;
+      uploadProgress = 'Processing 1 of ' + files.length + ' files…';
       renderUpload(uploadCache);
-      document.getElementById('upload-confirm').checked = confirmed;
-      var note = document.getElementById('upload-error');
+      var confirmBox = document.getElementById('upload-confirm');
+      if (confirmBox) confirmBox.checked = confirmed;
       var step = function (index) {
         if (index >= files.length) return Promise.resolve();
         var file = files[index];
-        note.className = 'sub';
-        note.textContent = 'Importing ' + (index + 1) + ' of ' + files.length + ': ' + file.name + '…';
-        return readBase64(file).then(function (base64) {
-          return api('uploadReport', { date: date, fileName: file.name, base64: base64, confirmDate: confirmed ? date : '' });
+        uploadProgress = 'Processing ' + (index + 1) + ' of ' + files.length + ' files… ' + file.name;
+        renderUpload(uploadCache);
+        var box = document.getElementById('upload-confirm');
+        if (box) box.checked = confirmed;
+        return readBase64(file.blob || file).then(function (base64) {
+          return api('uploadReport', { date: date, fileName: file.name, base64: base64, confirmDate: confirmed ? date : '', adoptReportDate: !!file.fromZip });
         }).then(function (result) {
+          result.file = result.file || file.name;
           uploadResults.push(result);
         }, function (error) {
           if (/sign in/i.test(error.message)) throw error;
           uploadResults.push({ file: file.name, status: 'Failed', report: '', message: error.message });
         }).then(function () { return step(index + 1); });
       };
+      var refreshedPage = null;
       step(0).then(function () {
-        note.textContent = 'Recalculating the dashboard…';
+        uploadProgress = 'Recalculating the dashboard…';
+        renderUpload(uploadCache);
         return api('uploads', { date: date, refresh: true });
       }).then(function (data) {
-        var kept = uploadResults.some(function (result) { return result.status === 'Imported' || result.status === 'Already on file'; });
-        if (!kept) return data;
-        note.textContent = 'Refreshing Home and Sales Team…';
+        refreshedPage = data;
+        var dates = [];
+        uploadResults.forEach(function (result) {
+          if (result.start && dates.indexOf(result.start) === -1) dates.push(result.start);
+        });
+        if (dates.indexOf(date) === -1) dates.push(date);
+        var extra = dates.filter(function (day) { return day !== data.date; });
+        var sequence = Promise.resolve([]);
+        var pages = [];
+        extra.forEach(function (day) {
+          sequence = sequence.then(function () {
+            return api('uploads', { date: day, refresh: false }).then(function (page) { pages.push(page); });
+          });
+        });
+        return sequence.then(function () { return pages; });
+      }).then(function (pages) {
+        var missing = [];
+        var describe = function (page) {
+          var names = page.checklist.filter(function (item) { return item.status === 'Missing'; }).map(function (item) { return item.label; });
+          missing.push(page.date + ': ' + (names.length ? names.join(', ') : 'none'));
+        };
+        describe(refreshedPage);
+        pages.forEach(describe);
+        uploadSummary = uploadBatchSummary(uploadResults, missing);
+        uploadSummary.refresh = refreshedPage.dashboardRefreshed
+          ? 'Recalculated. Report readiness was updated from the latest verified reports.'
+          : 'The recalculation did not run. Open Upload reports again and import any file that is still missing. Figures already saved were not changed.';
+        uploadSummary.audit = refreshedPage.consistency
+          ? refreshedPage.consistency.status + ' (' + refreshedPage.consistency.matched + ' of ' + refreshedPage.consistency.checked + ' matched, ' + refreshedPage.consistency.discrepancies + ' discrepancies).'
+          : 'The consistency check did not return a result. No figure was invented.';
+        var keptWork = uploadResults.some(function (result) { return result.status === 'Imported' || result.status === 'Already on file'; });
+        if (!keptWork) return refreshedPage;
+        uploadProgress = 'Refreshing Home and Sales Team…';
+        renderUpload(uploadCache);
         return Promise.all([api('home'), api('people')]).then(function () {
-          data.pagesRefreshed = true;
-          return data;
+          refreshedPage.pagesRefreshed = true;
+          return refreshedPage;
         }, function () {
-          data.pagesRefreshed = true;
-          return data;
+          refreshedPage.pagesRefreshed = true;
+          return refreshedPage;
         });
       }).then(function (data) {
         uploadBusy = false;
-        uploadFiles = [];
+        uploadProgress = '';
+        var failed = {};
+        uploadResults.forEach(function (result) { if (result.status === 'Failed') failed[result.file] = true; });
+        uploadFiles = uploadFiles.filter(function (file) { return failed[file.name]; });
         renderUpload(data);
       }).catch(function (error) {
         uploadBusy = false;
+        uploadProgress = '';
+        uploadSummary = uploadBatchSummary(uploadResults, []);
+        uploadSummary.refresh = 'The batch stopped before the dashboard refresh. Files already imported are on file and will not be added again. Retry the files that failed.';
+        uploadSummary.audit = 'Not run.';
         renderUpload(uploadCache);
         uploadFailed(error);
       });

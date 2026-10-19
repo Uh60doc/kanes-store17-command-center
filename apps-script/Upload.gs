@@ -118,6 +118,8 @@ function classifyWorkbook_(bytes, fileName) {
   try {
     sheets = xlsxCells_(files).filter(function (sheet) { return !sheet.hidden; });
   } catch (error) {
+    var archived = !Object.keys(files).some(function (name) { return /(?:^|\/)xl\/workbook\.xml$/i.test(name); });
+    if (archived) return { problem: 'This is a ZIP archive, not an Excel .xlsx workbook. Choose the ZIP on Upload reports and each PDF or Excel file inside is imported on its own.' };
     return { problem: 'The file is not an Excel .xlsx workbook.' };
   }
   if (!sheets.length) return { problem: 'The workbook has no visible worksheet.' };
@@ -145,7 +147,7 @@ function uploadReport_(payload) {
   var bytes = Utilities.base64Decode(base64);
   if (bytes.length > UPLOAD_MAX_BYTES_) throw new Error(fileName + ' is larger than 15 MB.');
   var sha = sha256Hex_(bytes);
-  var context = { date: date, fileName: fileName, bytes: bytes, sha: sha, confirmed: isoDate_(payload.confirmDate) === date, role: payload.session.role };
+  var context = { date: date, fileName: fileName, bytes: bytes, sha: sha, confirmed: isoDate_(payload.confirmDate) === date, adoptDate: payload.adoptReportDate === true, role: payload.session.role };
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(30000);
@@ -172,8 +174,17 @@ function uploadReport_(payload) {
     UPLOAD_QUIET_ = false;
     lock.releaseLock();
   }
-  uploadTab_().appendRow([new Date().toISOString(), date, context.role, fileName, sha, result.key ? uploadReportLabel_(result.key) : '', result.start || '', result.end || '', result.status, result.message]);
+  uploadTab_().appendRow([new Date().toISOString(), context.date, context.role, fileName, sha, result.key ? uploadReportLabel_(result.key) : '', result.start || '', result.end || '', result.status, result.message]);
   return { file: fileName, sha256: sha, status: result.status, report: result.key ? uploadReportLabel_(result.key) : '', reportKey: result.key || '', start: result.start || '', end: result.end || '', message: result.message };
+}
+
+/** A file from a ZIP is filed on the date printed in the report, even when the page is set to another day. */
+function adoptUploadDate_(context, reportDate) {
+  if (!context.adoptDate) return false;
+  var date = isoDate_(reportDate);
+  if (!date || date > todayNy_()) return false;
+  context.date = date;
+  return true;
 }
 
 function processUpload_(context) {
@@ -233,7 +244,7 @@ function uploadPdf_(context) {
     }
     return finishImport_(context, uploadOutcome_(base, 'Needs Review', 'This ' + parsed.reportType + ' report covers ' + parsed.start + ' through ' + parsed.end + '. Month-to-date reports are not added to daily figures. Upload the single-day report for ' + context.date + '. Nothing was changed.'), 'needs-review');
   }
-  if (parsed.start !== context.date) {
+  if (parsed.start !== context.date && !adoptUploadDate_(context, parsed.start)) {
     return uploadOutcome_(base, 'Failed', 'This ' + parsed.reportType + ' report is for ' + parsed.start + ', not the business date ' + context.date + '. Choose ' + parsed.start + ' as the business date to import it. Nothing was changed.');
   }
   var field = key === 'snapWritten' ? 'snapWritten' : key === 'nwdsrWritten' ? 'nwdsrWritten' : 'nwdsrDelivered';
@@ -294,7 +305,7 @@ function uploadKpiWorkbook_(context, info) {
       }
       return finishImport_(context, uploadOutcome_(base, 'Needs Review', label + ' covers ' + period[1] + ' through ' + period[2] + '. Month-to-date reports are not added to the daily figures, so nothing was changed. Upload the single-day report for ' + context.date + '.'), 'needs-review');
     }
-    if (period[1] !== context.date) {
+    if (period[1] !== context.date && !(period[1] === period[2] && adoptUploadDate_(context, period[1]))) {
       return uploadOutcome_(base, 'Failed', label + ' is for ' + period[1] + ', not the business date ' + context.date + '. Choose ' + period[1] + ' as the business date to import it. Nothing was changed.');
     }
   } else if (!context.confirmed) {
@@ -445,6 +456,8 @@ function recordPerqFact_(fact, fileName) {
 
 function uploadPerq_(context, info) {
   var label = uploadReportLabel_(info.key);
+  var namedDay = /(\d{4}-\d{2}-\d{2})/.exec(context.fileName);
+  if (namedDay && adoptUploadDate_(context, namedDay[1])) context.confirmed = true;
   var date = context.date;
   var base = { key: info.key, start: date, end: date };
   if (!context.confirmed) {
@@ -913,7 +926,9 @@ function uploads_(payload) {
         try { refreshHistory_(); } catch (error) { appendException_('Update Failed', 'Permanent history could not be refreshed after an upload. Nothing already recorded was changed. ' + String(error && error.message ? error.message : error)); }
         try { refreshMetricRegistry_(); } catch (error) { appendException_('Update Failed', 'CC_MetricDefinitions could not be refreshed after an upload. ' + String(error && error.message ? error.message : error)); }
         noteHealth_('last_calculation', new Date().toISOString());
-        if (typeof qualityAfterUpdate_ === 'function') qualityAfterUpdate_('upload by ' + payload.session.role, false);
+        var quality = typeof qualityAfterUpdate_ === 'function' ? qualityAfterUpdate_('upload by ' + payload.session.role, false) : null;
+        if (!refreshed) refreshed = { issues: [], kpiUpdated: [], kpiAppended: [] };
+        refreshed.quality = quality;
       } finally {
         lock.releaseLock();
       }
@@ -937,6 +952,7 @@ function uploads_(payload) {
   var mailbox = lastMailboxImport_(evidence.uploads);
   if (mailbox && (!last || mailbox.at > last.at)) last = mailbox;
   var storeKpi = sheet_('CC_Kpi').filter(function (row) { return String(row.metric) === 'Bedding' && isoDate_(row.period_start) === storePeriodContaining_(date).start; })[0];
+  var audit = refreshed && refreshed.quality && refreshed.quality.consistency;
   return {
     role: payload.session.role,
     today: today,
@@ -950,7 +966,9 @@ function uploads_(payload) {
     latestComplete: complete,
     lastSuccess: last,
     kpiThrough: storeKpi ? isoDate_(storeKpi.verified_through) : '',
-    refreshed: refreshed ? { issues: refreshed.issues, updated: refreshed.kpiUpdated.length + refreshed.kpiAppended.length } : null,
+    refreshed: refreshed ? { issues: refreshed.issues || [], updated: (refreshed.kpiUpdated || []).length + (refreshed.kpiAppended || []).length } : null,
+    dashboardRefreshed: payload.refresh === true && !!refreshed,
+    consistency: audit ? { status: String(audit.status || ''), checked: audit.checked || 0, matched: audit.matched || 0, discrepancies: audit.discrepancies || 0 } : null,
     history: evidence.uploads.slice(-40).reverse(),
   };
 }

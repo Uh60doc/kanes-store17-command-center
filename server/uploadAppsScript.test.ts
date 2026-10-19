@@ -498,3 +498,37 @@ test('originals are archived once, privately, by business date; a file no record
   ]);
   assert.deepEqual(plain(gs.ROUTES_.archiveOriginal), ['admin']);
 });
+
+test('a ZIP is not imported as one workbook, and a batch can file an older day without a second copy', () => {
+  const { gs, send, tabs } = boot();
+  const archive = zip({ 'Performance Stats by Salesperson/note.txt': 'not a workbook' });
+  const rejected = send('2026-10-16', 'Performance Stats by Salesperson.zip', archive);
+  assert.equal(rejected.status, 'Failed');
+  assert.match(rejected.message, /ZIP archive, not an Excel/);
+  assert.equal(tabs.CC_Daily!.some((row) => row[0] === '2026-10-15' || row[0] === '2026-10-16'), false);
+
+  const sendAdopt = (date: string, fileName: string, bytes: Buffer, confirm = false) =>
+    plain(gs.uploadReport_({ date, fileName, base64: bytes.toString('base64'), confirmDate: confirm ? date : '', adoptReportDate: true, session: manager }));
+  const first = sendAdopt('2026-10-16', 'output.pdf', nwdsrPdf('written', '2026-10-15', '2026-10-15', 2500));
+  assert.equal(first.status, 'Imported');
+  assert.equal(first.start, '2026-10-15');
+  const again = sendAdopt('2026-10-16', 'output again.pdf', nwdsrPdf('written', '2026-10-15', '2026-10-15', 2500, 2, '\n%copy'));
+  assert.equal(again.status, 'Already on file');
+  assert.equal(tabs.CC_Daily!.filter((row) => row[0] === '2026-10-15').length, 1);
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-15')![2], 2500);
+  const conflict = sendAdopt('2026-10-16', 'output changed.pdf', nwdsrPdf('written', '2026-10-15', '2026-10-15', 9999));
+  assert.equal(conflict.status, 'Needs Review');
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-15')![2], 2500);
+
+  const delivered = sendAdopt('2026-10-16', 'DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-16_2026-10-16.xlsx', group17('DELIVERED', [['TARIK NASSIF', 800]]));
+  assert.equal(delivered.status, 'Imported');
+  assert.match(delivered.message, /NWDSR Delivered for 2026-10-16 is not on file/);
+  assert.equal(tabs.CC_Daily!.some((row) => row[0] === '2026-10-16'), false, 'Group 17 does not invent the official store delivered total');
+
+  const perq = sendAdopt('2026-10-16', 'Performance Stats by Location 2026-10-15.xlsx', perqLocation(4));
+  assert.equal(perq.status, 'Imported');
+  assert.equal(perq.start, '2026-10-15');
+  const perqAgain = sendAdopt('2026-10-16', 'Performance Stats by Location 2026-10-15 copy.xlsx', perqLocation(4, 'copy'));
+  assert.equal(perqAgain.status, 'Already on file');
+  assert.equal(tabs.CC_Closing!.filter((row) => row[8] === 'PERQ Ups + Be Backs' && row[1] === 'store').length, 1);
+});
