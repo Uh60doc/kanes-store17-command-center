@@ -64,6 +64,8 @@ test('manager navigation is the nine groups in order and keeps every manager pag
   assert.equal(targets.includes('admin'), false);
   assert.equal(targets.includes('coverage'), false);
   assert.equal(html.includes('Google Setup'), false);
+  assert.equal(html.includes('Remaining written budget divided by days left.'), false);
+  assert.equal(html.includes('This week written'), true);
 });
 
 test('admin adds administration and coverage, and sales cannot open manager pages', () => {

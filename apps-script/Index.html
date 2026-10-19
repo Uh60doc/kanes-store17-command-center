@@ -108,7 +108,7 @@
     .home-kpis, .home-targets, .home-compare, .team-grid, .home-quad, .pair, .kpi-wrap, .card, .glow-card { min-width: 0; max-width: 100%; }
     .kpi-wrap, .trend-chart { max-width: 100%; }
     .home-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
-    .home-targets { display: grid; grid-template-columns: 1.15fr 1.15fr 1.05fr; gap: 10px; margin-top: 8px; }
+    .home-targets { display: grid; grid-template-columns: 1.15fr 1.25fr 0.62fr; gap: 10px; margin-top: 8px; align-items: stretch; }
     .home-compare { display: grid; grid-template-columns: 0.9fr 1.35fr; gap: 12px; }
     .home-quad { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .team-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
@@ -136,11 +136,14 @@
     .tone-attach { box-shadow: 0 0 28px rgba(226, 194, 122, 0.2); }
     .stretch { border: 1px solid #e2c27a; background: radial-gradient(120% 90% at 100% 0%, rgba(226, 194, 122, 0.2), transparent 55%), #14180f; box-shadow: 0 0 28px rgba(226, 194, 122, 0.16); }
     .stretch h2 { color: #f3d48a; }
-    .stretch-line { margin: 12px 0 0; }
-    .stretch-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
-    .stretch-line .label { color: #f3d48a; font-size: 13px; font-weight: 750; letter-spacing: 0.04em; }
-    .stretch-line strong { color: #ffffff; font-size: 26px; font-weight: 780; line-height: 1; }
-    .stretch-line .meta { margin-left: auto; color: #d5e2f0; font-size: 13px; text-align: right; }
+    .stretch-line { margin: 8px 0 0; }
+    .stretch-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+    .stretch-line .label { color: #f3d48a; font-size: 12px; font-weight: 750; letter-spacing: 0.04em; }
+    .stretch-line strong { color: #ffffff; font-size: 18px; font-weight: 780; line-height: 1; }
+    .stretch-line .meta { margin-left: auto; color: #d5e2f0; font-size: 12px; text-align: right; }
+    .stretch-compact { padding: 10px 12px; }
+    .stretch-compact .card-head { margin-bottom: 2px; }
+    .stretch-compact .meter { height: 6px; margin: 4px 0 0; }
     .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
     .card-head h2 { margin: 0; }
     .need-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -170,8 +173,10 @@
     .rank.gold { background: #f3d48a; }
     .rank.silver { background: #d5e2f0; }
     .rank.bronze { background: #e0a36a; }
-    .target-grid .figure { color: #ffffff; font-size: 28px; }
-    .target-grid h2 { min-height: 0; }
+    .target-grid .figure { color: #ffffff; font-size: 22px; margin: 2px 0 0; }
+    .target-grid h2 { min-height: 0; font-size: 12px; line-height: 1.2; }
+    .target-grid .target-tile { padding: 8px 10px; }
+    .target-grid .kpi-icon.lg { width: 28px; height: 28px; }
     .person-card { cursor: pointer; text-align: left; width: 100%; color: #f7fbff; background: radial-gradient(120% 80% at 0% 0%, rgba(20, 196, 212, 0.16), transparent 55%), #122033; }
     .person-card h3 { margin: 4px 0 0; font-size: 18px; font-weight: 750; color: #f7fbff; }
     .person-card .figure { color: #ffffff; font-size: 34px; }
@@ -1304,18 +1309,21 @@
       var still = '<article class="card glow-card"><div class="card-head">' + glyph('bars') + '<div><h2>Still needed this month</h2><p class="sub">' + esc(data.period || '') + '</p></div></div><div class="need-pair">' +
         '<div class="need-tile">' + glyph('dollar') + '<div><p class="sub">Written still needed</p><p class="figure">' + boardMoney(monthBoard.writtenLeft) + '</p><p class="sub">of ' + boardMoney(monthBoard.writtenGoal) + '</p></div></div>' +
         '<div class="need-tile">' + glyph('truck') + '<div><p class="sub">Delivered still needed</p><p class="figure">' + boardMoney(monthBoard.deliveredLeft) + '</p><p class="sub">of ' + boardMoney(monthBoard.deliveredGoal) + '</p></div></div></div></article>';
+      function targetTile(title, figure, icon) {
+        return '<article class="card mini-card target-tile"><div class="mini-top"><h2>' + esc(title) + '</h2>' + glyph(icon) + '</div><p class="figure">' + figure + '</p></article>';
+      }
       var targets = '<article class="card glow-card"><h2>Today and this week</h2><div class="home-quad target-grid">' +
-        mini('Today written target', boardMoney(todayBoard.written), 'Remaining written budget divided by days left.', 'doc') +
-        mini('Today delivered target', boardMoney(todayBoard.delivered), 'Remaining delivered budget divided by days left.', 'truck') +
-        mini('This week written target', boardMoney(week.written), week.start ? esc(week.start) + ' through ' + esc(week.end) + '. Sum of the daily written goals.' : '', 'cal') +
-        mini('This week delivered target', boardMoney(week.delivered), 'Sum of the daily delivered goals for the same days.', 'truck') +
+        targetTile('Today written', boardMoney(todayBoard.written), 'doc') +
+        targetTile('Today delivered', boardMoney(todayBoard.delivered), 'truck') +
+        targetTile('This week written', boardMoney(week.written), 'cal') +
+        targetTile('This week delivered', boardMoney(week.delivered), 'truck') +
         '</div></article>';
       function stretchLine(label, budget, actual, left, bar) {
         var share = known(actual) && known(budget) && Number(budget) ? percent(Number(actual) / Number(budget)) : 'Pending';
         return '<div class="stretch-line"><div class="stretch-row"><span class="label">' + label + '</span><strong>' + boardMoney(budget) + '</strong><span class="meta">' + share + ' · ' + boardMoney(left) + ' left</span></div>' + meterHtml(actual, budget, bar) + '</div>';
       }
       var stretchPack = data.stretch || {};
-      var stretch = '<article class="card glow-card stretch"><div class="card-head">' + glyph('target') + '<h2>Corporate stretch</h2></div><p class="sub">Corporate target. The cards above stay on the store budgets.</p>' +
+      var stretch = '<article class="card glow-card stretch stretch-compact"><div class="card-head">' + glyph('target') + '<h2>Corporate stretch</h2></div>' +
         stretchLine('Written', stretchPack.written, monthBoard.written, stretchPack.writtenLeft, 'cyan') +
         stretchLine('Delivered', stretchPack.delivered, monthBoard.delivered, stretchPack.deliveredLeft, 'pink') +
         '</article>';
