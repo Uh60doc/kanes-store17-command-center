@@ -172,7 +172,7 @@
     .order-row > div { min-width: 0; overflow-wrap: anywhere; }
     .order-row.open { background: rgba(255, 142, 163, 0.08); }
     .eod-step { display: flex; gap: 14px; align-items: flex-start; padding: 14px 4px; border-bottom: 1px solid #1d5c66; min-width: 0; }
-    .eod-step input { width: 32px; height: 32px; min-width: 32px; margin: 2px 0 0; accent-color: #14c4d4; }
+    .eod-step input { width: 32px; height: 32px; min-width: 32px; min-height: 32px; margin: 2px 0 0; accent-color: #14c4d4; flex: none; }
     .eod-step span { min-width: 0; overflow-wrap: anywhere; font-size: 18px; line-height: 1.35; }
     .eod-step.open { background: rgba(255, 142, 163, 0.14); }
     .eod-banner.Incomplete { border-color: #ff8ea3; }
@@ -3448,8 +3448,8 @@
       }).join('');
       document.getElementById('header-note').textContent = 'End-of-day closeout · ' + (current.displayDate || current.date || '') + ' · ' + (current.status || 'Incomplete');
       document.getElementById('screen').innerHTML = '<article class="card eod-banner ' + esc(current.status || 'Incomplete') + '"><p class="ready-label">End-of-day closeout</p><h2 class="' + (current.status === 'Complete' ? 'good' : 'bad') + '">' + esc(current.status || 'Incomplete') + '</h2><p>' + esc(data.notice || '') + '</p><p class="sub">Closing date ' + esc(current.displayDate || current.date || '') + (current.manager ? ' · ' + esc(current.manager) : '') + (current.completedAt ? ' · completed ' + esc(String(current.completedAt).slice(0, 16).replace('T', ' ')) : ' · no completion time') + '</p><div class="ready-actions noprint"><label>Closing date<input id="eod-date" type="date" max="' + esc(data.today || '') + '" value="' + esc(current.date || '') + '"></label><button type="button" id="eod-show">Show night</button><button type="button" id="eod-reports">Open existing reports</button></div><p id="eod-error" class="error"></p></article>' +
-        (open ? '<article class="card"><h2>Still open</h2><ul class="list">' + open + '</ul></article>' : '<article class="card"><h2>Still open</h2><p class="good">Every step is checked for this night.</p></article>') +
         '<article id="eod-sheet" class="card"><p class="ready-label">Closing record</p>' + steps + '<label class="ready-actions">Closing manager<input id="eod-manager" maxlength="40" value="' + esc(current.manager || '') + '"></label><label>Notes<textarea id="eod-notes" maxlength="240" rows="3" placeholder="Optional. Do not type an alarm code or a lock combination.">' + esc(current.notes || '') + '</textarea></label><p class="noprint"><button type="button" id="eod-save">Save closeout</button> <button type="button" id="eod-print">Print record</button></p><p class="sub">A completion time is recorded only when every box is checked. Unchecking a box clears that time. This page does not send email.</p></article>' +
+        (open ? '<article class="card"><h2>Still open</h2><ul class="list">' + open + '</ul></article>' : '<article class="card"><h2>Still open</h2><p class="good">Every step is checked for this night.</p></article>') +
         '<article class="card noprint"><h2>Closing log</h2>' + (history ? '<ul class="list">' + history + '</ul>' : '<p>No closing is on file yet.</p>') + '</article>';
       document.getElementById('eod-show').addEventListener('click', function () {
         api('closeout', { date: document.getElementById('eod-date').value }).then(renderCloseout).catch(function (error) { document.getElementById('eod-error').textContent = error.message; });
