@@ -110,11 +110,16 @@ function metricService_(session) {
   var deliveredThrough = fresh.delivered && fresh.delivered.through ? fresh.delivered.through : '';
   var snapThrough = fresh.snap && fresh.snap.through ? fresh.snap.through : '';
   var day = home.yesterday ? home.yesterday.date : '';
+  var latestWrittenDay = fresh.written && !consistencyBlank_(fresh.written.day) ? fresh.written.day : null;
+  var latestSnapDay = fresh.snap && fresh.snap.through === writtenThrough && !consistencyBlank_(fresh.snap.day) ? fresh.snap.day : null;
+  var latestGap = consistencyBlank_(latestWrittenDay) || consistencyBlank_(latestSnapDay) ? null : Math.round((Number(latestWrittenDay) - Number(latestSnapDay)) * 100) / 100;
   var metrics = [
     dollars('store_written_day', dayWritten, 'store_written', 'Store day', day, day, consistencyBlank_(dayWritten) ? '' : day, consistencyBlank_(dayWritten) ? 'Pending' : 'Complete'),
+    dollars('store_written_latest', latestWrittenDay, 'store_written', 'Latest verified store day', writtenThrough, writtenThrough, writtenThrough, consistencyBlank_(latestWrittenDay) ? 'Pending' : 'Complete'),
     dollars('store_written', home.month.written, 'store_written', 'Store month', start, end, writtenThrough, consistencyBlank_(home.month.written) ? 'Pending' : 'Complete'),
     dollars('store_delivered', home.month.delivered, 'store_delivered', 'Store month', start, end, deliveredThrough, consistencyBlank_(home.month.delivered) ? 'Pending' : 'Complete'),
     dollars('store_snap_day', daySnap, 'store_snap_written', 'Store day', day, day, consistencyBlank_(daySnap) ? '' : day, consistencyBlank_(daySnap) ? 'Pending' : 'Complete'),
+    dollars('store_snap_latest', latestSnapDay, 'store_snap_written', 'Latest verified store day', writtenThrough, writtenThrough, consistencyBlank_(latestSnapDay) ? '' : writtenThrough, consistencyBlank_(latestSnapDay) ? 'Pending' : 'Complete'),
     dollars('store_snap', home.month.snapWritten, 'store_snap_written', 'Store month', start, end, snapThrough, consistencyBlank_(home.month.snapWritten) ? 'Pending' : 'Complete'),
     {
       id: 'nwdsr_minus_snap',
@@ -126,6 +131,18 @@ function metricService_(session) {
       verifiedThrough: consistencyBlank_(gap) ? 'Pending' : day,
       completeness: consistencyBlank_(gap) ? 'Pending' : 'Complete',
       definition: 'The two written systems stay separate. The difference is NWDSR minus SNAP for the same day. Neither figure is rewritten.',
+      calculatedAt: at,
+    },
+    {
+      id: 'nwdsr_minus_snap_latest',
+      value: latestGap,
+      source: 'NWDSR Net Written minus SNAP Written',
+      scope: 'Latest verified store day',
+      periodStart: writtenThrough,
+      periodEnd: writtenThrough,
+      verifiedThrough: consistencyBlank_(latestGap) ? 'Pending' : writtenThrough,
+      completeness: consistencyBlank_(latestGap) ? 'Pending' : 'Complete',
+      definition: 'NWDSR minus SNAP on the latest day both reports cover. The systems are not forced to match.',
       calculatedAt: at,
     },
     {
@@ -188,6 +205,10 @@ function consistencySurfaces_(session, pack, findings) {
   try {
     var daily = daily_({ session: session });
     consistencyCheck_(findings, 'Daily', 'Store written MTD', written.value, consistencySum_(daily.days, 'nwdsrWritten'), 'dollars', 'The Daily calendar does not add up to the store-month NWDSR Written total.');
+    var latestRow = null;
+    (daily.days || []).forEach(function (day) { if (day.date === written.verifiedThrough) latestRow = day; });
+    consistencyCheck_(findings, 'Daily', 'Latest written day', consistencyById_(pack.metrics, 'store_written_latest').value, latestRow ? latestRow.nwdsrWritten : null, 'dollars', 'The Daily row for the verified-through date does not match the latest NWDSR Written day.');
+    consistencyCheck_(findings, 'Daily', 'Latest SNAP day', consistencyById_(pack.metrics, 'store_snap_latest').value, latestRow ? latestRow.snapWritten : null, 'dollars', 'The Daily row for the verified-through date does not match SNAP Written.');
     consistencyCheck_(findings, 'Daily', 'Store delivered MTD', delivered.value, consistencySum_(daily.days, 'nwdsrDelivered'), 'dollars', 'The Daily calendar does not add up to the store-month NWDSR Delivered total.');
     consistencyCheck_(findings, 'Daily', 'Store closing', closing.value, daily.closing ? daily.closing.ratio : null, 'percent', 'Daily store closing does not match the matching-date closing ratio.');
     consistencyCheck_(findings, 'Daily', 'Purchasing customers', closing.customers, daily.closing ? daily.closing.customers : null, 'count', 'Daily purchasing customers do not match the closing coverage.');

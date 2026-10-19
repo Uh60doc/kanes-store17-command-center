@@ -28,6 +28,9 @@ test('canonical October figures match across the screens that share them', () =>
   assert.equal(metric('store_written').verifiedThrough, '2026-10-16');
   assert.equal(metric('store_snap_day').value, 7432);
   assert.equal(metric('nwdsr_minus_snap').value, 3063);
+  assert.equal(metric('store_written_latest').value, 10495);
+  assert.equal(metric('store_snap_latest').value, 7432);
+  assert.equal(metric('nwdsr_minus_snap_latest').value, 3063);
   assert.equal(metric('store_closing').customers, 54);
   assert.equal(metric('store_closing').opportunities, 111);
   assert.equal(metric('store_closing').value, 0.486);
