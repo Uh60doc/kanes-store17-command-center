@@ -168,6 +168,9 @@
     .var-row.large { background: rgba(243, 212, 138, 0.08); }
     .var-chart { width: 100%; height: auto; display: block; }
     .var-note { margin-top: 8px; }
+    .order-row { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.8fr) minmax(0, 1fr); gap: 8px; align-items: start; padding: 8px 0; border-bottom: 1px solid #1d5c66; }
+    .order-row > div { min-width: 0; overflow-wrap: anywhere; }
+    .order-row.open { background: rgba(255, 142, 163, 0.08); }
     @media (max-width: 720px) {
       h1 { font-size: 24px; }
       .figure { font-size: 32px; }
@@ -177,6 +180,7 @@
       .ready-row { grid-template-columns: 1fr 1fr; }
       .var-grid { grid-template-columns: 1fr; }
       .var-row { grid-template-columns: 1fr 1fr; }
+      .order-row { grid-template-columns: 1fr; }
     }
     button, input, textarea { font: inherit; }
     textarea { width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid #1d5c66; background: #070b10; color: white; }
@@ -468,6 +472,12 @@
       body.print-variance #screen > :not(#variance-sheet) { display: none !important; }
       body.print-variance #variance-sheet, body.print-variance #variance-sheet * { color: #102027; background: white; }
       body.print-variance #variance-sheet { border: 0; margin: 0; padding: 0; }
+      html:has(body.print-order), body.print-order { background: white !important; color: black !important; }
+      body.print-order .wrap { padding: 0; max-width: 8.5in; }
+      body.print-order header.brand, body.print-order .nav, body.print-order .section-title, body.print-order .noprint, body.print-order #data-refresh { display: none !important; }
+      body.print-order #screen > :not(#order-sheet) { display: none !important; }
+      body.print-order #order-sheet, body.print-order #order-sheet * { color: #102027; background: white; }
+      body.print-order #order-sheet { border: 0; margin: 0; padding: 0; }
       body.print-report #screen > :not(#report-sheet) { display: none !important; }
       body.print-report #report-sheet { margin: 0; border: 0; box-shadow: none; max-width: none; padding: 0; }
       body.print-report #report-sheet, body.print-report #report-sheet * { color: #102027; background: white; }
@@ -689,6 +699,9 @@
         var readyAt = morningAt + 1;
         items.forEach(function (item, index) { if (item[0] === 'readiness') readyAt = index + 1; });
         items.splice(readyAt, 0, ['variance', 'Written reality']);
+        var varianceAt = readyAt + 1;
+        items.forEach(function (item, index) { if (item[0] === 'variance') varianceAt = index + 1; });
+        items.splice(varianceAt, 0, ['orderQuality', 'Order quality']);
       }
       if (role !== 'sales') items.push(['bedding', 'Bedding'], ['delivery', 'Delivery rescue'], ['upload', 'Upload reports'], ['health', 'System health']);
       if (role === 'admin') items.push(['coverage', 'Data coverage'], ['admin', 'Admin']);
@@ -3307,6 +3320,98 @@
         });
       });
     }
+    function orderAppliesClient(step, flags) {
+      if (step.when === 'white-glove') return flags.delivery === 'white-glove';
+      if (step.when === 'no-contact') return flags.delivery === 'no-contact';
+      if (step.when === 'asis') return flags.asIs;
+      if (step.when === 'protector') return flags.mattress || flags.nocom;
+      return true;
+    }
+    function renderOrderQuality(data) {
+      var selected = null;
+      (data.checks || []).forEach(function (check) { if (check.id === data.selectedId) selected = check; });
+      if (!selected && data.saved) selected = data.saved;
+      var savedItems = {};
+      if (selected) (selected.items || []).forEach(function (item) { savedItems[item.key] = item; });
+      var flags = {
+        delivery: selected ? selected.delivery : 'white-glove',
+        asIs: selected ? !!selected.asIs : false,
+        mattress: selected ? !!selected.mattress : false,
+        nocom: selected ? !!selected.nocom : false,
+      };
+      function row(step) {
+        var item = savedItems[step.key] || { state: 'open', note: '' };
+        var live = orderAppliesClient(step, flags);
+        var state = live ? item.state : 'na';
+        var choices = step.sign ? '<option value="open">Not signed</option><option value="done"' + (state === 'done' ? ' selected' : '') + '>Signed</option>' : '<option value="open"' + (state === 'open' ? ' selected' : '') + '>Not done</option><option value="done"' + (state === 'done' ? ' selected' : '') + '>Done</option><option value="exception"' + (state === 'exception' ? ' selected' : '') + '>Manager exception</option>';
+        return '<div class="order-row' + (live && state === 'open' ? ' open' : '') + '" data-order-step="' + esc(step.key) + '"><div><strong>' + esc(step.label) + '</strong><span class="sub">' + (live ? 'Required' : 'Not this order') + (step.sign === 'manager' ? ' · final sign-off' : '') + '</span></div><div><select' + (live ? '' : ' style="display:none"') + '>' + choices + '</select><strong class="order-na"' + (live ? ' style="display:none"' : '') + '>Not this order</strong></div><div><input type="text" maxlength="240" placeholder="Exception note only" value="' + esc(item.note || '') + '"' + (live && !step.sign ? '' : ' style="display:none"') + '></div></div>';
+      }
+      var training = (data.training || []).map(function (doc) {
+        return '<li><button type="button" class="linkish" data-order-doc="' + esc(doc.id) + '">' + esc(doc.title) + '</button><span class="sub">' + esc(doc.category) + ' · ' + esc(doc.subcategory) + '</span></li>';
+      }).join('');
+      var problems = ((data.report && data.report.problems) || []).map(function (item) {
+        return '<li>' + esc(item.label) + ' · open ' + esc(String(item.open)) + ' · exceptions ' + esc(String(item.exception)) + '</li>';
+      }).join('');
+      var recent = (data.checks || []).map(function (check) {
+        return '<li><button type="button" class="linkish" data-order-open="' + esc(check.id) + '">' + esc(check.orderRef) + '</button> · ' + esc(check.deliveryLabel) + (check.asIs ? ' · AS-IS' : '') + ' · ' + esc(check.status) + (check.incomplete && check.incomplete.length ? '<div class="sub">Still open: ' + esc(check.incomplete.join('; ')) + '</div>' : '') + '</li>';
+      }).join('');
+      var report = data.report || { total: 0, complete: 0, awaiting: 0, incomplete: 0 };
+      document.getElementById('header-note').textContent = 'Order quality · ' + report.complete + ' complete · ' + report.awaiting + ' awaiting manager';
+      document.getElementById('screen').innerHTML = '<article class="card"><p class="ready-label">Sales order quality</p><h2>Completion checklist</h2><p>' + esc(data.notice || '') + '</p><p class="sub">This does not change a customer order and it does not replace the point-of-sale system. Do not type an address, phone, payment number, or access code.</p>' + (training ? '<h2>Training documents</h2><ul class="list">' + training + '</ul>' : '<p class="sub">No matching training document is in the Document Center yet.</p>') + '</article>' +
+        '<article class="card"><h2>Manager report</h2><p>' + esc(String(report.complete)) + ' complete · ' + esc(String(report.awaiting)) + ' awaiting manager · ' + esc(String(report.incomplete)) + ' incomplete · ' + esc(String(report.total)) + ' on file.</p>' + (problems ? '<ul class="list">' + problems + '</ul>' : '<p class="sub">No recurring gap is on file yet.</p>') + '</article>' +
+        '<article class="card noprint"><h2>' + (selected ? 'Checklist ' + esc(selected.orderRef) : 'New checklist') + '</h2><p id="order-error" class="error"></p><div class="ready-actions"><label>Order reference<input id="order-ref" maxlength="20" value="' + esc(selected ? selected.orderRef : '') + '"></label><label>Delivery<select id="order-delivery"><option value="white-glove"' + (flags.delivery === 'white-glove' ? ' selected' : '') + '>White Glove</option><option value="no-contact"' + (flags.delivery === 'no-contact' ? ' selected' : '') + '>No Contact</option></select></label><label>AS-IS<select id="order-asis"><option value="no"' + (flags.asIs ? '' : ' selected') + '>No</option><option value="yes"' + (flags.asIs ? ' selected' : '') + '>Yes</option></select></label><label>Mattress<select id="order-mattress"><option value="no"' + (flags.mattress ? '' : ' selected') + '>No</option><option value="yes"' + (flags.mattress ? ' selected' : '') + '>Yes</option></select></label><label>NOCOM applies<select id="order-nocom"><option value="no"' + (flags.nocom ? '' : ' selected') + '>No</option><option value="yes"' + (flags.nocom ? ' selected' : '') + '>Yes</option></select></label><label>Salesperson<input id="order-person" maxlength="40" value="' + esc(selected ? selected.salesperson : '') + '"></label><button type="button" id="order-new">New checklist</button></div></article>' +
+        '<article id="order-sheet" class="card"><p class="ready-label">Printable completion record</p><h2>' + esc(selected ? selected.orderRef + ' · ' + selected.status : 'Not saved yet') + '</h2><p class="sub">' + esc(selected ? selected.deliveryLabel + (selected.asIs ? ' · AS-IS' : '') + (selected.mattress ? ' · mattress' : '') + (selected.nocom ? ' · NOCOM' : '') : '') + '</p>' + (data.steps || []).map(row).join('') + '<p class="noprint"><button type="button" id="order-save">Save checklist</button> <button type="button" id="order-print">Print record</button></p><p class="sub">A checklist is Complete only after the manager final review. An exception needs a manager note and cannot replace either sign-off.</p></article>' +
+        '<article class="card noprint"><h2>On file</h2>' + (recent ? '<ul class="list">' + recent + '</ul>' : '<p>No checklist yet.</p>') + '</article>';
+      function flagsNow() {
+        return { delivery: document.getElementById('order-delivery').value, asIs: document.getElementById('order-asis').value === 'yes', mattress: document.getElementById('order-mattress').value === 'yes', nocom: document.getElementById('order-nocom').value === 'yes' };
+      }
+      function paintFlags() {
+        var live = flagsNow();
+        Array.prototype.forEach.call(document.querySelectorAll('[data-order-step]'), function (line) {
+          var key = line.getAttribute('data-order-step');
+          var step = (data.steps || []).filter(function (item) { return item.key === key; })[0] || {};
+          var on = orderAppliesClient(step, live);
+          var sub = line.querySelector('.sub');
+          if (sub) sub.textContent = (on ? 'Required' : 'Not this order') + (step.sign === 'manager' ? ' · final sign-off' : '');
+          line.classList.toggle('open', on && line.querySelector('select') && line.querySelector('select').value === 'open');
+          var select = line.querySelector('select');
+          if (select) select.style.display = on ? '' : 'none';
+          var mark = line.querySelector('.order-na');
+          if (mark) mark.style.display = on ? 'none' : '';
+          var note = line.querySelector('input');
+          if (note) note.style.display = on && !step.sign ? '' : 'none';
+        });
+      }
+      ['order-delivery', 'order-asis', 'order-mattress', 'order-nocom'].forEach(function (id) {
+        document.getElementById(id).addEventListener('change', paintFlags);
+      });
+      document.getElementById('order-save').addEventListener('click', function () {
+        var steps = {};
+        var live = flagsNow();
+        Array.prototype.forEach.call(document.querySelectorAll('[data-order-step]'), function (line) {
+          var key = line.getAttribute('data-order-step');
+          var step = (data.steps || []).filter(function (item) { return item.key === key; })[0] || {};
+          var select = line.querySelector('select');
+          var note = line.querySelector('input');
+          steps[key] = { state: orderAppliesClient(step, live) && select ? select.value : 'na', note: note ? note.value : '' };
+        });
+        document.getElementById('order-error').textContent = '';
+        api('saveOrderCheck', { id: selected ? selected.id : '', orderRef: document.getElementById('order-ref').value, delivery: live.delivery, asIs: live.asIs ? 'yes' : 'no', mattress: live.mattress ? 'yes' : 'no', nocom: live.nocom ? 'yes' : 'no', salesperson: document.getElementById('order-person').value, steps: steps }).then(function (page) { page.selectedId = page.saved && page.saved.id; renderOrderQuality(page); }).catch(function (error) { document.getElementById('order-error').textContent = error.message; });
+      });
+      var print = document.getElementById('order-print');
+      if (print) print.addEventListener('click', function () { document.body.classList.add('print-order'); window.print(); document.body.classList.remove('print-order'); });
+      var newer = document.getElementById('order-new');
+      if (newer) newer.addEventListener('click', function () { data.selectedId = ''; data.saved = null; renderOrderQuality(data); });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-order-open]'), function (button) {
+        button.addEventListener('click', function () { data.selectedId = button.getAttribute('data-order-open'); data.saved = null; renderOrderQuality(data); });
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-order-doc]'), function (button) {
+        button.addEventListener('click', function () {
+          var id = button.getAttribute('data-order-doc');
+          api('documents', {}).then(function (library) { docCache = library; openDoc(id); }).catch(function (error) { document.getElementById('order-error').textContent = error.message; });
+        });
+      });
+    }
     function varianceChart(points) {
       var width = 720;
       var height = 200;
@@ -4773,7 +4878,7 @@
       var active = document.activeElement;
       if (active && active.id !== 'display-refresh' && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return true;
       var body = document.body;
-      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd') || body.classList.contains('print-evalprep') || body.classList.contains('print-actions') || body.classList.contains('print-report') || body.classList.contains('print-variance')) return true;
+      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd') || body.classList.contains('print-evalprep') || body.classList.contains('print-actions') || body.classList.contains('print-report') || body.classList.contains('print-variance') || body.classList.contains('print-order')) return true;
       return false;
     }
     function syncRefreshButton() {
@@ -4800,6 +4905,7 @@
       else if (name === 'health') renderHealth(data);
       else if (name === 'readiness') renderReadiness(data);
       else if (name === 'variance') renderVariance(data);
+      else if (name === 'orderQuality') renderOrderQuality(data);
       else if (name === 'coverage') renderCoverage(data);
     }
     function reloadCurrentScreen() {
