@@ -16,6 +16,7 @@ export function fakeSpreadsheet(tabs: Record<string, Grid>) {
       appendRow: (row: unknown[]) => { grid().push([...row]); },
       clearContents: () => { grid().length = 0; },
       getLastRow: () => grid().length,
+      getLastColumn: () => width(),
       setFrozenRows: (_count: number) => undefined,
       setColumnWidth: (_col: number, _width: number) => undefined,
       getRange: (row: number, col: number, rows = 1, cols = 1) => {
@@ -30,7 +31,26 @@ export function fakeSpreadsheet(tabs: Record<string, Grid>) {
           },
           setValue: (value: unknown) => { ensure(); grid()[row - 1]![col - 1] = value; },
           getValue: () => grid()[row - 1]?.[col - 1] ?? '',
+          getFormula: () => {
+            const cell = grid()[row - 1]?.[col - 1];
+            return typeof cell === 'string' && cell.startsWith('=') ? cell : '';
+          },
+          getDisplayValue: () => {
+            const cell = grid()[row - 1]?.[col - 1];
+            if (typeof cell === 'string' && cell.startsWith('=') && cell.includes('CC_Ledger')) {
+              const blocked = grid().slice(row).some((line) => line.some((value) => value !== '' && value !== undefined));
+              return blocked ? '#REF!' : 'view';
+            }
+            return cell ?? '';
+          },
           getValues: () => Array.from({ length: rows }, (_, r) => Array.from({ length: cols }, (_, c) => grid()[row - 1 + r]?.[col - 1 + c] ?? '')),
+          clearContent: () => {
+            for (let r = 0; r < rows; r += 1) {
+              const line = grid()[row - 1 + r];
+              if (!line) continue;
+              for (let c = 0; c < cols; c += 1) line[col - 1 + c] = '';
+            }
+          },
           setNumberFormat: (_pattern: string) => undefined,
         };
       },
