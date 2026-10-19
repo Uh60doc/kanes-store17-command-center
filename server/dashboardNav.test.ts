@@ -93,14 +93,18 @@ test('home chart repeats the store calendar through yesterday', () => {
   const daily = plain(gs.daily_({ session }));
   const expected = (daily.days as { date: string; nwdsrWritten: number | null; nwdsrDelivered: number | null; snapWritten: number | null }[])
     .filter((day) => day.date < home.today);
-  assert.equal(home.chart.length, expected.length);
-  home.chart.forEach((day: { date: string; written: number | null; delivered: number | null; snap: number | null }, index: number) => {
+  const past = home.chart.filter((day: { date: string }) => day.date < home.today);
+  assert.equal(past.length, expected.length);
+  let running = 0;
+  past.forEach((day: { date: string; written: number | null; dailyWritten: number | null }, index: number) => {
     assert.equal(day.date, expected[index]!.date);
-    assert.equal(day.written, expected[index]!.nwdsrWritten);
-    assert.equal(day.delivered, expected[index]!.nwdsrDelivered);
-    assert.equal(day.snap, expected[index]!.snapWritten);
+    assert.equal(day.dailyWritten, expected[index]!.nwdsrWritten);
+    if (day.dailyWritten !== null && day.dailyWritten !== undefined) running += day.dailyWritten;
+    const cumulative = day.dailyWritten === null || day.dailyWritten === undefined ? null : Math.round(running * 100) / 100;
+    assert.equal(day.written, cumulative);
   });
-  assert.ok(home.chart.length > 0);
+  assert.ok(home.chart.some((day: { date: string; written: number | null }) => day.date >= home.today && day.written === null));
+  assert.ok(home.chart.length > past.length);
   assert.equal(home.month.writtenGoal, 400000);
   assert.equal(home.month.deliveredGoal, 320000);
   assert.equal(home.stretch.written, 652274);

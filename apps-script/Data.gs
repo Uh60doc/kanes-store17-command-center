@@ -1706,6 +1706,45 @@ function ensureSavedDailyGoals_(period, today, closed, facts, writtenBudget, del
   }
 }
 
+/**
+ * Cumulative store-month chart. NWDSR Written is this year's store sales. SNAP Written last year is the
+ * same day-for-day partner inside the confirmed prior period. A missing day is a gap, not zero, and a
+ * last-year day that is not on file is left off rather than drawn.
+ */
+function homeChart_(facts, days, store, today, config) {
+  var ly = { confirmed: false, start: '', end: '', status: 'Pending' };
+  try { ly = storeLastYear_(config, store); } catch (error) { ly = ly; }
+  var byDate = {};
+  facts.forEach(function (row) { byDate[row.date] = row; });
+  var running = 0;
+  var lyRunning = 0;
+  return days.map(function (day) {
+    var daily = day.nwdsrWritten;
+    var cumulative = null;
+    if (day.date < today && daily !== null && daily !== undefined && daily !== '') {
+      running += Number(daily);
+      cumulative = Math.round(running * 100) / 100;
+    }
+    var snapLy = null;
+    if (ly.confirmed && day.date < today && !day.closed) {
+      var mapped = shiftDate_(ly.start, historyDayGap_(store.start, day.date));
+      var lyRow = mapped && mapped <= ly.end ? byDate[mapped] : null;
+      if (lyRow && lyRow.snapWritten !== null && lyRow.snapWritten !== undefined && lyRow.snapWritten !== '') {
+        lyRunning += Number(lyRow.snapWritten);
+        snapLy = Math.round(lyRunning * 100) / 100;
+      }
+    }
+    return {
+      date: day.date,
+      written: cumulative,
+      dailyWritten: day.date < today ? daily : null,
+      snapLy: snapLy,
+      closed: !!day.closed,
+      lyConfirmed: !!ly.confirmed,
+    };
+  });
+}
+
 function home_(payload) {
   try { ensureDailyTrigger_(); } catch (error) { appendException_('Update Failed', 'The daily import check could not be started.'); }
   try { ensureOfficialGoals_(); } catch (error) { appendException_('Update Failed', 'Official KPI goals could not be saved.'); }
@@ -1886,9 +1925,7 @@ function home_(payload) {
     winners: winnersPack.winners,
     rosterNotes: winnersPack.roster.notes || [],
     writtenBalance: writtenBalance,
-    chart: days.filter(function (day) { return day.date < today; }).map(function (day) {
-      return { date: day.date, written: day.nwdsrWritten, delivered: day.nwdsrDelivered, snap: day.snapWritten, closed: !!day.closed };
-    }),
+    chart: homeChart_(facts, days, store, today, config),
     week: homeWeekTargets_(store, today, closed, facts, writtenGoal, deliveredGoal, savedGoals),
     stretch: {
       written: stretchWritten,

@@ -258,8 +258,14 @@
     .report-sheet.report-meeting { max-width: 8.5in; }
     .packet-page { margin: 0 0 18px; padding: 0 0 12px; border-bottom: 1px solid #d5dee3; }
     .packet-page .page-no { margin: 8px 0 0; font-size: 11px; color: #3d5660; }
-    .trend-chart { width: 100%; height: auto; display: block; }
-    .trend-chart text { font-family: "Avenir Next", "Segoe UI", sans-serif; }
+    .trend-chart { width: 100%; height: 250px; display: block; }
+    .trend-chart text { font-family: "Segoe UI", Helvetica, Arial, sans-serif; }
+    .trend-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+    .trend-head h2 { margin: 0; }
+    .trend-legend { display: flex; gap: 14px; color: #d5e2f0; font-size: 12px; white-space: nowrap; }
+    .trend-legend .swatch { display: inline-block; width: 22px; height: 3px; margin-right: 6px; border-radius: 99px; vertical-align: middle; }
+    .trend-legend .swatch.nw { background: #14c4d4; }
+    .trend-legend .swatch.ly { background: repeating-linear-gradient(90deg, #8eb4ff 0 4px, transparent 4px 7px); }
     .trend-note { margin: 6px 0; font-size: 13px; line-height: 1.4; }
     @media (max-width: 800px) {
       .report-sheet.report-trend table { font-size: 12px; }
@@ -1349,12 +1355,12 @@
         '<h2 class="section-title">Store performance</h2><div class="home-kpis">' + five + '</div>' +
         '<div class="home-targets">' + still + targets + stretch + '</div>' +
         '<h2 class="section-title">Year over year</h2><div class="home-compare">' + compare +
-        '<article class="card glow-card"><div class="card-head"><div><h2>Written and delivered trend</h2><p class="sub">Store month. NWDSR Written and NWDSR Delivered. A missing day is a gap, not zero.</p></div></div>' + homeTrend(data.chart, data.today) + '</article></div>' +
+        '<article class="card glow-card trend-card"><div class="trend-head"><div><h2>NWDSR this year and SNAP last year</h2><p class="sub">Store month, cumulative. A missing day is a gap, not zero.</p></div><div class="trend-legend"><span><i class="swatch nw"></i>NWDSR this year</span><span><i class="swatch ly"></i>SNAP last year</span></div></div>' + homeTrend(data.chart, data.today) + '</article></div>' +
         pendingList(fresh.pending) +
         '<h2 class="section-title">Sales team performance</h2>' + quick +
         '<div class="team-grid">' + (teamCards || '<article class="card"><p class="pending">Pending. No active salesperson is on the home record.</p></article>') + '</div>' +
+        (otherKpis ? '<h2 class="section-title">Store KPIs</h2><div class="kpi-primary">' + otherKpis + '</div>' : '') +
         winnersHtml +
-        (otherKpis ? '<h2 class="section-title">Other store KPIs</h2><div class="kpi-primary">' + otherKpis + '</div>' : '') +
         '<p class="sub">Store month ' + esc(data.period) + ' only. Individual cards use each person\'s monthly goal, not the store budget. ' + standardText(data) + '</p>';
       document.querySelectorAll('[data-home]').forEach(function (button) {
         button.addEventListener('click', function () { openNavTarget(button.getAttribute('data-home')); });
@@ -1364,53 +1370,87 @@
       });
       if (winnersHtml) bindWinnersPicker('home', function (next) { renderHome(next, focus); });
     }
-    function homeTrend(chart) {
-      var rows = (chart || []).filter(function (day) { return !day.closed || day.written !== null || day.delivered !== null; });
-      if (!rows.length) return '<p class="pending">Pending. No verified store days are on this month yet.</p>';
+    function homeTrend(chart, today) {
+      var rows = chart || [];
+      var hasWritten = rows.some(function (day) { return day.written !== null && day.written !== undefined && day.written !== ''; });
+      if (!rows.length || !hasWritten) return '<p class="pending">Pending. No verified NWDSR days are on this month yet.</p>';
+      var hasLy = rows.some(function (day) { return day.snapLy !== null && day.snapLy !== undefined && day.snapLy !== ''; });
       var max = 0;
-      var any = false;
       rows.forEach(function (day) {
-        [day.written, day.delivered].forEach(function (value) {
+        [day.written, day.snapLy].forEach(function (value) {
           if (value === null || value === undefined || value === '') return;
-          any = true;
           if (Number(value) > max) max = Number(value);
         });
       });
-      if (!any) return '<p class="pending">Pending. Written and delivered are not on file for these days.</p>';
-      if (!max) max = 1;
-      var left = 52, right = 12, top = 16, bottom = 28;
-      var width = Math.max(520, left + right + rows.length * 28);
-      var height = 220;
+      var rough = Math.max(max * 1.08, 1);
+      var pow = Math.pow(10, Math.floor(Math.log(rough) / Math.LN10));
+      var axis = [1, 2, 2.5, 5, 10].map(function (step) { return step * pow; }).filter(function (step) { return step >= rough; })[0] || rough;
+      var left = 48, right = 16, top = 18, bottom = 28;
+      var width = 640, height = 250;
       var plot = height - top - bottom;
       var step = (width - left - right) / Math.max(1, rows.length - 1);
-      function y(value) { return top + plot * (1 - (Number(value) / max)); }
-      var svg = ['<line x1="' + left + '" x2="' + (width - right) + '" y1="' + (top + plot) + '" y2="' + (top + plot) + '" stroke="#1d5c66"/>'];
-      [0, 0.5, 1].forEach(function (tick) {
-        var amount = max * tick;
-        svg.push('<text x="' + (left - 6) + '" y="' + (y(amount) + 4) + '" text-anchor="end" fill="#9eb0c9" font-size="11">$' + Math.round(amount / 1000) + 'k</text>');
+      function y(value) { return top + plot * (1 - (Number(value) / axis)); }
+      function x(index) { return left + index * step; }
+      var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      function label(date) {
+        var parts = String(date || '').split('-');
+        return months[Number(parts[1]) - 1] + ' ' + Number(parts[2]);
+      }
+      var svg = [];
+      [0, 0.25, 0.5, 0.75, 1].forEach(function (tick) {
+        var amount = axis * tick;
+        var yy = y(amount);
+        svg.push('<line x1="' + left + '" x2="' + (width - right) + '" y1="' + yy.toFixed(1) + '" y2="' + yy.toFixed(1) + '" stroke="rgba(20,196,212,0.18)"/>');
+        var tickLabel = amount === 0 ? '$0' : '$' + Math.round(amount / 1000) + 'k';
+        svg.push('<text x="' + (left - 8) + '" y="' + (yy + 4) + '" text-anchor="end" fill="#9eb0c9" font-size="11">' + tickLabel + '</text>');
       });
-      function pathFor(field) {
-        var parts = [];
-        var pen = false;
+      function segments(field) {
+        var groups = [];
+        var current = [];
         rows.forEach(function (day, index) {
           var value = day[field];
-          if (value === null || value === undefined || value === '') { pen = false; return; }
-          var x = left + index * step;
-          parts.push((pen ? 'L' : 'M') + x.toFixed(1) + ' ' + y(value).toFixed(1));
-          pen = true;
+          if (value === null || value === undefined || value === '') {
+            if (current.length) groups.push(current);
+            current = [];
+            return;
+          }
+          current.push({ index: index, value: Number(value) });
         });
-        return parts.join(' ');
+        if (current.length) groups.push(current);
+        return groups;
       }
-      var written = pathFor('written');
-      var delivered = pathFor('delivered');
-      if (written) svg.push('<path d="' + written + '" fill="none" stroke="#14c4d4" stroke-width="2.5"/>');
-      if (delivered) svg.push('<path d="' + delivered + '" fill="none" stroke="#7ee7f0" stroke-width="2" stroke-dasharray="5 4"/>');
-      rows.forEach(function (day, index) {
-        if (index % Math.ceil(rows.length / 6) !== 0 && index !== rows.length - 1) return;
-        svg.push('<text x="' + (left + index * step) + '" y="' + (height - 8) + '" text-anchor="middle" fill="#9eb0c9" font-size="10">' + esc(String(day.date).slice(5)) + '</text>');
+      function linePath(group) {
+        return group.map(function (point, index) {
+          return (index ? 'L' : 'M') + x(point.index).toFixed(1) + ' ' + y(point.value).toFixed(1);
+        }).join(' ');
+      }
+      segments('written').forEach(function (group) {
+        var line = linePath(group);
+        var area = line + ' L' + x(group[group.length - 1].index).toFixed(1) + ' ' + y(0).toFixed(1) + ' L' + x(group[0].index).toFixed(1) + ' ' + y(0).toFixed(1) + ' Z';
+        svg.push('<path d="' + area + '" fill="rgba(20,196,212,0.22)" stroke="none"/>');
+        svg.push('<path d="' + line + '" fill="none" stroke="#14c4d4" stroke-width="2.5" stroke-linejoin="round"/>');
       });
-      return '<div class="kpi-wrap"><svg class="trend-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="NWDSR written and delivered by day">' + svg.join('') + '</svg></div>' +
-        '<p class="sub"><span style="color:#14c4d4">●</span> NWDSR Written · <span style="color:#7ee7f0">●</span> NWDSR Delivered</p>';
+      segments('snapLy').forEach(function (group) {
+        svg.push('<path d="' + linePath(group) + '" fill="none" stroke="#8eb4ff" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round"/>');
+      });
+      var todayIndex = -1;
+      rows.forEach(function (day, index) { if (day.date === today) todayIndex = index; });
+      if (todayIndex < 0) {
+        rows.forEach(function (day, index) {
+          if (day.written !== null && day.written !== undefined && day.written !== '') todayIndex = index;
+        });
+      }
+      if (todayIndex >= 0) {
+        svg.push('<line x1="' + x(todayIndex).toFixed(1) + '" x2="' + x(todayIndex).toFixed(1) + '" y1="' + top + '" y2="' + y(0).toFixed(1) + '" stroke="#9eb0c9" stroke-dasharray="3 3"/>');
+        svg.push('<text x="' + x(todayIndex).toFixed(1) + '" y="' + (top - 4) + '" text-anchor="middle" fill="#d5e2f0" font-size="11">Today ' + label(rows[todayIndex].date) + '</text>');
+      }
+      var marks = Math.min(6, rows.length);
+      rows.forEach(function (day, index) {
+        if (index % Math.ceil(rows.length / marks) !== 0 && index !== rows.length - 1) return;
+        svg.push('<text x="' + x(index).toFixed(1) + '" y="' + (height - 8) + '" text-anchor="middle" fill="#9eb0c9" font-size="11">' + label(day.date) + '</text>');
+      });
+      var note = hasLy ? '' : '<p class="sub">SNAP last year stays Pending until those verified days are on file. It is not drawn as a guess.</p>';
+      return '<div class="kpi-wrap"><svg class="trend-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Cumulative NWDSR this year and SNAP last year">' + svg.join('') + '</svg></div>' + note;
     }
     function openPersonFromHome(name) {
       screen = 'people';

@@ -1,5 +1,5 @@
 var SPREADSHEET_ID_ = '1KtsfQPQRdg3IdNXomlM5t47IyE1psouxvgW-D8VSLfw';
-var APP_VERSION_ = '1.0.38';
+var APP_VERSION_ = '1.0.39';
 
 var ROUTES_ = {
   login: null,
@@ -328,3 +328,4 @@ function route_(name, payload) {
   if (name === 'saveRescueFlag') return saveRescueFlag_(payload);
   throw new Error('That request is not available.');
 }
+
