@@ -1127,6 +1127,11 @@ function qualityAfterUpdate_(trigger, email) {
     if (email) {
       try { summary.email = sendAlertDigest_(summary.alertRows); } catch (error) { appendException_('Update Failed', 'The consolidated alert email could not be sent. ' + String(error && error.message ? error.message : error)); }
     }
+    try {
+      if (typeof runConsistencyAudit_ === 'function') summary.consistency = runConsistencyAudit_(trigger);
+    } catch (error) {
+      appendException_('Update Failed', 'The consistency audit could not run after the ' + trigger + '. No figure was changed. ' + String(error && error.message ? error.message : error));
+    }
     return summary;
   } catch (error) {
     appendException_('Update Failed', 'The quality checks could not run after the ' + trigger + '. No figure was changed. ' + String(error && error.message ? error.message : error));
