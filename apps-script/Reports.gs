@@ -1378,6 +1378,9 @@ function reportMonthlyPdf_(page) {
   y -= 11;
   paint(0.06, 0.13, 0.16);
   reportBalanceCompact_(snapLy).forEach(function (line) { text(36, y, 8, line, false); y -= 10; });
+  if (page.writtenGap && page.writtenGap.text) {
+    reportWrap_(page.writtenGap.text, 150).slice(0, 2).forEach(function (line) { text(36, y, 8, line, false); y -= 10; });
+  }
   y -= 2;
   paint(0.06, 0.13, 0.16);
   reportWrap_(page.assessment, 150).slice(0, 3).forEach(function (line) { text(36, y, 8, line, false); y -= 10; });
@@ -1685,6 +1688,7 @@ function reportMeetingPdf_(page) {
   row('NWDSR Written', snapLy.nwdsr || 'Pending', snapLy.currentDates || '');
   row('SNAP Written', snapLy.current || 'Pending', 'Supplemental');
   row('NWDSR minus SNAP', snapLy.variance || 'Pending', 'Not removed from the store total');
+  if (page.writtenGap && page.writtenGap.text) row('Written differences', String(page.writtenGap.count) + ' unresolved', 'Not removed from official NWDSR');
   row('NWDSR Written LAST YEAR', snapLy.nwdsrLy || 'Pending', snapLy.lyDates || '');
   row('SNAP Written LY', snapLy.ly || 'Pending', 'LAST YEAR, not last month');
   y -= 2;
@@ -1793,6 +1797,14 @@ function reportCenter_(payload) {
   var page = kind === 'daily' ? reportDaily_(payload, today) : (kind === 'weekly' ? reportWeekly_(payload, today) : (kind === 'individual' ? reportIndividual_(payload, today) : (kind === 'monthly' ? reportMonthly_(payload, today) : (kind === 'meeting' ? reportMeeting_(payload, today) : (kind === 'trend' ? trend_(payload, today) : reportUnbuilt_(payload, today, kind))))));
   page.catalog = reportCatalog_(today);
   if (payload.session && payload.session.role === 'sales') page.catalog.kinds = [{ key: 'individual', label: 'My report', ready: true }];
+  else if (page.layout !== 'individual' && page.kind !== 'individual') {
+    try {
+      var gapStart = page.period && page.period.start ? page.period.start : page.date;
+      var gapEnd = page.period && page.period.end ? page.period.end : page.date;
+      if (page.kind === 'daily') { gapStart = page.date; gapEnd = page.date; }
+      if (gapStart && gapEnd) page.writtenGap = varianceBrief_(gapStart, gapEnd);
+    } catch (error) { page.writtenGap = null; }
+  }
   var pdf = '';
   if (page.ready && page.layout === 'weekly') pdf = reportWeeklyPdf_(page);
   else if (page.ready && page.layout === 'individual') pdf = reportIndividualPdf_(page);
@@ -1883,6 +1895,12 @@ function reportPdf_(page) {
       text(36, y, 8, line, false);
       y -= 10;
     });
+    if (page.writtenGap && page.writtenGap.text && y > 108) {
+      reportWrap_(page.writtenGap.text, 108).slice(0, 2).forEach(function (line) {
+        text(36, y, 8, line, false);
+        y -= 10;
+      });
+    }
   }
   y -= 4;
   paint(0.05, 0.50, 0.53);
@@ -1970,6 +1988,9 @@ function reportWeeklyPdf_(page) {
     text(36, y, 8, line, false);
     y -= 10;
   });
+  if (page.writtenGap && page.writtenGap.text && y > 96) {
+    reportWrap_(page.writtenGap.text, 112).slice(0, 2).forEach(function (line) { text(36, y, 8, line, false); y -= 10; });
+  }
   y -= 2;
   band('STORE MONTH', page.month || []);
   band('STORE-MONTH KPIs', page.kpis || []);
