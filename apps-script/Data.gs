@@ -1725,6 +1725,8 @@ function home_(payload) {
   var budgets = storeSalesGoals_(config, store);
   var writtenGoal = budgets.written;
   var deliveredGoal = budgets.delivered;
+  var stretchWritten = goalOr_(config, 'stretch_written', null);
+  var stretchDelivered = goalOr_(config, 'stretch_delivered', null);
   var daysLeft = operatingDaysRemaining_(store, today, closed);
   var writtenPace = pace_(writtenGoal, written, daysLeft);
   var deliveredPace = pace_(deliveredGoal, delivered, daysLeft);
@@ -1888,6 +1890,12 @@ function home_(payload) {
       return { date: day.date, written: day.nwdsrWritten, delivered: day.nwdsrDelivered, snap: day.snapWritten, closed: !!day.closed };
     }),
     week: homeWeekTargets_(store, today, closed, facts, writtenGoal, deliveredGoal, savedGoals),
+    stretch: {
+      written: stretchWritten,
+      delivered: stretchDelivered,
+      writtenLeft: stretchWritten === null || written === null ? null : Math.round((Number(stretchWritten) - written) * 100) / 100,
+      deliveredLeft: stretchDelivered === null || delivered === null ? null : Math.round((Number(stretchDelivered) - delivered) * 100) / 100,
+    },
   };
 }
 
