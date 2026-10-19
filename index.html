@@ -2,12 +2,148 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Store 17 Command Center</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Floor count</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%231b4634' width='32' height='32' rx='6'/%3E%3Cpath fill='%23ffd84a' d='M8 22V10h3l5 8 5-8h3v12h-3v-7l-4 6h-2l-4-6v7z'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div class="top">
+      <div class="wrap">
+        <header class="header">
+          <div>
+            <p class="eyebrow">Sales floor</p>
+            <h1>Floor count</h1>
+            <p class="sub">Store 17 catalog is on this device. No upload, no account.</p>
+          </div>
+          <div class="zone-block">
+            <p class="zone-label">Current zone</p>
+            <p id="current-zone" data-testid="current-zone">No zone yet</p>
+            <p id="zone-summary"></p>
+          </div>
+        </header>
+        <div class="zone-row">
+          <div id="zone-chips" class="zone-chips"></div>
+          <button type="button" id="new-zone">New zone</button>
+        </div>
+        <div id="zone-create">
+          <form id="zone-form">
+            <label class="sr-only" for="zone-name">Zone name</label>
+            <input id="zone-name" data-keep-focus maxlength="60" placeholder="Zone name, such as Front window" autocomplete="off" />
+            <button type="submit">Create zone</button>
+          </form>
+        </div>
+        <div id="asis-banner" class="banner" data-testid="asis-banner" hidden>
+          <strong>Next scan is AS IS</strong>
+          <button type="button" id="cancel-asis">Cancel</button>
+        </div>
+        <div class="scan-panel">
+          <form id="scan-form">
+            <label class="scan-label" for="scan">Scan or enter SKU</label>
+            <div class="scan-row">
+              <input
+                id="scan"
+                data-testid="scan-input"
+                inputmode="numeric"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"
+                placeholder="Barcode or digits"
+              />
+              <button type="submit">Count</button>
+            </div>
+          </form>
+          <p class="hint">The scanner types the code and presses Enter. You can also type the digits on a keypad.</p>
+          <p id="live" class="sr-only" role="status"></p>
+        </div>
+        <div class="tools">
+        <div class="views" role="group" aria-label="List">
+          <button type="button" data-view="count" aria-pressed="true">This zone</button>
+          <button type="button" data-view="catalog" aria-pressed="false">Catalog</button>
+        </div>
+        <button type="button" id="export">Export CSV</button>
+      </div>
+      <div class="tools">
+        <label class="sr-only" for="search">Search SKU, description, or group</label>
+        <input id="search" data-keep-focus placeholder="Search SKU, description, or group" autocomplete="off" />
+      </div>
+      <div id="sort-bar" class="sort" role="group" aria-label="Sort count">
+        <button type="button" data-sort="paired" aria-pressed="true">Paired under SKU</button>
+        <button type="button" data-sort="new-first" aria-pressed="false">New first</button>
+        <button type="button" data-sort="asis-first" aria-pressed="false">AS IS first</button>
+      </div>
+      <div id="filter-bar" class="filters" role="group" aria-label="Catalog filter" hidden>
+        <button type="button" data-filter="zone">Counted in this zone</button>
+        <button type="button" data-filter="any">Counted in any zone</button>
+        <button type="button" data-filter="none">Not yet counted</button>
+        <button type="button" data-filter="all" aria-pressed="true">All items</button>
+      </div>
+      <p id="list-note"></p>
+      <p id="catalog-stats"></p>
+      </div>
+    </div>
+
+    <main class="wrap panel">
+      <section id="match" data-testid="match-card" hidden></section>
+      <section id="count-view">
+        <p id="count-empty" class="empty" hidden></p>
+        <table>
+          <thead>
+            <tr>
+              <th>Group</th>
+              <th>Description</th>
+              <th>SKU</th>
+              <th>New / AS IS</th>
+              <th>Qty</th>
+            </tr>
+          </thead>
+          <tbody id="count-body"></tbody>
+        </table>
+      </section>
+
+      <section id="catalog-view" hidden>
+        <p id="catalog-empty" class="empty" hidden></p>
+        <table>
+          <thead>
+            <tr>
+              <th>Group</th>
+              <th>Description</th>
+              <th>SKU</th>
+              <th>Sheet</th>
+              <th>Counted</th>
+            </tr>
+          </thead>
+          <tbody id="catalog-body"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <dialog id="add-dialog">
+      <form id="add-form" data-keep-focus>
+        <h2>SKU not on the list</h2>
+        <p>Add it and count it in <strong id="add-zone"></strong>.</p>
+        <p id="add-asis-note" hidden>Next scan is AS IS. This piece will count as AS IS.</p>
+        <label>Group Name
+          <input id="add-group" data-keep-focus autocomplete="off" />
+        </label>
+        <label>Description
+          <input id="add-description" data-keep-focus autocomplete="off" />
+        </label>
+        <label>SKU
+          <input id="add-sku" data-keep-focus inputmode="numeric" autocomplete="off" />
+        </label>
+        <p id="add-error" class="add-error"></p>
+        <div class="add-actions">
+          <button type="submit" id="add-save">Add and count</button>
+          <button type="button" id="add-cancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="catalog.js"></script>
+    <script src="logic.js"></script>
+    <script src="app.js"></script>
   </body>
 </html>
