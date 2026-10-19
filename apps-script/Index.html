@@ -4290,11 +4290,11 @@
         '<div class="upload-grid">' +
         '<article class="card upload-card"><h2>1 · Business date</h2>' +
         '<label for="upload-date">The day these reports cover</label><input id="upload-date" type="date" max="' + esc(data.today) + '" value="' + esc(data.date) + '" />' +
-        '<p class="sub">Each PDF prints its own report date. A ZIP can hold several days of PDF and Excel reports; each file is filed on the date printed in that file. PERQ does not print a date, so it is filed on the business date selected above. A file that is not one of the nine daily reports is ignored.</p>' +
+        '<p class="sub">A PDF is filed on the FROM/TO date printed in the file. A Data Analysis workbook is filed on the dates in its file name. The date you pick above does not override those. DATE/TIME and a PERQ Active Deals time are when the file was run, not the day the report covers. PERQ does not print a business date, so it is filed on the date selected above. A file that is not one of the nine daily reports is ignored.</p>' +
         '<h3>2 · Choose the files</h3>' +
         '<input id="upload-files" type="file" multiple accept=".pdf,.xlsx,.zip,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip"' + (uploadBusy ? ' disabled' : '') + ' />' +
         (selected ? '<ul class="upload-list">' + selected + '</ul>' : '<p class="sub">No files chosen. Choose the day’s PDFs and Excel files, or one ZIP that contains them. A ZIP may include more than one day.</p>') +
-        '<p class="sub">PERQ and any Excel file that does not print its own date are filed on <strong>' + esc(data.dateText) + '</strong>.</p>' +
+        '<p class="sub">PERQ is filed on <strong>' + esc(data.dateText) + '</strong>. The Active Deals time in that file is ignored.</p>' +
         (uploadProgress ? '<p class="sub" id="upload-progress">' + esc(uploadProgress) + '</p>' : '') +
         '<p id="upload-error" class="error"></p>' +
         '<p class="summary-actions"><button id="upload-go" type="button"' + (uploadFiles.length && !uploadBusy ? '' : ' disabled') + '>' + (uploadBusy ? 'Importing…' : 'Import reports') + '</button>' +

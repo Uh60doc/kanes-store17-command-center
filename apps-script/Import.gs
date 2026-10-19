@@ -210,7 +210,10 @@ function parseCloudReport_(text) {
     }
   }
   if (total === null) return null;
-  return { reportType: reportType, start: start, end: end, singleDay: start === end, storeTotal: total, purchasingCustomers: purchasingCustomers };
+  var runDate = /DATE:\s*(\d{2}\/\d{2}\/\d{4})/i.exec(text);
+  var runTime = /TIME:\s*(\d{1,2}:\d{2}\s*[AP]M)/i.exec(text);
+  var runStamp = runDate ? runDate[1] + (runTime ? ' ' + runTime[1] : '') : '';
+  return { reportType: reportType, start: start, end: end, singleDay: start === end, storeTotal: total, purchasingCustomers: purchasingCustomers, runStamp: runStamp };
 }
 
 function isoFromParts_(day, month, year) {
