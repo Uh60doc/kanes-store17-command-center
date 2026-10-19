@@ -3250,7 +3250,7 @@
           '<div><span class="ready-label">Business date</span><strong>' + esc(data.displayDate || item.date) + '</strong></div>' +
           '<div><span class="ready-label">Received</span><strong class="' + arrival + '">' + esc(item.received) + '</strong></div>' +
           '<div><span class="ready-label">Imported</span><strong class="' + brought + '">' + esc(item.imported) + '</strong><div class="sub">Verified through ' + esc(item.through || 'Pending') + '</div></div>' +
-          '<div><span class="ready-label">Last update</span><strong>' + esc(item.updated ? String(item.updated).slice(0, 16).replace('T', ' ') : (data.lastUpdate || 'Pending')) + '</strong><div class="sub">' + source + '</div></div></div>';
+          '<div><span class="ready-label">Last update</span><strong>' + esc(item.updated ? String(item.updated).slice(0, 16).replace('T', ' ') : 'Pending') + '</strong><div class="sub">' + source + '</div></div></div>';
       }).join('');
       var waiting = (data.waiting || []).map(function (line) {
         return '<li><strong>' + esc(line.report) + '</strong> · ' + esc(line.waiting) + '<div class="sub">' + esc(line.metrics) + '</div></li>';
