@@ -81,6 +81,21 @@ test('the historical registers keep every printed day and do not change current-
   assert.match(home.writtenBalance.month.deliveredLySource, /2025-10-01/);
   assert.equal(home.month.written, before.month.written);
 
+  const dailyAfterSeed = JSON.stringify(tabs.CC_Daily);
+  const filed = plain(gs.fileVerifiedDaysOntoRegisters_());
+  assert.equal(JSON.stringify(tabs.CC_Daily), dailyAfterSeed);
+  assert.equal(plain(gs.historicalAmount_('SNAP Written', '2025-10-17')).verification, 'Verified zero');
+  assert.ok(filed.added.length > 0);
+  assert.equal(plain(gs.historicalAmount_('SNAP Written', '2026-10-02')) !== null, true);
+  const againFiled = plain(gs.fileVerifiedDaysOntoRegisters_());
+  assert.equal(againFiled.added.length, 0);
+  const coverage = plain(gs.writeMetricCoverage_());
+  const deliveredCoverage = coverage.open.find((row: { metric: string }) => row.metric === 'Store delivered sales');
+  assert.equal(deliveredCoverage.status, 'PARTIAL');
+  assert.match(deliveredCoverage.issue, /2025-10-01/);
+  const writtenCoverage = (tabs.CC_MetricCoverage || []).find((row) => row[0] === 'Store written sales');
+  assert.equal(writtenCoverage && writtenCoverage[5], 'PASS');
+
   const kept = plain(gs.recordHistoricalDay_({ metric: 'SNAP Written', date: '2025-11-01', dollars: 1, source: 'later.pdf', verification: 'Verified', note: 'disagree' }));
   assert.equal(kept.status, 'kept');
   assert.equal(plain(gs.historicalAmount_('SNAP Written', '2025-11-01')).dollars, 19922);
