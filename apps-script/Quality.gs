@@ -1146,6 +1146,11 @@ function runQualityChecks_(trigger) {
   var now = new Date().toISOString();
   var today = todayNy_();
   try {
+    if (typeof syncPerqPresenceNotes_ === 'function') syncPerqPresenceNotes_();
+  } catch (error) {
+    appendException_('Update Failed', 'A stale PERQ-missing note could not be cleared. The PERQ counts were not changed. ' + String(error && error.message ? error.message : error));
+  }
+  try {
     if (typeof repairScopeViewSheets_ === 'function') repairScopeViewSheets_();
   } catch (error) {
     appendException_('Update Failed', 'A calculated STORE or PERSON tab could not be repaired. No ledger figure was changed. ' + String(error && error.message ? error.message : error));
