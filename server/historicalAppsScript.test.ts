@@ -1,0 +1,73 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { plain } from './fakeSpreadsheet.ts';
+import { harness, session } from './octoberVerified.ts';
+
+test('the historical registers keep every printed day and do not change current-year sales', () => {
+  const { gs, tabs } = harness();
+  const before = plain(gs.home_({ session }));
+  const dailyBefore = JSON.stringify(tabs.CC_Daily);
+  const ledgerBefore = JSON.stringify(tabs.CC_Ledger);
+  const counts = plain(gs.installHistoricalSeed_());
+  assert.equal(counts.added, 98);
+  assert.equal(JSON.stringify(tabs.CC_Daily), dailyBefore);
+  assert.equal(JSON.stringify(tabs.CC_Ledger), ledgerBefore);
+  const again = plain(gs.installHistoricalSeed_());
+  assert.equal(again.added, 0);
+  assert.equal(again.same, 98);
+  assert.equal(tabs.SNAP_WRITTEN_LY.length, 34);
+  assert.equal(tabs.NWDSR_WRITTEN_LY.length, 34);
+  assert.equal(tabs.NWDSR_DELIVERED_LY.length, 33);
+
+  const snap17 = plain(gs.historicalAmount_('SNAP Written', '2025-10-17'));
+  assert.equal(snap17.dollars, 0);
+  assert.equal(snap17.verification, 'Verified zero');
+  assert.match(snap17.notes, /NO DATA RETURNED/);
+  assert.match(snap17.notes, /\$0/);
+  assert.equal(plain(gs.historicalAmount_('NWDSR Written', '2025-10-17')).dollars, 0);
+  assert.equal(plain(gs.historicalAmount_('NWDSR Delivered', '2025-10-17')).dollars, 0);
+  assert.equal(plain(gs.historicalAmount_('SNAP Written', '2025-11-01')).dollars, 19922);
+  assert.equal(plain(gs.historicalAmount_('NWDSR Written', '2025-11-01')).dollars, 23350);
+  assert.equal(plain(gs.historicalAmount_('NWDSR Delivered', '2025-11-01')).dollars, 38407);
+  assert.equal(plain(gs.historicalAmount_('NWDSR Delivered', '2025-10-01')), null);
+  assert.equal(plain(gs.historicalAmount_('SNAP Written', '2025-11-02')).dollars, 7737);
+  const november = plain(gs.historicalAmount_('SNAP Written', '2025-11-01'));
+  assert.equal(november.month, '2025-10-02 through 2025-11-01');
+  assert.equal(Number(november.position), 31);
+  const octoberFirst = plain(gs.historicalAmount_('NWDSR Written', '2025-10-01'));
+  assert.equal(octoberFirst.month, '2025-09-02 through 2025-10-01');
+  assert.equal(Number(octoberFirst.position), 30);
+  assert.match(plain(gs.historicalAmount_('SNAP Written', '2025-10-02')).source, /output \(71\)\.pdf/);
+  assert.match(plain(gs.historicalAmount_('SNAP Written', '2025-10-02')).source, /output \(72\)\.pdf/);
+
+  const facts = plain(gs.dailyFacts_());
+  const dates: string[] = [];
+  for (let day = 1; day <= 17; day += 1) dates.push(`2025-10-${String(day).padStart(2, '0')}`);
+  const snap = plain(gs.reportLySeries_(facts, dates, 'snapWritten', 'SNAP Written'));
+  const written = plain(gs.reportLySeries_(facts, dates, 'nwdsrWritten', 'NWDSR Written'));
+  const delivered = plain(gs.reportLySeries_(facts, dates, 'nwdsrDelivered', 'NWDSR Delivered'));
+  assert.equal(snap.pending, false);
+  assert.equal(snap.value, 109161);
+  assert.match(snap.source, /SNAP_WRITTEN_LY/);
+  assert.equal(written.pending, false);
+  assert.equal(written.value, 306056);
+  assert.match(written.source, /NWDSR_WRITTEN_LY/);
+  assert.equal(delivered.pending, true);
+  assert.equal(delivered.value, null);
+  assert.match(delivered.source, /2025-10-01/);
+  assert.match(delivered.source, /not the completed comparison/);
+  assert.notEqual(delivered.partial, 0);
+
+  const after = plain(gs.home_({ session }));
+  assert.ok((after.chart || []).some((day: { snapLy: number | null }) => day.snapLy !== null && day.snapLy !== undefined));
+  assert.equal(after.month.written, before.month.written);
+  assert.equal(after.month.delivered, before.month.delivered);
+  assert.equal(after.month.snapWritten, before.month.snapWritten);
+  assert.equal(after.yesterday.written, before.yesterday.written);
+  assert.equal(after.yesterday.snapWritten, before.yesterday.snapWritten);
+
+  const kept = plain(gs.recordHistoricalDay_({ metric: 'SNAP Written', date: '2025-11-01', dollars: 1, source: 'later.pdf', verification: 'Verified', note: 'disagree' }));
+  assert.equal(kept.status, 'kept');
+  assert.equal(plain(gs.historicalAmount_('SNAP Written', '2025-11-01')).dollars, 19922);
+  assert.equal(JSON.stringify(tabs.CC_Daily), dailyBefore);
+});
