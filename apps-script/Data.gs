@@ -1491,7 +1491,7 @@ function homeKpiSpecs_(goals, actuals) {
     ['Total Attachment', 'Total Attachment', 'percent', goals.attachment, 'secondary', ''],
     ['Adjustable Base Attachment', 'Adjustable Base Attachment', 'percent', goals.adjustableBase, 'secondary', ''],
     ['Pillows', 'Pillows', 'percent', goals.pillow, 'secondary', ''],
-    ['Wood / Furniture Protection', 'Wood / Furniture Protection', 'percent', goals.wood, 'secondary', 'ASL Furniture Protection, protected ÷ qualified items. UVWL wood and lacquer warranties count different items and are not added.'],
+    ['Wood / Furniture Protection', 'Wood / Furniture Protection', 'percent', goals.wood, 'secondary', ''],
     ['Financing', 'Finance', 'percent', goals.finance, 'secondary', ''],
   ];
   var warranty = actuals['Overall Warranty % of Sales'];

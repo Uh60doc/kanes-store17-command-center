@@ -70,6 +70,9 @@ test('manager navigation is the nine groups in order and keeps every manager pag
   assert.equal(html.includes('Last year is the prior year, not last month.'), false);
   assert.equal(html.includes('Supplemental. Not the store written total.'), false);
   assert.equal(html.includes('repeat(6, minmax(0, 1fr))'), true);
+  assert.equal(html.includes('class="kpi-split"'), true);
+  assert.equal(html.includes('Written verified through'), false);
+  assert.equal(html.includes('Delivered verified through'), false);
 });
 
 test('admin adds administration and coverage, and sales cannot open manager pages', () => {

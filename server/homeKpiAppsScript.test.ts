@@ -53,7 +53,7 @@ test('Home MTD KPIs: Bedding, Closing Ratio, Average Ticket and Rugs lead, every
   assert.equal(goalOf('Total Attachment'), 0.9);
   assert.deepEqual([byName['Closing Ratio']?.written, byName['Closing Ratio']?.delivered, byName['Closing Ratio']?.through], [0.486, null, through]);
   assert.deepEqual([byName.Financing?.written, byName.Financing?.delivered], [0.234, 0.471]);
-  assert.match(byName['Wood / Furniture Protection']?.detail ?? '', /UVWL .* not added/);
+  assert.equal(byName['Wood / Furniture Protection']?.detail, '');
 });
 
 test('Warranty % of Sales appears only with a verified store-period figure, and ADJ PWR % rides on the Adjustable Base tile', () => {
