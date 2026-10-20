@@ -1306,6 +1306,33 @@ function withDayClosing_(days, view) {
   });
 }
 
+function homeWeekTargets_(store, today, closed, facts, writtenGoal, deliveredGoal, savedGoals) {
+  var weekday = reportWeekday_(today);
+  var monday = shiftDate_(today, weekday === 0 ? -6 : 1 - weekday);
+  var sunday = shiftDate_(monday, 6);
+  var written = 0;
+  var delivered = 0;
+  var days = 0;
+  eachDate_(monday, sunday).forEach(function (date) {
+    if (date < store.start || date > store.end || closed[date]) return;
+    var daysLeft = operatingDaysRemaining_(store, date, closed);
+    var saved = savedGoals[date] || {};
+    var dayWritten = saved.written !== undefined && saved.written !== null ? saved.written : savedPace_(writtenGoal, sumBefore_(facts, 'nwdsrWritten', store.start, date), daysLeft);
+    var dayDelivered = saved.delivered !== undefined && saved.delivered !== null ? saved.delivered : savedPace_(deliveredGoal, sumBefore_(facts, 'nwdsrDelivered', store.start, date), daysLeft);
+    if (dayWritten === null || dayDelivered === null) return;
+    written += dayWritten;
+    delivered += dayDelivered;
+    days += 1;
+  });
+  return {
+    start: monday,
+    end: sunday,
+    days: days,
+    written: days ? Math.round(written * 100) / 100 : null,
+    delivered: days ? Math.round(delivered * 100) / 100 : null,
+  };
+}
+
 function savedPace_(budget, actualBefore, daysLeft) {
   if (budget === null || actualBefore === null || daysLeft === null || daysLeft <= 0) return null;
   return Math.round(((Number(budget) - actualBefore) / daysLeft) * 100) / 100;
@@ -1464,7 +1491,7 @@ function homeKpiSpecs_(goals, actuals) {
     ['Total Attachment', 'Total Attachment', 'percent', goals.attachment, 'secondary', ''],
     ['Adjustable Base Attachment', 'Adjustable Base Attachment', 'percent', goals.adjustableBase, 'secondary', ''],
     ['Pillows', 'Pillows', 'percent', goals.pillow, 'secondary', ''],
-    ['Wood / Furniture Protection', 'Wood / Furniture Protection', 'percent', goals.wood, 'secondary', 'ASL Furniture Protection, protected ÷ qualified items. UVWL wood and lacquer warranties count different items and are not added.'],
+    ['Wood / Furniture Protection', 'Wood / Furniture Protection', 'percent', goals.wood, 'secondary', ''],
     ['Financing', 'Finance', 'percent', goals.finance, 'secondary', ''],
   ];
   var warranty = actuals['Overall Warranty % of Sales'];
@@ -1679,6 +1706,45 @@ function ensureSavedDailyGoals_(period, today, closed, facts, writtenBudget, del
   }
 }
 
+/**
+ * Cumulative store-month chart. NWDSR Written is this year's store sales. SNAP Written last year is the
+ * same day-for-day partner inside the confirmed prior period. A missing day is a gap, not zero, and a
+ * last-year day that is not on file is left off rather than drawn.
+ */
+function homeChart_(facts, days, store, today, config) {
+  var ly = { confirmed: false, start: '', end: '', status: 'Pending' };
+  try { ly = storeLastYear_(config, store); } catch (error) { ly = ly; }
+  var byDate = {};
+  facts.forEach(function (row) { byDate[row.date] = row; });
+  var running = 0;
+  var lyRunning = 0;
+  return days.map(function (day) {
+    var daily = day.nwdsrWritten;
+    var cumulative = null;
+    if (day.date < today && daily !== null && daily !== undefined && daily !== '') {
+      running += Number(daily);
+      cumulative = Math.round(running * 100) / 100;
+    }
+    var snapLy = null;
+    if (ly.confirmed && day.date < today && !day.closed) {
+      var mapped = shiftDate_(ly.start, historyDayGap_(store.start, day.date));
+      var lyRow = mapped && mapped <= ly.end ? byDate[mapped] : null;
+      if (lyRow && lyRow.snapWritten !== null && lyRow.snapWritten !== undefined && lyRow.snapWritten !== '') {
+        lyRunning += Number(lyRow.snapWritten);
+        snapLy = Math.round(lyRunning * 100) / 100;
+      }
+    }
+    return {
+      date: day.date,
+      written: cumulative,
+      dailyWritten: day.date < today ? daily : null,
+      snapLy: snapLy,
+      closed: !!day.closed,
+      lyConfirmed: !!ly.confirmed,
+    };
+  });
+}
+
 function home_(payload) {
   try { ensureDailyTrigger_(); } catch (error) { appendException_('Update Failed', 'The daily import check could not be started.'); }
   try { ensureOfficialGoals_(); } catch (error) { appendException_('Update Failed', 'Official KPI goals could not be saved.'); }
@@ -1698,6 +1764,8 @@ function home_(payload) {
   var budgets = storeSalesGoals_(config, store);
   var writtenGoal = budgets.written;
   var deliveredGoal = budgets.delivered;
+  var stretchWritten = goalOr_(config, 'stretch_written', null);
+  var stretchDelivered = goalOr_(config, 'stretch_delivered', null);
   var daysLeft = operatingDaysRemaining_(store, today, closed);
   var writtenPace = pace_(writtenGoal, written, daysLeft);
   var deliveredPace = pace_(deliveredGoal, delivered, daysLeft);
@@ -1857,6 +1925,14 @@ function home_(payload) {
     winners: winnersPack.winners,
     rosterNotes: winnersPack.roster.notes || [],
     writtenBalance: writtenBalance,
+    chart: homeChart_(facts, days, store, today, config),
+    week: homeWeekTargets_(store, today, closed, facts, writtenGoal, deliveredGoal, savedGoals),
+    stretch: {
+      written: stretchWritten,
+      delivered: stretchDelivered,
+      writtenLeft: stretchWritten === null || written === null ? null : Math.round((Number(stretchWritten) - written) * 100) / 100,
+      deliveredLeft: stretchDelivered === null || delivered === null ? null : Math.round((Number(stretchDelivered) - delivered) * 100) / 100,
+    },
   };
 }
 
