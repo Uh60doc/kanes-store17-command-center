@@ -3707,11 +3707,17 @@
         var featured = (promo.featured || []).map(function (item) {
           return huddleCard(item.name, cents(item.now), cents(item.was) + ' to ' + cents(item.now) + ' · Save ' + cents(item.save) + ' · ' + esc(item.off), 'good');
         }).join('');
-        promoHtml = '<h2>' + esc(promo.name) + '</h2><p class="sub">' + esc(promo.start) + ' through ' + esc(promo.end) + '</p><ul class="list">' + (promo.highlights || []).map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('') + '</ul>' +
+        var points = promo.highlights || [];
+        if (promo.fullText && points.length > 4) points = points.slice(0, 4);
+        promoHtml = '<h2>' + esc(promo.name) + '</h2><p class="sub">' + esc(promo.start) + ' through ' + esc(promo.end) + '</p><ul class="list">' + points.map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('') + '</ul>' +
           '<div class="morning-grid">' + featured + '</div>' +
           '<p class="sub">' + esc(promo.floorNote || '') + '</p>' +
           huddleCard(promo.mattressName || 'Mattress special', esc(promo.mattressOff || ''), (promo.mattressLines || []).map(esc).join(' · ') + ' ' + esc(promo.mattressNote || ''), '') +
           '<p class="sub">Exclusions: ' + esc((promo.exclusions || []).join(', ')) + '. Other company exclusions stay in the written policy.</p>';
+        if (promo.marquee) promoHtml += '<p class="sub">Store 17 marquee: ' + esc(promo.marquee) + '</p>';
+        if (promo.mainFinance) promoHtml += '<p class="sub">Main financing: ' + esc(promo.mainFinance) + '</p>';
+        if (promo.restrictions) promoHtml += '<p class="sub">Important restrictions: ' + esc(promo.restrictions) + '</p>';
+        if (promo.fullText) promoHtml += '<details><summary>View the full promotion</summary><p class="sub" style="white-space:pre-wrap">' + esc(promo.fullText) + '</p></details>';
       }
       var finance = (data.financing || []).map(function (term) {
         if (term.highlight) {
@@ -3735,7 +3741,22 @@
         function financeLines(list) {
           return (list || []).map(function (term) { return term.months + ' | ' + term.end + ' | ' + (term.zeroInterest ? 'yes' : 'no') + ' | ' + term.summary; }).join('\n');
         }
-        editor = '<article class="card noprint" style="margin-top:12px"><h2>Approve the promotion</h2><p class="sub">The team sees this only after it is approved, and only between the start and end dates.</p>' +
+        var review = data.review;
+        var reviewChanges = review && review.changes ? review.changes : (promoSource.changes || []);
+        var reviewHtml = '';
+        if (review || reviewChanges.length) {
+          var changeLines = reviewChanges.map(function (change) {
+            return '<li>' + esc(change.label) + ': ' + esc(change.from) + ' → ' + esc(change.to) + '</li>';
+          }).join('');
+          var reviewNote = review
+            ? 'Compared with ' + esc(review.comparedWith || 'the previous sale') + '. File: ' + esc(review.file || '') + '. This draft is not on the floor until you check Approved and save.'
+            : 'Compared with ' + esc(promoSource.comparedWith || 'the previous sale') + '.';
+          reviewHtml = '<p class="sub">' + reviewNote + '</p>' +
+            (changeLines ? '<ul class="list">' + changeLines + '</ul>' : '<p class="sub">No date, price, financing, or offer change was found.</p>');
+        }
+        editor = '<article class="card noprint" style="margin-top:12px"><h2>Approve the promotion</h2><p class="sub">The team sees this only after it is approved, and only between the start and end dates. Upload a new flyer once. You do not upload it again each morning.</p>' +
+          reviewHtml +
+          '<label>New promotion PDF</label><input id="promo-file" type="file" accept="application/pdf,.pdf" />' +
           '<label>Event name</label><input id="promo-name" value="' + esc(promoSource.name || '') + '" />' +
           '<label>Start</label><input id="promo-start" value="' + esc(promoSource.start || '') + '" />' +
           '<label>End</label><input id="promo-end" value="' + esc(promoSource.end || '') + '" />' +
@@ -3749,6 +3770,10 @@
           '<label>Exclusions</label><textarea id="promo-exclusions" rows="2">' + esc(lines(promoSource.exclusions)) + '</textarea>' +
           '<label>Financing</label><textarea id="promo-financing" rows="8">' + esc(financeLines(promoSource.financing)) + '</textarea>' +
           '<label>Bedding financing</label><input id="promo-bedding-finance" value="' + esc(promoSource.beddingFinance || '') + '" />' +
+          '<label>Store 17 marquee</label><input id="promo-marquee" value="' + esc(promoSource.marquee || '') + '" />' +
+          '<label>Main financing</label><input id="promo-main-finance" value="' + esc(promoSource.mainFinance || '') + '" />' +
+          '<label>Restrictions</label><input id="promo-restrictions" value="' + esc(promoSource.restrictions || '') + '" />' +
+          '<label>Full promotion</label><textarea id="promo-full" rows="4">' + esc(promoSource.fullText || '') + '</textarea>' +
           '<label><input id="promo-approved" type="checkbox" ' + (promoSource.approved === 'yes' ? 'checked' : '') + ' /> Approved for the team</label>' +
           '<p id="promo-error" class="error"></p><button id="promo-save" type="button">Save promotion</button></article>';
       }
@@ -3795,10 +3820,27 @@
           exclusions: document.getElementById('promo-exclusions').value,
           financing: document.getElementById('promo-financing').value,
           beddingFinance: document.getElementById('promo-bedding-finance').value,
+          marquee: document.getElementById('promo-marquee').value,
+          mainFinance: document.getElementById('promo-main-finance').value,
+          restrictions: document.getElementById('promo-restrictions').value,
+          fullText: document.getElementById('promo-full').value,
           approved: document.getElementById('promo-approved').checked,
         }).then(renderMorning).catch(function (error) {
           if (/sign in/i.test(error.message)) showLogin(error.message);
           else document.getElementById('promo-error').textContent = error.message;
+        });
+      });
+      var promoFile = document.getElementById('promo-file');
+      if (promoFile) promoFile.addEventListener('change', function () {
+        var picked = promoFile.files && promoFile.files[0];
+        if (!picked) return;
+        var note = document.getElementById('promo-error');
+        if (note) note.textContent = 'Reading the promotion…';
+        readBase64(picked).then(function (base64) {
+          return api('reviewPromotionPdf', { fileName: picked.name, base64: base64 });
+        }).then(renderMorning).catch(function (error) {
+          if (/sign in/i.test(error.message)) showLogin(error.message);
+          else if (note) note.textContent = error.message;
         });
       });
     }

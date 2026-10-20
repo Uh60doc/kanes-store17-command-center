@@ -380,9 +380,8 @@ function lastBriefPromotion_() {
 }
 
 function briefPromotionInfo_(today) {
-  var raw = null;
-  try { raw = readPromotion_(); } catch (error) { raw = null; }
-  var current = saleOnDate_(raw, today);
+  var current = null;
+  try { current = promotionForDate_(today); } catch (error) { current = null; }
   var last = null;
   try { last = lastBriefPromotion_(); } catch (error) { last = null; }
   if (!current) {

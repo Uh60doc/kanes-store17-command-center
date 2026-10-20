@@ -2345,6 +2345,101 @@ function financeOnDate_(promotion, today) {
   }).sort(function (left, right) { return Number(left.months) - Number(right.months); });
 }
 
+function promoBodies_() {
+  var rows = [];
+  sheet_('CC_Promotions').forEach(function (row) {
+    if (!row.body) return;
+    var body = null;
+    try { body = JSON.parse(String(row.body)); } catch (error) { body = null; }
+    if (body) rows.push({ id: String(row.id || ''), body: body });
+  });
+  return rows;
+}
+
+function readPromoById_(id) {
+  var found = null;
+  promoBodies_().forEach(function (row) {
+    if (row.id === id) found = row.body;
+  });
+  return found;
+}
+
+/** The approved sale whose dates cover this day. A pending draft is never used. */
+function promotionForDate_(today) {
+  var best = null;
+  var bestId = '';
+  promoBodies_().forEach(function (row) {
+    if (row.id === 'pending' || row.id.indexOf('removed-') === 0) return;
+    var sale = saleOnDate_(row.body, today);
+    if (!sale) return;
+    var later = !best || String(sale.start) > String(best.start);
+    var sameStartCurrent = best && sale.start === best.start && row.id === 'current' && bestId !== 'current';
+    if (later || sameStartCurrent) {
+      best = sale;
+      bestId = row.id;
+    }
+  });
+  return best;
+}
+
+/** Financing still follows an approved term end date after the sale window closes. */
+function financingPromotion_(today) {
+  var active = promotionForDate_(today);
+  if (active) return active;
+  var best = null;
+  promoBodies_().forEach(function (row) {
+    if (row.id === 'pending' || String(row.body.approved) !== 'yes') return;
+    if (!financeOnDate_(row.body, today).length) return;
+    if (!best || String(row.body.end) > String(best.end)) best = row.body;
+  });
+  return best;
+}
+
+function upsertPromo_(id, body) {
+  var tab = promoSheet_();
+  var values = tab.getDataRange().getValues();
+  var encoded = JSON.stringify(body);
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    if (String(values[r][0]) === id) {
+      tab.getRange(r + 1, 2).setValue(encoded);
+      forgetRead_('CC_Promotions');
+      return;
+    }
+  }
+  tab.appendRow([id, encoded]);
+  forgetRead_('CC_Promotions');
+}
+
+function clearPromo_(id) {
+  var tab = promoSheet_();
+  var values = tab.getDataRange().getValues();
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    if (String(values[r][0]) === id) {
+      tab.getRange(r + 1, 1, 1, 2).setValues([['', '']]);
+      forgetRead_('CC_Promotions');
+      return;
+    }
+  }
+}
+
+function archiveApproved_(body) {
+  if (!body || String(body.approved) !== 'yes' || !body.start || !body.end) return;
+  var base = 'history-' + body.start + '-' + body.end;
+  var id = base;
+  var version = 2;
+  var existing = readPromoById_(id);
+  while (existing) {
+    if (JSON.stringify(existing) === JSON.stringify(body)) return;
+    id = base + '-v' + version;
+    version += 1;
+    if (version > 20) return;
+    existing = readPromoById_(id);
+  }
+  upsertPromo_(id, body);
+}
+
 function beddingDailyMap_() {
   var map = {};
   sheet_('CC_Kpi').forEach(function (row) {
@@ -2818,8 +2913,25 @@ function morning_(payload) {
   var home = home_(payload);
   try { ensureMorningPromotion_(); } catch (error) { appendException_('Update Failed', 'The morning promotion could not be saved.'); }
   var promotion = null;
-  try { promotion = readPromotion_(); } catch (error) { promotion = null; }
-  if (!promotion) promotion = anniversaryPromotion_();
+  var financePromo = null;
+  var editorBody = null;
+  var pendingDraft = null;
+  try {
+    promotion = promotionForDate_(home.today);
+    financePromo = financingPromotion_(home.today);
+    if (!promotion && !financePromo && !promoBodies_().length) {
+      var seed = anniversaryPromotion_();
+      promotion = saleOnDate_(seed, home.today);
+      financePromo = seed;
+    }
+    if (payload.session.role === 'admin') {
+      pendingDraft = readPromoById_('pending');
+      editorBody = pendingDraft && String(pendingDraft.approved) !== 'yes' ? pendingDraft : (readPromotion_() || anniversaryPromotion_());
+    }
+  } catch (error) {
+    promotion = null;
+    financePromo = null;
+  }
   var yesterday = home.yesterday.date;
   var closingFigure = { value: null, scope: 'none', date: '', period: '', goal: home.closing.goal, customers: null, opportunities: null, reconcile: false };
   var beddingGoal = home.goals.bedding;
@@ -2894,9 +3006,9 @@ function morning_(payload) {
     },
     winners: winners,
     rosterNotes: roster.notes || [],
-    promotion: saleOnDate_(promotion, home.today),
-    financing: financeOnDate_(promotion, home.today),
-    beddingFinance: promotion.beddingFinance || 'Size-based qualifying amounts are not in the approved promotion.',
+    promotion: promotion,
+    financing: financeOnDate_(financePromo, home.today),
+    beddingFinance: (financePromo && financePromo.beddingFinance) || 'Size-based qualifying amounts are not in the approved promotion.',
     reminders: [
       'NO ONE WALKS.',
       'Present maintenance plans.',
@@ -2904,7 +3016,14 @@ function morning_(payload) {
       'Complete the sales order checklist.',
       'Obtain required manager reviews.',
     ],
-    editor: payload.session.role === 'admin' ? promotion : null,
+    editor: editorBody,
+    review: pendingDraft && pendingDraft.changes ? {
+      file: pendingDraft.sourceFile || '',
+      comparedWith: pendingDraft.comparedWith || '',
+      changes: pendingDraft.changes,
+      financingUnread: !!pendingDraft.financingUnread,
+      offersUnread: !!pendingDraft.offersUnread,
+    } : null,
   };
 }
 
@@ -2951,21 +3070,538 @@ function savePromotion_(payload) {
     exclusions: promoLines_(payload.exclusions),
     beddingFinance: String(payload.beddingFinance || '').trim(),
     financing: financing,
+    marquee: String(payload.marquee || '').trim(),
+    mainFinance: String(payload.mainFinance || '').trim(),
+    restrictions: String(payload.restrictions || '').trim(),
+    fullText: String(payload.fullText || '').trim().slice(0, 20000),
   };
   if (!promotion.name || !/^\d{4}-\d{2}-\d{2}$/.test(promotion.start) || !/^\d{4}-\d{2}-\d{2}$/.test(promotion.end)) {
     throw new Error('The promotion needs a name and YYYY-MM-DD dates.');
   }
-  var tab = promoSheet_();
-  var values = tab.getDataRange().getValues();
-  var r;
-  for (r = 1; r < values.length; r += 1) {
-    if (String(values[r][0]) === 'current') {
-      tab.getRange(r + 1, 2).setValue(JSON.stringify(promotion));
-      return morning_(payload);
-    }
+  var previous = readPromotion_();
+  var pending = readPromoById_('pending');
+  if (pending) {
+    if (!promotion.marquee && pending.marquee) promotion.marquee = pending.marquee;
+    if (!promotion.mainFinance && pending.mainFinance) promotion.mainFinance = pending.mainFinance;
+    if (!promotion.restrictions && pending.restrictions) promotion.restrictions = pending.restrictions;
+    if (!promotion.fullText && pending.fullText) promotion.fullText = pending.fullText;
+    if (pending.changes) promotion.changes = pending.changes;
+    if (pending.comparedWith) promotion.comparedWith = pending.comparedWith;
+    if (pending.sourceFile) promotion.sourceFile = pending.sourceFile;
+    if (pending.financingUnread) promotion.financingUnread = true;
+    if (pending.offersUnread) promotion.offersUnread = true;
   }
-  tab.appendRow(['current', JSON.stringify(promotion)]);
+  if (promotion.financing.length) promotion.financingUnread = false;
+  if (promotion.highlights.length || promotion.featured.length) promotion.offersUnread = false;
+  var sameSale = previous && previous.name === promotion.name && previous.start === promotion.start && previous.end === promotion.end;
+  if (promotion.approved !== 'yes' && !sameSale) {
+    promotion.approved = 'no';
+    upsertPromo_('pending', promotion);
+    return morning_(payload);
+  }
+  if (promotion.approved === 'yes' && previous && String(previous.approved) === 'yes' && JSON.stringify(previous) !== JSON.stringify(promotion)) {
+    archiveApproved_(previous);
+  }
+  upsertPromo_('current', promotion);
+  if (promotion.approved === 'yes') clearPromo_('pending');
   return morning_(payload);
+}
+
+function promoMonthIndex_(name) {
+  var months = {
+    jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4, may: 5,
+    jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9,
+    oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12,
+  };
+  return months[String(name || '').toLowerCase()] || 0;
+}
+
+function promoIso_(year, month, day) {
+  var y = Number(year);
+  var m = Number(month);
+  var d = Number(day);
+  if (y < 100) y += 2000;
+  if (y < 2000 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return '';
+  return y + '-' + (m < 10 ? '0' : '') + m + '-' + (d < 10 ? '0' : '') + d;
+}
+
+function promoSpanDays_(start, end) {
+  var left = Date.parse(start + 'T12:00:00Z');
+  var right = Date.parse(end + 'T12:00:00Z');
+  if (!isFinite(left) || !isFinite(right)) return 99;
+  return Math.round((right - left) / 86400000);
+}
+
+function promoSpokenDate_(iso) {
+  var parts = String(iso || '').split('-');
+  var names = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var month = names[Number(parts[1]) - 1];
+  if (!month || !parts[2]) return iso;
+  return month + ' ' + Number(parts[2]) + ', ' + parts[0];
+}
+
+function promoDatePairs_(text) {
+  var flat = String(text || '').replace(/[\u2013\u2014]/g, '-');
+  var month = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
+  var weekday = '(?:(?:mon|tues|wednes|thurs|fri|satur|sun)day,?\\s+)?';
+  var pairs = [];
+  var match;
+  var dated = new RegExp(weekday + month + '\\s+(\\d{1,2}),?\\s+(20\\d{2})\\s*(?:-|through|to)\\s*' + weekday + month + '\\s+(\\d{1,2}),?\\s+(20\\d{2})', 'ig');
+  while ((match = dated.exec(flat))) {
+    var start = promoIso_(match[3], promoMonthIndex_(match[1]), match[2]);
+    var end = promoIso_(match[6], promoMonthIndex_(match[4]), match[5]);
+    if (start && end && start <= end) pairs.push({ start: start, end: end, index: match.index });
+  }
+  var named = new RegExp(month + '\\s+(\\d{1,2})\\s*(?:-|through|to)\\s*(?:' + month + '\\s+)?(\\d{1,2}),?\\s*(20\\d{2})', 'ig');
+  while ((match = named.exec(flat))) {
+    var startMonth = promoMonthIndex_(match[1]);
+    var endMonth = match[3] ? promoMonthIndex_(match[3]) : startMonth;
+    var startShort = promoIso_(match[5], startMonth, match[2]);
+    var endShort = promoIso_(match[5], endMonth, match[4]);
+    if (startShort && endShort && startShort <= endShort) pairs.push({ start: startShort, end: endShort, index: match.index });
+  }
+  var numeric = /(\d{1,2})[./](\d{1,2})[./](20\d{2})\s*(?:-|through|to)\s*(\d{1,2})[./](\d{1,2})[./](20\d{2})/g;
+  while ((match = numeric.exec(flat))) {
+    var startN = promoIso_(match[3], match[1], match[2]);
+    var endN = promoIso_(match[6], match[4], match[5]);
+    if (startN && endN && startN <= endN) pairs.push({ start: startN, end: endN, index: match.index });
+  }
+  return pairs;
+}
+
+function promoSingleDate_(text) {
+  var flat = String(text || '').replace(/[\u2013\u2014]/g, '-');
+  var month = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
+  var named = new RegExp(month + '\\s+(\\d{1,2}),?\\s*(20\\d{2})', 'i').exec(flat);
+  if (named) return promoIso_(named[3], promoMonthIndex_(named[1]), named[2]);
+  var numeric = /(\d{1,2})[./](\d{1,2})[./](20\d{2})/.exec(flat);
+  if (numeric) return promoIso_(numeric[3], numeric[1], numeric[2]);
+  return '';
+}
+
+function promoMoneyToken_(value) {
+  var number = Number(String(value || '').replace(/[$,]/g, ''));
+  if (!isFinite(number)) return '';
+  var text = number.toFixed(2).replace(/\.00$/, '');
+  var parts = text.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return '$' + parts.join('.');
+}
+
+function financingFromBlock_(months, body, saleEnd) {
+  var text = String(body || '').replace(/\s+/g, ' ').trim();
+  var zero = /(^|[^0-9])0\s*%|zero interest|0 interest/i.test(text);
+  var noMin = /no minimum/i.test(text);
+  var min = /\$\s*(\d[\d,]*(?:\.\d{2})?)/.exec(text);
+  var deposit = /(\d{1,2})\s*%\s*(?:down|deposit)/i.exec(text) || /(?:down|deposit)[^%]{0,40}?(\d{1,2})\s*%/i.exec(text);
+  var noDown = /no down payment|no deposit/i.test(text);
+  var yellow = /yellow tag only/i.test(text);
+  var noExtra = /no additional discount/i.test(text);
+  var discountsOk = /discounts allowed|discounted items/i.test(text);
+  var ownDates = promoDatePairs_(text);
+  var end = ownDates.length ? ownDates[0].end : (promoSingleDate_(text) || saleEnd);
+  var sentences = [months + (zero ? ' months at 0% interest.' : ' months.')];
+  if (/credit card/i.test(text)) sentences.push('Use the Kane\'s Furniture credit card.');
+  if (noMin) sentences.push('No minimum purchase.');
+  else if (min) sentences.push('Minimum purchase is ' + promoMoneyToken_(min[1]) + '.');
+  else sentences.push('Minimum purchase was not printed in this offer.');
+  if (noDown) sentences.push('No down payment.');
+  else if (deposit) sentences.push('Required deposit is ' + deposit[1] + '%.');
+  if (/another payment/i.test(text)) sentences.push('Pay the deposit with another payment method.');
+  if (/equal monthly payments/i.test(text)) sentences.push('Equal monthly payments are required.');
+  if (/plus tax and delivery/i.test(text)) sentences.push('Plus tax and delivery.');
+  if (ownDates.length) sentences.push('This offer runs ' + promoSpokenDate_(ownDates[0].start) + ' through ' + promoSpokenDate_(ownDates[0].end) + '.');
+  else if (end) sentences.push('This offer ends ' + promoSpokenDate_(end) + '.');
+  if (yellow) sentences.push('Yellow Tag only.');
+  if (noExtra) sentences.push('No additional discount.');
+  if (discountsOk) sentences.push('Discounts are allowed.');
+  return {
+    months: months,
+    end: end,
+    zeroInterest: zero,
+    highlight: !!(zero && months >= 60),
+    bedding: /bedding only|code:\s*bed\b/i.test(text),
+    summary: sentences.join(' '),
+  };
+}
+
+function promoMoneyList_(line) {
+  return String(line || '').match(/\$\s*\d[\d,]*(?:\.\d{2})?/g) || [];
+}
+
+function parseFinancingTerms_(text, saleEnd) {
+  var lines = String(text || '').replace(/\r/g, '').split('\n');
+  var blocks = [];
+  var current = '';
+  function push() {
+    if (current) blocks.push(current);
+    current = '';
+  }
+  lines.forEach(function (line) {
+    var clean = line.replace(/\s+/g, ' ').trim();
+    if (!clean) return;
+    if (/^code\s*:/i.test(clean) || /^\d{1,2}\s*-?\s*months?\b/i.test(clean)) {
+      push();
+      current = clean;
+      return;
+    }
+    if (current && !/^(\*|disclaimer|non advertised|bedding financing|advertised offers)\b/i.test(clean)) current += ' ' + clean;
+    else push();
+  });
+  push();
+  var found = [];
+  blocks.forEach(function (block) {
+    var monthMatch = /(\d{1,2})\s*-?\s*months?\b/i.exec(block);
+    if (!monthMatch) return;
+    var months = Number(monthMatch[1]);
+    if (months < 1 || months > 84) return;
+    if (!/minimum|down payment|deposit|discount|yellow tag|0\s*%|interest/i.test(block)) return;
+    var term = financingFromBlock_(months, block, saleEnd);
+    var key = String(months) + (term.bedding ? '-bedding' : '');
+    var prior = -1;
+    found.forEach(function (item, index) {
+      if (String(item.months) + (item.bedding ? '-bedding' : '') === key) prior = index;
+    });
+    if (prior === -1 || term.summary.length > found[prior].summary.length) {
+      if (prior === -1) found.push(term);
+      else found[prior] = term;
+    }
+  });
+  return found.sort(function (left, right) { return left.months - right.months; });
+}
+
+function headlineFeatured_(text) {
+  var found = {};
+  String(text || '').split('\n').forEach(function (line) {
+    var prices = promoMoneyList_(line);
+    if (prices.length < 2) return;
+    var was = Number(prices[0].replace(/[$,\s]/g, ''));
+    var now = Number(prices[prices.length - 1].replace(/[$,\s]/g, ''));
+    if (!isFinite(was) || !isFinite(now) || now >= was) return;
+    var percent = /(\d{1,2})\s*%/.exec(line);
+    if (percent && Math.abs(Math.round((1 - now / was) * 100) - Number(percent[1])) > 3) return;
+    var off = percent ? percent[1] + '% OFF' : '';
+    var name = '';
+    if (/palm gate/i.test(line)) name = 'Palm Gate 5-piece King Bedroom';
+    else if (/oakley white/i.test(line)) name = 'Oakley White 4-piece Sectional';
+    else if (/oakley grey/i.test(line)) name = 'Oakley Grey 4-piece Sectional';
+    else if (/dallas saddle/i.test(line) && /manual/i.test(line)) name = 'Dallas Saddle 6-piece Manual Reclining Sectional';
+    else if (/dallas saddle/i.test(line) && /pwr|power/i.test(line)) name = 'Dallas Saddle 6-piece Power Reclining Sectional';
+    if (!name || found[name]) return;
+    found[name] = { name: name, was: was, now: now, save: Math.round((was - now) * 100) / 100, off: off };
+  });
+  var order = [
+    'Palm Gate 5-piece King Bedroom',
+    'Oakley White 4-piece Sectional',
+    'Oakley Grey 4-piece Sectional',
+    'Dallas Saddle 6-piece Manual Reclining Sectional',
+  ];
+  var items = [];
+  order.forEach(function (name) { if (found[name]) items.push(found[name]); });
+  var white = found['Oakley White 4-piece Sectional'];
+  var grey = found['Oakley Grey 4-piece Sectional'];
+  if (white && grey && white.was === grey.was && white.now === grey.now && white.off === grey.off) {
+    items = items.filter(function (item) { return item.name.indexOf('Oakley') !== 0; });
+    items.splice(1, 0, { name: 'Oakley White/Grey 4-piece Sectional', was: white.was, now: white.now, save: white.save, off: white.off });
+  }
+  return { items: items, power: found['Dallas Saddle 6-piece Power Reclining Sectional'] || null };
+}
+
+function parseOfferLines_(text) {
+  var offers = [];
+  String(text || '').split(/\n/).forEach(function (line) {
+    var clean = line.replace(/\s+/g, ' ').trim();
+    if (!clean || clean.length > 180) return;
+    if (/^\d{1,2}\s*-?\s*months?\b/i.test(clean)) return;
+    if (/marquee/i.test(clean)) return;
+    if (/^(exclusions?|restrictions?|queen|king|twin|full)\b/i.test(clean)) return;
+    if (!/(\d+\s*%|\boff\b|\$\d)/i.test(clean)) return;
+    if (!/[.]$/.test(clean)) clean += '.';
+    offers.push(clean);
+  });
+  return offers;
+}
+
+function parseFeatured_(text) {
+  var items = [];
+  String(text || '').split(/\n/).forEach(function (line) {
+    var clean = line.replace(/\s+/g, ' ').trim();
+    var prices = clean.match(/\$(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/g) || [];
+    if (prices.length < 2) return;
+    var name = clean.split(/\$/)[0].replace(/\b(was|now|reg\.?|regular)\b/ig, ' ').replace(/\s+/g, ' ').trim().replace(/[:\-–]+$/, '');
+    if (!name || name.length < 4) return;
+    var was = Number(prices[0].replace(/[$,]/g, ''));
+    var now = Number(prices[1].replace(/[$,]/g, ''));
+    if (!isFinite(was) || !isFinite(now) || now >= was) return;
+    var off = '';
+    var percent = /(\d{1,2})\s*%/.exec(clean);
+    if (percent) off = percent[1] + '% OFF';
+    items.push({ name: name, was: was, now: now, save: Math.round((was - now) * 100) / 100, off: off });
+  });
+  return items;
+}
+
+function promoSaleWindow_(text) {
+  var active = /active in[\s\S]{0,180}/i.exec(text);
+  var source = active ? promoDatePairs_(active[0]) : [];
+  var pairs = (source.length ? source : promoDatePairs_(text)).filter(function (pair) {
+    return promoSpanDays_(pair.start, pair.end) <= 20;
+  });
+  pairs.sort(function (left, right) { return left.index - right.index; });
+  return pairs[0] || null;
+}
+
+function parseStoreMarquee_(text) {
+  var chosen = '';
+  String(text || '').split('\n').forEach(function (line) {
+    var clean = line.replace(/\s+/g, ' ').trim();
+    if (/#17\b/.test(clean) && /anniversary/i.test(clean)) chosen = clean;
+  });
+  if (!chosen) {
+    String(text || '').split('\n').forEach(function (line, index, lines) {
+      if (chosen || !/marquee/i.test(line)) return;
+      var same = line.replace(/.*marquee\s*[:\-]?/i, '').replace(/\s+/g, ' ').trim();
+      chosen = same && !/^store\s*17$/i.test(same) ? same : String(lines[index + 1] || '').replace(/\s+/g, ' ').trim();
+    });
+  }
+  return chosen.replace(/^stores?\s+#(?:(?!-\s).)*-\s*/i, '').trim();
+}
+
+function parseBeddingFinance_(text) {
+  var block = /code:\s*bed\b[\s\S]{0,500}/i.exec(text);
+  if (!block) return '';
+  var body = block[0].split(/\n\s*\*/)[0].replace(/\s+/g, ' ');
+  var sizes = /\$(\d[\d,]*)\s*twin\/twin xl,\s*\$(\d[\d,]*)\s*queen\/full,\s*\$(\d[\d,]*)\s*king/i.exec(body);
+  if (!sizes) return '';
+  var sentences = [
+    'Bedding only. 48 months.',
+    'Twin and Twin XL minimum is ' + promoMoneyToken_(sizes[1]) + '.',
+    'Queen and Full minimum is ' + promoMoneyToken_(sizes[2]) + '.',
+    'King minimum is ' + promoMoneyToken_(sizes[3]) + '.',
+    'Plus tax and delivery.',
+  ];
+  if (/cannot be used with discounted/i.test(body)) sentences.push('Do not use this on a discounted item.');
+  if (/free delivery on premium bedding/i.test(body)) sentences.push('Free delivery on premium bedding.');
+  return sentences.join(' ');
+}
+
+function parsePromotionText_(text) {
+  var raw = String(text || '').replace(/\r/g, '').trim();
+  if (!raw) throw new Error('No words could be read from that PDF. Nothing was saved.');
+  var window = promoSaleWindow_(raw);
+  if (!window) throw new Error('The sale dates could not be read. Nothing was approved.');
+  var name = /78th anniversary sale/i.test(raw) ? '78th Anniversary Sale' : '';
+  if (!name && /78th anniversary event/i.test(raw)) name = '78th Anniversary Event';
+  if (!name) {
+    var nameMatch = /([^\n]{0,80}anniversary sale[^\n]{0,40})/i.exec(raw) || /([^\n]{0,60}\bsale\b[^\n]{0,40})/i.exec(raw);
+    name = nameMatch ? nameMatch[1].replace(/\s+/g, ' ').trim() : '';
+    name = name.replace(/^[^A-Za-z0-9]+/, '').replace(/[^A-Za-z0-9]+$/, '');
+  }
+  if (!name) throw new Error('The sale name could not be read. Nothing was approved.');
+  var kaneSheet = /code:\s*(?:\d{3}|bed)\b/i.test(raw);
+  var financing = parseFinancingTerms_(raw, window.end).filter(function (term) { return !term.bedding; });
+  var headline = kaneSheet ? headlineFeatured_(raw) : { items: parseFeatured_(raw), power: null };
+  var featured = headline.items;
+  var offers = parseOfferLines_(raw).filter(function (line) {
+    return !featured.some(function (item) { return line.indexOf(item.name) === 0; });
+  });
+  var highlights = [];
+  if (kaneSheet) {
+    if (featured.some(function (item) { return item.off === '50% OFF'; })) highlights.push('Featured floor samples are 50% off.');
+    if (/davey euro top/i.test(raw)) highlights.push('Davey Euro Top mattresses are 50% off.');
+    var delivery = /free immediate delivery with minimum purchase of \$(\d[\d,]*)/i.exec(raw);
+    if (delivery) highlights.push('Free delivery when you buy ' + promoMoneyToken_(delivery[1]) + ' or more, in the carton.');
+    if (/\$300 gift card with the purchase of select premium mattresses/i.test(raw)) highlights.push('A $300 gift card comes with select premium mattresses.');
+  }
+  if (!highlights.length) highlights = offers.slice(0, 4);
+  var marquee = parseStoreMarquee_(raw);
+  var exclusionMatch = /excludes\s+([^\.]+)/i.exec(raw) || /exclusions?\s*[:\-]\s*([^\n]+)/i.exec(raw);
+  var exclusions = exclusionMatch ? exclusionMatch[1].split(/,|&| and /).map(function (part) {
+    return part.replace(/\.$/, '').replace(/\s+/g, ' ').trim();
+  }).filter(function (part) { return part; }).map(function (part) {
+    if (/tempur/i.test(part)) return 'Tempur-Pedic';
+    if (/beautyrest/i.test(part)) return 'Beautyrest Black';
+    return part.charAt(0).toUpperCase() + part.slice(1);
+  }) : [];
+  var restrictionLines = [];
+  if (/not valid with any other offer/i.test(raw)) restrictionLines.push('Not valid with any other offer.');
+  if (/within 21 days/i.test(raw)) restrictionLines.push('Take delivery within 21 days.');
+  if (/cannot be further discounted/i.test(raw)) restrictionLines.push('Mattress sets can count toward the minimum. They cannot be discounted more.');
+  if (/discounts can not be combined|discounts cannot be combined/i.test(raw)) restrictionLines.push('Discounts cannot be combined with another promotion.');
+  if (/red tag merchandise/i.test(raw)) restrictionLines.push('Red Tag, AS-IS, gift cards, and warranties are not discounted.');
+  raw.split('\n').forEach(function (line) {
+    var clean = line.replace(/\s+/g, ' ').trim();
+    if (/^(restrictions?|not eligible)\b/i.test(clean)) restrictionLines.push(clean.replace(/\.$/, '') + '.');
+  });
+  var floorBits = [];
+  var adjustable = /free adjustable base[\s\S]{0,220}/i.exec(raw);
+  if (adjustable && /\$599/.test(adjustable[0]) && /\$799/.test(adjustable[0]) && /\$1,?199/.test(adjustable[0])) {
+    floorBits.push('Free adjustable base upgrade on the same size. Twin sets must be over $599. Queen sets must be over $799. King sets must be over $1,199.');
+  }
+  if (headline.power) floorBits.push('Dallas Saddle power sectional is ' + promoMoneyToken_(headline.power.now) + '.');
+  if (kaneSheet) floorBits.push('The full item list is in the promotion.');
+  var main = null;
+  financing.forEach(function (term) {
+    if (term.highlight) main = term;
+  });
+  if (!main) financing.forEach(function (term) { if (!main && term.zeroInterest) main = term; });
+  if (!main && financing.length) main = financing[0];
+  var mattressLines = [];
+  raw.split('\n').forEach(function (line) {
+    if (!/davey/i.test(line)) return;
+    var prices = promoMoneyList_(line);
+    if (prices.length < 2) return;
+    var sale = promoMoneyToken_(prices[prices.length - 1].replace(/[$,\s]/g, ''));
+    if (/qn|queen/i.test(line)) mattressLines.push('Queen: ' + sale);
+    if (/kg|king/i.test(line) && !/queen/i.test(line)) mattressLines.push('King: ' + sale);
+  });
+  if (!mattressLines.length && !kaneSheet) {
+    raw.split('\n').forEach(function (line) {
+      if (/^(queen|king)\b/i.test(line.trim()) && /\$\d/.test(line)) {
+        var clean = line.replace(/\s+/g, ' ').trim();
+        if (mattressLines.indexOf(clean) === -1) mattressLines.push(clean);
+      }
+    });
+  }
+  var beddingFinance = parseBeddingFinance_(raw) || 'Size-based qualifying amounts are not in the approved promotion.';
+  return {
+    name: name,
+    start: window.start,
+    end: window.end,
+    approved: 'no',
+    highlights: highlights.slice(0, 4),
+    featured: featured,
+    floorNote: floorBits.join(' '),
+    mattressName: /davey euro top/i.test(raw) ? 'Davey Euro Top' : '',
+    mattressOff: /davey euro top[\s\S]{0,240}50\s*%/i.test(raw) ? '50% OFF' : '',
+    mattressLines: mattressLines,
+    mattressNote: /cannot be further discounted/i.test(raw)
+      ? 'Mattress sets can count toward the minimum purchase. They cannot be discounted more.'
+      : (/not automatically eligible/i.test(raw) ? 'Mattresses are not automatically eligible for additional discounts. Only an explicitly approved special applies.' : ''),
+    exclusions: exclusions,
+    restrictions: restrictionLines.join(' '),
+    beddingFinance: beddingFinance,
+    financing: financing,
+    financingUnread: financing.length === 0,
+    offersUnread: highlights.length === 0 && featured.length === 0,
+    marquee: marquee,
+    mainFinance: main ? main.summary : '',
+    fullText: raw.slice(0, 20000),
+  };
+}
+
+function promoFactNumbers_(text) {
+  var found = [];
+  var match;
+  var pattern = /\$[\d,]+(?:\.\d{2})?|\d{1,3}\s*%/g;
+  while ((match = pattern.exec(String(text || '')))) found.push(match[0].replace(/[\s,]/g, '').toLowerCase());
+  return found;
+}
+
+function comparePromotions_(before, after) {
+  var changes = [];
+  function add(label, from, to) {
+    if (String(from || '') === String(to || '')) return;
+    changes.push({ label: label, from: String(from || '—'), to: String(to || '—') });
+  }
+  add('Sale name', before && before.name, after.name);
+  add('Start date', before && before.start, after.start);
+  add('End date', before && before.end, after.end);
+  add('Marquee', before && before.marquee, after.marquee);
+  var oldHighlights = (before && before.highlights) || [];
+  var newHighlights = after.highlights || [];
+  newHighlights.forEach(function (line) {
+    if (oldHighlights.indexOf(line) === -1) add('Selling point added', '—', line);
+  });
+  oldHighlights.forEach(function (line) {
+    if (newHighlights.indexOf(line) === -1) add('Selling point removed', line, '—');
+  });
+  var oldFeatured = {};
+  ((before && before.featured) || []).forEach(function (item) { oldFeatured[item.name] = item; });
+  var newFeatured = {};
+  (after.featured || []).forEach(function (item) { newFeatured[item.name] = item; });
+  Object.keys(newFeatured).forEach(function (name) {
+    var prior = oldFeatured[name];
+    var item = newFeatured[name];
+    if (!prior) {
+      add(name, '—', promoMoneyToken_(item.now));
+      return;
+    }
+    add(name + ' was', promoMoneyToken_(prior.was), promoMoneyToken_(item.was));
+    add(name + ' now', promoMoneyToken_(prior.now), promoMoneyToken_(item.now));
+    add(name + ' off', prior.off, item.off);
+  });
+  Object.keys(oldFeatured).forEach(function (name) {
+    if (!newFeatured[name]) add(name, promoMoneyToken_(oldFeatured[name].now), '—');
+  });
+  var oldTerms = {};
+  ((before && before.financing) || []).forEach(function (term) { oldTerms[String(term.months)] = term; });
+  if (after.financingUnread) {
+    add('Financing', 'Not copied from the old sale', 'Not read from this PDF');
+  } else {
+    (after.financing || []).forEach(function (term) {
+      var prior = oldTerms[String(term.months)];
+      var label = term.months + '-month financing';
+      if (!prior) {
+        add(label, '—', term.summary);
+        return;
+      }
+      add(label + ' end date', prior.end, term.end);
+      if (!!prior.zeroInterest !== !!term.zeroInterest) add(label + ' 0%', prior.zeroInterest ? 'yes' : 'no', term.zeroInterest ? 'yes' : 'no');
+      var oldNumbers = promoFactNumbers_(prior.summary);
+      var newNumbers = promoFactNumbers_(term.summary);
+      var missing = oldNumbers.filter(function (token) { return newNumbers.indexOf(token) === -1; });
+      var added = newNumbers.filter(function (token) { return oldNumbers.indexOf(token) === -1; });
+      var addedRule = (/credit card/i.test(term.summary) && !/credit card/i.test(prior.summary))
+        || (/equal monthly/i.test(term.summary) && !/equal monthly/i.test(prior.summary));
+      if (missing.length || added.length || addedRule) add(label + ' terms', prior.summary, term.summary);
+      delete oldTerms[String(term.months)];
+    });
+    Object.keys(oldTerms).forEach(function (months) {
+      add(months + '-month financing', oldTerms[months].summary, 'Not in the new PDF');
+    });
+  }
+  if (after.offersUnread) add('Offers', 'Not copied from the old sale', 'Not read from this PDF');
+  var oldExcluded = ((before && before.exclusions) || []).join(', ');
+  var newExcluded = (after.exclusions || []).join(', ');
+  add('Exclusions', oldExcluded, newExcluded);
+  add('Restrictions', before && before.restrictions, after.restrictions);
+  add('Bedding financing', before && before.beddingFinance, after.beddingFinance);
+  return changes;
+}
+
+function latestApprovedPromotion_() {
+  var best = null;
+  promoBodies_().forEach(function (row) {
+    if (row.id === 'pending' || String(row.body.approved) !== 'yes') return;
+    if (!best || String(row.body.end) > String(best.end) || (row.body.end === best.end && row.id === 'current')) best = row.body;
+  });
+  return best;
+}
+
+function reviewPromotionPdf_(payload) {
+  var fileName = String(payload.fileName || '').trim();
+  if (!/\.pdf$/i.test(fileName)) throw new Error('Upload the promotion as a PDF.');
+  var bytes = Utilities.base64Decode(String(payload.base64 || ''));
+  if (!bytes || !bytes.length) throw new Error('The PDF was empty. Nothing was saved.');
+  var blob = Utilities.newBlob(bytes, 'application/pdf', fileName);
+  var text = pdfText_(blob);
+  var parsed = parsePromotionText_(text);
+  parsed.sourceFile = fileName;
+  parsed.approved = 'no';
+  var prior = latestApprovedPromotion_();
+  parsed.changes = comparePromotions_(prior, parsed);
+  parsed.comparedWith = prior ? prior.name + ' ' + prior.start + ' through ' + prior.end : 'No earlier approved sale';
+  upsertPromo_('pending', parsed);
+  var page = morning_(payload);
+  page.review = {
+    file: fileName,
+    comparedWith: parsed.comparedWith,
+    changes: parsed.changes,
+    financingUnread: !!parsed.financingUnread,
+    offersUnread: !!parsed.offersUnread,
+  };
+  return page;
 }
 
 function health_(payload) {
