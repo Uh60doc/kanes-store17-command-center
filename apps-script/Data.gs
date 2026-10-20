@@ -3279,6 +3279,7 @@ function headlineFeatured_(text) {
     var now = Number(prices[prices.length - 1].replace(/[$,\s]/g, ''));
     if (!isFinite(was) || !isFinite(now) || now >= was) return;
     var percent = /(\d{1,2})\s*%/.exec(line);
+    if (percent && Math.abs(Math.round((1 - now / was) * 100) - Number(percent[1])) > 3) return;
     var off = percent ? percent[1] + '% OFF' : '';
     var name = '';
     if (/palm gate/i.test(line)) name = 'Palm Gate 5-piece King Bedroom';
