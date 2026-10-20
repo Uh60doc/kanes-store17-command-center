@@ -111,7 +111,7 @@
     .home-targets { display: grid; grid-template-columns: 1.15fr 1.25fr 0.62fr; gap: 10px; margin-top: 8px; align-items: stretch; }
     .home-compare { display: grid; grid-template-columns: 0.9fr 1.35fr; gap: 12px; }
     .home-quad { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .team-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .team-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
     .glow-card { min-width: 0; }
     .glow-card .kicker { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0c9; }
     .kpi-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(20, 196, 212, 0.15); color: #7ee7f0; font-size: 14px; }
@@ -177,22 +177,35 @@
     .target-grid h2 { min-height: 0; font-size: 12px; line-height: 1.2; }
     .target-grid .target-tile { padding: 8px 10px; }
     .target-grid .kpi-icon.lg { width: 28px; height: 28px; }
-    .person-card { cursor: pointer; text-align: left; width: 100%; color: #f7fbff; background: radial-gradient(120% 80% at 0% 0%, rgba(20, 196, 212, 0.16), transparent 55%), #122033; }
-    .person-card h3 { margin: 4px 0 0; font-size: 18px; font-weight: 750; color: #f7fbff; }
-    .person-card .figure { color: #ffffff; font-size: 34px; }
-    .person-card .sub { color: #d7e4f2; font-size: 14px; }
+    .person-card { cursor: pointer; text-align: left; width: 100%; padding: 8px 8px 10px; color: #f7fbff; background: radial-gradient(120% 80% at 0% 0%, rgba(20, 196, 212, 0.16), transparent 55%), #122033; }
+    .person-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .person-card h3 { margin: 0; font-size: 13px; line-height: 1.15; font-weight: 750; color: #f7fbff; }
+    .person-card .figure { color: #ffffff; font-size: 18px; margin: 0; }
+    .person-card .sub { color: #d7e4f2; font-size: 11px; }
+    .sales-line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 8px; margin: 6px 0 0; }
+    .sales-line .sub { margin: 0; }
+    .vstats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
+    .vstat { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+    .vstat b { color: #9eb0c9; font-size: 10px; font-weight: 750; letter-spacing: 0.02em; text-align: center; }
+    .vmeter { position: relative; width: 12px; height: 48px; margin: 4px 0; border-radius: 99px; background: #0b1c28; overflow: hidden; }
+    .vmeter i { position: absolute; left: 0; right: 0; bottom: 0; display: block; border-radius: 99px; background: linear-gradient(180deg, #7ee7f0, #0e8f9c); }
+    .vmeter.good i { background: linear-gradient(180deg, #3dde8a, #128a55); }
+    .vmeter.warn i { background: linear-gradient(180deg, #f3d48a, #8a6a2f); }
+    .vmeter.bad i { background: linear-gradient(180deg, #ff8ea3, #8a3048); }
+    .vstat span { color: #f7fbff; font-size: 11px; font-weight: 750; text-align: center; }
     .rank { font-size: 13px; font-weight: 800; letter-spacing: 0; }
     .focus-note { margin: 0 0 12px; }
     @media (max-width: 1200px) {
       .home-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .home-targets, .home-compare { grid-template-columns: 1fr; }
-      .team-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .team-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
     @media (max-width: 1180px) {
       .wrap { overflow-x: clip; }
     }
     @media (max-width: 720px) {
-      .home-kpis, .team-grid, .pair, .home-quad { grid-template-columns: 1fr; }
+      .home-kpis, .pair, .home-quad { grid-template-columns: 1fr; }
+      .team-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .brand { flex-direction: column; align-items: stretch; min-height: 0; padding-bottom: 16px; }
       .hero-side { width: 100%; margin-left: 0; flex-direction: column; align-items: stretch; }
       .hero-meta, .data-refresh { width: 100%; margin-left: 0; flex-basis: auto; }
@@ -1327,11 +1340,14 @@
         stretchLine('Written', stretchPack.written, monthBoard.written, stretchPack.writtenLeft, 'cyan') +
         stretchLine('Delivered', stretchPack.delivered, monthBoard.delivered, stretchPack.deliveredLeft, 'pink') +
         '</article>';
+      function dateLine(dates) {
+        return dates && dates !== 'Pending' ? esc(dates) : '';
+      }
       var compare = '<article class="card glow-card"><div class="card-head">' + glyph('bars') + '<h2>Year over year comparison</h2></div><div class="home-quad">' +
-        mini('NWDSR Written', esc(balance.nwdsr || 'Pending'), esc(balance.currentDates || '')) +
-        mini('SNAP Written', esc(balance.snap || 'Pending'), 'Supplemental. Not the store written total.') +
-        mini('NWDSR Written last year', esc(balance.nwdsrLy || 'Pending'), esc(balance.lyDates || 'Pending')) +
-        mini('SNAP Written last year', esc(balance.snapLy || balance.ly || 'Pending'), esc(balance.note || 'Last year is the prior year, not last month.')) +
+        mini('NWDSR Written', esc(balance.nwdsr || 'Pending'), dateLine(balance.currentDates)) +
+        mini('SNAP Written', esc(balance.snap || 'Pending'), dateLine(balance.currentDates)) +
+        mini('NWDSR Written last year', esc(balance.nwdsrLy || 'Pending'), dateLine(balance.lyDates)) +
+        mini('SNAP Written last year', esc(balance.snapLy || balance.ly || 'Pending'), dateLine(balance.lyDates)) +
         '</div></article>';
       var team = (data.people || []).slice().sort(function (left, right) {
         var leftValue = known(left.snapWritten) ? Number(left.snapWritten) : -1;
@@ -1347,12 +1363,21 @@
         var beddingText = beddingRow && known(beddingRow.written) ? kpiValue(beddingRow.written, beddingRow.unit) : 'Pending';
         var closingText = known(person.closingRatio) ? percent(person.closingRatio) : 'Pending';
         var attachText = attach && known(attach.actual) ? percent(attach.actual) : 'Pending';
+        var closingGoal = person.closing && known(person.closing.goal) ? person.closing.goal : null;
+        function vbar(label, actual, goal, text) {
+          var height = barPct(actual, goal);
+          var tone = !known(actual) || !known(goal) ? '' : (Number(actual) >= Number(goal) ? 'good' : (Number(actual) >= Number(goal) * 0.9 ? 'warn' : 'bad'));
+          return '<div class="vstat"><b>' + label + '</b><div class="vmeter ' + tone + '">' + (height === null ? '' : '<i style="height:' + height + '%"></i>') + '</div><span>' + text + '</span></div>';
+        }
         var medal = index === 0 ? ' gold' : index === 1 ? ' silver' : index === 2 ? ' bronze' : '';
-        return '<button type="button" class="card glow-card person-card" data-person-home="' + esc(person.name) + '"><p class="rank' + medal + '">' + (index + 1) + '</p><h3>' + esc(person.name) + '</h3>' +
-          '<p class="figure">' + (known(person.snapWritten) ? money(person.snapWritten) : 'Pending') + '</p>' +
-          '<p class="sub">SNAP written</p><p class="sub">' + (progress === null ? 'Pending' : percent(progress) + ' of ' + (known(person.monthlyGoal) ? money(person.monthlyGoal) : 'the individual goal')) + '</p>' +
-          meterHtml(person.snapWritten, person.monthlyGoal, 'cyan') +
-          '<div class="stat-row"><span><b>BED</b>' + beddingText + '</span><span><b>CR</b>' + closingText + '</span><span><b>ATT</b>' + attachText + '</span></div></button>';
+        var salesNote = progress === null ? 'Pending' : percent(progress) + (known(person.monthlyGoal) ? ' of ' + money(person.monthlyGoal) : '');
+        return '<button type="button" class="card glow-card person-card" data-person-home="' + esc(person.name) + '"><div class="person-top"><p class="rank' + medal + '">' + (index + 1) + '</p><h3>' + esc(person.name) + '</h3></div>' +
+          '<p class="sales-line"><span class="figure">' + (known(person.snapWritten) ? money(person.snapWritten) : 'Pending') + '</span><span class="sub">' + salesNote + '</span></p>' +
+          '<div class="vstats">' +
+          vbar('Bed', beddingRow ? beddingRow.written : null, beddingRow ? beddingRow.goal : null, beddingText) +
+          vbar('Close %', person.closingRatio, closingGoal, closingText) +
+          vbar('Att', attach ? attach.actual : null, attach ? attach.goal : null, attachText) +
+          '</div></button>';
       }).join('');
       var quick = '<p class="sub noprint"><button type="button" class="linkish" data-home="people">Open Sales Team</button>' +
         (routeAllowed('coach') ? ' · <button type="button" class="linkish" data-home="coach">Goal Coach</button>' : '') +
