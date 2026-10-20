@@ -4,7 +4,7 @@ import { plain } from './fakeSpreadsheet.ts';
 import { harness, session } from './octoberVerified.ts';
 
 test('the historical registers keep every printed day and do not change current-year sales', () => {
-  const { gs, tabs } = harness();
+  const { gs, tabs, setToday } = harness();
   const before = plain(gs.home_({ session }));
   const dailyBefore = JSON.stringify(tabs.CC_Daily);
   const ledgerBefore = JSON.stringify(tabs.CC_Ledger);
@@ -65,6 +65,21 @@ test('the historical registers keep every printed day and do not change current-
   assert.equal(after.month.snapWritten, before.month.snapWritten);
   assert.equal(after.yesterday.written, before.yesterday.written);
   assert.equal(after.yesterday.snapWritten, before.yesterday.snapWritten);
+
+  setToday('2026-10-20');
+  const weekly = plain(gs.reportCenter_({ session, kind: 'weekly' }));
+  assert.equal(weekly.snapLy.nwdsrLy !== 'Pending', true);
+  assert.doesNotMatch(weekly.lastYear.note, /not on file|haven't been provided|have not been provided/i);
+  assert.match(weekly.lastYear.note, /NWDSR_WRITTEN_LY/);
+  const meeting = plain(gs.reportCenter_({ session, kind: 'meeting' }));
+  assert.match(meeting.recognition.join(' '), /same week last year/);
+  assert.doesNotMatch(meeting.recognition.join(' '), /No prior comparable week/);
+  const home = plain(gs.home_({ session }));
+  assert.equal(home.writtenBalance.month.nwdsrLy, '$369,018');
+  assert.equal(home.writtenBalance.month.ly, '$144,537');
+  assert.equal(home.writtenBalance.month.lyDates, 'Oct 1, 2025 - Oct 18, 2025');
+  assert.match(home.writtenBalance.month.deliveredLySource, /2025-10-01/);
+  assert.equal(home.month.written, before.month.written);
 
   const kept = plain(gs.recordHistoricalDay_({ metric: 'SNAP Written', date: '2025-11-01', dollars: 1, source: 'later.pdf', verification: 'Verified', note: 'disagree' }));
   assert.equal(kept.status, 'kept');

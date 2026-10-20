@@ -846,6 +846,13 @@ function reportWeekly_(payload, today) {
     if (ly && ly.confirmed && ly.written && !briefBlank_(ly.written.value)) lastYear.written = moneyText_(ly.written.value);
     if (ly && ly.confirmed && ly.delivered && !briefBlank_(ly.delivered.value)) lastYear.delivered = moneyText_(ly.delivered.value);
     if (lastYear.written === 'Pending' && lastYear.delivered === 'Pending') lastYear.note = 'Last year is Pending. ' + ((ly && ly.written && ly.written.basis) || 'No verified last-year figure was invented.');
+    else {
+      var parts = [];
+      if (ly && ly.written && ly.written.basis) parts.push(ly.written.basis);
+      if (ly && ly.delivered && ly.delivered.basis && lastYear.delivered === 'Pending') parts.push(ly.delivered.basis);
+      else if (ly && ly.delivered && ly.delivered.basis) parts.push(ly.delivered.basis);
+      lastYear.note = parts.join(' ');
+    }
   } catch (error) { lastYear.note = 'Last year is Pending. No verified last-year figure was invented.'; }
 
   var partialLabel = span.partial ? (span.span === 'week-to-date' ? 'Partial · week to date' : 'Partial · custom range') : 'Completed week';
@@ -1594,9 +1601,11 @@ function reportMeetingRecognition_(weekly, people) {
   });
   if (attached.length) items.push('Strong attachment: ' + attached.slice(0, 3).join(' '));
   else items.push('No verified attachment result is at its goal.');
-  var lastYear = weekly.lastYear || {};
-  if (lastYear.written && lastYear.written !== 'Pending') items.push('Verified last-year store written is ' + lastYear.written + '. A week-versus-week improvement is not on file.');
-  else items.push('No prior comparable week is on file, so no improvement versus an earlier week is shown.');
+  var snap = weekly.snapLy || {};
+  if (snap.nwdsrLy && snap.nwdsrLy !== 'Pending') {
+    if (snap.nwdsr && snap.nwdsr !== 'Pending') items.push('This week NWDSR Written ' + snap.nwdsr + ' versus the same week last year ' + snap.nwdsrLy + '.');
+    else items.push('The same week last year is ' + snap.nwdsrLy + ' NWDSR Written. This week is Pending, so the comparison stays Pending.');
+  } else items.push('No prior comparable week is on file, so no improvement versus an earlier week is shown.');
   return items.slice(0, 4);
 }
 
