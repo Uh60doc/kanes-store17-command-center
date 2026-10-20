@@ -1,5 +1,5 @@
 var SPREADSHEET_ID_ = '1KtsfQPQRdg3IdNXomlM5t47IyE1psouxvgW-D8VSLfw';
-var APP_VERSION_ = '1.0.47';
+var APP_VERSION_ = '1.0.48';
 
 var ROUTES_ = {
   login: null,
@@ -18,6 +18,7 @@ var ROUTES_ = {
   saveBriefMailSettings: ['admin'],
   resendBriefEmail: ['manager', 'admin'],
   savePromotion: ['admin'],
+  reviewPromotionPdf: ['admin'],
   health: ['manager', 'admin'],
   bedding: ['manager', 'admin'],
   saveBeddingGoals: ['admin'],
@@ -271,6 +272,7 @@ function route_(name, payload) {
   if (name === 'saveBriefMailSettings') return saveBriefMailSettings_(payload);
   if (name === 'resendBriefEmail') return resendBriefEmail_(payload);
   if (name === 'savePromotion') return savePromotion_(payload);
+  if (name === 'reviewPromotionPdf') return reviewPromotionPdf_(payload);
   if (name === 'health') return health_(payload);
   if (name === 'bedding') return bedding_(payload);
   if (name === 'saveBeddingGoals') return saveBeddingGoals_(payload);
