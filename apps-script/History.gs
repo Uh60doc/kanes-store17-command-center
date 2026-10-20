@@ -523,7 +523,11 @@ function refreshDailyHistory_(ctx, calendar) {
     var differs = [];
     for (i = 9; i <= 14; i += 1) if (historyNorm_(row[i]) !== historyNorm_(current[i])) differs.push(DAILY_HISTORY_HEADERS_[i] + ' ' + (historyBlank_(row[i]) ? 'blank' : row[i]));
     if (differs.length) later = (later ? later + '. ' : '') + candidate.sourceTab + ' now shows ' + differs.join(', ') + '; the figures first recorded for this date are kept';
-    if (later && later !== String(current[width - 1] || '')) { current[width - 1] = later; changed = true; }
+    else {
+      var cleaned = String(current[width - 1] || '').replace(/(?:^|\. )?[^.]*now shows [^.]*(?:; the figures first recorded for this date are kept)?/g, '').replace(/\s+/g, ' ').trim();
+      later = later ? String(later).replace(/(?:^|\. )?[^.]*now shows [^.]*(?:; the figures first recorded for this date are kept)?/g, '').replace(/\s+/g, ' ').trim() : cleaned;
+    }
+    if (later !== String(current[width - 1] || '')) { current[width - 1] = later; changed = true; }
   });
   if (changed && values.length > 1) tab.getRange(2, DAILY_HISTORY_FIXED_ + 1, values.length - 1, width - DAILY_HISTORY_FIXED_).setValues(values.slice(1).map(function (row) { return row.slice(DAILY_HISTORY_FIXED_, width); }));
   appends.sort(function (a, b) { return a[1] === b[1] ? (a[0] < b[0] ? -1 : 1) : (a[1] < b[1] ? -1 : 1); });

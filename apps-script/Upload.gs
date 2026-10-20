@@ -471,6 +471,86 @@ function recordPerqFact_(fact, fileName) {
   return outcome;
 }
 
+/**
+ * A store PERQ count the General Manager confirmed. The previous closing row and ledger row are kept on CC_History.
+ * The count stays on the store. It is not copied onto a salesperson, including the manager who sent the report.
+ */
+function applyConfirmedStoreOpportunities_(date, opportunities, reason) {
+  date = isoDate_(date);
+  opportunities = Number(opportunities);
+  if (!date || !isFinite(opportunities)) throw new Error('A business date and a store opportunity count are required.');
+  var why = String(reason || '').replace(/\s+/g, ' ').trim();
+  if (!why) throw new Error('Record why the store opportunity count is being set.');
+  var closing = book_().getSheetByName('CC_Closing');
+  if (!closing) throw new Error('CC_Closing is not on the spreadsheet.');
+  var values = closing.getDataRange().getValues();
+  var found = 0;
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    if (String(values[r][1]) !== 'store' || String(values[r][2] || '') || String(values[r][8]) !== PERQ_UPLOAD_SOURCE_) continue;
+    if (isoDate_(values[r][6]) === date && isoDate_(values[r][7]) === date) found = r;
+  }
+  if (!found) throw new Error('No store PERQ row for ' + date + '.');
+  var previous = numberOrNull_(values[found][5]);
+  if (previous !== opportunities) archiveReplaced_('CC_Closing', 'PERQ store||' + date + '|' + date, values[found], String(opportunities), why);
+  if (previous !== opportunities) closing.getRange(found + 1, 6).setValue(opportunities);
+  var note = String(values[found][10] || '');
+  var trail = 'Store opportunities for ' + date + ' are ' + opportunities + '. ' + why + ' Previous store count ' + (previous === null ? 'blank' : previous) + '. This is the store total, not a salesperson.';
+  if (note.indexOf(why) === -1) closing.getRange(found + 1, 11).setValue((note ? note + ' ' : '') + trail);
+  var ledger = book_().getSheetByName('CC_Ledger');
+  if (!ledger) throw new Error('CC_Ledger is not on the spreadsheet.');
+  var rows = ledger.getDataRange().getValues();
+  var hit = 0;
+  for (r = 1; r < rows.length; r += 1) {
+    if (String(rows[r][0]) !== 'PERQ_STORE' || String(rows[r][1]) !== 'daily' || isoDate_(rows[r][2]) !== date) continue;
+    if (String(rows[r][7] || '') || String(rows[r][8] || '')) continue;
+    hit = r;
+  }
+  if (!hit) throw new Error('No PERQ_STORE daily ledger row for ' + date + '.');
+  var priorEligible = fineNumber_(rows[hit][12]);
+  if (priorEligible !== opportunities) {
+    archiveReplaced_('CC_Ledger', String(rows[hit][17] || ('PERQ_STORE|' + date)), rows[hit], String(opportunities), why);
+    ledger.getRange(hit + 1, 13).setValue(opportunities);
+  }
+  forgetRead_('CC_Closing');
+  forgetRead_('CC_Ledger');
+  forgetRead_('CC_History');
+  var notes = syncPerqPresenceNotes_();
+  return { date: date, opportunities: opportunities, previousClosing: previous, previousLedger: priorEligible, notesCleared: notes };
+}
+
+/** Once a daily store PERQ row exists, a customer note must not keep saying that report is missing. */
+function syncPerqPresenceNotes_() {
+  var counts = {};
+  ledgerRows_().forEach(function (row) {
+    if (row.view !== 'PERQ_STORE' || row.grain !== 'daily' || !row.reportDate || row.eligible === null) return;
+    if (row.code || row.name) return;
+    counts[row.reportDate] = row.eligible;
+  });
+  var tab = book_().getSheetByName('CC_Closing');
+  if (!tab) return 0;
+  var values = tab.getDataRange().getValues();
+  var cleared = 0;
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    if (String(values[r][1]) !== 'store') continue;
+    var date = isoDate_(values[r][6]);
+    if (!date || counts[date] === undefined) continue;
+    var note = String(values[r][10] || '');
+    if (!/PERQ report missing|PERQ not received|closing Pending/i.test(note)) continue;
+    var next = note
+      .replace(/;?\s*PERQ report missing,?\s*closing Pending\.?/ig, '')
+      .replace(/PERQ not received\.?/ig, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    next = (next ? next.replace(/[.;\s]+$/, '') + '. ' : '') + 'PERQ Store opportunities for ' + date + ' are on file (' + counts[date] + '). This is the store count, not a salesperson.';
+    tab.getRange(r + 1, 11).setValue(next);
+    cleared += 1;
+  }
+  if (cleared) forgetRead_('CC_Closing');
+  return cleared;
+}
+
 function uploadPerq_(context, info) {
   var label = uploadReportLabel_(info.key);
   var date = context.date;
@@ -917,7 +997,7 @@ function uploadChecklist_(evidence, date) {
     var message = detail;
     var dayText = uploadDayText_(date);
     if (check) { status = 'Needs Review'; message = check; }
-    else if (last && last.status === 'Needs Review') { status = 'Needs Review'; message = last.message; }
+    else if (!onFile && last && last.status === 'Needs Review') { status = 'Needs Review'; message = last.message; }
     else if (!onFile && last && last.status === 'Failed' && /must be confirmed|Tick "These Excel files are for|not the business date|before the business date|prints .* which is after today/i.test(last.message)) status = 'Missing';
     else if (!onFile && last && last.status === 'Failed') { status = 'Failed'; message = last.message; }
     if (item.key === 'g17Delivered' && fact.nwdsrDelivered === 0 && !onFile && !check) {

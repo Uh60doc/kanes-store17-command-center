@@ -569,3 +569,50 @@ test('a ZIP is not imported as one workbook, and a batch can file an older day w
   assert.equal(perqAgain.status, 'Already on file');
   assert.equal(tabs.CC_Closing!.filter((row) => row[8] === 'PERQ Ups + Be Backs' && row[1] === 'store').length, 1);
 });
+
+test('a confirmed store opportunity count replaces 13 with 11 and does not assign it to a person', () => {
+  const { gs, send, tabs } = boot(store(), '2026-10-19');
+  tabs.CC_Daily!.push(['2026-10-18', 8099, 8099, 0]);
+  assert.equal(send('2026-10-18', 'loc.xlsx', perqLocation(13), true).status, 'Imported');
+  const held = send('2026-10-18', 'loc-9.xlsx', perqLocation(9, 'nine'), true);
+  assert.equal(held.status, 'Needs Review');
+  tabs.CC_Closing!.push(['2026-10-18', 'store', '', '', 3, '', '2026-10-18', '2026-10-18', 'NWDSR Net Written # OF CUST', 'yes', 'Verified purchasing customers; PERQ report missing, closing Pending.', '2026-10-18', '17']);
+  const written = tabs.CC_Daily!.find((row) => row[0] === '2026-10-18')![2];
+  const result = plain(gs.applyConfirmedStoreOpportunities_('2026-10-18', 11, 'General Manager confirmed the original Store 17 location export of 11. A later export of 9 was not applied. A manual correction of 13 is retained in history. The sales manager reported the store result and is not given these opportunities.'));
+  assert.equal(result.previousClosing, 13);
+  assert.equal(result.previousLedger, 13);
+  assert.equal(result.notesCleared, 1);
+  const storeRow = tabs.CC_Closing!.find((row) => row[1] === 'store' && row[8] === 'PERQ Ups + Be Backs' && row[6] === '2026-10-18')!;
+  assert.equal(storeRow[5], 11);
+  assert.match(String(storeRow[10]), /Previous store count 13/);
+  assert.match(String(storeRow[10]), /not a salesperson/);
+  const ledger = tabs.CC_Ledger!.find((row) => row[0] === 'PERQ_STORE' && row[1] === 'daily' && row[2] === '2026-10-18')!;
+  assert.equal(ledger[12], 11);
+  assert.equal(ledger[10], '');
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-18')![2], written);
+  assert.equal(tabs.CC_Closing!.some((row) => /Cordell|CPRI0909/.test(String(row[2]) + String(row[3]))), false);
+  const customer = tabs.CC_Closing!.find((row) => String(row[8]).includes('OF CUST'))!;
+  assert.equal(customer[4], 3);
+  assert.match(String(customer[10]), /on file \(11\)/);
+  assert.doesNotMatch(String(customer[10]), /PERQ report missing/);
+  assert.ok(tabs.CC_History!.some((row) => String(row[1]) === 'CC_Closing' && String(row[3]).includes('original Store 17')));
+  assert.ok(tabs.CC_History!.some((row) => String(row[1]) === 'CC_Ledger' && String(row[5]).includes('13')));
+  const page = plain(gs.uploads_({ date: '2026-10-18', session: manager }));
+  assert.equal(page.checklist.find((item: { key: string }) => item.key === 'perqLocation').status, 'Imported');
+});
+
+test('October 16 PERQ stays on file when a later attempt failed', () => {
+  const { gs, send, tabs } = boot(store(), '2026-10-19');
+  assert.equal(send('2026-10-16', 'loc16.xlsx', perqLocation(9), true).status, 'Imported');
+  tabs.CC_Uploads!.push(['2026-10-20T01:00:00Z', '2026-10-16', 'manager', 'wrong.xlsx', 'sha', 'PERQ Performance Stats by Location', '', '', 'Failed', 'Tick "These Excel files are for this business date" before the business date can be used.']);
+  tabs.CC_Closing!.push(['2026-10-16', 'store', '', '', 5, '', '2026-10-16', '2026-10-16', 'NWDSR Net Written # OF CUST', 'yes', 'Verified purchasing customers; PERQ report missing, closing Pending.', '2026-10-16', '17']);
+  assert.equal(plain(gs.syncPerqPresenceNotes_()), 1);
+  const note = String(tabs.CC_Closing!.find((row) => String(row[8]).includes('OF CUST') && row[6] === '2026-10-16')![10]);
+  assert.match(note, /on file \(9\)/);
+  assert.doesNotMatch(note, /PERQ report missing/);
+  const page = plain(gs.uploads_({ date: '2026-10-16', session: manager }));
+  const location = page.checklist.find((item: { key: string }) => item.key === 'perqLocation');
+  assert.equal(location.status, 'Imported');
+  assert.match(location.message, /Store 17 opportunities 9/);
+  assert.equal(page.recent.find((day: { date: string }) => day.date === '2026-10-16').missing.includes('PERQ Performance Stats by Location'), false);
+});
