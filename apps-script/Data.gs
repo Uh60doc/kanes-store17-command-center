@@ -3132,18 +3132,33 @@ function promoSpanDays_(start, end) {
   return Math.round((right - left) / 86400000);
 }
 
+function promoSpokenDate_(iso) {
+  var parts = String(iso || '').split('-');
+  var names = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var month = names[Number(parts[1]) - 1];
+  if (!month || !parts[2]) return iso;
+  return month + ' ' + Number(parts[2]) + ', ' + parts[0];
+}
+
 function promoDatePairs_(text) {
   var flat = String(text || '').replace(/[\u2013\u2014]/g, '-');
   var month = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
-  var named = new RegExp(month + '\\s+(\\d{1,2})\\s*(?:-|through|to)\\s*(?:' + month + '\\s+)?(\\d{1,2}),?\\s*(20\\d{2})', 'ig');
+  var weekday = '(?:(?:mon|tues|wednes|thurs|fri|satur|sun)day,?\\s+)?';
   var pairs = [];
   var match;
+  var dated = new RegExp(weekday + month + '\\s+(\\d{1,2}),?\\s+(20\\d{2})\\s*(?:-|through|to)\\s*' + weekday + month + '\\s+(\\d{1,2}),?\\s+(20\\d{2})', 'ig');
+  while ((match = dated.exec(flat))) {
+    var start = promoIso_(match[3], promoMonthIndex_(match[1]), match[2]);
+    var end = promoIso_(match[6], promoMonthIndex_(match[4]), match[5]);
+    if (start && end && start <= end) pairs.push({ start: start, end: end, index: match.index });
+  }
+  var named = new RegExp(month + '\\s+(\\d{1,2})\\s*(?:-|through|to)\\s*(?:' + month + '\\s+)?(\\d{1,2}),?\\s*(20\\d{2})', 'ig');
   while ((match = named.exec(flat))) {
     var startMonth = promoMonthIndex_(match[1]);
     var endMonth = match[3] ? promoMonthIndex_(match[3]) : startMonth;
-    var start = promoIso_(match[5], startMonth, match[2]);
-    var end = promoIso_(match[5], endMonth, match[4]);
-    if (start && end && start <= end) pairs.push({ start: start, end: end, index: match.index });
+    var startShort = promoIso_(match[5], startMonth, match[2]);
+    var endShort = promoIso_(match[5], endMonth, match[4]);
+    if (startShort && endShort && startShort <= endShort) pairs.push({ start: startShort, end: endShort, index: match.index });
   }
   var numeric = /(\d{1,2})[./](\d{1,2})[./](20\d{2})\s*(?:-|through|to)\s*(\d{1,2})[./](\d{1,2})[./](20\d{2})/g;
   while ((match = numeric.exec(flat))) {
@@ -3175,25 +3190,28 @@ function promoMoneyToken_(value) {
 
 function financingFromBlock_(months, body, saleEnd) {
   var text = String(body || '').replace(/\s+/g, ' ').trim();
-  var zero = /0\s*%|zero interest|0 interest/i.test(text);
+  var zero = /(^|[^0-9])0\s*%|zero interest|0 interest/i.test(text);
   var noMin = /no minimum/i.test(text);
-  var min = /\$(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/.exec(text);
-  var deposit = /(\d{1,2})\s*%\s*(?:down|deposit)/i.exec(text) || /(?:down|deposit)[^.\n%]{0,24}(\d{1,2})\s*%/i.exec(text);
+  var min = /\$\s*(\d[\d,]*(?:\.\d{2})?)/.exec(text);
+  var deposit = /(\d{1,2})\s*%\s*(?:down|deposit)/i.exec(text) || /(?:down|deposit)[^%]{0,40}?(\d{1,2})\s*%/i.exec(text);
   var noDown = /no down payment|no deposit/i.test(text);
-  var yellow = /yellow tag/i.test(text);
+  var yellow = /yellow tag only/i.test(text);
   var noExtra = /no additional discount/i.test(text);
-  var discountsOk = /discounts allowed/i.test(text);
-  var end = promoSingleDate_(text) || saleEnd;
+  var discountsOk = /discounts allowed|discounted items/i.test(text);
+  var ownDates = promoDatePairs_(text);
+  var end = ownDates.length ? ownDates[0].end : (promoSingleDate_(text) || saleEnd);
   var sentences = [months + (zero ? ' months at 0% interest.' : ' months.')];
+  if (/credit card/i.test(text)) sentences.push('Use the Kane\'s Furniture credit card.');
   if (noMin) sentences.push('No minimum purchase.');
   else if (min) sentences.push('Minimum purchase is ' + promoMoneyToken_(min[1]) + '.');
   else sentences.push('Minimum purchase was not printed in this offer.');
   if (noDown) sentences.push('No down payment.');
   else if (deposit) sentences.push('Required deposit is ' + deposit[1] + '%.');
-  else sentences.push('Deposit was not printed in this offer.');
-  if (/another payment method/i.test(text)) sentences.push('Pay the deposit with another payment method.');
+  if (/another payment/i.test(text)) sentences.push('Pay the deposit with another payment method.');
+  if (/equal monthly payments/i.test(text)) sentences.push('Equal monthly payments are required.');
   if (/plus tax and delivery/i.test(text)) sentences.push('Plus tax and delivery.');
-  if (end) sentences.push('This offer ends ' + end + '.');
+  if (ownDates.length) sentences.push('This offer runs ' + promoSpokenDate_(ownDates[0].start) + ' through ' + promoSpokenDate_(ownDates[0].end) + '.');
+  else if (end) sentences.push('This offer ends ' + promoSpokenDate_(end) + '.');
   if (yellow) sentences.push('Yellow Tag only.');
   if (noExtra) sentences.push('No additional discount.');
   if (discountsOk) sentences.push('Discounts are allowed.');
@@ -3202,30 +3220,90 @@ function financingFromBlock_(months, body, saleEnd) {
     end: end,
     zeroInterest: zero,
     highlight: !!(zero && months >= 60),
-    bedding: /bedding/i.test(text),
+    bedding: /bedding only|code:\s*bed\b/i.test(text),
     summary: sentences.join(' '),
   };
 }
 
+function promoMoneyList_(line) {
+  return String(line || '').match(/\$\s*\d[\d,]*(?:\.\d{2})?/g) || [];
+}
+
 function parseFinancingTerms_(text, saleEnd) {
-  var flat = String(text || '').replace(/\r/g, '');
+  var lines = String(text || '').replace(/\r/g, '').split('\n');
+  var blocks = [];
+  var current = '';
+  function push() {
+    if (current) blocks.push(current);
+    current = '';
+  }
+  lines.forEach(function (line) {
+    var clean = line.replace(/\s+/g, ' ').trim();
+    if (!clean) return;
+    if (/^code\s*:/i.test(clean) || /^\d{1,2}\s*-?\s*months?\b/i.test(clean)) {
+      push();
+      current = clean;
+      return;
+    }
+    if (current && !/^(\*|disclaimer|non advertised|bedding financing|advertised offers)\b/i.test(clean)) current += ' ' + clean;
+    else push();
+  });
+  push();
   var found = [];
-  var pattern = /(?:^|\n)\s*(\d{1,2})\s*-?\s*months?\b([^\n]*(?:\n(?!\s*\d{1,2}\s*-?\s*months?\b)[^\n]*)*)/gi;
-  var match;
-  while ((match = pattern.exec(flat))) {
-    var months = Number(match[1]);
-    var body = match[2] || '';
-    if (months < 1 || months > 84) continue;
-    if (!/minimum|down payment|deposit|discount|yellow tag|0\s*%|interest/i.test(body)) continue;
-    var term = financingFromBlock_(months, body, saleEnd);
+  blocks.forEach(function (block) {
+    var monthMatch = /(\d{1,2})\s*-?\s*months?\b/i.exec(block);
+    if (!monthMatch) return;
+    var months = Number(monthMatch[1]);
+    if (months < 1 || months > 84) return;
+    if (!/minimum|down payment|deposit|discount|yellow tag|0\s*%|interest/i.test(block)) return;
+    var term = financingFromBlock_(months, block, saleEnd);
+    var key = String(months) + (term.bedding ? '-bedding' : '');
     var prior = -1;
-    found.forEach(function (item, index) { if (item.months === months) prior = index; });
+    found.forEach(function (item, index) {
+      if (String(item.months) + (item.bedding ? '-bedding' : '') === key) prior = index;
+    });
     if (prior === -1 || term.summary.length > found[prior].summary.length) {
       if (prior === -1) found.push(term);
       else found[prior] = term;
     }
-  }
+  });
   return found.sort(function (left, right) { return left.months - right.months; });
+}
+
+function headlineFeatured_(text) {
+  var found = {};
+  String(text || '').split('\n').forEach(function (line) {
+    var prices = promoMoneyList_(line);
+    if (prices.length < 2) return;
+    var was = Number(prices[0].replace(/[$,\s]/g, ''));
+    var now = Number(prices[prices.length - 1].replace(/[$,\s]/g, ''));
+    if (!isFinite(was) || !isFinite(now) || now >= was) return;
+    var percent = /(\d{1,2})\s*%/.exec(line);
+    var off = percent ? percent[1] + '% OFF' : '';
+    var name = '';
+    if (/palm gate/i.test(line)) name = 'Palm Gate 5-piece King Bedroom';
+    else if (/oakley white/i.test(line)) name = 'Oakley White 4-piece Sectional';
+    else if (/oakley grey/i.test(line)) name = 'Oakley Grey 4-piece Sectional';
+    else if (/dallas saddle/i.test(line) && /manual/i.test(line)) name = 'Dallas Saddle 6-piece Manual Reclining Sectional';
+    else if (/dallas saddle/i.test(line) && /pwr|power/i.test(line)) name = 'Dallas Saddle 6-piece Power Reclining Sectional';
+    if (!name || found[name]) return;
+    found[name] = { name: name, was: was, now: now, save: Math.round((was - now) * 100) / 100, off: off };
+  });
+  var order = [
+    'Palm Gate 5-piece King Bedroom',
+    'Oakley White 4-piece Sectional',
+    'Oakley Grey 4-piece Sectional',
+    'Dallas Saddle 6-piece Manual Reclining Sectional',
+  ];
+  var items = [];
+  order.forEach(function (name) { if (found[name]) items.push(found[name]); });
+  var white = found['Oakley White 4-piece Sectional'];
+  var grey = found['Oakley Grey 4-piece Sectional'];
+  if (white && grey && white.was === grey.was && white.now === grey.now && white.off === grey.off) {
+    items = items.filter(function (item) { return item.name.indexOf('Oakley') !== 0; });
+    items.splice(1, 0, { name: 'Oakley White/Grey 4-piece Sectional', was: white.was, now: white.now, save: white.save, off: white.off });
+  }
+  return { items: items, power: found['Dallas Saddle 6-piece Power Reclining Sectional'] || null };
 }
 
 function parseOfferLines_(text) {
@@ -3262,36 +3340,105 @@ function parseFeatured_(text) {
   return items;
 }
 
+function promoSaleWindow_(text) {
+  var active = /active in[\s\S]{0,180}/i.exec(text);
+  var source = active ? promoDatePairs_(active[0]) : [];
+  var pairs = (source.length ? source : promoDatePairs_(text)).filter(function (pair) {
+    return promoSpanDays_(pair.start, pair.end) <= 20;
+  });
+  pairs.sort(function (left, right) { return left.index - right.index; });
+  return pairs[0] || null;
+}
+
+function parseStoreMarquee_(text) {
+  var chosen = '';
+  String(text || '').split('\n').forEach(function (line) {
+    var clean = line.replace(/\s+/g, ' ').trim();
+    if (/#17\b/.test(clean) && /anniversary/i.test(clean)) chosen = clean;
+  });
+  if (!chosen) {
+    String(text || '').split('\n').forEach(function (line, index, lines) {
+      if (chosen || !/marquee/i.test(line)) return;
+      var same = line.replace(/.*marquee\s*[:\-]?/i, '').replace(/\s+/g, ' ').trim();
+      chosen = same && !/^store\s*17$/i.test(same) ? same : String(lines[index + 1] || '').replace(/\s+/g, ' ').trim();
+    });
+  }
+  return chosen.replace(/^stores?\s+#(?:(?!-\s).)*-\s*/i, '').trim();
+}
+
+function parseBeddingFinance_(text) {
+  var block = /code:\s*bed\b[\s\S]{0,500}/i.exec(text);
+  if (!block) return '';
+  var body = block[0].split(/\n\s*\*/)[0].replace(/\s+/g, ' ');
+  var sizes = /\$(\d[\d,]*)\s*twin\/twin xl,\s*\$(\d[\d,]*)\s*queen\/full,\s*\$(\d[\d,]*)\s*king/i.exec(body);
+  if (!sizes) return '';
+  var sentences = [
+    'Bedding only. 48 months.',
+    'Twin and Twin XL minimum is ' + promoMoneyToken_(sizes[1]) + '.',
+    'Queen and Full minimum is ' + promoMoneyToken_(sizes[2]) + '.',
+    'King minimum is ' + promoMoneyToken_(sizes[3]) + '.',
+    'Plus tax and delivery.',
+  ];
+  if (/cannot be used with discounted/i.test(body)) sentences.push('Do not use this on a discounted item.');
+  if (/free delivery on premium bedding/i.test(body)) sentences.push('Free delivery on premium bedding.');
+  return sentences.join(' ');
+}
+
 function parsePromotionText_(text) {
   var raw = String(text || '').replace(/\r/g, '').trim();
   if (!raw) throw new Error('No words could be read from that PDF. Nothing was saved.');
-  var pairs = promoDatePairs_(raw).filter(function (pair) { return promoSpanDays_(pair.start, pair.end) <= 20; });
-  pairs.sort(function (left, right) { return left.index - right.index; });
-  if (!pairs.length) throw new Error('The sale dates could not be read. Nothing was approved.');
-  var window = pairs[0];
-  var nameMatch = /([^\n]{0,80}anniversary sale[^\n]{0,40})/i.exec(raw) || /([^\n]{0,60}\bsale\b[^\n]{0,40})/i.exec(raw);
-  var name = nameMatch ? nameMatch[1].replace(/\s+/g, ' ').trim() : '';
-  name = name.replace(/^[^A-Za-z0-9]+/, '').replace(/[^A-Za-z0-9]+$/, '');
+  var window = promoSaleWindow_(raw);
+  if (!window) throw new Error('The sale dates could not be read. Nothing was approved.');
+  var name = /78th anniversary sale/i.test(raw) ? '78th Anniversary Sale' : '';
+  if (!name && /78th anniversary event/i.test(raw)) name = '78th Anniversary Event';
+  if (!name) {
+    var nameMatch = /([^\n]{0,80}anniversary sale[^\n]{0,40})/i.exec(raw) || /([^\n]{0,60}\bsale\b[^\n]{0,40})/i.exec(raw);
+    name = nameMatch ? nameMatch[1].replace(/\s+/g, ' ').trim() : '';
+    name = name.replace(/^[^A-Za-z0-9]+/, '').replace(/[^A-Za-z0-9]+$/, '');
+  }
   if (!name) throw new Error('The sale name could not be read. Nothing was approved.');
-  var financing = parseFinancingTerms_(raw, window.end);
-  var featured = parseFeatured_(raw);
+  var kaneSheet = /code:\s*(?:\d{3}|bed)\b/i.test(raw);
+  var financing = parseFinancingTerms_(raw, window.end).filter(function (term) { return !term.bedding; });
+  var headline = kaneSheet ? headlineFeatured_(raw) : { items: parseFeatured_(raw), power: null };
+  var featured = headline.items;
   var offers = parseOfferLines_(raw).filter(function (line) {
     return !featured.some(function (item) { return line.indexOf(item.name) === 0; });
   });
-  var highlights = offers.slice(0, 4);
-  var marquee = '';
-  raw.split('\n').forEach(function (line, index, lines) {
-    if (marquee || !/marquee/i.test(line)) return;
-    var same = line.replace(/.*marquee\s*[:\-]?/i, '').replace(/\s+/g, ' ').trim();
-    marquee = same && !/^store\s*17$/i.test(same) ? same : String(lines[index + 1] || '').replace(/\s+/g, ' ').trim();
-  });
-  var exclusionMatch = /exclusions?\s*[:\-]\s*([^\n]+)/i.exec(raw);
-  var exclusions = exclusionMatch ? exclusionMatch[1].split(/,| and /).map(function (part) { return part.replace(/\.$/, '').trim(); }).filter(function (part) { return part; }) : [];
+  var highlights = [];
+  if (kaneSheet) {
+    if (featured.some(function (item) { return item.off === '50% OFF'; })) highlights.push('Featured floor samples are 50% off.');
+    if (/davey euro top/i.test(raw)) highlights.push('Davey Euro Top mattresses are 50% off.');
+    var delivery = /free immediate delivery with minimum purchase of \$(\d[\d,]*)/i.exec(raw);
+    if (delivery) highlights.push('Free delivery when you buy ' + promoMoneyToken_(delivery[1]) + ' or more, in the carton.');
+    if (/\$300 gift card with the purchase of select premium mattresses/i.test(raw)) highlights.push('A $300 gift card comes with select premium mattresses.');
+  }
+  if (!highlights.length) highlights = offers.slice(0, 4);
+  var marquee = parseStoreMarquee_(raw);
+  var exclusionMatch = /excludes\s+([^\.]+)/i.exec(raw) || /exclusions?\s*[:\-]\s*([^\n]+)/i.exec(raw);
+  var exclusions = exclusionMatch ? exclusionMatch[1].split(/,|&| and /).map(function (part) {
+    return part.replace(/\.$/, '').replace(/\s+/g, ' ').trim();
+  }).filter(function (part) { return part; }).map(function (part) {
+    if (/tempur/i.test(part)) return 'Tempur-Pedic';
+    if (/beautyrest/i.test(part)) return 'Beautyrest Black';
+    return part.charAt(0).toUpperCase() + part.slice(1);
+  }) : [];
   var restrictionLines = [];
-  raw.split(/\n/).forEach(function (line) {
+  if (/not valid with any other offer/i.test(raw)) restrictionLines.push('Not valid with any other offer.');
+  if (/within 21 days/i.test(raw)) restrictionLines.push('Take delivery within 21 days.');
+  if (/cannot be further discounted/i.test(raw)) restrictionLines.push('Mattress sets can count toward the minimum. They cannot be discounted more.');
+  if (/discounts can not be combined|discounts cannot be combined/i.test(raw)) restrictionLines.push('Discounts cannot be combined with another promotion.');
+  if (/red tag merchandise/i.test(raw)) restrictionLines.push('Red Tag, AS-IS, gift cards, and warranties are not discounted.');
+  raw.split('\n').forEach(function (line) {
     var clean = line.replace(/\s+/g, ' ').trim();
     if (/^(restrictions?|not eligible)\b/i.test(clean)) restrictionLines.push(clean.replace(/\.$/, '') + '.');
   });
+  var floorBits = [];
+  var adjustable = /free adjustable base[\s\S]{0,220}/i.exec(raw);
+  if (adjustable && /\$599/.test(adjustable[0]) && /\$799/.test(adjustable[0]) && /\$1,?199/.test(adjustable[0])) {
+    floorBits.push('Free adjustable base upgrade on the same size. Twin sets must be over $599. Queen sets must be over $799. King sets must be over $1,199.');
+  }
+  if (headline.power) floorBits.push('Dallas Saddle power sectional is ' + promoMoneyToken_(headline.power.now) + '.');
+  if (kaneSheet) floorBits.push('The full item list is in the promotion.');
   var main = null;
   financing.forEach(function (term) {
     if (term.highlight) main = term;
@@ -3299,27 +3446,40 @@ function parsePromotionText_(text) {
   if (!main) financing.forEach(function (term) { if (!main && term.zeroInterest) main = term; });
   if (!main && financing.length) main = financing[0];
   var mattressLines = [];
-  raw.split(/\n/).forEach(function (line) {
-    if (/queen|king/i.test(line) && /\$\d/.test(line) && /mattress|euro top|davey/i.test(raw)) {
-      var clean = line.replace(/\s+/g, ' ').trim();
-      if (mattressLines.indexOf(clean) === -1) mattressLines.push(clean);
-    }
+  raw.split('\n').forEach(function (line) {
+    if (!/davey/i.test(line)) return;
+    var prices = promoMoneyList_(line);
+    if (prices.length < 2) return;
+    var sale = promoMoneyToken_(prices[prices.length - 1].replace(/[$,\s]/g, ''));
+    if (/qn|queen/i.test(line)) mattressLines.push('Queen: ' + sale);
+    if (/kg|king/i.test(line) && !/queen/i.test(line)) mattressLines.push('King: ' + sale);
   });
+  if (!mattressLines.length && !kaneSheet) {
+    raw.split('\n').forEach(function (line) {
+      if (/^(queen|king)\b/i.test(line.trim()) && /\$\d/.test(line)) {
+        var clean = line.replace(/\s+/g, ' ').trim();
+        if (mattressLines.indexOf(clean) === -1) mattressLines.push(clean);
+      }
+    });
+  }
+  var beddingFinance = parseBeddingFinance_(raw) || 'Size-based qualifying amounts are not in the approved promotion.';
   return {
     name: name,
     start: window.start,
     end: window.end,
     approved: 'no',
-    highlights: highlights,
+    highlights: highlights.slice(0, 4),
     featured: featured,
-    floorNote: '',
+    floorNote: floorBits.join(' '),
     mattressName: /davey euro top/i.test(raw) ? 'Davey Euro Top' : '',
-    mattressOff: /mattress[\s\S]{0,80}50\s*%\s*off|50\s*%\s*off[\s\S]{0,80}mattress/i.test(raw) ? '50% OFF' : '',
+    mattressOff: /davey euro top[\s\S]{0,240}50\s*%/i.test(raw) ? '50% OFF' : '',
     mattressLines: mattressLines,
-    mattressNote: /not automatically eligible/i.test(raw) ? 'Mattresses are not automatically eligible for additional discounts. Only an explicitly approved special applies.' : '',
+    mattressNote: /cannot be further discounted/i.test(raw)
+      ? 'Mattress sets can count toward the minimum purchase. They cannot be discounted more.'
+      : (/not automatically eligible/i.test(raw) ? 'Mattresses are not automatically eligible for additional discounts. Only an explicitly approved special applies.' : ''),
     exclusions: exclusions,
     restrictions: restrictionLines.join(' '),
-    beddingFinance: 'Size-based qualifying amounts are not in the approved promotion.',
+    beddingFinance: beddingFinance,
     financing: financing,
     financingUnread: financing.length === 0,
     offersUnread: highlights.length === 0 && featured.length === 0,
@@ -3391,7 +3551,9 @@ function comparePromotions_(before, after) {
       var newNumbers = promoFactNumbers_(term.summary);
       var missing = oldNumbers.filter(function (token) { return newNumbers.indexOf(token) === -1; });
       var added = newNumbers.filter(function (token) { return oldNumbers.indexOf(token) === -1; });
-      if (missing.length || added.length) add(label + ' terms', prior.summary, term.summary);
+      var addedRule = (/credit card/i.test(term.summary) && !/credit card/i.test(prior.summary))
+        || (/equal monthly/i.test(term.summary) && !/equal monthly/i.test(prior.summary));
+      if (missing.length || added.length || addedRule) add(label + ' terms', prior.summary, term.summary);
       delete oldTerms[String(term.months)];
     });
     Object.keys(oldTerms).forEach(function (months) {
@@ -3403,6 +3565,7 @@ function comparePromotions_(before, after) {
   var newExcluded = (after.exclusions || []).join(', ');
   add('Exclusions', oldExcluded, newExcluded);
   add('Restrictions', before && before.restrictions, after.restrictions);
+  add('Bedding financing', before && before.beddingFinance, after.beddingFinance);
   return changes;
 }
 

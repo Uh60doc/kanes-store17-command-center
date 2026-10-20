@@ -3742,12 +3742,16 @@
           return (list || []).map(function (term) { return term.months + ' | ' + term.end + ' | ' + (term.zeroInterest ? 'yes' : 'no') + ' | ' + term.summary; }).join('\n');
         }
         var review = data.review;
+        var reviewChanges = review && review.changes ? review.changes : (promoSource.changes || []);
         var reviewHtml = '';
-        if (review) {
-          var changeLines = (review.changes || []).map(function (change) {
+        if (review || reviewChanges.length) {
+          var changeLines = reviewChanges.map(function (change) {
             return '<li>' + esc(change.label) + ': ' + esc(change.from) + ' → ' + esc(change.to) + '</li>';
           }).join('');
-          reviewHtml = '<p class="sub">Compared with ' + esc(review.comparedWith || 'the previous sale') + '. File: ' + esc(review.file || '') + '. This draft is not on the floor until you check Approved and save.</p>' +
+          var reviewNote = review
+            ? 'Compared with ' + esc(review.comparedWith || 'the previous sale') + '. File: ' + esc(review.file || '') + '. This draft is not on the floor until you check Approved and save.'
+            : 'Compared with ' + esc(promoSource.comparedWith || 'the previous sale') + '.';
+          reviewHtml = '<p class="sub">' + reviewNote + '</p>' +
             (changeLines ? '<ul class="list">' + changeLines + '</ul>' : '<p class="sub">No date, price, financing, or offer change was found.</p>');
         }
         editor = '<article class="card noprint" style="margin-top:12px"><h2>Approve the promotion</h2><p class="sub">The team sees this only after it is approved, and only between the start and end dates. Upload a new flyer once. You do not upload it again each morning.</p>' +
