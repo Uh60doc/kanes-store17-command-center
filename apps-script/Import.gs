@@ -160,6 +160,7 @@ function applyCloudReport_(parsed, text, sha, fileName) {
     return recordPdfFinal_(parsed, text, fileName || parsed.reportType + ' ' + parsed.start + ' through ' + parsed.end) ? 'official-final' : 'cumulative-not-added';
   }
   var decision = writeDailyAmount_(parsed);
+  if ((decision === 'imported' || decision === 'same') && typeof recordHistoricalFromImport_ === 'function') recordHistoricalFromImport_(parsed, fileName);
   if (decision !== 'conflict' && parsed.reportType === 'SNAP Written') writeSnapAssociates_(parsed, text, sha);
   if (decision !== 'conflict' && parsed.reportType === 'NWDSR Written' && parsed.purchasingCustomers !== null) {
     upsertClosing_({ date: parsed.start, scope: 'store', code: '', name: '', customers: parsed.purchasingCustomers, opportunities: '', start: parsed.start, end: parsed.end, source: 'NWDSR Net Written # OF CUST', final: 'yes', note: 'Net Written # OF CUST for the report date.' });

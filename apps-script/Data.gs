@@ -1728,9 +1728,17 @@ function homeChart_(facts, days, store, today, config) {
     var snapLy = null;
     if (ly.confirmed && day.date < today && !day.closed) {
       var mapped = shiftDate_(ly.start, historyDayGap_(store.start, day.date));
-      var lyRow = mapped && mapped <= ly.end ? byDate[mapped] : null;
-      if (lyRow && lyRow.snapWritten !== null && lyRow.snapWritten !== undefined && lyRow.snapWritten !== '') {
-        lyRunning += Number(lyRow.snapWritten);
+      var lyAmount = null;
+      if (mapped && mapped <= ly.end) {
+        var hist = typeof historicalAmount_ === 'function' ? historicalAmount_('SNAP Written', mapped) : null;
+        if (hist && hist.dollars !== null && hist.dollars !== undefined) lyAmount = Number(hist.dollars);
+        if (lyAmount === null) {
+          var lyRow = byDate[mapped];
+          if (lyRow && lyRow.snapWritten !== null && lyRow.snapWritten !== undefined && lyRow.snapWritten !== '') lyAmount = Number(lyRow.snapWritten);
+        }
+      }
+      if (lyAmount !== null) {
+        lyRunning += lyAmount;
         snapLy = Math.round(lyRunning * 100) / 100;
       }
     }

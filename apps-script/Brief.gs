@@ -153,6 +153,27 @@ function briefLastYearStore_(config, store) {
     return { period: period, confirmed: false, written: wait, delivered: wait };
   }
   var rows = typeof lastYearRows_ === 'function' ? lastYearRows_() : [];
+  function fromRegister(metric, field) {
+    if (typeof reportLySeries_ !== 'function' || typeof dailyFacts_ !== 'function' || typeof closedDates_ !== 'function' || typeof todayNy_ !== 'function') return null;
+    var currentEnd = shiftDate_(todayNy_(), -1);
+    if (currentEnd > store.end) currentEnd = store.end;
+    if (currentEnd < store.start) return null;
+    var currentDates = [];
+    var closed = closedDates_();
+    eachDate_(store.start, currentEnd).forEach(function (date) { if (!closed[date]) currentDates.push(date); });
+    var lyDates = [];
+    var unpaired = false;
+    currentDates.forEach(function (date) {
+      var mapped = shiftDate_(ly.start, historyDayGap_(store.start, date));
+      if (!mapped || mapped > ly.end) { unpaired = true; return; }
+      lyDates.push(mapped);
+    });
+    if (unpaired || !lyDates.length) return null;
+    var series = reportLySeries_(dailyFacts_(), lyDates, field, metric);
+    if (!series || !series.onFile) return null;
+    if (series.pending) return { value: null, basis: series.source };
+    return { value: series.value, basis: series.source };
+  }
   function pick(metric) {
     var match = null;
     rows.forEach(function (row) {
@@ -167,7 +188,14 @@ function briefLastYearStore_(config, store) {
     if (!match) return pending('Pending: no verified last-year ' + metric + ' for ' + ly.start + ' through ' + ly.end + ' is on CC_LastYear.');
     return { value: match.value, basis: 'CC_LastYear ' + match.source + ' ' + ly.start + ' through ' + ly.end + ', verified by ' + match.verifiedBy };
   }
-  return { period: period, confirmed: true, written: pick('NWDSR Written'), delivered: pick('NWDSR Delivered') };
+  var writtenRegister = fromRegister('NWDSR Written', 'nwdsrWritten');
+  var deliveredRegister = fromRegister('NWDSR Delivered', 'nwdsrDelivered');
+  return {
+    period: period,
+    confirmed: true,
+    written: writtenRegister || pick('NWDSR Written'),
+    delivered: deliveredRegister || pick('NWDSR Delivered'),
+  };
 }
 
 function briefPersonShortfalls_(person) {

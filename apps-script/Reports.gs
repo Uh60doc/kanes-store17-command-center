@@ -557,11 +557,64 @@ function reportMetricSeries_(facts, dates, field, metric) {
   return { pending: pending, value: pending ? null : value, source: source };
 }
 
+/**
+ * Last-year days come from the permanent register first, then from CC_Daily for a date the register
+ * does not have yet. A partial register is not replaced by a CC_LastYear period total.
+ */
+function reportLySeries_(facts, dates, field, metric) {
+  var missing = [];
+  var total = 0;
+  var seen = false;
+  var fromRegister = 0;
+  var fromDaily = 0;
+  dates.forEach(function (date) {
+    var hist = typeof historicalAmount_ === 'function' ? historicalAmount_(metric, date) : null;
+    if (hist && hist.dollars !== null && hist.dollars !== undefined) {
+      seen = true;
+      fromRegister += 1;
+      total += Number(hist.dollars);
+      return;
+    }
+    var row = reportFact_(facts, date);
+    var value = row ? row[field] : null;
+    if (value === null || value === undefined) { missing.push(date); return; }
+    seen = true;
+    fromDaily += 1;
+    total += Number(value);
+  });
+  if (!fromRegister) return reportMetricSeries_(facts, dates, field, metric);
+  var start = dates.length ? dates[0] : '';
+  var end = dates.length ? dates[dates.length - 1] : '';
+  var tab = typeof historicalTabName_ === 'function' ? historicalTabName_(metric) : 'historical register';
+  if (dates.length && !missing.length && seen) {
+    var origin = fromDaily ? tab + ' and CC_Daily' : tab;
+    return {
+      pending: false,
+      value: Math.round(total * 100) / 100,
+      missing: [],
+      onFile: fromRegister + fromDaily,
+      expected: dates.length,
+      source: origin + ' ' + metric + ', ' + start + ' through ' + end + '. Not added to current-year sales.',
+    };
+  }
+  var onFile = fromRegister + fromDaily;
+  return {
+    pending: true,
+    value: null,
+    missing: missing,
+    partial: seen ? Math.round(total * 100) / 100 : null,
+    onFile: onFile,
+    expected: dates.length,
+    source: 'Pending. ' + tab + ' has ' + onFile + ' of ' + dates.length + ' days. Missing ' + metric + ' for ' + reportDateList_(missing) + '. The days on file are not the completed comparison.',
+  };
+}
+
 function reportSnapComparison_(facts, currentDates, lyDates, lyLabel) {
   var current = reportMetricSeries_(facts, currentDates, 'snapWritten', 'SNAP Written');
   var nwdsr = reportMetricSeries_(facts, currentDates, 'nwdsrWritten', 'NWDSR Written');
-  var lyDaily = reportMetricSeries_(facts, lyDates, 'snapWritten', 'SNAP Written');
-  var nwdsrLy = reportMetricSeries_(facts, lyDates, 'nwdsrWritten', 'NWDSR Written');
+  var lyDaily = reportLySeries_(facts, lyDates, 'snapWritten', 'SNAP Written');
+  var nwdsrLy = reportLySeries_(facts, lyDates, 'nwdsrWritten', 'NWDSR Written');
+  var deliveredLy = reportLySeries_(facts, lyDates, 'nwdsrDelivered', 'NWDSR Delivered');
   var dollars = current.pending || lyDaily.pending ? null : Math.round((current.value - lyDaily.value) * 100) / 100;
   var variance = current.pending || nwdsr.pending ? null : Math.round((nwdsr.value - current.value) * 100) / 100;
   var currentStart = currentDates.length ? currentDates[0] : '';
@@ -581,6 +634,14 @@ function reportSnapComparison_(facts, currentDates, lyDates, lyLabel) {
     lyDates: lyStart ? (briefDisplayDate_(lyStart) + ' - ' + briefDisplayDate_(lyEnd)) : 'Pending',
     dollars: dollars === null ? 'Pending' : reportSnapSignMoney_(dollars),
     percent: reportSnapSignPercent_(current.pending ? null : current.value, lyDaily.pending ? null : lyDaily.value),
+    lyValue: lyDaily.pending ? null : lyDaily.value,
+    nwdsrLyValue: nwdsrLy.pending ? null : nwdsrLy.value,
+    deliveredLy: deliveredLy.pending ? 'Pending' : moneyText_(deliveredLy.value),
+    deliveredLyValue: deliveredLy.pending ? null : deliveredLy.value,
+    deliveredLyOnFile: deliveredLy.onFile || 0,
+    lySource: lyDaily.source,
+    nwdsrLySource: nwdsrLy.source,
+    deliveredLySource: deliveredLy.source,
     note: (lyLabel ? lyLabel + ' ' : '') + 'Supplemental. SNAP Written is kept separate from NWDSR Written and is not the store budget. LAST YEAR is the prior year, not last month. The NWDSR minus SNAP difference is not removed from the store total.',
     source: 'Current SNAP Written ' + (current.pending ? ('Pending. Missing ' + (currentDates.length ? reportDateList_(reportMetricWindow_(facts, currentDates, 'snapWritten').missing) : '') + '.') : ('CC_Daily SNAP Written, ' + currentStart + ' through ' + currentEnd + '.')) + ' Last year: ' + lyDaily.source,
   };
@@ -785,6 +846,13 @@ function reportWeekly_(payload, today) {
     if (ly && ly.confirmed && ly.written && !briefBlank_(ly.written.value)) lastYear.written = moneyText_(ly.written.value);
     if (ly && ly.confirmed && ly.delivered && !briefBlank_(ly.delivered.value)) lastYear.delivered = moneyText_(ly.delivered.value);
     if (lastYear.written === 'Pending' && lastYear.delivered === 'Pending') lastYear.note = 'Last year is Pending. ' + ((ly && ly.written && ly.written.basis) || 'No verified last-year figure was invented.');
+    else {
+      var parts = [];
+      if (ly && ly.written && ly.written.basis) parts.push(ly.written.basis);
+      if (ly && ly.delivered && ly.delivered.basis && lastYear.delivered === 'Pending') parts.push(ly.delivered.basis);
+      else if (ly && ly.delivered && ly.delivered.basis) parts.push(ly.delivered.basis);
+      lastYear.note = parts.join(' ');
+    }
   } catch (error) { lastYear.note = 'Last year is Pending. No verified last-year figure was invented.'; }
 
   var partialLabel = span.partial ? (span.span === 'week-to-date' ? 'Partial · week to date' : 'Partial · custom range') : 'Completed week';
@@ -1242,6 +1310,12 @@ function reportMonthly_(payload, today) {
   var delivered = reportMonthFacts_('nwdsrDelivered', facts, store, asOf, closed);
   var ly = { confirmed: false, period: '', written: { value: null }, delivered: { value: null } };
   try { ly = briefLastYearStore_(config, store); } catch (error) { ly = ly; }
+  try {
+    var compared = reportMonthSnapLy_(facts, closed, store, asOf);
+    if (compared.nwdsrLyValue !== null && compared.nwdsrLyValue !== undefined) ly.written = { value: compared.nwdsrLyValue, basis: compared.nwdsrLySource };
+    if (compared.deliveredLyValue !== null && compared.deliveredLyValue !== undefined) ly.delivered = { value: compared.deliveredLyValue, basis: compared.deliveredLySource };
+    else if (compared.deliveredLyOnFile) ly.delivered = { value: null, basis: compared.deliveredLySource };
+  } catch (error) { ly = ly; }
   var closing = { ratio: null, goal: closingGoal_(config), through: '', note: 'Store closing is Pending.' };
   try { closing = storeMonthClosing_(loadClosingView_(), store, closing.goal); } catch (error) { closing = closing; }
   var kpis = reportKpiMap_(store);
@@ -1527,9 +1601,11 @@ function reportMeetingRecognition_(weekly, people) {
   });
   if (attached.length) items.push('Strong attachment: ' + attached.slice(0, 3).join(' '));
   else items.push('No verified attachment result is at its goal.');
-  var lastYear = weekly.lastYear || {};
-  if (lastYear.written && lastYear.written !== 'Pending') items.push('Verified last-year store written is ' + lastYear.written + '. A week-versus-week improvement is not on file.');
-  else items.push('No prior comparable week is on file, so no improvement versus an earlier week is shown.');
+  var snap = weekly.snapLy || {};
+  if (snap.nwdsrLy && snap.nwdsrLy !== 'Pending') {
+    if (snap.nwdsr && snap.nwdsr !== 'Pending') items.push('This week NWDSR Written ' + snap.nwdsr + ' versus the same week last year ' + snap.nwdsrLy + '.');
+    else items.push('The same week last year is ' + snap.nwdsrLy + ' NWDSR Written. This week is Pending, so the comparison stays Pending.');
+  } else items.push('No prior comparable week is on file, so no improvement versus an earlier week is shown.');
   return items.slice(0, 4);
 }
 
