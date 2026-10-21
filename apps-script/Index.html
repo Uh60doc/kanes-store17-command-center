@@ -124,6 +124,8 @@
     .kpi-hero .figure { color: #f8fbff; font-size: 32px; font-weight: 780; margin: 4px 0 2px; }
     .kpi-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .kpi-hero .goal-line, .kpi-hero .need { margin: 0; color: #d5e2f0; font-size: 13px; }
+    .kpi-hero .side-note { margin: 2px 0 0; color: #9eb0c9; font-size: 11px; line-height: 1.2; }
+    .kpi-hero .side-note b { color: #f8fbff; font-size: 13px; font-weight: 750; }
     .kpi-icon.lg { width: 36px; height: 36px; border-radius: 12px; font-size: 16px; font-weight: 800; }
     .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
     .pill.good { color: #04210f; background: #3dde8a; }
@@ -1274,14 +1276,20 @@
         };
         return '<span class="kpi-icon lg icon-' + kind + '" aria-hidden="true"><svg viewBox="0 0 24 24">' + (paths[kind] || '') + '</svg></span>';
       }
-      function heroCard(icon, toneName, title, figure, actual, goal, goalText, leftText, through, kind, bar) {
+      function heroCard(icon, toneName, title, figure, actual, goal, goalText, leftText, through, kind, bar, aside) {
         var tone = !known(actual) ? 'pending' : (!known(goal) ? 'pending' : (Number(actual) >= Number(goal) ? 'good' : 'bad'));
         var share = kind === 'rate' || !known(actual) || !known(goal) || !Number(goal) ? 'Goal ' + goalText : percent(Number(actual) / Number(goal)) + ' of ' + goalText;
+        if (aside) share = 'Written · ' + share;
         return '<article class="card glow-card kpi-hero tone-' + toneName + '"><div class="kpi-hero-top">' + glyph(icon) + '<span class="pill ' + tone + '">' + esc(paceWord(actual, goal)) + '</span></div>' +
           '<p class="kicker">' + esc(title) + '</p><p class="figure">' + figure + '</p><p class="goal-line">' + share + '</p>' +
           meterHtml(actual, goal, bar) +
           (leftText ? '<p class="need">' + leftText + '</p>' : '') +
-          '<p class="need">' + (through ? 'Verified through ' + esc(through) : '') + '</p></article>';
+          '<p class="need">' + (through ? 'Verified through ' + esc(through) : '') + '</p>' +
+          (aside ? '<p class="side-note">' + aside + '</p>' : '') + '</article>';
+      }
+      function deliveredAside(row) {
+        var value = row && known(row.delivered) ? kpiValue(row.delivered, row.unit) : 'Pending';
+        return 'Delivered <b>' + esc(value) + '</b>';
       }
       function mini(title, figure, note, icon) {
         return '<article class="card mini-card"><div class="mini-top"><h2>' + esc(title) + '</h2>' + (icon ? glyph(icon) : '') + '</div><p class="figure">' + figure + '</p><p class="sub">' + note + '</p></article>';
@@ -1298,9 +1306,9 @@
       var balance = (data.writtenBalance && data.writtenBalance.month) || {};
       var five = heroCard('dollar', 'written', 'NWDSR Written', boardMoney(monthBoard.written), monthBoard.written, monthBoard.writtenGoal, boardMoney(monthBoard.writtenGoal) + ' goal', boardMoney(monthBoard.writtenLeft) + ' still needed', writtenThrough, 'money', 'cyan') +
         heroCard('truck', 'delivered', 'NWDSR Delivered', boardMoney(monthBoard.delivered), monthBoard.delivered, monthBoard.deliveredGoal, boardMoney(monthBoard.deliveredGoal) + ' goal', boardMoney(monthBoard.deliveredLeft) + ' still needed', deliveredThrough, 'money', 'pink') +
-        heroCard('bed', 'bedding', 'Bedding', bedding && known(bedding.written) ? kpiValue(bedding.written, bedding.unit) : 'Pending', bedding ? bedding.written : null, bedding ? bedding.goal : null, bedding ? boardGoal(bedding.goal, bedding.unit) : 'Pending', '', bedding && bedding.writtenThrough ? longDate(bedding.writtenThrough) : '', 'rate', 'green') +
+        heroCard('bed', 'bedding', 'Bedding', bedding && known(bedding.written) ? kpiValue(bedding.written, bedding.unit) : 'Pending', bedding ? bedding.written : null, bedding ? bedding.goal : null, bedding ? boardGoal(bedding.goal, bedding.unit) : 'Pending', '', bedding && bedding.writtenThrough ? longDate(bedding.writtenThrough) : '', 'rate', 'green', deliveredAside(bedding)) +
         heroCard('target', 'closing', 'Closing Ratio', closingKpi && known(closingKpi.written) ? kpiValue(closingKpi.written, closingKpi.unit) : 'Pending', closingKpi ? closingKpi.written : null, closingKpi ? closingKpi.goal : null, closingKpi ? boardGoal(closingKpi.goal, closingKpi.unit) : 'Pending', closingKpi && closingKpi.detail ? esc(closingKpi.detail) : '', closingKpi && closingKpi.through ? longDate(closingKpi.through) : '', 'rate', 'gold') +
-        heroCard('link', 'attach', 'Store Attachment', attachment && known(attachment.written) ? kpiValue(attachment.written, attachment.unit) : 'Pending', attachment ? attachment.written : null, attachment ? attachment.goal : null, attachment ? boardGoal(attachment.goal, attachment.unit) : 'Pending', '', attachment && attachment.writtenThrough ? longDate(attachment.writtenThrough) : '', 'rate', 'gold');
+        heroCard('link', 'attach', 'Store Attachment', attachment && known(attachment.written) ? kpiValue(attachment.written, attachment.unit) : 'Pending', attachment ? attachment.written : null, attachment ? attachment.goal : null, attachment ? boardGoal(attachment.goal, attachment.unit) : 'Pending', '', attachment && attachment.writtenThrough ? longDate(attachment.writtenThrough) : '', 'rate', 'gold', deliveredAside(attachment));
       var week = data.week || {};
       var still = '<article class="card glow-card"><div class="card-head">' + glyph('bars') + '<div><h2>Still needed this month</h2><p class="sub">' + esc(data.period || '') + '</p></div></div><div class="need-pair">' +
         '<div class="need-tile">' + glyph('dollar') + '<div><p class="sub">Written still needed</p><p class="figure">' + boardMoney(monthBoard.writtenLeft) + '</p><p class="sub">of ' + boardMoney(monthBoard.writtenGoal) + '</p></div></div>' +
