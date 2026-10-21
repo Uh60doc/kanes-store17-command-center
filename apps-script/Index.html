@@ -126,6 +126,8 @@
     .kpi-hero .goal-line, .kpi-hero .need { margin: 0; color: #d5e2f0; font-size: 13px; }
     .kpi-hero .side-note { margin: 2px 0 0; color: #9eb0c9; font-size: 11px; line-height: 1.2; }
     .kpi-hero .side-note b { color: #f8fbff; font-size: 13px; font-weight: 750; }
+    .kpi-hero .side-note b.good { color: #3dde8a; }
+    .kpi-hero .side-note b.bad { color: #ff7b93; }
     .kpi-icon.lg { width: 36px; height: 36px; border-radius: 12px; font-size: 16px; font-weight: 800; }
     .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
     .pill.good { color: #04210f; background: #3dde8a; }
@@ -1289,7 +1291,9 @@
       }
       function deliveredAside(row) {
         var value = row && known(row.delivered) ? kpiValue(row.delivered, row.unit) : 'Pending';
-        return 'Delivered <b>' + esc(value) + '</b>';
+        var tone = '';
+        if (row && known(row.delivered) && known(row.goal)) tone = Number(row.delivered) >= Number(row.goal) ? 'good' : 'bad';
+        return 'Delivered <b class="' + tone + '">' + esc(value) + '</b>';
       }
       function mini(title, figure, note, icon) {
         return '<article class="card mini-card"><div class="mini-top"><h2>' + esc(title) + '</h2>' + (icon ? glyph(icon) : '') + '</div><p class="figure">' + figure + '</p><p class="sub">' + note + '</p></article>';
