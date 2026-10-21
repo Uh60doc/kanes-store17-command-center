@@ -142,6 +142,10 @@ test('home trend draws a smooth area and leaves last year off until those days e
   assert.match(svg, /stroke="#f3d48a" stroke-width="1.8" stroke-dasharray="4 4"/);
   assert.match(svg, /#7eecf6/);
   assert.match(svg, /Through Oct 15/);
+  assert.match(svg, /Last year/);
+  assert.match(svg, /This year/);
+  assert.match(svg, /\$120,000/);
+  assert.match(svg, /trend-readout" style="left:/);
   assert.equal(svg.includes('not drawn as a guess'), false);
   assert.equal(page.homeTrendHasLy(chart.map((day) => ({ ...day, snapLy: null }))), false);
   const pending = page.homeTrend(chart.map((day) => ({ ...day, snapLy: null })), '2026-10-15');
