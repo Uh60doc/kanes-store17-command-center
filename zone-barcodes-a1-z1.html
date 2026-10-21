@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Zone barcodes A1–Z1</title>
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: #fff;
+        color: #161616;
+        font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+      }
+      .sheet-tools {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        align-items: center;
+        padding: 0.8rem 1.2rem;
+        border-bottom: 1px solid #ddd;
+      }
+      h1 { font-size: 1.4rem; margin: 0; }
+      .note { margin: 0; color: #444; }
+      button, a.nav {
+        font: inherit;
+        min-height: 44px;
+        padding: 0.4rem 0.8rem;
+        border-radius: 8px;
+        border: 2px solid #1b4634;
+        background: #fff;
+        color: inherit;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      button { background: #1b4634; color: #fff; font-weight: 700; }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1.2rem 1.4rem;
+        padding: 1rem 1.2rem 2rem;
+      }
+      .code {
+        border: 1px solid #e6e6e6;
+        border-radius: 12px;
+        padding: 0.7rem 0.6rem 0.3rem;
+        text-align: center;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      .bars svg { width: min(100%, 420px); height: auto; }
+      .name {
+        margin: 0.15rem 0 0.2rem;
+        font-size: 3.2rem;
+        font-weight: 800;
+        line-height: 1;
+        letter-spacing: 0.04em;
+      }
+      @media print {
+        .sheet-tools { display: none !important; }
+        .grid { gap: 0.45rem 0.6rem; padding: 0; }
+        .code { border: 0; padding: 0.2rem 0.1rem; }
+        .name { font-size: 2.4rem; }
+      }
+      @page { size: letter; margin: 0.45in; }
+    </style>
+  </head>
+  <body>
+    <div class="sheet-tools">
+      <h1>Zone barcodes A1–Z1</h1>
+      <p class="note">Each barcode is the zone name. Scan it in Floor count.</p>
+      <button type="button" onclick="window.print()">Print</button>
+      <a class="nav" href="http://127.0.0.1:8765/">Back to count</a>
+      <a class="nav" href="zone-barcodes-a-z.html">A–Z sheet</a>
+    </div>
+    <div class="grid">
+    <article class="code" data-payload="A1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 A1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="3" height="108"/><rect x="75" y="0" width="3" height="108"/><rect x="87" y="0" width="6" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="150" y="0" width="3" height="108"/><rect x="159" y="0" width="6" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">A1</p>
+    </article>
+    <article class="code" data-payload="B1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 B1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="3" height="108"/><rect x="81" y="0" width="3" height="108"/><rect x="87" y="0" width="6" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="141" y="0" width="6" height="108"/><rect x="153" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">B1</p>
+    </article>
+    <article class="code" data-payload="C1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 C1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="3" height="108"/><rect x="81" y="0" width="3" height="108"/><rect x="93" y="0" width="6" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="141" y="0" width="6" height="108"/><rect x="159" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">C1</p>
+    </article>
+    <article class="code" data-payload="D1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 D1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="3" height="108"/><rect x="75" y="0" width="6" height="108"/><rect x="90" y="0" width="3" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="144" y="0" width="6" height="108"/><rect x="153" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">D1</p>
+    </article>
+    <article class="code" data-payload="E1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 E1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="3" height="108"/><rect x="81" y="0" width="6" height="108"/><rect x="90" y="0" width="3" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="144" y="0" width="6" height="108"/><rect x="162" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">E1</p>
+    </article>
+    <article class="code" data-payload="F1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 F1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="3" height="108"/><rect x="81" y="0" width="6" height="108"/><rect x="96" y="0" width="3" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="150" y="0" width="6" height="108"/><rect x="159" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">F1</p>
+    </article>
+    <article class="code" data-payload="G1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 G1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="6" height="108"/><rect x="78" y="0" width="3" height="108"/><rect x="90" y="0" width="3" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="150" y="0" width="6" height="108"/><rect x="162" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">G1</p>
+    </article>
+    <article class="code" data-payload="H1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 H1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="6" height="108"/><rect x="84" y="0" width="3" height="108"/><rect x="90" y="0" width="3" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="6" height="108"/><rect x="153" y="0" width="3" height="108"/><rect x="162" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">H1</p>
+    </article>
+    <article class="code" data-payload="I1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 I1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="6" height="108"/><rect x="84" y="0" width="3" height="108"/><rect x="96" y="0" width="3" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="6" height="108"/><rect x="147" y="0" width="3" height="108"/><rect x="153" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">I1</p>
+    </article>
+    <article class="code" data-payload="J1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 J1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="3" height="108"/><rect x="75" y="0" width="6" height="108"/><rect x="84" y="0" width="9" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="12" height="108"/><rect x="150" y="0" width="9" height="108"/><rect x="162" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">J1</p>
+    </article>
+    <article class="code" data-payload="K1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 K1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="3" height="108"/><rect x="75" y="0" width="6" height="108"/><rect x="90" y="0" width="9" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="6" height="108"/><rect x="153" y="0" width="3" height="108"/><rect x="159" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">K1</p>
+    </article>
+    <article class="code" data-payload="L1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 L1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="3" height="108"/><rect x="81" y="0" width="6" height="108"/><rect x="90" y="0" width="9" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="147" y="0" width="12" height="108"/><rect x="162" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">L1</p>
+    </article>
+    <article class="code" data-payload="M1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 M1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="3" height="108"/><rect x="75" y="0" width="9" height="108"/><rect x="87" y="0" width="6" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="141" y="0" width="3" height="108"/><rect x="150" y="0" width="12" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">M1</p>
+    </article>
+    <article class="code" data-payload="N1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 N1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="3" height="108"/><rect x="75" y="0" width="9" height="108"/><rect x="93" y="0" width="6" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="144" y="0" width="3" height="108"/><rect x="150" y="0" width="12" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">N1</p>
+    </article>
+    <article class="code" data-payload="O1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 O1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="3" height="108"/><rect x="81" y="0" width="9" height="108"/><rect x="93" y="0" width="6" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="144" y="0" width="3" height="108"/><rect x="153" y="0" width="12" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">O1</p>
+    </article>
+    <article class="code" data-payload="P1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 P1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="9" height="108"/><rect x="81" y="0" width="9" height="108"/><rect x="93" y="0" width="6" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="141" y="0" width="12" height="108"/><rect x="159" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">P1</p>
+    </article>
+    <article class="code" data-payload="Q1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 Q1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="6" height="108"/><rect x="78" y="0" width="3" height="108"/><rect x="90" y="0" width="9" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="144" y="0" width="12" height="108"/><rect x="159" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">Q1</p>
+    </article>
+    <article class="code" data-payload="R1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 R1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="6" height="108"/><rect x="84" y="0" width="3" height="108"/><rect x="90" y="0" width="9" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="144" y="0" width="12" height="108"/><rect x="162" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">R1</p>
+    </article>
+    <article class="code" data-payload="S1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 S1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="6" height="108"/><rect x="78" y="0" width="9" height="108"/><rect x="90" y="0" width="3" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="12" height="108"/><rect x="150" y="0" width="3" height="108"/><rect x="159" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">S1</p>
+    </article>
+    <article class="code" data-payload="T1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 T1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="6" height="108"/><rect x="78" y="0" width="9" height="108"/><rect x="96" y="0" width="3" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="12" height="108"/><rect x="153" y="0" width="3" height="108"/><rect x="159" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">T1</p>
+    </article>
+    <article class="code" data-payload="U1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 U1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="6" height="108"/><rect x="78" y="0" width="9" height="108"/><rect x="90" y="0" width="9" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="12" height="108"/><rect x="153" y="0" width="3" height="108"/><rect x="162" y="0" width="3" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">U1</p>
+    </article>
+    <article class="code" data-payload="V1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 V1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="9" height="108"/><rect x="81" y="0" width="3" height="108"/><rect x="87" y="0" width="6" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="6" height="108"/><rect x="144" y="0" width="6" height="108"/><rect x="153" y="0" width="12" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">V1</p>
+    </article>
+    <article class="code" data-payload="W1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 W1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="9" height="108"/><rect x="81" y="0" width="3" height="108"/><rect x="93" y="0" width="6" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="6" height="108"/><rect x="144" y="0" width="12" height="108"/><rect x="159" y="0" width="6" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">W1</p>
+    </article>
+    <article class="code" data-payload="X1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 X1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="9" height="108"/><rect x="87" y="0" width="3" height="108"/><rect x="93" y="0" width="6" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="12" height="108"/><rect x="150" y="0" width="6" height="108"/><rect x="159" y="0" width="6" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">X1</p>
+    </article>
+    <article class="code" data-payload="Y1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 Y1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="9" height="108"/><rect x="81" y="0" width="6" height="108"/><rect x="90" y="0" width="3" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="141" y="0" width="3" height="108"/><rect x="147" y="0" width="12" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">Y1</p>
+    </article>
+    <article class="code" data-payload="Z1">
+      <div class="bars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 243 108" width="243" height="108" shape-rendering="crispEdges" role="img" aria-label="Code 128 Z1"><rect width="243" height="108" fill="#fff"/><rect x="36" y="0" width="6" height="108"/><rect x="45" y="0" width="3" height="108"/><rect x="54" y="0" width="3" height="108"/><rect x="69" y="0" width="9" height="108"/><rect x="81" y="0" width="6" height="108"/><rect x="96" y="0" width="3" height="108"/><rect x="102" y="0" width="3" height="108"/><rect x="111" y="0" width="9" height="108"/><rect x="126" y="0" width="6" height="108"/><rect x="135" y="0" width="3" height="108"/><rect x="141" y="0" width="3" height="108"/><rect x="153" y="0" width="12" height="108"/><rect x="168" y="0" width="6" height="108"/><rect x="183" y="0" width="9" height="108"/><rect x="195" y="0" width="3" height="108"/><rect x="201" y="0" width="6" height="108"/></svg></div>
+      <p class="name">Z1</p>
+    </article>
+    </div>
+  </body>
+</html>

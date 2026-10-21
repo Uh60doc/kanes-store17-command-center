@@ -11,6 +11,22 @@ require("../logic.js");
 const logic = globalThis.FloorLogic;
 const root = path.dirname(fileURLToPath(import.meta.url));
 
+test("zone scans are a letter or a letter plus digits", () => {
+  assert.equal(logic.parseZoneName("A"), "A");
+  assert.equal(logic.parseZoneName(" a1 "), "A1");
+  assert.equal(logic.parseZoneName("Z1"), "Z1");
+  assert.equal(logic.parseZoneName("C12"), "C12");
+  assert.equal(logic.parseZoneName("0001-8"), null);
+  assert.equal(logic.parseZoneName("00018"), null);
+  assert.equal(logic.parseZoneName("001206538"), null);
+  assert.equal(logic.parseZoneName("999999999"), null);
+  assert.equal(logic.parseZoneName("AB"), null);
+  assert.deepEqual(logic.code128Symbols("A"), [104, 33, 34, 106]);
+  assert.deepEqual(logic.code128Symbols("A1"), [104, 33, 17, 68, 106]);
+  assert.match(logic.code128Svg("A"), /<rect /);
+  assert.doesNotMatch(logic.code128Svg("A"), />A</);
+});
+
 test("area tags drop the first and last digit", () => {
   const printed = logic.parseAreaTag("0001-8");
   assert.equal(printed.areaId, "001");

@@ -18,8 +18,16 @@
             <p class="sub">Store 17 catalog is on this device. No upload, no account.</p>
           </div>
           <div class="zone-block">
-            <p class="zone-label">Current area</p>
-            <p id="current-area" data-testid="current-area">—</p>
+            <div class="zone-pair">
+              <div>
+                <p class="zone-label">Current zone</p>
+                <p id="current-zone" data-testid="current-zone">—</p>
+              </div>
+              <div>
+                <p class="zone-label">Current area</p>
+                <p id="current-area" data-testid="current-area">—</p>
+              </div>
+            </div>
             <p id="area-raw" data-testid="area-raw"></p>
             <p id="zone-summary"></p>
           </div>
@@ -30,22 +38,21 @@
         </div>
         <div class="scan-panel">
           <form id="scan-form">
-            <label class="scan-label" for="scan">Scan area tag or SKU</label>
+            <label class="scan-label" for="scan">Scan zone, area tag, or SKU</label>
             <div class="scan-row">
               <input
                 id="scan"
                 data-testid="scan-input"
-                inputmode="numeric"
                 autocomplete="off"
                 autocorrect="off"
-                autocapitalize="off"
+                autocapitalize="characters"
                 spellcheck="false"
-                placeholder="Area tag or SKU"
+                placeholder="Zone, area tag, or SKU"
               />
               <button type="submit">Count</button>
             </div>
           </form>
-          <p class="hint">Scan the area tag, then the pieces. The cursor stays in this box.</p>
+          <p class="hint">Scan the zone barcode, then the area tag, then the pieces. The cursor stays in this box.</p>
           <p id="live" class="sr-only" role="status"></p>
         </div>
         <div class="tools">
@@ -54,6 +61,8 @@
           <button type="button" data-view="catalog" aria-pressed="false">Catalog</button>
         </div>
         <button type="button" id="export">Export CSV</button>
+        <a class="text-link" href="zone-barcodes-a-z.html">Print zones A–Z</a>
+        <a class="text-link" href="zone-barcodes-a1-z1.html">Print zones A1–Z1</a>
       </div>
       <div class="tools">
         <label class="sr-only" for="search">Search SKU, description, or group</label>
@@ -83,6 +92,7 @@
         <table>
           <thead>
             <tr>
+              <th>Zone</th>
               <th>Area</th>
               <th>Group</th>
               <th>Description</th>
@@ -115,7 +125,7 @@
     <dialog id="add-dialog">
       <form id="add-form" data-keep-focus>
         <h2>SKU not on the list</h2>
-        <p>Add it and count it in area <strong id="add-zone"></strong>.</p>
+        <p>Add it and count it in <strong id="add-zone"></strong>.</p>
         <p id="add-asis-note" hidden>Next scan is AS IS. This piece will count as AS IS.</p>
         <label>Group Name
           <input id="add-group" data-keep-focus autocomplete="off" />
