@@ -65,7 +65,12 @@ test('manager navigation is the nine groups in order and keeps every manager pag
   assert.equal(targets.includes('coverage'), false);
   assert.equal(html.includes('Google Setup'), false);
   assert.equal(html.includes('Remaining written budget divided by days left.'), false);
-  assert.equal(html.includes('This week written'), true);
+  assert.equal(html.includes('Today and this week goals'), true);
+  assert.equal(html.includes('Today written goal'), true);
+  assert.equal(html.includes('This week written goal'), true);
+  assert.equal(html.includes('This week delivered goal'), true);
+  assert.equal(html.includes('trend-readout-slot'), true);
+  assert.equal(html.includes('.trend-readout { position: absolute; top: 4px; width: auto;'), true);
   assert.equal(html.includes('Close %'), true);
   assert.equal(html.includes('Last year is the prior year, not last month.'), false);
   assert.equal(html.includes('Supplemental. Not the store written total.'), false);
@@ -145,7 +150,8 @@ test('home trend draws a smooth area and leaves last year off until those days e
   assert.match(svg, /Last year/);
   assert.match(svg, /This year/);
   assert.match(svg, /\$120,000/);
-  assert.match(svg, /trend-readout" style="left:/);
+  assert.match(svg, /trend-readout-slot/);
+  assert.match(svg, /<\/svg><\/div><div class="trend-readout-slot"><table class="trend-readout" style="left:/);
   assert.equal(svg.includes('not drawn as a guess'), false);
   assert.equal(page.homeTrendHasLy(chart.map((day) => ({ ...day, snapLy: null }))), false);
   const pending = page.homeTrend(chart.map((day) => ({ ...day, snapLy: null })), '2026-10-15');
