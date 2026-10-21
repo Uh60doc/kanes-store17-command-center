@@ -283,6 +283,13 @@
     .packet-page { margin: 0 0 18px; padding: 0 0 12px; border-bottom: 1px solid #d5dee3; }
     .packet-page .page-no { margin: 8px 0 0; font-size: 11px; color: #3d5660; }
     .trend-chart { width: 100%; height: 228px; display: block; }
+    .trend-plot { position: relative; margin-bottom: 36px; }
+    .trend-readout { position: absolute; top: 100%; margin-top: 2px; transform: translateX(-50%); border-collapse: collapse; background: rgba(8, 16, 26, 0.94); border: 1px solid rgba(20, 196, 212, 0.4); border-radius: 8px; overflow: hidden; font-size: 11px; line-height: 1.2; white-space: nowrap; z-index: 1; }
+    .trend-readout th, .trend-readout td { padding: 2px 8px; }
+    .trend-readout th { color: #9eb0c9; font-weight: 650; text-align: left; }
+    .trend-readout td { font-weight: 780; text-align: right; }
+    .trend-readout .ly { color: #f3d48a; }
+    .trend-readout .nw { color: #7eecf6; }
     .trend-chart text { font-family: "Segoe UI", Helvetica, Arial, sans-serif; }
     .trend-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 2px; }
     .trend-head h2 { margin: 0; color: #d5e2f0; }
@@ -1539,19 +1546,25 @@
       rows.forEach(function (day, index) {
         if (day.written !== null && day.written !== undefined && day.written !== '') marker = index;
       });
+      var readout = '';
       if (marker >= 0) {
         var markX = x(marker);
         var labelX = Math.max(left + 46, Math.min(width - right - 46, markX));
         svg.push('<line x1="' + markX.toFixed(1) + '" x2="' + markX.toFixed(1) + '" y1="' + (top - 2) + '" y2="' + y(0).toFixed(1) + '" stroke="rgba(215,227,240,0.55)" stroke-dasharray="2 3"/>');
         var markWord = rows[marker].date === today ? 'Today ' : 'Through ';
         svg.push('<text x="' + labelX.toFixed(1) + '" y="13" text-anchor="middle" fill="#d7e3f0" font-size="11">' + markWord + label(rows[marker].date) + '</text>');
+        var spot = rows[marker];
+        var lyAmount = spot.snapLy === null || spot.snapLy === undefined || spot.snapLy === '' ? 'Pending' : money(spot.snapLy);
+        var nowAmount = spot.written === null || spot.written === undefined || spot.written === '' ? 'Pending' : money(spot.written);
+        var place = Math.max(16, Math.min(84, (markX / width) * 100));
+        readout = '<table class="trend-readout" style="left:' + place.toFixed(1) + '%"><tbody><tr><th>Last year</th><td class="ly">' + esc(lyAmount) + '</td></tr><tr><th>This year</th><td class="nw">' + esc(nowAmount) + '</td></tr></tbody></table>';
       }
       var tickEvery = Math.max(1, Math.round((rows.length - 1) / 7));
       rows.forEach(function (day, index) {
         if (index % tickEvery !== 0 && index !== rows.length - 1) return;
         svg.push('<text x="' + x(index).toFixed(1) + '" y="' + (height - 8) + '" text-anchor="middle" fill="#8ea0b8" font-size="11">' + label(day.date) + '</text>');
       });
-      return '<div class="kpi-wrap"><svg class="trend-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Cumulative NWDSR this year and SNAP last year">' + svg.join('') + '</svg></div>';
+      return '<div class="kpi-wrap trend-plot"><svg class="trend-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Cumulative NWDSR this year and SNAP last year">' + svg.join('') + '</svg>' + readout + '</div>';
     }
     function openPersonFromHome(name) {
       screen = 'people';
