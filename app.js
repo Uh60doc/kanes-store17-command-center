@@ -2,16 +2,16 @@
 (function () {
   const L = globalThis.FloorLogic;
   const CATALOG = globalThis.FLOOR_CATALOG;
-  const STORAGE_KEY = "floor-inventory-scanner-v1";
+  const STORAGE_KEY = "floor-inventory-scanner-v2";
+  const FLOOR_ZONE_ID = "floor";
   const LIST_CAP = 200;
 
   const scanForm = document.querySelector("#scan-form");
   const scanInput = document.querySelector("#scan");
   const banner = document.querySelector("#asis-banner");
-  const zoneChips = document.querySelector("#zone-chips");
-  const zoneCreate = document.querySelector("#zone-create");
-  const zoneNameInput = document.querySelector("#zone-name");
-  const currentZoneEl = document.querySelector("#current-zone");
+  const currentAreaEl = document.querySelector("#current-area");
+  const areaRawEl = document.querySelector("#area-raw");
+  const otherAreasEl = document.querySelector("#other-areas");
   const matchEl = document.querySelector("#match");
   const liveEl = document.querySelector("#live");
   const countBody = document.querySelector("#count-body");
@@ -43,20 +43,17 @@
   let lastMatch = null;
 
   rebuildIndex();
-  zoneCreate.hidden = state.zones.length > 0;
   bind();
   render();
-  if (state.zones.length === 0) {
-    zoneNameInput.focus();
-  } else {
-    focusScan();
-  }
+  focusScan();
 
   function emptyState() {
     return {
-      zones: [],
-      currentZoneId: null,
-      counts: {},
+      zones: [{ id: FLOOR_ZONE_ID, letter: "" }],
+      currentZoneId: FLOOR_ZONE_ID,
+      currentAreaId: null,
+      areaMeta: { [FLOOR_ZONE_ID]: {} },
+      counts: { [FLOOR_ZONE_ID]: {} },
       added: [],
       asIsArmed: false,
     };
@@ -67,14 +64,18 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return emptyState();
       const data = JSON.parse(raw);
-      if (!data || !Array.isArray(data.zones) || typeof data.counts !== "object" || data.counts === null) {
+      if (!data || typeof data.counts !== "object" || data.counts === null) {
         return emptyState();
       }
+      const fresh = emptyState();
+      data.zones = fresh.zones;
+      data.currentZoneId = FLOOR_ZONE_ID;
+      data.currentAreaId = data.currentAreaId || null;
+      data.areaMeta = data.areaMeta && typeof data.areaMeta === "object" ? data.areaMeta : fresh.areaMeta;
+      if (!data.areaMeta[FLOOR_ZONE_ID]) data.areaMeta[FLOOR_ZONE_ID] = {};
+      if (!data.counts[FLOOR_ZONE_ID]) data.counts[FLOOR_ZONE_ID] = {};
       data.added = Array.isArray(data.added) ? data.added : [];
       data.asIsArmed = Boolean(data.asIsArmed);
-      if (!data.zones.some((zone) => zone.id === data.currentZoneId)) {
-        data.currentZoneId = data.zones[0] ? data.zones[0].id : null;
-      }
       return data;
     } catch {
       return emptyState();
@@ -111,17 +112,6 @@
       say("AS IS cancelled. The next scan counts as new.");
       renderBanner();
       focusScan();
-    });
-
-    document.querySelector("#new-zone").addEventListener("click", () => {
-      zoneCreate.hidden = false;
-      zoneNameInput.focus();
-      zoneNameInput.select();
-    });
-
-    document.querySelector("#zone-form").addEventListener("submit", (event) => {
-      event.preventDefault();
-      createZone(zoneNameInput.value);
     });
 
     document.querySelector("#export").addEventListener("click", exportCsv);
@@ -161,13 +151,11 @@
       if (event.key !== "Enter") return;
       const raw = searchInput.value.trim();
       if (!raw || /[a-z]/i.test(raw)) return;
-      const sku = L.digitsOnly(raw);
-      if (!sku) return;
       event.preventDefault();
       searchInput.value = "";
       searchInput.blur();
       renderActiveList();
-      handleScan(sku);
+      handleScan(raw);
     });
 
     countBody.addEventListener("click", (event) => {
@@ -217,16 +205,14 @@
   }
 
   function handleScan(raw) {
-    const zone = currentZone();
-    if (!zone) {
-      say("Create a zone first, then scan.");
-      zoneCreate.hidden = false;
-      zoneNameInput.focus();
+    const areaTag = L.parseAreaTag(raw);
+    if (areaTag && !bySku.has(areaTag.digits)) {
+      setArea(areaTag);
       return;
     }
     const sku = L.digitsOnly(raw);
     if (!sku) {
-      say("Enter a numeric SKU.");
+      say("Scan an area tag or a numeric SKU.");
       focusScan();
       return;
     }
@@ -238,6 +224,11 @@
       focusScan();
       return;
     }
+    if (!state.currentAreaId) {
+      say("Scan an area tag first.");
+      focusScan();
+      return;
+    }
     const item = bySku.get(sku);
     if (!item) {
       openAdd(sku);
@@ -245,16 +236,30 @@
     }
     const asIs = state.asIsArmed;
     state.asIsArmed = false;
-    bump(zone.id, sku, asIs, 1);
+    bump(state.currentAreaId, sku, asIs, 1);
     save();
-    remember(item, zone, asIs);
+    remember(item, asIs);
     renderAfterCount(sku, asIs);
     focusScan();
   }
 
-  function bump(zoneId, sku, asIs, delta) {
-    if (!state.counts[zoneId]) state.counts[zoneId] = {};
-    const bucket = state.counts[zoneId];
+  function setArea(areaTag) {
+    const meta = state.areaMeta[FLOOR_ZONE_ID] || (state.areaMeta[FLOOR_ZONE_ID] = {});
+    if (!meta[areaTag.areaId]) meta[areaTag.areaId] = { raw: areaTag.raw };
+    else meta[areaTag.areaId].raw = areaTag.raw;
+    state.currentAreaId = areaTag.areaId;
+    save();
+    say(`Area ${areaTag.areaId}.`);
+    lastMatch = null;
+    render();
+    focusScan();
+  }
+
+  function bump(areaId, sku, asIs, delta) {
+    if (!state.counts[FLOOR_ZONE_ID]) state.counts[FLOOR_ZONE_ID] = {};
+    const areas = state.counts[FLOOR_ZONE_ID];
+    if (!areas[areaId]) areas[areaId] = {};
+    const bucket = areas[areaId];
     if (!bucket[sku]) bucket[sku] = { new: 0, asIs: 0 };
     const key = asIs ? "asIs" : "new";
     bucket[sku][key] = Math.max(0, (Number(bucket[sku][key]) || 0) + delta);
@@ -262,18 +267,17 @@
   }
 
   function adjust(sku, asIs, delta) {
-    const zone = currentZone();
-    if (!zone) return;
-    bump(zone.id, sku, asIs, delta);
+    const areaId = state.currentAreaId;
+    if (!areaId) return;
+    bump(areaId, sku, asIs, delta);
     save();
     const item = bySku.get(sku);
     if (item) {
-      const qty = L.zoneQty(state.counts, zone.id, sku);
+      const qty = L.areaQty(state.counts, FLOOR_ZONE_ID, areaId, sku);
       const left = asIs ? qty.asIsQty : qty.newQty;
       lastMatch = {
         sku,
-        zoneId: zone.id,
-        zoneName: zone.name,
+        areaId,
         asIs,
         groupName: item.groupName,
         description: item.description,
@@ -286,12 +290,12 @@
     focusScan();
   }
 
-  function remember(item, zone, asIs) {
-    const qty = L.zoneQty(state.counts, zone.id, item.sku);
+  function remember(item, asIs) {
+    const areaId = state.currentAreaId;
+    const qty = L.areaQty(state.counts, FLOOR_ZONE_ID, areaId, item.sku);
     lastMatch = {
       sku: item.sku,
-      zoneId: zone.id,
-      zoneName: zone.name,
+      areaId,
       asIs,
       groupName: item.groupName,
       description: item.description,
@@ -301,48 +305,15 @@
     };
     const kind = asIs ? "AS IS" : "new";
     const sheet = item.asIs ? " The sheet already marks this item AS IS." : "";
-    say(`Counted ${kind} in ${zone.name}. ${item.groupName}, ${item.description}, SKU ${item.sku}.${sheet}`);
-  }
-
-  function createZone(name) {
-    const trimmed = String(name ?? "").trim();
-    if (!trimmed) {
-      say("Give the zone a name.");
-      zoneNameInput.focus();
-      return;
-    }
-    const zone = {
-      id: `z_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-      name: trimmed.slice(0, 60),
-    };
-    state.zones.push(zone);
-    state.currentZoneId = zone.id;
-    if (!state.counts[zone.id]) state.counts[zone.id] = {};
-    save();
-    zoneNameInput.value = "";
-    zoneCreate.hidden = true;
-    say(`Counting in ${zone.name}.`);
-    render();
-    focusScan();
-  }
-
-  function switchZone(zoneId) {
-    if (!state.zones.some((zone) => zone.id === zoneId)) return;
-    state.currentZoneId = zoneId;
-    save();
-    const zone = currentZone();
-    say(`Now counting in ${zone.name}.`);
-    render();
-    focusScan();
+    say(`Counted ${kind} in area ${areaId}. ${item.groupName}, ${item.description}, SKU ${item.sku}.${sheet}`);
   }
 
   function openAdd(sku) {
-    const zone = currentZone();
     addSku.value = sku;
     addGroup.value = "";
     addDescription.value = "";
     addError.textContent = "";
-    addZone.textContent = zone ? zone.name : "";
+    addZone.textContent = state.currentAreaId || "";
     addAsIsNote.hidden = !state.asIsArmed;
     addDialog.showModal();
     addGroup.focus();
@@ -358,9 +329,8 @@
   }
 
   function commitAdd() {
-    const zone = currentZone();
-    if (!zone) {
-      addError.textContent = "Create a zone before adding an item.";
+    if (!state.currentAreaId) {
+      addError.textContent = "Scan an area tag before adding an item.";
       return;
     }
     const groupName = addGroup.value.trim();
@@ -400,9 +370,9 @@
     }
     const asIs = state.asIsArmed;
     state.asIsArmed = false;
-    bump(zone.id, sku, asIs, 1);
+    bump(state.currentAreaId, sku, asIs, 1);
     save();
-    remember(item, zone, asIs);
+    remember(item, asIs);
     if (addDialog.open) addDialog.close();
     renderAfterCount(sku, asIs);
     renderStats();
@@ -432,7 +402,7 @@
   }
 
   function render() {
-    renderZones();
+    renderArea();
     renderBanner();
     renderMatch();
     renderViews();
@@ -445,7 +415,7 @@
   function renderAfterCount(sku, asIs) {
     renderBanner();
     renderMatch();
-    renderZones();
+    renderArea();
     renderStats();
     renderActiveList();
     const row = countBody.querySelector(
@@ -454,29 +424,19 @@
     if (row) row.scrollIntoView({ block: "nearest" });
   }
 
-  function renderZones() {
-    const zone = currentZone();
-    currentZoneEl.textContent = zone ? zone.name : "No zone yet";
-    zoneChips.replaceChildren();
-    for (const candidate of state.zones) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "zone-chip";
-      button.textContent = candidate.name;
-      button.setAttribute("aria-pressed", candidate.id === state.currentZoneId ? "true" : "false");
-      button.addEventListener("click", () => switchZone(candidate.id));
-      zoneChips.appendChild(button);
-    }
-    const summary = zoneTotals(state.currentZoneId);
-    zoneSummary.textContent = zone
-      ? `${summary.newQty} new · ${summary.asIsQty} AS IS in this zone`
-      : "Create a zone to start counting";
-    scanInput.disabled = !zone;
-    scanForm.querySelector("button").disabled = !zone;
+  function renderArea() {
+    const areaId = state.currentAreaId;
+    const meta = state.areaMeta[FLOOR_ZONE_ID]?.[areaId];
+    currentAreaEl.textContent = areaId || "—";
+    areaRawEl.textContent = meta?.raw ? `Scanned ${meta.raw}` : "Scan an area tag";
+    const summary = areaTotals(areaId);
+    zoneSummary.textContent = areaId
+      ? `${summary.newQty} new · ${summary.asIsQty} AS IS in this area`
+      : "Scan an area tag to start";
   }
 
-  function zoneTotals(zoneId) {
-    const bucket = state.counts[zoneId] || {};
+  function areaTotals(areaId) {
+    const bucket = (state.counts[FLOOR_ZONE_ID] || {})[areaId] || {};
     let newQty = 0;
     let asIsQty = 0;
     for (const sku of Object.keys(bucket)) {
@@ -508,7 +468,7 @@
     matchEl.innerHTML = `
       <p class="match-kicker">Last scan · counted as ${kind}</p>
       <p class="match-desc">${escapeHtml(lastMatch.groupName)} · ${escapeHtml(lastMatch.description)}</p>
-      <p class="match-sku">${escapeHtml(lastMatch.sku)} · ${escapeHtml(String(lastMatch.qty))} ${kind} in ${escapeHtml(lastMatch.zoneName)}</p>
+      <p class="match-sku">${escapeHtml(lastMatch.sku)} · ${escapeHtml(String(lastMatch.qty))} ${kind} in area ${escapeHtml(lastMatch.areaId)}</p>
       ${original}
       ${sheet}
     `;
@@ -552,24 +512,27 @@
   }
 
   function renderCount() {
-    const zone = currentZone();
+    const areaId = state.currentAreaId;
     countBody.replaceChildren();
-    if (!zone) {
+    const others = otherAreaNote(areaId);
+    otherAreasEl.textContent = others;
+    if (!areaId) {
       countEmpty.hidden = false;
-      countEmpty.textContent = "Create a zone, then scan the first piece.";
+      countEmpty.textContent = "Scan an area tag, then scan the pieces in that area.";
       countView.querySelector("table").hidden = true;
       listNote.textContent = "";
       return;
     }
-    const bucket = state.counts[zone.id] || {};
+    const bucket = (state.counts[FLOOR_ZONE_ID] || {})[areaId] || {};
     const entries = [];
     for (const sku of Object.keys(bucket)) {
       const item = bySku.get(sku);
       if (!item) continue;
       if (!L.matchesQuery(item, queryText())) continue;
-      const qty = L.zoneQty(state.counts, zone.id, sku);
+      const qty = L.areaQty(state.counts, FLOOR_ZONE_ID, areaId, sku);
       entries.push({
         sku,
+        areaId,
         groupName: item.groupName,
         description: item.description,
         originalSku: item.originalSku || "",
@@ -582,18 +545,31 @@
     const rows = L.pairCountRows(entries, sortMode);
     countEmpty.hidden = rows.length > 0;
     countEmpty.textContent = queryText().trim()
-      ? "No counted items match that search in this zone."
-      : "Nothing counted in this zone yet. Scan a barcode or type a SKU.";
+      ? "No counted items match that search in this area."
+      : "Nothing counted in this area yet. Scan a SKU.";
     countView.querySelector("table").hidden = rows.length === 0;
-    listNote.textContent = rows.length ? `${rows.length} ${rows.length === 1 ? "line" : "lines"} in ${zone.name}` : "";
+    listNote.textContent = rows.length ? `${rows.length} ${rows.length === 1 ? "line" : "lines"} in area ${areaId}` : "";
     for (const row of rows) {
       countBody.appendChild(countRow(row));
     }
   }
 
+  function otherAreaNote(currentId) {
+    const areas = state.counts[FLOOR_ZONE_ID] || {};
+    const bits = [];
+    for (const areaId of Object.keys(areas).sort()) {
+      if (areaId === currentId) continue;
+      const totals = areaTotals(areaId);
+      if (totals.newQty === 0 && totals.asIsQty === 0) continue;
+      bits.push(`Area ${areaId}: ${totals.newQty} new · ${totals.asIsQty} AS IS`);
+    }
+    return bits.length ? `Still counted — ${bits.join("; ")}` : "";
+  }
+
   function countRow(row) {
     const tr = document.createElement("tr");
     tr.setAttribute("data-sku", row.sku);
+    tr.setAttribute("data-area", row.areaId);
     tr.setAttribute("data-condition", row.condition);
     tr.setAttribute("data-testid", "count-row");
     if (row.condition === "asis") tr.className = "as-is";
@@ -601,6 +577,7 @@
     const original = row.originalSku ? `<div class="original">Original ${escapeHtml(row.originalSku)}</div>` : "";
     const sheet = row.sheetAsIs ? `<div class="sheet-flag">Sheet: AS IS</div>` : "";
     tr.innerHTML = `
+      <td class="area-cell">${escapeHtml(row.areaId)}</td>
       <td>${escapeHtml(row.groupName)}</td>
       <td>
         <div class="desc">${escapeHtml(row.description)}</div>
@@ -628,11 +605,14 @@
   function renderCatalog() {
     const zone = currentZone();
     const zoneId = zone ? zone.id : null;
+    const areaId = state.currentAreaId;
     const matches = [];
     for (const item of bySku.values()) {
       if (!L.matchesQuery(item, queryText())) continue;
       const status = L.countStatus(state.counts, zoneId, item.sku);
-      if (catalogFilter === "zone" && status !== "zone") continue;
+      const inArea = areaId && (L.areaQty(state.counts, FLOOR_ZONE_ID, areaId, item.sku).newQty > 0
+        || L.areaQty(state.counts, FLOOR_ZONE_ID, areaId, item.sku).asIsQty > 0);
+      if (catalogFilter === "area" && !inArea) continue;
       if (catalogFilter === "any" && status === "none") continue;
       if (catalogFilter === "none" && status !== "none") continue;
       matches.push(item);
@@ -655,7 +635,7 @@
     const tr = document.createElement("tr");
     tr.setAttribute("data-testid", "catalog-row");
     if (item.asIs) tr.className = "as-is";
-    const status = describeStatus(item.sku, zone);
+    const status = describeStatus(item.sku);
     const original = item.originalSku ? `<div class="original">Original ${escapeHtml(item.originalSku)}</div>` : "";
     const added = item.source === "added" ? `<div class="sheet-flag">Added on this device</div>` : "";
     tr.innerHTML = `
@@ -681,16 +661,17 @@
     return `<span class="new-pill">New</span>`;
   }
 
-  function describeStatus(sku, zone) {
+  function describeStatus(sku) {
+    const areas = state.counts[FLOOR_ZONE_ID] || {};
     const parts = [];
-    for (const candidate of state.zones) {
-      const qty = L.zoneQty(state.counts, candidate.id, sku);
+    for (const areaId of Object.keys(areas).sort()) {
+      const qty = L.areaQty(state.counts, FLOOR_ZONE_ID, areaId, sku);
       if (qty.newQty === 0 && qty.asIsQty === 0) continue;
       const bits = [];
       if (qty.newQty) bits.push(`${qty.newQty} new`);
       if (qty.asIsQty) bits.push(`${qty.asIsQty} AS IS`);
-      const here = zone && candidate.id === zone.id ? " (this zone)" : "";
-      parts.push(`${candidate.name}: ${bits.join(", ")}${here}`);
+      const here = areaId === state.currentAreaId ? " (this area)" : "";
+      parts.push(`Area ${areaId}: ${bits.join(", ")}${here}`);
     }
     return parts.length ? parts.join(" · ") : "Not counted";
   }
@@ -719,7 +700,6 @@
     if (addDialog.open) return;
     const active = document.activeElement;
     if (active && active.closest("[data-keep-focus]") && !addDialog.contains(active)) return;
-    if (!currentZone()) return;
     // A just-closed dialog can leave this field focused but ignoring keys.
     if (document.activeElement === scanInput) scanInput.blur();
     scanInput.focus({ preventScroll: true });

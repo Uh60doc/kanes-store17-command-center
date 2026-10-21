@@ -11,6 +11,35 @@ require("../logic.js");
 const logic = globalThis.FloorLogic;
 const root = path.dirname(fileURLToPath(import.meta.url));
 
+test("area tags drop the first and last digit", () => {
+  const printed = logic.parseAreaTag("0001-8");
+  assert.equal(printed.areaId, "001");
+  assert.equal(printed.raw, "0001-8");
+  assert.equal(printed.digits, "00018");
+  assert.equal(logic.parseAreaTag("00018").areaId, "001");
+  assert.equal(logic.parseAreaTag("00018").raw, "00018");
+  assert.equal(logic.parseAreaTag("0002-4").areaId, "002");
+  assert.equal(logic.parseAreaTag(" 0001 - 8 ").areaId, "001");
+  assert.equal(logic.parseAreaTag("001206538"), null);
+  assert.equal(logic.parseAreaTag("999999999"), null);
+  assert.equal(logic.parseAreaTag("0001"), null);
+  assert.equal(logic.parseAreaTag("001-206-538"), null);
+  assert.equal(logic.digitsOnly("001206538"), "001206538");
+});
+
+test("later zone names continue past a single letter", () => {
+  assert.equal(logic.zoneNameAt(0), "A");
+  assert.equal(logic.zoneNameAt(1), "B");
+  assert.equal(logic.zoneNameAt(25), "Z");
+  assert.equal(logic.zoneNameAt(26), "A1");
+  assert.equal(logic.zoneNameAt(27), "B1");
+  assert.equal(logic.zoneNameAt(28), "C1");
+  assert.equal(logic.zoneNameAt(51), "Z1");
+  assert.equal(logic.zoneNameAt(52), "A2");
+  assert.equal(logic.zoneNameAt(-1), "");
+  assert.notEqual(logic.zoneNameAt(26).length, 1);
+});
+
 test("digits only and the AS IS prefix", () => {
   assert.equal(logic.digitsOnly("001-206 538x"), "001206538");
   assert.equal(logic.digitsOnly("001354113 (*)"), "001354113");
@@ -101,6 +130,38 @@ test("csv keeps new and AS IS on separate lines and escapes commas", () => {
   const csv = logic.toCsv(logic.CSV_HEADERS, rows);
   assert.match(csv, /Sofa, 99"/);
   assert.match(csv, /AS IS/);
+  assert.equal(rows[0].Zone, "Front window");
+  assert.equal(rows[0].Area, "");
+});
+
+test("nested areas export the area id with New and AS IS on separate lines", () => {
+  const item = {
+    sku: "001206538",
+    originalSku: "",
+    groupName: "BHLD",
+    description: 'Sofa 99"',
+    asIs: false,
+    source: "catalog",
+  };
+  const rows = logic.buildExportRows(
+    [{ id: "floor", letter: "" }],
+    {
+      floor: {
+        "001": { "001206538": { new: 2, asIs: 1 } },
+        "002": { "001206538": { new: 1, asIs: 0 } },
+      },
+    },
+    { "001206538": item },
+  );
+  assert.deepEqual(
+    rows.map((row) => [row.Zone, row.Area, row["Counted As"], row.Quantity]),
+    [
+      ["", "001", "New", "2"],
+      ["", "001", "AS IS", "1"],
+      ["", "002", "New", "1"],
+    ],
+  );
+  assert.equal(logic.areaQty({ floor: { "001": { "001206538": { new: 2, asIs: 1 } } } }, "floor", "001", "001206538").newQty, 2);
 });
 
 test("embedded catalog rows, sku digits, and leading-X AS IS marks", () => {

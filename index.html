@@ -18,29 +18,19 @@
             <p class="sub">Store 17 catalog is on this device. No upload, no account.</p>
           </div>
           <div class="zone-block">
-            <p class="zone-label">Current zone</p>
-            <p id="current-zone" data-testid="current-zone">No zone yet</p>
+            <p class="zone-label">Current area</p>
+            <p id="current-area" data-testid="current-area">—</p>
+            <p id="area-raw" data-testid="area-raw"></p>
             <p id="zone-summary"></p>
           </div>
         </header>
-        <div class="zone-row">
-          <div id="zone-chips" class="zone-chips"></div>
-          <button type="button" id="new-zone">New zone</button>
-        </div>
-        <div id="zone-create">
-          <form id="zone-form">
-            <label class="sr-only" for="zone-name">Zone name</label>
-            <input id="zone-name" data-keep-focus maxlength="60" placeholder="Zone name, such as Front window" autocomplete="off" />
-            <button type="submit">Create zone</button>
-          </form>
-        </div>
         <div id="asis-banner" class="banner" data-testid="asis-banner" hidden>
           <strong>Next scan is AS IS</strong>
           <button type="button" id="cancel-asis">Cancel</button>
         </div>
         <div class="scan-panel">
           <form id="scan-form">
-            <label class="scan-label" for="scan">Scan or enter SKU</label>
+            <label class="scan-label" for="scan">Scan area tag or SKU</label>
             <div class="scan-row">
               <input
                 id="scan"
@@ -50,17 +40,17 @@
                 autocorrect="off"
                 autocapitalize="off"
                 spellcheck="false"
-                placeholder="Barcode or digits"
+                placeholder="Area tag or SKU"
               />
               <button type="submit">Count</button>
             </div>
           </form>
-          <p class="hint">The scanner types the code and presses Enter. You can also type the digits on a keypad.</p>
+          <p class="hint">Scan the area tag, then the pieces. The cursor stays in this box.</p>
           <p id="live" class="sr-only" role="status"></p>
         </div>
         <div class="tools">
         <div class="views" role="group" aria-label="List">
-          <button type="button" data-view="count" aria-pressed="true">This zone</button>
+          <button type="button" data-view="count" aria-pressed="true">This area</button>
           <button type="button" data-view="catalog" aria-pressed="false">Catalog</button>
         </div>
         <button type="button" id="export">Export CSV</button>
@@ -75,8 +65,8 @@
         <button type="button" data-sort="asis-first" aria-pressed="false">AS IS first</button>
       </div>
       <div id="filter-bar" class="filters" role="group" aria-label="Catalog filter" hidden>
-        <button type="button" data-filter="zone">Counted in this zone</button>
-        <button type="button" data-filter="any">Counted in any zone</button>
+        <button type="button" data-filter="area">Counted in this area</button>
+        <button type="button" data-filter="any">Counted in any area</button>
         <button type="button" data-filter="none">Not yet counted</button>
         <button type="button" data-filter="all" aria-pressed="true">All items</button>
       </div>
@@ -89,9 +79,11 @@
       <section id="match" data-testid="match-card" hidden></section>
       <section id="count-view">
         <p id="count-empty" class="empty" hidden></p>
+        <p id="other-areas" data-testid="other-areas"></p>
         <table>
           <thead>
             <tr>
+              <th>Area</th>
               <th>Group</th>
               <th>Description</th>
               <th>SKU</th>
@@ -123,7 +115,7 @@
     <dialog id="add-dialog">
       <form id="add-form" data-keep-focus>
         <h2>SKU not on the list</h2>
-        <p>Add it and count it in <strong id="add-zone"></strong>.</p>
+        <p>Add it and count it in area <strong id="add-zone"></strong>.</p>
         <p id="add-asis-note" hidden>Next scan is AS IS. This piece will count as AS IS.</p>
         <label>Group Name
           <input id="add-group" data-keep-focus autocomplete="off" />

@@ -105,10 +105,17 @@ h1 {
   color: var(--muted);
 }
 
-#current-zone {
+#current-area {
   margin: 0;
-  font-size: 1.85rem;
-  line-height: 1.05;
+  font-size: 4.4rem;
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+}
+
+#area-raw {
+  margin: 0.25rem 0 0;
+  font-size: 1.05rem;
 }
 
 #zone-summary {
@@ -385,7 +392,7 @@ dialog::backdrop { background: rgba(28, 25, 21, 0.45); }
   body { font-size: 17px; }
   .header { flex-direction: column; align-items: stretch; }
   .zone-block { text-align: left; }
-  #current-zone { font-size: 1.6rem; }
+  #current-area { font-size: 3.4rem; }
   .scan-row, #zone-form, .tools { flex-direction: column; align-items: stretch; }
   #scan-form button, #zone-form button, #export { width: 100%; }
   .banner { align-items: stretch; flex-direction: column; }

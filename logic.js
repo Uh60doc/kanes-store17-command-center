@@ -4,12 +4,47 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   const AS_IS_PREFIX = "999999999";
 
+  /** Later zone names: A–Z, then A1, B1, … Z1, then A2, B2, and so on. */
+  function zoneNameAt(index) {
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const n = Number(index);
+    if (!Number.isInteger(n) || n < 0) return "";
+    if (n < letters.length) return letters[n];
+    const after = n - letters.length;
+    return letters[after % letters.length] + String(Math.floor(after / letters.length) + 1);
+  }
+
   function digitsOnly(value) {
     return String(value ?? "").replace(/\D/g, "");
   }
 
   function isAsIsPrefix(value) {
     return digitsOnly(value) === AS_IS_PREFIX;
+  }
+
+  /**
+   * WIS area ticket: digits with an optional hyphen before the last digit.
+   * Sample 0001-8 and 00018 are the same tag. Drop the first digit and the
+   * last digit; the middle is the area id (001). A 9-digit product SKU is
+   * never an area tag. The hyphen is ignored when reading the number.
+   */
+  function parseAreaTag(raw) {
+    const compact = String(raw ?? "").trim().replace(/\s+/g, "");
+    if (!compact) return null;
+    // Hyphen sits immediately before the last digit: 0001-8.
+    const hyphenForm = /^\d{2,}-\d$/.test(compact);
+    // Same tag with the hyphen omitted: 00018. Four digits (the photo
+    // barcode read "0001") are not an area tag.
+    const digitForm = /^\d{5,8}$/.test(compact);
+    if (!hyphenForm && !digitForm) return null;
+    const digits = compact.replace(/\D/g, "");
+    if (digits.length < 3 || digits.length > 8) return null;
+    if (digits === AS_IS_PREFIX) return null;
+    return {
+      areaId: digits.slice(1, -1),
+      raw: compact,
+      digits,
+    };
   }
 
   function matchesQuery(item, query) {
@@ -29,14 +64,35 @@
     return Boolean(digits) && sku.includes(digits);
   }
 
-  function zoneQty(counts, zoneId, sku) {
-    const zone = counts?.[zoneId];
-    const entry = zone?.[sku];
+  function readQty(entry) {
     if (!entry) return { newQty: 0, asIsQty: 0 };
     return {
       newQty: Number(entry.new) || 0,
       asIsQty: Number(entry.asIs) || 0,
     };
+  }
+
+  function isSkuEntry(value) {
+    return Boolean(value) && typeof value === "object" && ("new" in value || "asIs" in value);
+  }
+
+  function zoneQty(counts, zoneId, sku) {
+    const zone = counts?.[zoneId];
+    if (!zone) return { newQty: 0, asIsQty: 0 };
+    if (isSkuEntry(zone[sku])) return readQty(zone[sku]);
+    let newQty = 0;
+    let asIsQty = 0;
+    for (const areaId of Object.keys(zone)) {
+      if (isSkuEntry(zone[areaId])) continue;
+      const qty = readQty(zone[areaId]?.[sku]);
+      newQty += qty.newQty;
+      asIsQty += qty.asIsQty;
+    }
+    return { newQty, asIsQty };
+  }
+
+  function areaQty(counts, zoneId, areaId, sku) {
+    return readQty(counts?.[zoneId]?.[areaId]?.[sku]);
   }
 
   function countedAnywhere(counts, sku) {
@@ -102,17 +158,27 @@
     return `\uFEFF${lines.join("\r\n")}\r\n`;
   }
 
+  function areaBuckets(zoneCounts) {
+    const keys = Object.keys(zoneCounts);
+    const nested = keys.some((key) => zoneCounts[key] && !isSkuEntry(zoneCounts[key]));
+    if (!nested) return [[ "", zoneCounts ]];
+    return keys.sort().map((areaId) => [areaId, zoneCounts[areaId] || {}]);
+  }
+
   function buildExportRows(zones, counts, itemsBySku) {
     const rows = [];
     for (const zone of zones) {
-      const bucket = counts[zone.id] || {};
+      const buckets = areaBuckets(counts[zone.id] || {});
+      for (const [areaId, bucket] of buckets) {
       const skus = Object.keys(bucket).sort();
       for (const sku of skus) {
         const entry = bucket[sku] || {};
+        if (isSkuEntry(entry) === false) continue;
         const item = itemsBySku[sku];
         if (!item) continue;
         const base = {
-          Zone: zone.name,
+          Zone: zone.letter != null ? zone.letter : (zone.name || ""),
+          Area: areaId,
           "Group Name": item.groupName,
           Description: item.description,
           SKU: item.sku,
@@ -137,12 +203,14 @@
           rows.push({ ...base, "Counted As": "AS IS", Quantity: String(entry.asIs) });
         }
       }
+      }
     }
     return rows;
   }
 
   const CSV_HEADERS = [
     "Zone",
+    "Area",
     "Group Name",
     "Description",
     "SKU",
@@ -166,10 +234,13 @@
   return {
     AS_IS_PREFIX,
     CSV_HEADERS,
+    zoneNameAt,
     digitsOnly,
     isAsIsPrefix,
+    parseAreaTag,
     matchesQuery,
     zoneQty,
+    areaQty,
     countedAnywhere,
     countStatus,
     pairCountRows,
