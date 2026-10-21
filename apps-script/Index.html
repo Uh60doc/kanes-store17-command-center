@@ -283,9 +283,9 @@
     .packet-page { margin: 0 0 18px; padding: 0 0 12px; border-bottom: 1px solid #d5dee3; }
     .packet-page .page-no { margin: 8px 0 0; font-size: 11px; color: #3d5660; }
     .trend-chart { width: 100%; height: 228px; display: block; }
-    .trend-plot { position: relative; margin-bottom: 36px; }
-    .trend-readout { position: absolute; top: 100%; margin-top: 2px; transform: translateX(-50%); border-collapse: collapse; background: rgba(8, 16, 26, 0.94); border: 1px solid rgba(20, 196, 212, 0.4); border-radius: 8px; overflow: hidden; font-size: 11px; line-height: 1.2; white-space: nowrap; z-index: 1; }
-    .trend-readout th, .trend-readout td { padding: 2px 8px; }
+    .trend-readout-slot { position: relative; height: 52px; }
+    .trend-readout { position: absolute; top: 4px; width: auto; transform: translateX(-50%); border-collapse: collapse; background: rgba(8, 16, 26, 0.94); border: 1px solid rgba(20, 196, 212, 0.4); border-radius: 8px; font-size: 13px; line-height: 1.25; white-space: nowrap; z-index: 1; }
+    .trend-readout th, .trend-readout td { padding: 2px 8px; border-bottom: none; }
     .trend-readout th { color: #9eb0c9; font-weight: 650; text-align: left; }
     .trend-readout td { font-weight: 780; text-align: right; }
     .trend-readout .ly { color: #f3d48a; }
@@ -1327,11 +1327,11 @@
       function targetTile(title, figure, icon) {
         return '<article class="card mini-card target-tile"><div class="mini-top"><h2>' + esc(title) + '</h2>' + glyph(icon) + '</div><p class="figure">' + figure + '</p></article>';
       }
-      var targets = '<article class="card glow-card"><h2>Today and this week</h2><div class="home-quad target-grid">' +
-        targetTile('Today written', boardMoney(todayBoard.written), 'doc') +
-        targetTile('Today delivered', boardMoney(todayBoard.delivered), 'truck') +
-        targetTile('This week written', boardMoney(week.written), 'cal') +
-        targetTile('This week delivered', boardMoney(week.delivered), 'truck') +
+      var targets = '<article class="card glow-card"><h2>Today and this week goals</h2><div class="home-quad target-grid">' +
+        targetTile('Today written goal', boardMoney(todayBoard.written), 'doc') +
+        targetTile('Today delivered goal', boardMoney(todayBoard.delivered), 'truck') +
+        targetTile('This week written goal', boardMoney(week.written), 'cal') +
+        targetTile('This week delivered goal', boardMoney(week.delivered), 'truck') +
         '</div></article>';
       function stretchLine(label, budget, actual, left, bar) {
         var share = known(actual) && known(budget) && Number(budget) ? percent(Number(actual) / Number(budget)) : 'Pending';
@@ -1564,7 +1564,7 @@
         if (index % tickEvery !== 0 && index !== rows.length - 1) return;
         svg.push('<text x="' + x(index).toFixed(1) + '" y="' + (height - 8) + '" text-anchor="middle" fill="#8ea0b8" font-size="11">' + label(day.date) + '</text>');
       });
-      return '<div class="kpi-wrap trend-plot"><svg class="trend-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Cumulative NWDSR this year and SNAP last year">' + svg.join('') + '</svg>' + readout + '</div>';
+      return '<div class="trend-block"><div class="kpi-wrap"><svg class="trend-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Cumulative NWDSR this year and SNAP last year">' + svg.join('') + '</svg></div>' + (readout ? '<div class="trend-readout-slot">' + readout + '</div>' : '') + '</div>';
     }
     function openPersonFromHome(name) {
       screen = 'people';
