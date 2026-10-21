@@ -286,6 +286,289 @@
     return rows;
   }
 
+  function zoneRank(name) {
+    const match = String(name ?? "").match(/^([A-Z])(\d*)$/);
+    if (!match) return [1, 0, String(name ?? "")];
+    return [0, match[2] === "" ? 0 : Number(match[2]), match[1]];
+  }
+
+  function compareZoneNames(a, b) {
+    const left = zoneRank(a);
+    const right = zoneRank(b);
+    if (left[0] !== right[0]) return left[0] - right[0];
+    if (left[1] !== right[1]) return left[1] - right[1];
+    return String(left[2]).localeCompare(String(right[2]));
+  }
+
+  function zoneLabel(zone) {
+    if (!zone) return "";
+    if (zone.letter != null && zone.letter !== "") return zone.letter;
+    return zone.name || zone.id || "";
+  }
+
+  /** One line per scanned SKU. Sheet on-hand and total are previous, not the count. */
+  function buildMasterLines(zones, counts, itemsBySku) {
+    const lines = [];
+    const ordered = [...(zones || [])].sort((a, b) => compareZoneNames(zoneLabel(a), zoneLabel(b)));
+    for (const zone of ordered) {
+      const name = zoneLabel(zone);
+      const buckets = areaBuckets(counts?.[zone.id] || {});
+      for (const [areaId, bucket] of buckets) {
+        const skus = Object.keys(bucket).sort();
+        for (const sku of skus) {
+          const entry = bucket[sku];
+          if (!isSkuEntry(entry)) continue;
+          const item = itemsBySku?.[sku];
+          if (!item) continue;
+          const newQty = Number(entry.new) || 0;
+          const asIsQty = Number(entry.asIs) || 0;
+          if (newQty === 0 && asIsQty === 0) continue;
+          lines.push({
+            zone: name,
+            area: areaId,
+            groupName: item.groupName || "",
+            description: item.description || "",
+            sku: item.sku,
+            newQty,
+            asIsQty,
+            totalPieces: newQty + asIsQty,
+            previousOnHand: item.store ?? "",
+            previousTotal: item.total ?? "",
+          });
+        }
+      }
+    }
+    return lines;
+  }
+
+  const COUNT_HEADERS = [
+    "Zone",
+    "Area",
+    "Group Name",
+    "Description",
+    "SKU",
+    "Condition",
+    "Quantity",
+    "Previous on hand",
+    "Previous total",
+  ];
+
+  const ZONE_HEADERS = [
+    "Zone",
+    "Area count",
+    "New pieces",
+    "AS IS pieces",
+    "Total pieces",
+  ];
+
+  function buildCountSheetRows(lines) {
+    const rows = [];
+    for (const line of lines) {
+      const base = {
+        Zone: line.zone,
+        Area: line.area,
+        "Group Name": line.groupName,
+        Description: line.description,
+        SKU: line.sku,
+        "Previous on hand": line.previousOnHand,
+        "Previous total": line.previousTotal,
+      };
+      if (line.newQty > 0) rows.push({ ...base, Condition: "New", Quantity: String(line.newQty) });
+      if (line.asIsQty > 0) rows.push({ ...base, Condition: "AS IS", Quantity: String(line.asIsQty) });
+    }
+    return rows;
+  }
+
+  function buildZoneSheetRows(lines) {
+    const grouped = new Map();
+    for (const line of lines) {
+      if (!grouped.has(line.zone)) {
+        grouped.set(line.zone, { areas: new Set(), newPieces: 0, asIsPieces: 0 });
+      }
+      const row = grouped.get(line.zone);
+      row.areas.add(line.area);
+      row.newPieces += line.newQty;
+      row.asIsPieces += line.asIsQty;
+    }
+    const rows = [];
+    for (const [zone, row] of grouped) {
+      rows.push({
+        Zone: zone,
+        "Area count": String(row.areas.size),
+        "New pieces": String(row.newPieces),
+        "AS IS pieces": String(row.asIsPieces),
+        "Total pieces": String(row.newPieces + row.asIsPieces),
+      });
+    }
+    return rows;
+  }
+
+  function masterWorkbookCsv(countRows, zoneRows) {
+    const counts = toCsv(COUNT_HEADERS, countRows).replace(/^\uFEFF/, "");
+    const zones = toCsv(ZONE_HEADERS, zoneRows).replace(/^\uFEFF/, "");
+    return `\uFEFF${counts}\r\n${zones}`;
+  }
+
+  function xmlEscape(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (ch) => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[ch]
+    ));
+  }
+
+  function colLetters(index) {
+    let n = index + 1;
+    let letters = "";
+    while (n > 0) {
+      const rem = (n - 1) % 26;
+      letters = String.fromCharCode(65 + rem) + letters;
+      n = Math.floor((n - 1) / 26);
+    }
+    return letters;
+  }
+
+  function worksheetXml(headers, rows) {
+    const grid = [headers, ...rows.map((row) => headers.map((header) => row[header] ?? ""))];
+    const body = grid.map((cells, rowIndex) => {
+      const cols = cells.map((value, colIndex) => {
+        const ref = `${colLetters(colIndex)}${rowIndex + 1}`;
+        const text = String(value ?? "");
+        if (rowIndex > 0 && /^-?\d+$/.test(text)) {
+          return `<c r="${ref}"><v>${text}</v></c>`;
+        }
+        return `<c r="${ref}" t="inlineStr"><is><t>${xmlEscape(text)}</t></is></c>`;
+      }).join("");
+      return `<row r="${rowIndex + 1}">${cols}</row>`;
+    }).join("");
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${body}</sheetData></worksheet>`;
+  }
+
+  function u16(n) {
+    return [n & 255, (n >> 8) & 255];
+  }
+
+  function u32(n) {
+    return [n & 255, (n >> 8) & 255, (n >> 16) & 255, (n >> 24) & 255];
+  }
+
+  function crc32(data) {
+    let c = 0xffffffff;
+    for (let i = 0; i < data.length; i += 1) {
+      c ^= data[i];
+      for (let k = 0; k < 8; k += 1) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+    }
+    return (c ^ 0xffffffff) >>> 0;
+  }
+
+  function concatBytes(chunks) {
+    const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return out;
+  }
+
+  function buildZip(files) {
+    const encoder = new TextEncoder();
+    const localParts = [];
+    const centralParts = [];
+    let offset = 0;
+    for (const file of files) {
+      const name = encoder.encode(file.name);
+      const data = typeof file.data === "string" ? encoder.encode(file.data) : file.data;
+      const crc = crc32(data);
+      const local = new Uint8Array([
+        ...u32(0x04034b50),
+        ...u16(20),
+        ...u16(0),
+        ...u16(0),
+        ...u16(0),
+        ...u16(0),
+        ...u32(crc),
+        ...u32(data.length),
+        ...u32(data.length),
+        ...u16(name.length),
+        ...u16(0),
+      ]);
+      localParts.push(local, name, data);
+      centralParts.push(new Uint8Array([
+        ...u32(0x02014b50),
+        ...u16(20),
+        ...u16(20),
+        ...u16(0),
+        ...u16(0),
+        ...u16(0),
+        ...u16(0),
+        ...u32(crc),
+        ...u32(data.length),
+        ...u32(data.length),
+        ...u16(name.length),
+        ...u16(0),
+        ...u16(0),
+        ...u16(0),
+        ...u16(0),
+        ...u32(0),
+        ...u32(offset),
+      ]), name);
+      offset += local.length + name.length + data.length;
+    }
+    const central = concatBytes(centralParts);
+    const eocd = new Uint8Array([
+      ...u32(0x06054b50),
+      ...u16(0),
+      ...u16(0),
+      ...u16(files.length),
+      ...u16(files.length),
+      ...u32(central.length),
+      ...u32(offset),
+      ...u16(0),
+    ]);
+    return concatBytes([...localParts, central, eocd]);
+  }
+
+  function buildCountWorkbook(countRows, zoneRows) {
+    const sheets = [
+      { name: "Counts", headers: COUNT_HEADERS, rows: countRows },
+      { name: "By zone", headers: ZONE_HEADERS, rows: zoneRows },
+    ];
+    const overrides = sheets.map((sheet, index) => (
+      `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
+    )).join("");
+    const sheetTags = sheets.map((sheet, index) => (
+      `<sheet name="${xmlEscape(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`
+    )).join("");
+    const rels = sheets.map((sheet, index) => (
+      `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`
+    )).join("");
+    const files = [
+      {
+        name: "[Content_Types].xml",
+        data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${overrides}</Types>`,
+      },
+      {
+        name: "_rels/.rels",
+        data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+      },
+      {
+        name: "xl/workbook.xml",
+        data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheetTags}</sheets></workbook>`,
+      },
+      {
+        name: "xl/_rels/workbook.xml.rels",
+        data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`,
+      },
+    ];
+    sheets.forEach((sheet, index) => {
+      files.push({
+        name: `xl/worksheets/sheet${index + 1}.xml`,
+        data: worksheetXml(sheet.headers, sheet.rows),
+      });
+    });
+    return buildZip(files);
+  }
+
   const CSV_HEADERS = [
     "Zone",
     "Area",
@@ -328,5 +611,13 @@
     csvEscape,
     toCsv,
     buildExportRows,
+    compareZoneNames,
+    buildMasterLines,
+    COUNT_HEADERS,
+    ZONE_HEADERS,
+    buildCountSheetRows,
+    buildZoneSheetRows,
+    masterWorkbookCsv,
+    buildCountWorkbook,
   };
 });

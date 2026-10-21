@@ -28,9 +28,17 @@ body {
   line-height: 1.4;
 }
 
-button, input {
+button, input, select {
   font: inherit;
   color: inherit;
+}
+
+select {
+  min-height: var(--tap);
+  padding: 0.4rem 0.7rem;
+  border-radius: 10px;
+  border: 2px solid var(--green);
+  background: var(--card);
 }
 
 button {
@@ -118,6 +126,38 @@ h1 {
   line-height: 0.9;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.03em;
+}
+
+#start-fresh {
+  border-color: #8d1d1d;
+  color: #8d1d1d;
+}
+
+.sheet-url-row input {
+  flex: 1;
+  min-width: 16rem;
+  min-height: var(--tap);
+  padding: 0.45rem 0.7rem;
+  border-radius: 10px;
+  border: 2px solid var(--line);
+  background: var(--card);
+}
+
+.previous {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+tr.zone-head th {
+  background: var(--green);
+  color: var(--green-ink);
+  text-align: left;
+  font-size: 1.15rem;
+}
+
+#master-summary {
+  margin: 0 0 0.6rem;
+  font-weight: 700;
 }
 
 a.text-link {

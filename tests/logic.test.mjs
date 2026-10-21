@@ -180,6 +180,65 @@ test("nested areas export the area id with New and AS IS on separate lines", () 
   assert.equal(logic.areaQty({ floor: { "001": { "001206538": { new: 2, asIs: 1 } } } }, "floor", "001", "001206538").newQty, 2);
 });
 
+test("master quantities come from scans, not previous on hand", () => {
+  const item = {
+    sku: "001206538",
+    groupName: "BHLD",
+    description: 'Sofa 99"',
+    store: "1",
+    total: "4",
+  };
+  const other = {
+    sku: "001200001",
+    groupName: "ACME",
+    description: "Chair",
+    store: "9",
+    total: "9",
+  };
+  const lines = logic.buildMasterLines(
+    [
+      { id: "B", letter: "B" },
+      { id: "A", letter: "A" },
+      { id: "A1", letter: "A1" },
+    ],
+    {
+      A: { "001": { "001206538": { new: 2, asIs: 1 } } },
+      B: { "002": { "001200001": { new: 1, asIs: 0 } } },
+      A1: {},
+    },
+    { "001206538": item, "001200001": other },
+  );
+  assert.deepEqual(lines.map((line) => [line.zone, line.area, line.sku, line.newQty, line.asIsQty, line.totalPieces]), [
+    ["A", "001", "001206538", 2, 1, 3],
+    ["B", "002", "001200001", 1, 0, 1],
+  ]);
+  assert.equal(lines[0].previousOnHand, "1");
+  assert.notEqual(lines[0].totalPieces, Number(lines[0].previousOnHand));
+  const countRows = logic.buildCountSheetRows(lines);
+  assert.deepEqual(countRows.map((row) => [row.Zone, row.Area, row.SKU, row.Condition, row.Quantity]), [
+    ["A", "001", "001206538", "New", "2"],
+    ["A", "001", "001206538", "AS IS", "1"],
+    ["B", "002", "001200001", "New", "1"],
+  ]);
+  const zoneRows = logic.buildZoneSheetRows(lines);
+  assert.deepEqual(zoneRows.map((row) => [row.Zone, row["Area count"], row["New pieces"], row["AS IS pieces"], row["Total pieces"]]), [
+    ["A", "1", "2", "1", "3"],
+    ["B", "1", "1", "0", "1"],
+  ]);
+  const csv = logic.masterWorkbookCsv(countRows, zoneRows);
+  assert.match(csv, /Previous on hand/);
+  assert.match(csv, /Area count/);
+  const bytes = logic.buildCountWorkbook(countRows, zoneRows);
+  assert.equal(bytes[0], 0x50);
+  assert.equal(bytes[1], 0x4b);
+  const text = new TextDecoder().decode(bytes);
+  assert.match(text, /name="Counts"/);
+  assert.match(text, /name="By zone"/);
+  assert.match(text, /001206538/);
+  assert.equal(logic.compareZoneNames("A", "B") < 0, true);
+  assert.equal(logic.compareZoneNames("Z", "A1") < 0, true);
+});
+
 test("embedded catalog rows, sku digits, and leading-X AS IS marks", () => {
   const code = readFileSync(path.join(root, "..", "catalog.js"), "utf8");
   const catalog = vm.runInNewContext(code, {});

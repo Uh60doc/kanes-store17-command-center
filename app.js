@@ -34,6 +34,14 @@
   const addError = document.querySelector("#add-error");
   const catalogStats = document.querySelector("#catalog-stats");
   const zoneSummary = document.querySelector("#zone-summary");
+  const masterView = document.querySelector("#master-view");
+  const masterBody = document.querySelector("#master-body");
+  const masterEmpty = document.querySelector("#master-empty");
+  const masterSummary = document.querySelector("#master-summary");
+  const masterZoneSelect = document.querySelector("#master-zone");
+  const masterTools = document.querySelector("#master-tools");
+  const sheetUrlInput = document.querySelector("#sheet-url");
+  const freshDialog = document.querySelector("#fresh-dialog");
 
   const state = loadState();
   let bySku = new Map();
@@ -41,6 +49,7 @@
   let catalogFilter = "all";
   let view = "count";
   let lastMatch = null;
+  let masterZone = "";
 
   rebuildIndex();
   bind();
@@ -57,6 +66,7 @@
       counts: {},
       added: [],
       asIsArmed: false,
+      sheetUrl: "",
     };
   }
 
@@ -81,6 +91,7 @@
         : null;
       data.added = Array.isArray(data.added) ? data.added : [];
       data.asIsArmed = Boolean(data.asIsArmed);
+      data.sheetUrl = typeof data.sheetUrl === "string" ? data.sheetUrl : "";
       return data;
     } catch {
       return emptyState();
@@ -119,7 +130,35 @@
       focusScan();
     });
 
-    document.querySelector("#export").addEventListener("click", exportCsv);
+    document.querySelector("#export").addEventListener("click", exportWorkbook);
+    document.querySelector("#start-fresh").addEventListener("click", () => {
+      freshDialog.showModal();
+    });
+    document.querySelector("#fresh-cancel").addEventListener("click", () => {
+      freshDialog.close();
+    });
+    document.querySelector("#fresh-confirm").addEventListener("click", () => {
+      freshDialog.close();
+      startFresh();
+    });
+    freshDialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      freshDialog.close();
+    });
+    freshDialog.addEventListener("close", () => {
+      focusScan();
+    });
+    masterZoneSelect.addEventListener("change", () => {
+      masterZone = masterZoneSelect.value;
+      renderMaster();
+      masterZoneSelect.blur();
+      focusScan();
+    });
+    sheetUrlInput.value = state.sheetUrl || "";
+    sheetUrlInput.addEventListener("input", () => {
+      state.sheetUrl = sheetUrlInput.value;
+      save();
+    });
 
     document.querySelectorAll("[data-view]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -193,7 +232,7 @@
     });
 
     document.addEventListener("keydown", (event) => {
-      if (addDialog.open) return;
+      if (dialogOpen()) return;
       const target = event.target;
       if (target && target.closest("[data-keep-focus]")) return;
       if (event.key.length !== 1) return;
@@ -204,7 +243,7 @@
     });
 
     document.addEventListener("pointerup", (event) => {
-      if (addDialog.open) return;
+      if (dialogOpen()) return;
       if (event.target.closest("[data-keep-focus], button, a, select, label")) return;
       focusScan();
     });
@@ -436,26 +475,48 @@
     focusScan();
   }
 
-  function exportCsv() {
-    const itemsBySku = Object.fromEntries(bySku);
-    const rows = L.buildExportRows(state.zones, state.counts, itemsBySku);
-    if (rows.length === 0) {
+  function exportWorkbook() {
+    const lines = L.buildMasterLines(state.zones, state.counts, Object.fromEntries(bySku));
+    if (lines.length === 0) {
       say("Nothing counted yet. Scan a few items, then export.");
       focusScan();
       return;
     }
-    const csv = L.toCsv(L.CSV_HEADERS, rows);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const countRows = L.buildCountSheetRows(lines);
+    const zoneRows = L.buildZoneSheetRows(lines);
+    const bytes = L.buildCountWorkbook(countRows, zoneRows);
+    const blob = new Blob([bytes], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
     const link = document.createElement("a");
-    const stamp = new Date().toISOString().slice(0, 10);
     link.href = URL.createObjectURL(blob);
-    link.download = `inventory-count-${stamp}.csv`;
+    link.download = "fresh-count-master.xlsx";
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(link.href);
-    say(`Exported ${rows.length} count ${rows.length === 1 ? "line" : "lines"}.`);
+    say(`Exported ${countRows.length} count lines and ${zoneRows.length} zones. Saved on this page first.`);
     focusScan();
+  }
+
+  function startFresh() {
+    const added = state.added;
+    const sheetUrl = state.sheetUrl || "";
+    const next = emptyState();
+    next.added = added;
+    next.sheetUrl = sheetUrl;
+    for (const key of Object.keys(state)) delete state[key];
+    Object.assign(state, next);
+    lastMatch = null;
+    masterZone = "";
+    save();
+    say("Fresh count. The product list is still here. Scan a zone barcode.");
+    render();
+    focusScan();
+  }
+
+  function dialogOpen() {
+    return Boolean(document.querySelector("dialog[open]"));
   }
 
   function render() {
@@ -545,8 +606,10 @@
   function renderViews() {
     countView.hidden = view !== "count";
     catalogView.hidden = view !== "catalog";
+    masterView.hidden = view !== "master";
     sortBar.hidden = view !== "count";
     filterBar.hidden = view !== "catalog";
+    masterTools.hidden = view !== "master";
     document.querySelectorAll("[data-view]").forEach((button) => {
       button.setAttribute("aria-pressed", button.getAttribute("data-view") === view ? "true" : "false");
     });
@@ -571,7 +634,91 @@
 
   function renderActiveList() {
     if (view === "count") renderCount();
+    else if (view === "master") renderMaster();
     else renderCatalog();
+  }
+
+  function renderMaster() {
+    const lines = L.buildMasterLines(state.zones, state.counts, Object.fromEntries(bySku))
+      .filter((line) => L.matchesQuery({
+        sku: line.sku,
+        groupName: line.groupName,
+        description: line.description,
+        originalSku: "",
+      }, queryText()));
+    const zones = [];
+    for (const line of lines) {
+      if (!zones.includes(line.zone)) zones.push(line.zone);
+    }
+    if (masterZone && !zones.includes(masterZone)) masterZone = "";
+    masterZoneSelect.replaceChildren();
+    const whole = document.createElement("option");
+    whole.value = "";
+    whole.textContent = "Whole store";
+    masterZoneSelect.appendChild(whole);
+    for (const zone of zones) {
+      const option = document.createElement("option");
+      option.value = zone;
+      option.textContent = `Zone ${zone}`;
+      masterZoneSelect.appendChild(option);
+    }
+    masterZoneSelect.value = masterZone;
+    const shown = masterZone ? lines.filter((line) => line.zone === masterZone) : lines;
+    masterBody.replaceChildren();
+    masterEmpty.hidden = shown.length > 0;
+    masterEmpty.textContent = "Nothing counted yet. Only scans fill the count.";
+    masterView.querySelector("table").hidden = shown.length === 0;
+    const areas = new Set(shown.map((line) => `${line.zone}|${line.area}`));
+    const newPieces = shown.reduce((sum, line) => sum + line.newQty, 0);
+    const asIsPieces = shown.reduce((sum, line) => sum + line.asIsQty, 0);
+    masterSummary.textContent = shown.length
+      ? `${masterZone ? `Zone ${masterZone}` : "Whole store"} · ${areas.size} ${areas.size === 1 ? "area" : "areas"} · ${newPieces} new · ${asIsPieces} AS IS · ${newPieces + asIsPieces} pieces`
+      : "";
+    listNote.textContent = shown.length
+      ? `${shown.length} ${shown.length === 1 ? "SKU" : "SKUs"} from scans`
+      : "";
+    let lastZone = "";
+    for (const line of shown) {
+      if (line.zone !== lastZone) {
+        const head = document.createElement("tr");
+        head.className = "zone-head";
+        head.setAttribute("data-testid", "zone-group");
+        head.innerHTML = `<th colspan="8">Zone ${escapeHtml(line.zone)}</th>`;
+        masterBody.appendChild(head);
+        lastZone = line.zone;
+      }
+      masterBody.appendChild(masterRow(line));
+    }
+  }
+
+  function masterRow(line) {
+    const tr = document.createElement("tr");
+    tr.setAttribute("data-testid", "master-row");
+    tr.setAttribute("data-zone", line.zone);
+    tr.setAttribute("data-area", line.area);
+    tr.setAttribute("data-sku", line.sku);
+    const previous = previousLine({ store: line.previousOnHand, total: line.previousTotal });
+    tr.innerHTML = `
+      <td>${escapeHtml(line.zone)}</td>
+      <td>${escapeHtml(line.area)}</td>
+      <td>${escapeHtml(line.groupName)}</td>
+      <td>
+        <div class="desc">${escapeHtml(line.description)}</div>
+        ${previous ? `<div class="previous">${escapeHtml(previous)}</div>` : ""}
+      </td>
+      <td class="sku">${escapeHtml(line.sku)}</td>
+      <td class="qty" data-testid="new-qty">${line.newQty}</td>
+      <td class="qty" data-testid="asis-qty">${line.asIsQty}</td>
+      <td class="qty" data-testid="total-qty">${line.totalPieces}</td>
+    `;
+    return tr;
+  }
+
+  function previousLine(item) {
+    const bits = [];
+    if (item.store !== "" && item.store != null) bits.push(`Previous on hand ${item.store}`);
+    if (item.total !== "" && item.total != null) bits.push(`Previous total ${item.total}`);
+    return bits.join(" · ");
   }
 
   function queryText() {
@@ -759,11 +906,11 @@
     if (item.finish) bits.push(`Finish ${item.finish}`);
     if (item.dimensions) bits.push(`Dim ${item.dimensions}`);
     if (item.site) bits.push(`Site ${item.site}`);
-    if (item.store) bits.push(`On hand ${item.store}`);
+    const previous = previousLine(item);
+    if (previous) bits.push(previous);
     if (item.locked && item.locked !== "0") bits.push(`Locked ${item.locked}`);
     if (item.reserved && item.reserved !== "0") bits.push(`Reserved ${item.reserved}`);
     if (item.transfers && item.transfers !== "0") bits.push(`Transfers ${item.transfers}`);
-    if (item.total) bits.push(`Total ${item.total}`);
     if (item.dropped) bits.push("Dropped");
     return bits.join(" · ");
   }
@@ -773,7 +920,7 @@
   }
 
   function focusScan() {
-    if (addDialog.open) return;
+    if (dialogOpen()) return;
     const active = document.activeElement;
     if (active && active.closest("[data-keep-focus]") && !addDialog.contains(active)) return;
     // A just-closed dialog can leave this field focused but ignoring keys.
