@@ -1,8 +1,10 @@
-/* Floor inventory scanner. Catalog is embedded; counts stay in localStorage. */
+/* Floor inventory scanner. Catalog embedded; unit events local-first (IndexedDB + localStorage). */
 (function () {
   const L = globalThis.FloorLogic;
+  const E = globalThis.InventoryEvents;
+  const Persist = globalThis.InventoryPersist;
+  const Sync = globalThis.InventorySync;
   const CATALOG = globalThis.FLOOR_CATALOG;
-  const STORAGE_KEY = "floor-inventory-scanner-v3";
   const LIST_CAP = 200;
 
   const scanForm = document.querySelector("#scan-form");
@@ -43,63 +45,76 @@
   const sheetUrlInput = document.querySelector("#sheet-url");
   const freshDialog = document.querySelector("#fresh-dialog");
 
-  const state = loadState();
+  const state = Persist.loadFromLocalStorage();
+  refreshCounts();
   let bySku = new Map();
   let sortMode = "paired";
   let catalogFilter = "all";
   let view = "count";
   let lastMatch = null;
   let masterZone = "";
+  let syncTimer = null;
+
+  globalThis.FloorApp = {
+    getState: () => state,
+    save,
+    refreshCounts,
+    bySku: () => bySku,
+    say,
+    focusScan,
+    render,
+    syncNow,
+  };
 
   rebuildIndex();
   bind();
   render();
   focusScan();
+  scheduleSync();
 
   function emptyState() {
-    return {
-      zones: [],
-      currentZoneId: null,
-      currentAreaId: null,
-      areaOwner: {},
-      areaMeta: {},
-      counts: {},
-      added: [],
-      asIsArmed: false,
-      sheetUrl: "",
-    };
+    return Persist.emptyState();
   }
 
-  function loadState() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return emptyState();
-      const data = JSON.parse(raw);
-      if (!data || typeof data.counts !== "object" || data.counts === null) {
-        return emptyState();
-      }
-      data.zones = Array.isArray(data.zones)
-        ? data.zones.filter((zone) => zone && zone.id && zone.letter)
-        : [];
-      data.currentZoneId = data.zones.some((zone) => zone.id === data.currentZoneId)
-        ? data.currentZoneId
-        : null;
-      data.areaOwner = data.areaOwner && typeof data.areaOwner === "object" ? data.areaOwner : {};
-      data.areaMeta = data.areaMeta && typeof data.areaMeta === "object" ? data.areaMeta : {};
-      data.currentAreaId = data.currentAreaId && data.areaOwner[data.currentAreaId]
-        ? data.currentAreaId
-        : null;
-      data.added = Array.isArray(data.added) ? data.added : [];
-      data.asIsArmed = Boolean(data.asIsArmed);
-      data.sheetUrl = typeof data.sheetUrl === "string" ? data.sheetUrl : "";
-      return data;
-    } catch {
-      return emptyState();
-    }
+  function refreshCounts() {
+    state.counts = E.countsFromEvents(state.events);
   }
 
   function save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    refreshCounts();
+    Persist.saveLocalStorage(state);
+    Persist.save(state).catch(() => {});
+    renderSyncBadge();
+    scheduleSync();
+    if (globalThis.InventoryPanels && globalThis.InventoryPanels.onStateChange) {
+      globalThis.InventoryPanels.onStateChange();
+    }
+  }
+
+  function scheduleSync() {
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      syncNow().catch(() => {});
+    }, 1200);
+  }
+
+  async function syncNow() {
+    const result = await Sync.syncPending(state, {});
+    if (result.events) {
+      state.events = result.events;
+      if (result.ok) state.lastSyncAt = E.nowIso();
+      Persist.saveLocalStorage(state);
+      renderSyncBadge();
+    }
+    return result;
+  }
+
+  function renderSyncBadge() {
+    const el = document.querySelector("#sync-badge");
+    if (!el) return;
+    const summary = Sync.summaryBadges(state.events);
+    el.textContent = summary.label;
+    el.dataset.tone = summary.error ? "bad" : summary.local || summary.syncing ? "local" : "ok";
   }
 
   function rebuildIndex() {
@@ -131,6 +146,21 @@
     });
 
     document.querySelector("#export").addEventListener("click", exportWorkbook);
+    const syncBtn = document.querySelector("#sync-now");
+    if (syncBtn) {
+      syncBtn.addEventListener("click", () => {
+        syncNow().then((r) => {
+          say(r.ok ? `Sync: ${r.reason}` : `Sync needs attention: ${r.reason}`);
+          focusScan();
+        });
+      });
+    }
+    const undoBtn = document.querySelector("#undo-last");
+    if (undoBtn) {
+      undoBtn.addEventListener("click", () => {
+        undoLastScan();
+      });
+    }
     document.querySelector("#start-fresh").addEventListener("click", () => {
       freshDialog.showModal();
     });
@@ -347,14 +377,72 @@
   function bump(areaId, sku, asIs, delta) {
     const zoneId = state.areaOwner[areaId];
     if (!zoneId) return;
-    if (!state.counts[zoneId]) state.counts[zoneId] = {};
-    const areas = state.counts[zoneId];
-    if (!areas[areaId]) areas[areaId] = {};
-    const bucket = areas[areaId];
-    if (!bucket[sku]) bucket[sku] = { new: 0, asIs: 0 };
-    const key = asIs ? "asIs" : "new";
-    bucket[sku][key] = Math.max(0, (Number(bucket[sku][key]) || 0) + delta);
-    if (bucket[sku].new === 0 && bucket[sku].asIs === 0) delete bucket[sku];
+    const condition = asIs ? "asis" : "new";
+    const item = bySku.get(sku);
+    if (delta > 0) {
+      for (let i = 0; i < delta; i += 1) {
+        const event = E.createUnitEvent({
+          sku,
+          zoneId,
+          areaId,
+          condition,
+          source: "scan",
+          syncStatus: "local",
+          clientId: state.clientId,
+          description: item ? item.description : "",
+          groupName: item ? item.groupName : "",
+        });
+        const up = E.upsertEvent(state.events, event);
+        state.events = up.events;
+      }
+      Persist.bumpAreaRevision(state, zoneId, areaId);
+      Persist.appendAudit(state, {
+        action: "scan",
+        detail: `+${delta} ${sku} ${condition} ${zoneId}/${areaId}`,
+      });
+    } else if (delta < 0) {
+      let need = Math.abs(delta);
+      const candidates = state.events
+        .filter((e) => e.status !== "void"
+          && e.sku === sku
+          && e.areaId === areaId
+          && e.zoneId === zoneId
+          && e.condition === condition)
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+      for (const cand of candidates) {
+        if (need <= 0) break;
+        const result = E.voidEvent(state.events, cand.eventId, "qty_adjust");
+        state.events = result.events;
+        need -= 1;
+      }
+      Persist.bumpAreaRevision(state, zoneId, areaId);
+      Persist.appendAudit(state, {
+        action: "correct",
+        detail: `${delta} ${sku} ${condition} ${zoneId}/${areaId}`,
+      });
+    }
+    refreshCounts();
+  }
+
+  function undoLastScan() {
+    const active = E.activeEvents(state.events)
+      .filter((e) => e.source === "scan")
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    if (!active.length) {
+      say("Nothing to undo.");
+      focusScan();
+      return;
+    }
+    const last = active[0];
+    const result = E.voidEvent(state.events, last.eventId, "undo_last");
+    state.events = result.events;
+    Persist.bumpAreaRevision(state, last.zoneId, last.areaId);
+    Persist.appendAudit(state, { action: "undo", detail: last.eventId });
+    save();
+    say(`Undid last scan of SKU ${last.sku} in ${last.zoneId}/${last.areaId}.`);
+    lastMatch = null;
+    render();
+    focusScan();
   }
 
   function adjust(sku, asIs, delta) {
@@ -502,9 +590,18 @@
   function startFresh() {
     const added = state.added;
     const sheetUrl = state.sheetUrl || "";
+    const syncEndpoint = state.syncEndpoint || "";
+    const syncToken = state.syncToken || "";
+    const expected = state.expected;
+    const clientId = state.clientId;
     const next = emptyState();
     next.added = added;
     next.sheetUrl = sheetUrl;
+    next.syncEndpoint = syncEndpoint;
+    next.syncToken = syncToken;
+    next.expected = expected;
+    next.clientId = clientId;
+    next.migratedFromLegacy = true;
     for (const key of Object.keys(state)) delete state[key];
     Object.assign(state, next);
     lastMatch = null;
@@ -527,6 +624,7 @@
     renderSort();
     renderFilters();
     renderStats();
+    renderSyncBadge();
     renderActiveList();
   }
 

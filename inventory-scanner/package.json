@@ -1,0 +1,10 @@
+{
+  "name": "store17-inventory-scanner",
+  "private": true,
+  "version": "0.2.0",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test tests/logic.test.mjs tests/inventory-core.test.mjs",
+    "serve": "python3 -m http.server 8765"
+  }
+}

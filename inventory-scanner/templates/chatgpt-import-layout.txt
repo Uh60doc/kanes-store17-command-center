@@ -1,0 +1,25 @@
+ChatGPT → CSV layout for Store 17 inventory imports
+=====================================================
+
+After photographing a handwritten area sheet, ask ChatGPT for a CSV (not a database edit).
+
+A) Identified items (staff handwritten counts)
+Columns (exact headers):
+sku,description,zone,area,quantity,source,source_reference,notes
+
+Rules:
+- sku is TEXT (keep leading zeros, e.g. 000123456)
+- zone is a letter or letter+digits (A, B, A1)
+- area is the normalized area id (001) OR a printed tag like 0001-8 (the app will decode)
+- quantity is a nonnegative whole number; quantity 5 becomes FIVE identified units and FIVE print barcodes
+- description optional; zone/area/sku/quantity required
+- Do NOT invent SKUs that were not on the sheet
+
+B) Company expected inventory snapshot
+Columns (exact headers):
+sku,description,expected_qty
+
+Also tell the importer the snapshot date and source document name.
+This file is NEVER counted as physical observations.
+
+Import in the app: Imports → choose type → Upload → Preview → Validate → Confirm.

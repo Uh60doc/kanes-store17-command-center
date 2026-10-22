@@ -459,3 +459,42 @@ dialog::backdrop { background: rgba(28, 25, 21, 0.45); }
   .banner { align-items: stretch; flex-direction: column; }
   table { font-size: 1rem; }
 }
+
+.sync-badge {
+  display: inline-block;
+  margin: 0.35rem 0 0;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: #fff3cd;
+  color: var(--ink);
+}
+.sync-badge[data-tone="ok"] { background: #d8f0d8; }
+.sync-badge[data-tone="local"] { background: #fff3cd; }
+.sync-badge[data-tone="bad"] { background: #f8d7da; color: #7a1f24; }
+
+.main-nav { margin: 0.35rem 0 0.5rem; }
+
+.validation {
+  white-space: pre-wrap;
+  background: #f4f6f5;
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.go-nogo {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+
+@media print {
+  .top, .main-nav, .tools, #panel-scanner, #panel-zones, #panel-imports, #panel-setup {
+    display: none !important;
+  }
+  #panel-report:not([hidden]) { display: block !important; }
+}
