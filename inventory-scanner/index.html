@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Store 17 Annual Inventory</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%231b4634' width='32' height='32' rx='6'/%3E%3Cpath fill='%23ffd84a' d='M8 22V10h3l5 8 5-8h3v12h-3v-7l-4 6h-2l-4-6v7z'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="top">
+      <div class="wrap">
+        <header class="header">
+          <div>
+            <p class="eyebrow">Kane's Store 17</p>
+            <h1>Annual Inventory</h1>
+            <p class="sub">Pre-inventory identified counts. Catalog on device. Google Sheet is the master list after sync.</p>
+            <p id="sync-badge" class="sync-badge" data-tone="local">Saved locally</p>
+          </div>
+          <div class="zone-block">
+            <div class="zone-pair">
+              <div>
+                <p class="zone-label">Current zone</p>
+                <p id="current-zone" data-testid="current-zone">—</p>
+              </div>
+              <div>
+                <p class="zone-label">Current area</p>
+                <p id="current-area" data-testid="current-area">—</p>
+              </div>
+            </div>
+            <p id="area-raw" data-testid="area-raw"></p>
+            <p id="zone-summary"></p>
+          </div>
+        </header>
+        <div id="asis-banner" class="banner" data-testid="asis-banner" hidden>
+          <strong>Next scan is AS IS</strong>
+          <button type="button" id="cancel-asis">Cancel</button>
+        </div>
+        <div class="scan-panel">
+          <form id="scan-form">
+            <label class="scan-label" for="scan">Scan zone, area tag, or SKU</label>
+            <div class="scan-row">
+              <input
+                id="scan"
+                data-testid="scan-input"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="characters"
+                spellcheck="false"
+                placeholder="Zone, area tag, or SKU"
+              />
+              <button type="submit">Count</button>
+            </div>
+          </form>
+          <p class="hint">Scan the zone barcode, then the area tag, then the pieces. The cursor stays in this box.</p>
+          <p id="live" class="sr-only" role="status"></p>
+        </div>
+        <nav class="views main-nav" role="group" aria-label="App">
+          <button type="button" data-nav="scanner" aria-pressed="true">Scanner</button>
+          <button type="button" data-nav="zones" aria-pressed="false">Zones &amp; Areas</button>
+          <button type="button" data-nav="report" aria-pressed="false">Executive Report</button>
+          <button type="button" data-nav="imports" aria-pressed="false">Imports</button>
+          <button type="button" data-nav="setup" aria-pressed="false">Setup / Audit</button>
+        </nav>
+        <div class="tools" id="scanner-tools">
+        <div class="views" role="group" aria-label="List">
+          <button type="button" data-view="count" aria-pressed="true">This area</button>
+          <button type="button" data-view="master" aria-pressed="false">Zone master</button>
+          <button type="button" data-view="catalog" aria-pressed="false">Catalog</button>
+        </div>
+        <button type="button" id="undo-last">Undo last scan</button>
+        <button type="button" id="sync-now">Sync now</button>
+        <button type="button" id="export">Export workbook</button>
+        <button type="button" id="start-fresh">Start fresh count</button>
+        <a class="text-link" href="zone-barcodes-a-z.html">Print zones A–Z</a>
+        <a class="text-link" href="zone-barcodes-a1-z1.html">Print zones A1–Z1</a>
+      </div>
+      <div class="tools">
+        <label class="sr-only" for="search">Search SKU, description, or group</label>
+        <input id="search" data-keep-focus placeholder="Search SKU, description, or group" autocomplete="off" />
+      </div>
+      <div id="sort-bar" class="sort" role="group" aria-label="Sort count">
+        <button type="button" data-sort="paired" aria-pressed="true">Paired under SKU</button>
+        <button type="button" data-sort="new-first" aria-pressed="false">New first</button>
+        <button type="button" data-sort="asis-first" aria-pressed="false">AS IS first</button>
+      </div>
+      <div id="master-tools" class="filters" hidden>
+        <label for="master-zone">Show</label>
+        <select id="master-zone" data-keep-focus></select>
+      </div>
+      <div class="tools sheet-url-row">
+        <label for="sheet-url">Google Sheet URL</label>
+        <input id="sheet-url" data-keep-focus placeholder="Paste a link later. Scans stay on this page." autocomplete="off" />
+      </div>
+      <div id="filter-bar" class="filters" role="group" aria-label="Catalog filter" hidden>
+        <button type="button" data-filter="area">Counted in this area</button>
+        <button type="button" data-filter="any">Counted in any area</button>
+        <button type="button" data-filter="none">Not yet counted</button>
+        <button type="button" data-filter="all" aria-pressed="true">All items</button>
+      </div>
+      <p id="list-note"></p>
+      <p id="catalog-stats"></p>
+      </div>
+    </div>
+
+    <main class="wrap panel" id="panel-scanner">
+      <section id="match" data-testid="match-card" hidden></section>
+      <section id="count-view">
+        <p id="count-empty" class="empty" hidden></p>
+        <p id="other-areas" data-testid="other-areas"></p>
+        <table>
+          <thead>
+            <tr>
+              <th>Zone</th>
+              <th>Area</th>
+              <th>Group</th>
+              <th>Description</th>
+              <th>SKU</th>
+              <th>New / AS IS</th>
+              <th>Qty</th>
+            </tr>
+          </thead>
+          <tbody id="count-body"></tbody>
+        </table>
+      </section>
+
+      <section id="master-view" hidden>
+        <p id="master-summary" data-testid="master-summary"></p>
+        <p id="master-empty" class="empty" hidden></p>
+        <table>
+          <thead>
+            <tr>
+              <th>Zone</th>
+              <th>Area</th>
+              <th>Group</th>
+              <th>Description</th>
+              <th>SKU</th>
+              <th>New</th>
+              <th>AS IS</th>
+              <th>Total pieces</th>
+            </tr>
+          </thead>
+          <tbody id="master-body"></tbody>
+        </table>
+      </section>
+
+      <section id="catalog-view" hidden>
+        <p id="catalog-empty" class="empty" hidden></p>
+        <table>
+          <thead>
+            <tr>
+              <th>Group</th>
+              <th>Description</th>
+              <th>SKU</th>
+              <th>Sheet</th>
+              <th>Counted</th>
+            </tr>
+          </thead>
+          <tbody id="catalog-body"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <section class="wrap panel" id="panel-zones" hidden>
+      <h2>Zones &amp; Areas</h2>
+      <p>Progress, area status, and third-party Code 128 count sheets (one barcode per identified unit).</p>
+      <div class="tools">
+        <label>Zone <select id="print-zone" data-keep-focus></select></label>
+        <label>Area <select id="print-area" data-keep-focus></select></label>
+        <button type="button" id="print-area-sheet">Preview / Print sheet</button>
+      </div>
+      <div id="print-preview" class="empty"></div>
+      <h3>Area progress</h3>
+      <div class="tools">
+        <label>Zone <select id="status-zone" data-keep-focus></select></label>
+        <label>Area <select id="status-area" data-keep-focus></select></label>
+        <button type="button" data-area-status-action="in_progress">In Progress</button>
+        <button type="button" data-area-status-action="ready_for_review">Ready for Review</button>
+        <button type="button" data-area-status-action="complete">Complete</button>
+        <button type="button" data-area-status-action="not_started">Reopen</button>
+      </div>
+      <table>
+        <thead><tr><th>Zone</th><th>Area</th><th>Status</th><th>Rev</th><th>Units</th><th>Updated</th></tr></thead>
+        <tbody id="zone-progress-body"></tbody>
+      </table>
+      <div id="go-nogo" class="go-nogo"></div>
+    </section>
+
+    <section class="wrap panel report-print" id="panel-report" hidden>
+      <h2>Executive Report</h2>
+      <p id="report-notice"></p>
+      <p id="report-meta"></p>
+      <div class="views" role="group" aria-label="Report view">
+        <button type="button" data-report-view="full" aria-pressed="true">Full Inventory</button>
+        <button type="button" data-report-view="shortages" aria-pressed="false">Shortages Only</button>
+        <button type="button" data-report-view="overages" aria-pressed="false">Overages Only</button>
+        <button type="button" data-report-view="discrepancies" aria-pressed="false">All Discrepancies</button>
+      </div>
+      <div class="tools">
+        <input id="report-search" data-keep-focus placeholder="Filter SKU / description / location" />
+        <button type="button" id="print-report">Print This Report</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>SKU</th><th>Description</th><th>Expected</th><th>Identified</th><th>Variance</th><th>Found locations</th>
+          </tr>
+        </thead>
+        <tbody id="report-body"></tbody>
+      </table>
+    </section>
+
+    <section class="wrap panel" id="panel-imports" hidden>
+      <h2>Imports</h2>
+      <div class="views">
+        <button type="button" data-import-type="identified" aria-pressed="true">Handwritten / identified CSV</button>
+        <button type="button" data-import-type="expected">Company expected CSV</button>
+      </div>
+      <div id="import-identified-panel">
+        <p>Template: <a href="templates/identified-import-template.csv">identified-import-template.csv</a></p>
+        <input type="file" id="import-identified-file" accept=".csv,text/csv" data-keep-focus />
+        <pre id="identified-validation" class="validation"></pre>
+        <button type="button" id="confirm-identified">Confirm import</button>
+        <p id="identified-receipt"></p>
+      </div>
+      <div id="import-expected-panel" hidden>
+        <p>Template: <a href="templates/expected-import-template.csv">expected-import-template.csv</a></p>
+        <label>Snapshot date <input id="expected-date" type="date" data-keep-focus /></label>
+        <label>Source <input id="expected-source" data-keep-focus placeholder="company report name" /></label>
+        <input type="file" id="import-expected-file" accept=".csv,text/csv" data-keep-focus />
+        <pre id="expected-validation" class="validation"></pre>
+        <button type="button" id="confirm-expected">Confirm expected import</button>
+        <p id="expected-receipt"></p>
+      </div>
+    </section>
+
+    <section class="wrap panel" id="panel-setup" hidden>
+      <h2>Setup / Audit</h2>
+      <p>Apps Script web-app URL and sync token (Script Property <code>SYNC_TOKEN</code>). Secrets stay local; never commit tokens.</p>
+      <label>Sync endpoint <input id="sync-endpoint" data-keep-focus placeholder="https://script.google.com/macros/s/.../exec" style="width:100%" /></label>
+      <label>Sync token <input id="sync-token" data-keep-focus type="password" style="width:100%" /></label>
+      <button type="button" id="save-sync-settings">Save sync settings</button>
+      <button type="button" id="export-recovery">Export recovery JSON</button>
+      <p id="sync-health"></p>
+      <p>Sheet: STORE 17 INVENTORY · deploy <code>inventory-scanner/gas/</code> with clasp after login.</p>
+    </section>
+
+    <dialog id="fresh-dialog">
+      <form id="fresh-form" data-keep-focus>
+        <h2>Start fresh count</h2>
+        <p>This clears every zone, area, and quantity. The product list stays. Previous on-hand numbers are not the count.</p>
+        <div class="add-actions">
+          <button type="button" id="fresh-confirm">Clear the count</button>
+          <button type="button" id="fresh-cancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="add-dialog">
+      <form id="add-form" data-keep-focus>
+        <h2>SKU not on the list</h2>
+        <p>Add it and count it in <strong id="add-zone"></strong>.</p>
+        <p id="add-asis-note" hidden>Next scan is AS IS. This piece will count as AS IS.</p>
+        <label>Group Name
+          <input id="add-group" data-keep-focus autocomplete="off" />
+        </label>
+        <label>Description
+          <input id="add-description" data-keep-focus autocomplete="off" />
+        </label>
+        <label>SKU
+          <input id="add-sku" data-keep-focus inputmode="numeric" autocomplete="off" />
+        </label>
+        <p id="add-error" class="add-error"></p>
+        <div class="add-actions">
+          <button type="submit" id="add-save">Add and count</button>
+          <button type="button" id="add-cancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="catalog.js"></script>
+    <script src="logic.js"></script>
+    <script src="core/events.js"></script>
+    <script src="core/persist.js"></script>
+    <script src="core/sync.js"></script>
+    <script src="core/report.js"></script>
+    <script src="core/print-area.js"></script>
+    <script src="core/import-csv.js"></script>
+    <script src="app.js"></script>
+    <script src="panels.js"></script>
+  </body>
+</html>
