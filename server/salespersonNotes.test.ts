@@ -118,3 +118,13 @@ test('every salesperson card says last updated and drops the file notes', () => 
   assert.equal(ricky.includes('wait on PERQ'), false);
   assert.equal(ricky.includes('day files'), false);
 });
+
+test('store pages do not print system bookkeeping under the numbers', () => {
+  ['reconciliation only', 'not counted as zero', 'CC_ClosingDaily', 'Individual cards use each person',
+    'Official bedding minimum', 'Not divided by store sales', 'Written amounts are not guessed',
+    'Confirmed in CC_Staffing', 'A cumulative snapshot is not counted'].forEach((phrase) => {
+    assert.equal(html.includes(phrase), false, phrase);
+  });
+  assert.equal(html.includes('function updatedOn(iso)'), true);
+  assert.equal(html.includes('Last updated '), true);
+});
