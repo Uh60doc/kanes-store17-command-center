@@ -393,8 +393,12 @@ test('a $0 delivered day does not expect an individual Data Analysis report', ()
   const zero = plain(gs.uploads_({ date: '2026-10-14', session: manager }));
   const item = zero.checklist.find((row: any) => row.key === 'g17Delivered');
   assert.equal(item.status, 'Not expected');
-  assert.match(item.message, /October 14, 2026\. Delivered was \$0, so there is no individual Data Analysis report/);
+  assert.equal(item.message, 'October 14, 2026. Delivered $0.');
+  const asl = zero.checklist.find((row: any) => row.key === 'aslDelivered');
+  assert.equal(asl.status, 'Not expected');
+  assert.equal(asl.message, 'October 14, 2026. Delivered $0.');
   assert.equal(zero.recent.find((day: any) => day.date === '2026-10-14').missing.includes('Group 17 Delivered'), false);
+  assert.equal(zero.recent.find((day: any) => day.date === '2026-10-14').missing.includes('ASL Delivered'), false);
   assert.equal(send('2026-10-15', 'nwd15.pdf', nwdsrPdf('delivered', '2026-10-15', '2026-10-15', 10)).status, 'Imported');
   const sold = plain(gs.uploads_({ date: '2026-10-15', session: manager }));
   assert.equal(sold.checklist.find((row: any) => row.key === 'g17Delivered').status, 'Missing');

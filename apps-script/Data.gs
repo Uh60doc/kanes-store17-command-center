@@ -526,8 +526,7 @@ function personAnalysisSide_(ledger, name, coverage) {
   return {
     through: coverage.through,
     basis: (coverage.snapshot ? 'Group 17 salesperson report ' + coverage.period.start + ' through ' + coverage.snapshot : '') +
-      (coverage.days.length ? (coverage.snapshot ? ' plus the ' : 'Group 17 ') + 'day files ' + coverage.days.join(', ') : '') +
-      (coverage.zeroDays && coverage.zeroDays.length ? '. Store ' + coverage.side + ' was $0 on ' + coverage.zeroDays.join(', ') + ', so there is no salesperson file and those days are included as $0' : ''),
+      (coverage.days.length ? (coverage.snapshot ? ' plus the ' : 'Group 17 ') + 'day files ' + coverage.days.join(', ') : ''),
     sales: round2(sales),
     orders: orders,
     beddingDollars: round2(bedding),

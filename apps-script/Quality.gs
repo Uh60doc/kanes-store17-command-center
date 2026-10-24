@@ -1013,6 +1013,7 @@ function resolutionFor_(ctx, alert, checks) {
     var parts = alert.alert_key.split('|');
     var date = parts[1];
     var item = packageItem_(ctx, date, parts[2]);
+    if (item.status === 'Not expected') return { status: 'Resolved', text: item.label + ' for ' + date + ' is $0. A $0 delivered day is $0, not a missing report.' };
     if (item.status === 'Imported' || item.status === 'Covered') return { status: 'Resolved', text: item.label + ' for ' + date + ' arrived and passed validation' + (item.detail ? ' (' + item.detail.replace(/\.$/, '') + ')' : '') + '.' };
     if (item.status === 'Awaiting') return { status: 'Withdrawn', text: 'Raised before the report was due. ' + item.label + ' for ' + date + ' is due by ' + ctx.dueHour + ':00 on ' + shiftDate_(date, 1) + ' and is raised again then if it has not arrived.' };
     if (ctx.closed[date]) return { status: 'Resolved', text: date + ' is a closed day on CC_SellingDays, so no report is required.' };

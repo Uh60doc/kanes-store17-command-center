@@ -67,8 +67,8 @@ function readinessItem_(ctx, date, key, archive) {
   var notExpected = packed.status === 'Not expected';
   var onFile = packed.status === 'Imported' || packed.status === 'Covered' || packed.status === 'Needs Review' || notExpected;
   var failed = packed.status === 'Failed' || packed.status === 'Needs Review';
-  var received = notExpected ? 'Not expected' : (onFile ? 'Received' : (packed.status === 'Awaiting' ? 'Not due' : 'Missing'));
-  var imported = notExpected ? 'Not expected' : (onFile && !failed ? 'Imported' : (failed ? 'Failed' : 'Pending'));
+  var received = notExpected ? '$0' : (onFile ? 'Received' : (packed.status === 'Awaiting' ? 'Not due' : 'Missing'));
+  var imported = notExpected ? '$0' : (onFile && !failed ? 'Imported' : (failed ? 'Failed' : 'Pending'));
   var through = onFile ? date : (readinessCover_(ctx, key, date) || '');
   var source = readinessSource_(attempt, archive);
   if (!source.file && checklist.lastFile) source.file = checklist.lastFile;
@@ -90,7 +90,7 @@ function readinessItem_(ctx, date, key, archive) {
 function readinessStatus_(items, due) {
   if (!items.length) return 'READY';
   if (items.some(function (item) { return item.failed; })) return 'ERROR';
-  var received = items.filter(function (item) { return item.received === 'Received'; }).length;
+  var received = items.filter(function (item) { return item.received === 'Received' || item.received === '$0'; }).length;
   if (received === items.length) return 'READY';
   if (!due && received === 0) return 'NOT DUE';
   if (received === 0) return 'MISSING';
@@ -100,7 +100,7 @@ function readinessStatus_(items, due) {
 function readinessWaiting_(items) {
   var lines = [];
   items.forEach(function (item) {
-    if (item.received === 'Received') return;
+    if (item.received === 'Received' || item.received === '$0') return;
     var names = [];
     (REPORT_METRICS_[item.key] || []).forEach(function (metric) {
       var definition = typeof metricDefinition_ === 'function' ? metricDefinition_(metric) : null;

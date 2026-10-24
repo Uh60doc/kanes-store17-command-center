@@ -89,7 +89,7 @@ test('a verified $0 store day is not a hole, and a missing day with no verified 
   assert.equal(context.written.through, '2026-10-16');
   const ricky = gs.personAnalysis_(context, 'Ricky Nassif').written;
   assert.equal(ricky.sales, 20180.84);
-  assert.match(ricky.basis, /Store written was \$0 on 2026-10-15/);
+  assert.equal(ricky.basis.includes('was $0'), false);
 });
 
 test('the salesperson record uses SNAP for written and the goal, Data Analysis for the rest, and has no NWDSR fields', () => {
