@@ -2072,6 +2072,8 @@ function bedding_(payload) {
       baseUnits: null,
       baseDollars: null,
       basePercent: null,
+      writtenThrough: written ? written.through : '',
+      deliveredThrough: delivered ? delivered.through : '',
     };
   });
   return {

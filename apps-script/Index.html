@@ -818,17 +818,6 @@
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
       });
     }
-    var salesStandard = 'Store written is NWDSR Net Written. Store delivered is NWDSR Delivered. SNAP Written is a separate reconciliation figure: it can legitimately differ from NWDSR, both are kept, and the variance is shown. Salesperson written sales and goal progress use SNAP Written by salesperson.';
-    function standardText(data) { return esc(data && data.standard ? data.standard : salesStandard); }
-    function snapReconcile(snapValue, variance) {
-      if (snapValue === null || snapValue === undefined) return 'SNAP Written reconciliation Pending.';
-      var gap = variance === null || variance === undefined ? 'Pending' : (Number(variance) > 0 ? '+' : '') + money(variance);
-      return 'SNAP Written ' + money(snapValue) + ', variance ' + gap + ' vs NWDSR (reconciliation only).';
-    }
-    function writtenBalanceNote(block, snapValue, variance) {
-      if (!block) return snapReconcile(snapValue, variance);
-      return 'SNAP Written ' + (block.snap || block.current || 'Pending') + '. NWDSR minus SNAP ' + (block.variance || 'Pending') + '. SNAP Written LAST YEAR ' + (block.ly || 'Pending') + '. NWDSR Written LAST YEAR ' + (block.nwdsrLy || 'Pending') + '.';
-    }
     function signedGap(nwdsr, snap) {
       if (nwdsr === null || nwdsr === undefined || nwdsr === '' || snap === null || snap === undefined || snap === '') return 'Pending';
       var gap = Number(nwdsr) - Number(snap);
@@ -1042,6 +1031,24 @@
       if (!month || !day) return String(iso).slice(0, 10);
       return month + ' ' + day;
     }
+    function dateLabel(iso) {
+      var text = longDate(iso);
+      return text ? text + ', ' + String(iso).slice(0, 4) : '';
+    }
+    function updatedOn(iso) {
+      var text = dateLabel(iso);
+      return text ? 'Last updated ' + text + '.' : 'Last updated Pending.';
+    }
+    function withUpdate(iso, extra) {
+      var line = updatedOn(iso);
+      extra = String(extra || '').replace(/\s+/g, ' ').trim();
+      return extra ? line + ' ' + extra : line;
+    }
+    function snapWaiting(dates) {
+      var list = (dates || []).filter(Boolean).map(dateLabel).filter(Boolean);
+      if (!list.length) return '';
+      return list.join(', ') + (list.length === 1 ? ' is' : ' are') + ' still waiting on SNAP.';
+    }
     function shortDate(iso) {
       if (!iso || String(iso).length < 10) return '';
       var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -1058,25 +1065,22 @@
       return '#' + place;
     }
     function perqActivity(person) {
-      if (person.source === 'staffing') return 'Confirmed in CC_Staffing';
-      if (pendingFigure(person.opportunities)) return 'Individual PERQ: opportunities conflict between exports';
-      return 'Individual PERQ: ' + person.opportunities + (Number(person.opportunities) === 1 ? ' opportunity' : ' opportunities');
+      if (pendingFigure(person.opportunities)) return '';
+      return person.opportunities + (Number(person.opportunities) === 1 ? ' opportunity' : ' opportunities');
     }
     function winnerCardsHtml(winners) {
       winners = winners || { status: 'pending', reason: 'PERQ Report Pending', people: [] };
       var day = shortDate(winners.date) || 'yesterday';
-      if (winners.status !== 'ready') {
-        return '<article class="card"><h2>Sales winners · ' + esc(day) + '</h2><p class="figure pending">Pending</p><p class="sub">' + esc((winners.reason || 'PERQ Report Pending') + '. ' + (winners.detail || 'The individual PERQ salesperson report is not on file. Nobody is marked as having worked.')) + '</p></article>';
+      if (winners.status !== 'ready' || !winners.snapReported) {
+        return '<article class="card"><h2>Sales winners · ' + esc(day) + '</h2><p class="figure pending">Pending</p><p class="sub">Last updated Pending.</p></article>';
       }
-      if (!winners.people.length) return '<p class="sub">' + esc(winners.reason) + '</p>';
-      if (!winners.snapReported) {
-        return '<article class="card"><h2>Sales winners · ' + esc(day) + '</h2><p class="figure pending">Pending</p><p class="sub">' + esc(winners.reason || ('SNAP Written by salesperson for ' + (winners.date || day) + ' is not on file.')) + ' Written amounts are not guessed, and $0 is not used.</p></article>';
-      }
+      if (!winners.people.length) return '<p class="sub">Last updated ' + esc(dateLabel(winners.date) || 'Pending') + '.</p>';
       var places = winners.places || [];
       var cards = places.map(function (person) {
-        return '<article class="card"><h2>' + esc(placeWord(person.place) + ' · ' + person.name) + '</h2><p class="figure good">' + money(person.written) + '</p><p class="sub">' + esc(perqActivity(person) + ' · SNAP Written') + '</p></article>';
+        var activity = perqActivity(person);
+        return '<article class="card"><h2>' + esc(placeWord(person.place) + ' · ' + person.name) + '</h2><p class="figure good">' + money(person.written) + '</p><p class="sub">' + withUpdate(winners.date, activity ? activity + '.' : '') + '</p></article>';
       }).join('');
-      if (!places.length) cards = '<article class="card"><h2>Top salesperson · ' + esc(day) + '</h2><p class="figure">None</p><p class="sub">Nobody on the working roster wrote on the complete SNAP report.</p></article>';
+      if (!places.length) cards = '<article class="card"><h2>Top salesperson · ' + esc(day) + '</h2><p class="figure">None</p><p class="sub">' + updatedOn(winners.date) + '</p></article>';
       var quiet = winners.noWritten || [];
       cards += '<article class="card"><h2>Worked, no written sales</h2><p class="figure">' + (quiet.length ? esc(String(quiet.length)) : 'None') + '</p><p class="sub">' + esc(quiet.length ? quiet.map(function (person) { return person.name; }).join(', ') : 'Every associate on the working roster wrote on the complete SNAP report.') + '</p></article>';
       var also = winners.alsoWrote || [];
@@ -1090,25 +1094,18 @@
       var opportunities = yesterday.opportunities;
       var ratio = yesterday.closingRatio;
       if (opportunities === 0 || opportunities === '0') {
-        return '<article class="card"><h2>Store closing · ' + esc(day) + '</h2><p class="figure pending">Pending</p><p class="sub">PERQ Store opportunities for ' + esc(yesterday.date) + ' are 0, so the ratio is not calculated.</p></article>';
+        return '<article class="card"><h2>Store closing · ' + esc(day) + '</h2><p class="figure pending">Pending</p><p class="sub">' + withUpdate(yesterday.date, 'No opportunities.') + '</p></article>';
       }
-      var customersMissing = pendingFigure(customers);
-      var perqMissing = pendingFigure(opportunities);
-      if (customersMissing || perqMissing || pendingFigure(ratio)) {
-        var missing = [];
-        if (customersMissing) missing.push('NWDSR Written purchasing customers');
-        if (perqMissing) missing.push('PERQ Store opportunities');
-        if (!missing.length) missing.push('Store closing');
-        return '<article class="card"><h2>Store closing · ' + esc(day) + '</h2><p class="figure pending">Pending</p><p class="sub">Missing ' + esc(missing.join(' and ')) + ' for ' + esc(yesterday.date) + '. Store closing is NWDSR Written purchasing customers ÷ PERQ Store opportunities, and it is not estimated.</p></article>';
+      if (pendingFigure(customers) || pendingFigure(opportunities) || pendingFigure(ratio)) {
+        return '<article class="card"><h2>Store closing · ' + esc(day) + '</h2><p class="figure pending">Pending</p><p class="sub">Last updated Pending.</p></article>';
       }
-      return '<article class="card"><h2>Store closing · ' + esc(day) + '</h2><p class="figure">' + percent(ratio) + '</p><p class="sub">' + esc(customers + ' NWDSR Written purchasing customers ÷ ' + opportunities + ' PERQ Store opportunities') + '</p></article>';
+      return '<article class="card"><h2>Store closing · ' + esc(day) + '</h2><p class="figure">' + percent(ratio) + '</p><p class="sub">' + updatedOn(yesterday.date) + '</p></article>';
     }
     function winnersSectionHtml(winners, yesterdayDate, notes, yesterday) {
       winners = winners || { status: 'pending', reason: 'PERQ Report Pending', people: [] };
       var day = shortDate(winners.date) || 'yesterday';
       var title = winners.date && yesterdayDate && winners.date !== yesterdayDate ? 'Sales winners · ' + day : 'Yesterday\'s sales winners';
-      var intro = '<p class="sub">Business date ' + esc(winners.date || '') + '. Who worked is the individual PERQ salesperson report, excluding management and former employees. Places are SNAP Written for that same date. A SNAP adjustment alone does not put someone on the floor.' +
-        (winners.status === 'ready' && winners.people.length && !winners.snapReported ? ' ' + esc(winners.reason) : '') + '</p>';
+      var intro = '<p class="sub">' + updatedOn(winners.date) + '</p>';
       var picker = '<div class="summary-actions noprint" style="align-items:center;margin:8px 0 12px"><input id="winners-day" type="date" aria-label="Business day" max="' + esc(yesterdayDate || '') + '" value="' + esc(winners.date || '') + '" style="max-width:220px" />' +
         '<button type="button" id="winners-show" class="secondary">Show this business day</button><span id="winners-error" class="error"></span></div>';
       var closing = yesterday && (!winners.date || winners.date === yesterday.date) ? yesterdayClosingCard(yesterday) : '';
@@ -1212,30 +1209,25 @@
         return countGap(actual, row.goal);
       }
       function performanceCard(title, actual, perf) {
-        if (actual === null || actual === undefined) return boardCard(title, 'Data Pending', 'Report missing. Not counted as zero.', 'pending');
-        if (!perf || perf.result === null || perf.result === undefined) return boardCard(title, 'Data Pending', 'Saved goal is not on file.', 'pending');
+        if (actual === null || actual === undefined) return boardCard(title, 'Data Pending', 'Last updated Pending.', 'pending');
+        if (!perf || perf.result === null || perf.result === undefined) return boardCard(title, 'Data Pending', 'Last updated Pending.', 'pending');
         return boardCard(title, perf.result, boardMoney(actual) + ' vs goal ' + boardMoney(perf.goal) + ' · ' + percent(perf.achieved) + ' · ' + signedMoney(perf.delta), perf.result === 'HIT' ? 'good' : 'bad');
       }
       function forecast(value, provisional) {
         return (provisional ? 'Provisional forecast ' : 'Forecast ') + boardMoney(value);
       }
-      var labels = data.labels || { written: 'NWDSR Net Written', delivered: 'NWDSR Delivered', snap: 'SNAP Written' };
       var fresh = data.freshness || {};
       var freshWritten = fresh.written || {};
       var freshSnap = fresh.snap || {};
       var freshDelivered = fresh.delivered || {};
-      function verifiedNote(through) {
-        return through ? ' Verified through ' + longDate(through) + '.' : '';
-      }
       function pendingList(items) {
         if (!items || !items.length) return '';
         return '<article class="card"><h2>Pending reports</h2><ul class="list">' + items.map(function (day) {
           var names = (day.reports || []).map(function (name) { return esc(longDate(day.date)) + ' ' + esc(name) + ': Pending'; }).join('. ');
           return '<li>' + names + '.</li>';
-        }).join('') + '</ul><p class="sub">A missing report stays pending. It is not counted as zero, and it does not hide figures already verified for that day.</p></article>';
+        }).join('') + '</ul></article>';
       }
-      var focusNote = focus === 'written' ? 'Written page uses ' + labels.written + '; ' + labels.snap + ' is shown for reconciliation.' : focus === 'delivered' ? 'Delivered page uses ' + labels.delivered + '.' : '';
-      document.getElementById('header-note').textContent = 'Store ' + data.period + (focusNote ? ' · ' + focusNote : '') + ' · Updated ' + data.updated;
+      document.getElementById('header-note').textContent = updatedOn(freshWritten.through || freshDelivered.through || data.latest);
       function kpiTile(row) {
         var hasWritten = !(row.written === null || row.written === undefined || row.written === '');
         var hasDelivered = !(row.delivered === null || row.delivered === undefined || row.delivered === '');
@@ -1293,7 +1285,7 @@
           '<p class="kicker">' + esc(title) + '</p><p class="figure">' + figure + '</p><p class="goal-line">' + share + '</p>' +
           meterHtml(actual, goal, bar) +
           (leftText ? '<p class="need">' + leftText + '</p>' : '') +
-          '<p class="need">' + (through ? 'Verified through ' + esc(through) : '') + '</p>' +
+          '<p class="need">' + (through ? 'Last updated ' + esc(through) : 'Last updated Pending.') + '</p>' +
           (aside ? '<p class="side-note">' + aside + '</p>' : '') + '</article>';
       }
       function deliveredAside(row) {
@@ -1308,8 +1300,8 @@
       var bedding = kpiRow('Bedding');
       var closingKpi = kpiRow('Closing Ratio');
       var attachment = kpiRow('Total Attachment');
-      var writtenThrough = freshWritten.through ? longDate(freshWritten.through) : '';
-      var deliveredThrough = freshDelivered.through ? longDate(freshDelivered.through) : '';
+      var writtenThrough = dateLabel(freshWritten.through);
+      var deliveredThrough = dateLabel(freshDelivered.through);
       var heroDate = document.getElementById('hero-date');
       if (heroDate) heroDate.textContent = freshWritten.through || data.latest || 'Pending';
       var heroUpdated = document.getElementById('hero-updated');
@@ -1317,9 +1309,9 @@
       var balance = (data.writtenBalance && data.writtenBalance.month) || {};
       var five = heroCard('dollar', 'written', 'NWDSR Written', boardMoney(monthBoard.written), monthBoard.written, monthBoard.writtenGoal, boardMoney(monthBoard.writtenGoal) + ' goal', boardMoney(monthBoard.writtenLeft) + ' still needed', writtenThrough, 'money', 'cyan') +
         heroCard('truck', 'delivered', 'NWDSR Delivered', boardMoney(monthBoard.delivered), monthBoard.delivered, monthBoard.deliveredGoal, boardMoney(monthBoard.deliveredGoal) + ' goal', boardMoney(monthBoard.deliveredLeft) + ' still needed', deliveredThrough, 'money', 'pink') +
-        heroCard('bed', 'bedding', 'Bedding', bedding && known(bedding.written) ? kpiValue(bedding.written, bedding.unit) : 'Pending', bedding ? bedding.written : null, bedding ? bedding.goal : null, bedding ? boardGoal(bedding.goal, bedding.unit) : 'Pending', '', bedding && bedding.writtenThrough ? longDate(bedding.writtenThrough) : '', 'rate', 'green', deliveredAside(bedding)) +
-        heroCard('target', 'closing', 'Closing Ratio', closingKpi && known(closingKpi.written) ? kpiValue(closingKpi.written, closingKpi.unit) : 'Pending', closingKpi ? closingKpi.written : null, closingKpi ? closingKpi.goal : null, closingKpi ? boardGoal(closingKpi.goal, closingKpi.unit) : 'Pending', closingKpi && closingKpi.detail ? esc(closingKpi.detail) : '', closingKpi && closingKpi.through ? longDate(closingKpi.through) : '', 'rate', 'gold') +
-        heroCard('link', 'attach', 'Store Attachment', attachment && known(attachment.written) ? kpiValue(attachment.written, attachment.unit) : 'Pending', attachment ? attachment.written : null, attachment ? attachment.goal : null, attachment ? boardGoal(attachment.goal, attachment.unit) : 'Pending', '', attachment && attachment.writtenThrough ? longDate(attachment.writtenThrough) : '', 'rate', 'gold', deliveredAside(attachment));
+        heroCard('bed', 'bedding', 'Bedding', bedding && known(bedding.written) ? kpiValue(bedding.written, bedding.unit) : 'Pending', bedding ? bedding.written : null, bedding ? bedding.goal : null, bedding ? boardGoal(bedding.goal, bedding.unit) : 'Pending', '', bedding && bedding.writtenThrough ? dateLabel(bedding.writtenThrough) : '', 'rate', 'green', deliveredAside(bedding)) +
+        heroCard('target', 'closing', 'Closing Ratio', closingKpi && known(closingKpi.written) ? kpiValue(closingKpi.written, closingKpi.unit) : 'Pending', closingKpi ? closingKpi.written : null, closingKpi ? closingKpi.goal : null, closingKpi ? boardGoal(closingKpi.goal, closingKpi.unit) : 'Pending', '', closingKpi && closingKpi.through ? dateLabel(closingKpi.through) : '', 'rate', 'gold') +
+        heroCard('link', 'attach', 'Store Attachment', attachment && known(attachment.written) ? kpiValue(attachment.written, attachment.unit) : 'Pending', attachment ? attachment.written : null, attachment ? attachment.goal : null, attachment ? boardGoal(attachment.goal, attachment.unit) : 'Pending', '', attachment && attachment.writtenThrough ? dateLabel(attachment.writtenThrough) : '', 'rate', 'gold', deliveredAside(attachment));
       var week = data.week || {};
       var still = '<article class="card glow-card"><div class="card-head">' + glyph('bars') + '<div><h2>Still needed this month</h2><p class="sub">' + esc(data.period || '') + '</p></div></div><div class="need-pair">' +
         '<div class="need-tile">' + glyph('dollar') + '<div><p class="sub">Written still needed</p><p class="figure">' + boardMoney(monthBoard.writtenLeft) + '</p><p class="sub">of ' + boardMoney(monthBoard.writtenGoal) + '</p></div></div>' +
@@ -1387,7 +1379,6 @@
         (routeAllowed('reports') ? ' · <button type="button" class="linkish" data-home="reports:individual">Individual reports</button>' : '') +
         '</p>';
       document.getElementById('screen').innerHTML =
-        (focusNote ? '<p class="card focus-note">' + esc(focusNote) + '</p>' : '') +
         '<h2 class="section-title">Store performance</h2><div class="home-kpis">' + five + '</div>' +
         '<div class="home-targets">' + still + targets + stretch + '</div>' +
         '<h2 class="section-title">Year over year</h2><div class="home-compare">' + compare +
@@ -1396,8 +1387,7 @@
         '<h2 class="section-title">Sales team performance</h2>' + quick +
         '<div class="team-grid">' + (teamCards || '<article class="card"><p class="pending">Pending. No active salesperson is on the home record.</p></article>') + '</div>' +
         (otherKpis ? '<h2 class="section-title">Store KPIs</h2><div class="kpi-primary">' + otherKpis + '</div>' : '') +
-        winnersHtml +
-        '<p class="sub">Store month ' + esc(data.period) + ' only. Individual cards use each person\'s monthly goal, not the store budget. ' + standardText(data) + '</p>';
+        winnersHtml;
       document.querySelectorAll('[data-home]').forEach(function (button) {
         button.addEventListener('click', function () { openNavTarget(button.getAttribute('data-home')); });
       });
@@ -1584,13 +1574,14 @@
     }
 
     function renderDaily(data) {
-      document.getElementById('header-note').textContent = data.period + ' · Updated ' + data.updated;
+      var latestDay = (data.days || []).reduce(function (latest, day) { return day.date > latest ? day.date : latest; }, '');
+      document.getElementById('header-note').textContent = updatedOn(latestDay);
       var mtd = data.closing || {};
       var rows = data.days.map(function (day) {
         var ratioTone = day.closingReconcile ? 'warn' : '';
         return '<tr><td>' + esc(day.date) + '</td><td>' + money(day.snapWritten) + '</td><td>' + money(day.nwdsrWritten) + '</td><td>' + signedGap(day.nwdsrWritten, day.snapWritten) + '</td><td>' + money(day.nwdsrDelivered) + '</td><td>' + count(day.purchasingCustomers) + '</td><td>' + count(day.opportunities) + '</td><td class="' + ratioTone + '">' + percent(day.closingRatio) + '</td><td class="' + ratioTone + '">' + esc(day.closingVersus || day.closingStatus || 'Pending') + '</td></tr>';
       }).join('');
-      document.getElementById('screen').innerHTML = '<article class="card"><h2>Daily performance</h2><p class="sub">' + standardText(data) + ' Month to date purchasing customers ' + count(mtd.customers) + ' · opportunities ' + count(mtd.opportunities) + ' · closing ratio ' + percent(mtd.ratio) + ' · ' + versusText(mtd) + '. Goal ' + percent(data.goal) + '.</p><table><tr><th>Date</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR minus SNAP</th><th>NWDSR delivered</th><th>Purchasing customers</th><th>Opportunities</th><th>Closing ratio</th><th>Versus goal</th></tr>' + rows + '</table><p class="sub">NWDSR Written stays the store total. The difference is not removed from it. Store month, the 2nd through the 1st. A day uses Net Written # OF CUST and PERQ Ups + Be Backs printed for that same date, from CC_ClosingDaily. Month to date is on CC_ClosingMTD. A missing report is Pending, not zero. ' + esc(mtd.note || '') + '</p></article>';
+      document.getElementById('screen').innerHTML = '<article class="card"><h2>Daily performance</h2><p class="sub">' + updatedOn(latestDay) + ' Purchasing customers ' + count(mtd.customers) + '. Opportunities ' + count(mtd.opportunities) + '. Closing ' + percent(mtd.ratio) + '. Goal ' + percent(data.goal) + '.</p><table><tr><th>Date</th><th>SNAP written</th><th>NWDSR written</th><th>NWDSR minus SNAP</th><th>NWDSR delivered</th><th>Purchasing customers</th><th>Opportunities</th><th>Closing ratio</th><th>Versus goal</th></tr>' + rows + '</table></article>';
     }
     function statusTone(status) {
       if (status === 'Above Goal') return 'good';
@@ -1642,39 +1633,37 @@
         svg.push('<circle cx="' + p[0] + '" cy="' + p[1] + '" r="4" fill="#ffffff"><title>' + esc(p[2].date) + ' month to date ' + percent(p[2].mtdRatio) + '</title></circle>');
       });
       return '<div class="kpi-wrap"><svg width="' + width + '" height="' + height + '" role="img" aria-label="Daily closing ratio trend">' + svg.join('') + '</svg></div>' +
-        '<p class="sub">Bars: daily closing ratio, colored by status. Dashed outline: Pending, because that day is missing PERQ or Net Written. White dots: month to date through that day, shown only where both counts are verified. Yellow dashed line: goal.</p>';
+        '<p class="sub">Yellow line is the goal.</p>';
     }
     function renderClosing(data) {
-      document.getElementById('header-note').textContent = 'Store ' + data.period + ' · Updated ' + data.updated;
       var store = data.store || {};
+      document.getElementById('header-note').textContent = updatedOn(store.through);
       var latest = store.latest;
       var tone = store.ratio === null || store.ratio === undefined ? 'pending' : statusTone(store.versusGoal);
       var heading = '<article class="card closing-hero"><h2>Store closing ratio</h2>' +
         '<p class="figure ' + tone + '">' + (store.ratio === null || store.ratio === undefined ? 'Data Pending' : percent(store.ratio)) + '</p>' +
         '<p class="sub"><span class="status-pill ' + tone + '">' + esc(store.versusGoal || (store.opportunities === 0 ? 'No opportunities' : 'Pending')) + '</span> Goal ' + percent(data.goal) + ' · ' + pointsText(store.points) + ' from goal</p>' +
-        '<p class="sub">' + (store.through ? 'Month to date ' + esc(data.period.split(' through ')[0]) + ' through ' + esc(store.through) + ' · <span class="' + (store.provisional ? 'warn' : 'pending') + '">' + esc(store.verification || '') + '</span>' : esc(store.gap || 'Month to date is not calculated.')) + '</p></article>';
+        '<p class="sub">' + updatedOn(store.through) + '</p></article>';
       var cards = '<div class="score-row">' +
-        card('Purchasing customers', count(store.customers), esc(store.customerSource || 'Net Written # OF CUST')) +
-        card('Customer opportunities', count(store.opportunities), esc(store.opportunitySource || 'PERQ Ups + Be Backs')) +
-        card('Latest verified date', store.through ? esc(store.through) : 'Data Pending', 'Both month-to-date counts are on file through this date. ' + esc(store.verification || ''), store.provisional ? 'warn' : '') +
-        card('Latest daily closing', latest ? percent(latest.ratio) : 'Data Pending', latest ? esc(latest.date) + ' · ' + count(latest.customers) + ' ÷ ' + count(latest.opportunities) + ' · <span class="' + statusTone(latest.status) + '">' + esc(latest.status) + '</span> · ' + pointsText(latest.points) : 'No day has both counts yet.', latest ? statusTone(latest.status) : 'pending') +
+        card('Purchasing customers', count(store.customers), updatedOn(store.through)) +
+        card('Customer opportunities', count(store.opportunities), updatedOn(store.through)) +
+        card('Latest verified date', store.through ? esc(dateLabel(store.through)) : 'Pending', updatedOn(store.through), store.provisional ? 'warn' : '') +
+        card('Latest daily closing', latest ? percent(latest.ratio) : 'Pending', latest ? withUpdate(latest.date, pointsText(latest.points) + ' from goal.') : 'Last updated Pending.', latest ? statusTone(latest.status) : 'pending') +
         '</div>';
       var trend = store.trend || [];
       var rows = trend.slice().reverse().map(function (day) {
-        return '<tr><td>' + esc(day.date) + '</td><td>' + count(day.customers) + '</td><td>' + count(day.opportunities) + '</td><td class="' + statusTone(day.status) + '">' + (day.ratio === null || day.ratio === undefined ? '—' : percent(day.ratio)) + '</td><td class="' + statusTone(day.status) + '">' + esc(day.status || '') + '</td><td>' + pointsText(day.points) + '</td><td>' + (day.mtdRatio === null || day.mtdRatio === undefined ? '—' : percent(day.mtdRatio) + ' <span class="pending">' + count(day.mtdCustomers) + ' ÷ ' + count(day.mtdOpportunities) + '</span>') + '</td><td class="pending">' + esc(day.verification || '') + '<br>' + esc(day.sources || '') + '</td></tr>';
+        return '<tr><td>' + esc(day.date) + '</td><td>' + count(day.customers) + '</td><td>' + count(day.opportunities) + '</td><td class="' + statusTone(day.status) + '">' + (day.ratio === null || day.ratio === undefined ? '—' : percent(day.ratio)) + '</td><td class="' + statusTone(day.status) + '">' + esc(day.status || '') + '</td><td>' + pointsText(day.points) + '</td><td>' + (day.mtdRatio === null || day.mtdRatio === undefined ? '—' : percent(day.mtdRatio)) + '</td><td>' + updatedOn(day.date) + '</td></tr>';
       }).join('');
       var people = (data.people || []).map(function (person) {
         var hasRatio = person.ratio !== null && person.ratio !== undefined;
         var tone = hasRatio ? statusTone(person.versusGoal) : 'pending';
-        return '<tr><td>' + esc(person.name) + '</td><td>' + (person.through ? count(person.orders) : 'Pending') + '</td><td>' + (person.through ? count(person.opportunities) : 'Pending') + '</td><td>' + (person.through ? esc(person.through) : 'Pending') + '</td><td class="' + tone + '">' + (hasRatio ? percent(person.ratio) + ' · ' + esc(person.versusGoal || '') : esc(person.ratioStatus || 'Pending')) + '</td><td class="' + tone + '">' + (hasRatio ? pointsText(person.points) : '—') + '</td><td class="pending">' + esc(person.note) + '</td></tr>';
+        return '<tr><td>' + esc(person.name) + '</td><td>' + (person.through ? count(person.orders) : 'Pending') + '</td><td>' + (person.through ? count(person.opportunities) : 'Pending') + '</td><td>' + (person.through ? esc(dateLabel(person.through)) : 'Pending') + '</td><td class="' + tone + '">' + (hasRatio ? percent(person.ratio) + ' · ' + esc(person.versusGoal || '') : 'Pending') + '</td><td class="' + tone + '">' + (hasRatio ? pointsText(person.points) : '—') + '</td><td>' + updatedOn(person.through) + '</td></tr>';
       }).join('');
       document.getElementById('screen').innerHTML = heading + cards +
         '<h2 class="section-title">Daily trend</h2><article class="card">' + closingChart(trend, data.goal) + '</article>' +
-        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Date</th><th>Purchasing customers</th><th>Opportunities</th><th>Daily closing</th><th>Status</th><th>Versus goal</th><th>Month to date</th><th>Verification and report dates</th></tr>' + rows + '</table></article>' +
+        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Date</th><th>Purchasing customers</th><th>Opportunities</th><th>Daily closing</th><th>Status</th><th>Versus goal</th><th>Month to date</th><th>Last updated</th></tr>' + rows + '</table></article>' +
         '<h2 class="section-title">Salesperson closing · ' + esc(data.individualPeriod) + '</h2>' +
-        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Salesperson</th><th>Written orders</th><th>PERQ opportunities</th><th>Through</th><th>Closing ratio</th><th>Difference from ' + percent(data.goal) + '</th><th>Source</th></tr>' + people + '</table>' +
-        '<p class="sub">Individual closing ratio = Data Analysis Group 17 Written order count ÷ the salesperson\'s PERQ Ups + Be Backs × 100, both from the 1st through the same verified date: the latest date on which both are on file. Days inside a to-date report are not added again. A report on file with no line for a salesperson is 0; a missing report is Pending. Zero opportunities is not divided. The store purchasing-customer count is never divided among salespeople.</p></article>' +
-        '<p class="sub">Closing ratio = Net Written # OF CUST ÷ PERQ Ups + Be Backs × 100. Store month ' + esc(data.period) + '. Below 50% is Below Goal, exactly 50.0% is On Target, above is Above Goal. A day missing either report is Pending, not zero. Calculated on the CC_ClosingDaily and CC_ClosingMTD tabs from the report rows on CC_Closing. ' + esc(store.note || '') + '</p>';
+        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Salesperson</th><th>Written orders</th><th>PERQ opportunities</th><th>Through</th><th>Closing ratio</th><th>Difference from ' + percent(data.goal) + '</th><th>Last updated</th></tr>' + people + '</table></article>';
     }
     function personRatioText(person) {
       var closing = person.closing || {};
@@ -1724,7 +1713,7 @@
       var actual = data.actual || {};
       var econ = data.economics || {};
       var closing = data.closing || {};
-      document.getElementById('header-note').textContent = 'Sales recovery · store month ' + (data.period || '') + ' · simulation only';
+      document.getElementById('header-note').textContent = updatedOn(String(data.period || '').split(' through ').pop());
       function card(block) {
         var reach = block.reaches === null || block.reaches === undefined ? 'Pending' : (block.reaches ? 'Reaches $400,000' : 'Short of $400,000');
         var tone = block.reaches ? 'rec-yes' : 'rec-no';
@@ -1732,7 +1721,7 @@
         var width = block.monthEnd && data.budget ? Math.max(4, Math.min(100, Math.round(block.monthEnd / data.budget * 100))) : 0;
         return '<article class="opp-card"><h3>' + esc(block.name) + '</h3><p class="rec-hit ' + tone + '">' + reach + '</p><p class="opp-amt">' + recoveryMoney(block.monthEnd) + '</p><div class="opp-meter"><span class="next" style="width:' + width + '%"></span></div><p class="sub">Remaining ' + recoveryMoney(block.remaining) + ' · gap ' + recoveryMoney(block.gap) + '</p><p class="sub">' + esc(block.note) + '</p></article>';
       }
-      document.getElementById('screen').innerHTML = '<section class="opp-layout"><p class="opp-banner"><strong>Would the rest of the month reach the written budget?</strong> Actual sales stay as reported. These cards are illustrations for the meeting.</p>' +
+      document.getElementById('screen').innerHTML = '<section class="opp-layout"><p class="opp-banner"><strong>Would the rest of the month reach the written budget?</strong></p>' +
         '<div class="opp-grid"><article class="opp-card"><h3>On file</h3><p>Written ' + recoveryMoney(actual.written) + ' of ' + recoveryMoney(data.budget) + '. Remaining ' + recoveryMoney(actual.writtenLeft) + '.</p><p class="sub">Delivered ' + recoveryMoney(actual.delivered) + ' of ' + recoveryMoney(data.deliveredBudget) + '. Remaining ' + recoveryMoney(actual.deliveredLeft) + '.</p><p class="sub">' + (data.daysLeft === null || data.daysLeft === undefined ? 'Open days left: Pending' : data.daysLeft + ' open days left, including today') + '. ' + esc(data.calendar || '') + '</p></article>' +
         '<article class="opp-card"><h3>Three different counts</h3><p>NWDSR purchasing customers: ' + (closing.customers === null || closing.customers === undefined ? 'Pending' : closing.customers) + (closing.through ? ' through ' + esc(closing.through) : '') + '.</p><p>PERQ store opportunities: ' + (closing.opportunities === null || closing.opportunities === undefined ? 'Pending' : closing.opportunities) + '. Closing ' + (closing.ratio === null || closing.ratio === undefined ? 'Pending' : percent(closing.ratio)) + '.</p><p>Data Analysis written orders: Pending. ' + esc(data.orders && data.orders.note ? data.orders.note : '') + '</p><p class="sub">Dollars per purchasing customer on matched days: ' + recoveryMoney(econ.dollarsPerCustomer) + '. Recent daily PERQ opportunities: ' + (econ.dailyOpportunities === null || econ.dailyOpportunities === undefined ? 'Pending' : econ.dailyOpportunities) + '.</p></article></div>' +
         '<div class="rec-cards">' + card(data.trend) + card(data.goal) + card(data.stretch) + '</div>' +
@@ -1807,7 +1796,7 @@
     function renderCoach(data) {
       coachDirty = false;
       var rules = data.rules || {};
-      document.getElementById('header-note').textContent = 'Goal coach · salesperson month ' + (data.period || '') + ' · not payroll';
+      document.getElementById('header-note').textContent = updatedOn(String(data.period || '').split(' through ').pop());
       if (data.access !== 'management') {
         document.getElementById('screen').innerHTML = '<section class="opp-layout"><p class="opp-banner"><strong>Here\'s what reaching your goal could mean to you.</strong> ' + esc(data.message || '') + '</p><article class="opp-card"><h3>Your results stay private</h3><p>Managers can review each current associate. This login cannot open another person\'s commission estimates.</p></article></section>';
         return;
@@ -1847,7 +1836,7 @@
         document.getElementById('opp-bar-now').style.width = coachBar(actualSales, maxBar) + '%';
         document.getElementById('opp-bar-next').style.width = coachBar(scenarioSales, maxBar) + '%';
         var impact = person.goalImpact || {};
-        document.getElementById('opp-snap').textContent = 'SNAP written ' + coachMoney(person.snapWritten) + ' of the ' + coachMoney(person.monthlyGoal) + ' monthly goal (' + (impact.actualPercent === null || impact.actualPercent === undefined ? 'Pending' : percent(impact.actualPercent)) + '). The illustration is not added to SNAP. Verified through ' + (person.writtenThrough || 'Pending') + '.';
+        document.getElementById('opp-snap').textContent = 'SNAP written ' + coachMoney(person.snapWritten) + ' of the ' + coachMoney(person.monthlyGoal) + ' monthly goal (' + (impact.actualPercent === null || impact.actualPercent === undefined ? 'Pending' : percent(impact.actualPercent)) + '). ' + updatedOn(person.writtenThrough);
         document.getElementById('opp-rug-result').textContent = extraRugs ? (rugPay === null ? 'Pay rule confirmation needed until a qualifying price is entered. 6% is not applied to a guessed price.' : 'Illustration: ' + extraRugs + ' rugs at ' + coachMoney(rugEach) + ' = ' + coachMoney(rugSales) + '. Estimated 6% commission ' + coachMoney(rugPay) + '. Not payroll, and not added to a verified rug count.') : 'Add a rug to illustrate the 6% agreement rate.';
         var protectText = 'Pay rule confirmation needed until qualifying dollars are on file or you enter an illustration. An illustration is not this associate\'s sales.';
         if (protectInput !== null && protectView.status === 'estimate') protectText = protectView.band + ' lists ' + percent(protectView.rate) + '. Estimated earnings ' + coachMoney(protectPay) + ' if that rate applies to the whole amount. Not payroll.' + (protectView.next ? ' The next listed band starts just above $4,500 at 25%.' : '');
@@ -1860,7 +1849,7 @@
         var ticket = person.ticket || {};
         document.getElementById('opp-body').innerHTML =
           '<div class="opp-grid"><article class="opp-card"><h3>Average ticket</h3>' +
-          '<p class="sub">Actual written sales use Group 17 for the ticket. SNAP stays the official goal figure. Hypothetical written sales are not commission.</p>' +
+          '<p class="sub">' + updatedOn(person.writtenThrough) + '</p>' +
           '<div class="opp-compare"><div class="opp-side now"><p class="sub">Actual</p><p class="opp-amt" id="opp-actual"></p><p class="sub" id="opp-actual-note"></p><div class="opp-meter"><span class="now" id="opp-bar-now"></span></div></div>' +
           '<div class="opp-side next"><p class="sub">At the scenario ticket</p><p class="opp-amt" id="opp-scenario"></p><p class="sub" id="opp-gap"></p><div class="opp-meter"><span class="next" id="opp-bar-next"></span></div></div></div>' +
           '<div class="opp-controls"><label>Transactions<input id="opp-orders" type="number" min="0" step="1" value="' + (ticket.orders || '') + '"></label>' +
@@ -2107,13 +2096,13 @@
     function renderLeakage(data) {
       var store = data.store || {};
       var people = data.people || [];
-      document.getElementById('header-note').textContent = 'Sales leakage · store ' + (store.period || '') + ' · illustrations, not lost revenue';
-      document.getElementById('screen').innerHTML = '<section class="opp-layout"><p class="opp-banner">' + esc(data.notice || '') + '</p><div class="leak-tabs noprint"><button type="button" id="leak-store" class="active">Store</button> <button type="button" id="leak-people">Sales team</button></div><div id="leak-body"></div></section>';
+      document.getElementById('header-note').textContent = updatedOn(store.closingThrough || String(store.period || '').split(' through ').pop());
+      document.getElementById('screen').innerHTML = '<section class="opp-layout"><div class="leak-tabs noprint"><button type="button" id="leak-store" class="active">Store</button> <button type="button" id="leak-people">Sales team</button></div><div id="leak-body"></div></section>';
       function moneyOr(value) { return leakBlank(value) ? 'Pending' : money(value); }
       function pctOr(value) { return leakBlank(value) ? 'Pending' : percent(value); }
       function biggestText(item) {
-        if (!item) return '<p class="leak-big">Pending</p><p class="sub">No priced incremental illustration is available. Pending is not zero, and closing is not added to average ticket.</p>';
-        return '<p class="sub">Biggest incremental illustration</p><p class="leak-big">' + money(item.dollars) + '</p><p><strong>' + esc(item.label) + '</strong></p><p class="sub">' + esc(item.note || '') + '</p>';
+        if (!item) return '<p class="leak-big">Pending</p><p class="sub">Last updated Pending.</p>';
+        return '<p class="sub">Biggest opportunity</p><p class="leak-big">' + money(item.dollars) + '</p><p><strong>' + esc(item.label) + '</strong></p>';
       }
       function showStore() {
         document.getElementById('leak-store').className = 'active';
@@ -2145,7 +2134,7 @@
           var top = person.biggest;
           return '<tr><td>' + esc(person.name) + (person.newHire ? ' <span class="coach-badge">NEW HIRE</span>' : '') + '</td><td>' + (top ? esc(top.label) : 'Pending') + '</td><td>' + (top ? money(top.dollars) : 'Pending') + '</td></tr>';
         }).join('');
-        document.getElementById('leak-body').innerHTML = '<p class="sub">' + esc(data.individual.calendar || '') + ' ' + esc(data.individual.period || '') + '</p><article class="card kpi-wrap"><table class="kpi"><tr><th>Associate</th><th>Biggest incremental illustration</th><th>Dollars</th></tr>' + board + '</table><p class="sub">The dollar column is one illustration. It is not closing plus ticket, and it is not lost revenue.</p></article><div class="opp-pick noprint"><label>Associate<select id="leak-person">' + options + '</select></label></div><div class="opp-controls noprint"><label>Closing goal %<input id="leak-person-close" type="number" min="0" max="100" step="1"></label><label>Ticket goal<input id="leak-person-ticket" type="number" min="0" step="50"></label></div><article class="opp-card" id="leak-person-hero"></article><div class="leak-split"><article class="opp-card"><h3>Closing</h3><p id="leak-person-close-now"></p><p class="opp-amt" id="leak-person-close-dollars"></p></article><article class="opp-card"><h3>Average ticket</h3><p id="leak-person-ticket-now"></p><p class="opp-amt" id="leak-person-ticket-dollars"></p></article></div><article class="opp-card"><h3>Bedding and attachments</h3><div id="leak-attach"></div></article>';
+        document.getElementById('leak-body').innerHTML = '<p class="sub">' + esc(data.individual.calendar || '') + ' ' + esc(data.individual.period || '') + '</p><article class="card kpi-wrap"><table class="kpi"><tr><th>Associate</th><th>Biggest incremental illustration</th><th>Dollars</th></tr>' + board + '</table><p class="sub">' + updatedOn(store.closingThrough) + '</p></article><div class="opp-pick noprint"><label>Associate<select id="leak-person">' + options + '</select></label></div><div class="opp-controls noprint"><label>Closing goal %<input id="leak-person-close" type="number" min="0" max="100" step="1"></label><label>Ticket goal<input id="leak-person-ticket" type="number" min="0" step="50"></label></div><article class="opp-card" id="leak-person-hero"></article><div class="leak-split"><article class="opp-card"><h3>Closing</h3><p id="leak-person-close-now"></p><p class="opp-amt" id="leak-person-close-dollars"></p></article><article class="opp-card"><h3>Average ticket</h3><p id="leak-person-ticket-now"></p><p class="opp-amt" id="leak-person-ticket-dollars"></p></article></div><article class="opp-card"><h3>Bedding and attachments</h3><div id="leak-attach"></div></article>';
         function selected() {
           var name = document.getElementById('leak-person').value;
           for (var i = 0; i < people.length; i += 1) if (people[i].name === name) return people[i];
@@ -2199,7 +2188,7 @@
       peopleEvaluation = data.evaluation || null;
       peopleToday = data.today || '';
       if (!peopleSort) peopleSort = 'snapWritten';
-      document.getElementById('header-note').textContent = 'Salesperson month ' + (data.period || '') + ' · SNAP written through ' + (peopleSnapThrough || 'Not Available') + ' · Data Analysis delivered through ' + (peopleAnalysisThrough.delivered || 'Not Available') + ' · Updated ' + data.updated;
+      document.getElementById('header-note').textContent = 'Last updated. SNAP written ' + (dateLabel(peopleSnapThrough) || 'Pending') + '. Delivered ' + (dateLabel(peopleAnalysisThrough.delivered) || 'Pending') + '.';
       drawPeopleTable();
     }
     function goalProgress(person) {
@@ -2240,12 +2229,12 @@
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Sales Team leaderboard</h2>' +
         teamNav('board') +
-        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Sales Team</th><th>SNAP written</th><th>Monthly goal</th><th>% to goal</th><th>Delivered</th><th>Written orders</th><th>Opportunities</th><th>Closing ratio</th></tr>' + rows + '</table><p class="sub">Salesperson month, the 1st through the last day. SNAP written through ' + esc(peopleSnapThrough || 'Not Available') + ' is the only source for individual written sales and % to the monthly goal. ' + (peopleSnapPending.length ? 'Salesperson SNAP for ' + esc(peopleSnapPending.join(', ')) + ' is Pending: no report on file, so those dates are not in the total and are not zero. ' : '') + 'Delivered sales are from the Data Analysis Group 17 Delivered report (through ' + esc(peopleAnalysisThrough.delivered || 'Not Available') + '). Data Analysis written (through ' + esc(peopleAnalysisThrough.written || 'Not Available') + ') is kept for KPIs and reconciliation and is never used for the goal. There is no individual NWDSR: the NWDSR reports are store-level ranking reports. Closing ratio = Group 17 Written orders ÷ PERQ Ups + Be Backs × 100, both from the 1st through the date shown, with points from the ' + percent((peopleCache[0] && peopleCache[0].closing && peopleCache[0].closing.goal) || 0.5) + ' goal. The store customer count is never divided among associates. Managers and former associates are not listed as active.</p>' +
-        (peopleDeliveredVariance ? '<p class="sub"><strong>Store Delivered vs Sales Team Delivered.</strong> Official Store Delivered (NWDSR, store month ' + esc(peopleDeliveredVariance.storePeriod || '') + ') is ' + money(peopleDeliveredVariance.storeDelivered) + (peopleDeliveredVariance.storeDeliveredThrough ? ', verified through ' + esc(longDate(peopleDeliveredVariance.storeDeliveredThrough)) : '') + '. Active Sales Team Delivered sum (Group 17, salesperson month) is ' + (peopleDeliveredVariance.activeAssociateDelivered === null || peopleDeliveredVariance.activeAssociateDelivered === undefined ? 'Pending' : money(peopleDeliveredVariance.activeAssociateDelivered)) + '. ' + esc(peopleDeliveredVariance.note || '') + '</p>' : '') +
+        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Sales Team</th><th>SNAP written</th><th>Monthly goal</th><th>% to goal</th><th>Delivered</th><th>Written orders</th><th>Opportunities</th><th>Closing ratio</th></tr>' + rows + '</table><p class="sub">Last updated. SNAP written ' + esc(dateLabel(peopleSnapThrough) || 'Pending') + '. Delivered ' + esc(dateLabel(peopleAnalysisThrough.delivered) || 'Pending') + '.' + (snapWaiting(peopleSnapPending) ? ' ' + esc(snapWaiting(peopleSnapPending)) : '') + '</p>' +
+        (peopleDeliveredVariance ? '<p class="sub">Store delivered ' + money(peopleDeliveredVariance.storeDelivered) + '. ' + updatedOn(peopleDeliveredVariance.storeDeliveredThrough) + ' Sales team delivered ' + (peopleDeliveredVariance.activeAssociateDelivered === null || peopleDeliveredVariance.activeAssociateDelivered === undefined ? 'Pending' : money(peopleDeliveredVariance.activeAssociateDelivered)) + '.</p>' : '') +
         '</article>' +
         '<h2 class="section-title">Individual KPI scorecard</h2><div id="kpi-scorecard"></div>' +
         '<h2 class="section-title">KPI comparison</h2>' +
-        '<article class="card kpi-wrap"><table class="kpi"><tr><th>KPI</th>' + heads + '</tr>' + compare + '</table><p class="sub">Written results from Data Analysis Group 17 Written through ' + esc(peopleAnalysisThrough.written || 'Not Available') + '. Delivered results are on each scorecard. Not in report means the Group 17 report has no salesperson column for that KPI.</p></article>';
+        '<article class="card kpi-wrap"><table class="kpi"><tr><th>KPI</th>' + heads + '</tr>' + compare + '</table><p class="sub">' + updatedOn(peopleAnalysisThrough.written) + '</p></article>';
       bindTeamNav();
       document.querySelectorAll('[data-person]').forEach(function (button) {
         button.addEventListener('click', function () { renderPerson(button.getAttribute('data-person')); });
@@ -2302,6 +2291,13 @@
       else if (extra) note += ' · ' + extra;
       return '<article class="report-tile ' + esc(line.status) + '"><h3>' + esc(line.label) + '</h3><p class="figure">' + esc(line.result) + '</p><p class="sub">' + esc(note) + '</p></article>';
     }
+    function reportUpdated(data) {
+      data = data || {};
+      var iso = data.date || (data.period && data.period.end) || '';
+      if (/^\d{4}-\d{2}-\d{2}/.test(String(iso))) return updatedOn(iso);
+      if (data.displayDate) return 'Last updated ' + data.displayDate + '.';
+      return 'Last updated Pending.';
+    }
     function renderSnapCompare(block) {
       block = block || {};
       var difference = esc(block.dollars || 'Pending');
@@ -2316,7 +2312,7 @@
         item('NWDSR Written LAST YEAR', block.nwdsrLy) +
         item('SNAP Written LAST YEAR', block.ly) +
         '<p><strong>SNAP versus SNAP LAST YEAR</strong> ' + difference + '</p>' +
-        '<p class="report-foot">' + esc(block.currentDates || '') + (block.lyDates ? ' · LAST YEAR ' + esc(block.lyDates) : '') + '. ' + esc(block.note || '') + '</p></aside>';
+        '<p class="report-foot">' + (block.currentDates ? 'Last updated ' + esc(block.currentDates) + '.' : 'Last updated Pending.') + (block.lyDates ? ' Last year ' + esc(block.lyDates) + '.' : '') + '</p></aside>';
     }
     function renderWrittenGap(gap) {
       if (!gap || !gap.text) return '';
@@ -2338,13 +2334,13 @@
       var dates = data.span === 'week-to-date' ? '' : (data.span === 'custom'
         ? '<label>Start<input id="report-start" type="date" value="' + esc(reportQuery.start) + '"></label><label>End<input id="report-end" type="date" value="' + esc(reportQuery.end) + '"></label>'
         : '<label>Week containing<input id="report-end" type="date" value="' + esc(reportQuery.end) + '"></label>');
-      return { controls: span + dates, body: '<p class="report-badge ' + (data.partial ? 'partial' : 'complete') + '">' + esc(data.partialLabel || '') + '</p><h1>' + esc(data.title) + '</h1><p class="report-verify">' + esc(data.verification) + '</p>' +
+      return { controls: span + dates, body: '<p class="report-badge ' + (data.partial ? 'partial' : 'complete') + '">' + esc(data.partialLabel || '') + '</p><h1>' + esc(data.title) + '</h1><p class="report-verify">' + reportUpdated(data) + '</p>' +
         '<h2>This week</h2><div class="report-tiles">' + (data.weekly || []).map(reportTile).join('') + '</div>' + renderSnapCompare(data.snapLy) + renderWrittenGap(data.writtenGap) +
         '<h2>Store month to date</h2><div class="report-tiles">' + (data.month || []).map(reportTile).join('') + '</div>' +
         '<h2>Store-month KPIs · not this week</h2><div class="report-kpis">' + (data.kpis || []).map(function (line) {
           return '<span class="report-chip ' + esc(line.status) + '">' + esc(line.label) + ' ' + esc(line.result) + (line.goal ? ' / ' + esc(line.goal) : '') + '</span>';
         }).join('') + '</div>' +
-        '<h2>People</h2><div class="report-cols"><div><h3>Top associates</h3>' + top + '<p class="report-foot">' + esc(people.source || '') + '</p></div><div><h3>Coaching</h3>' + coach + '<p class="report-foot">' + esc(people.coachingSource || '') + '</p></div><div><h3>New hires</h3><p>' + hires + '</p></div></div>' +
+        '<h2>People</h2><div class="report-cols"><div><h3>Top associates</h3>' + top + '</div><div><h3>Coaching</h3>' + coach + '</div><div><h3>New hires</h3><p>' + hires + '</p></div></div>' +
         '<div class="report-cols"><div><h2>Wins</h2>' + list(summary.wins) + '</div><div><h2>Needs attention</h2>' + list(summary.attention) + '</div><div><h2>Coming week</h2>' + list(summary.priorities) + '</div></div>' };
     }
     function renderIndividualReport(data) {
@@ -2355,7 +2351,7 @@
       var coaching = data.coaching || {};
       function rows(lines) {
         return (lines || []).map(function (line) {
-          return '<tr class="' + esc(line.status) + '"><td class="measure">' + esc(line.label) + '</td><td>' + esc(line.result) + '</td><td>' + esc(line.goal || '') + '</td><td>' + reportMark(line) + '</td><td>' + esc(line.source) + '</td></tr>';
+          return '<tr class="' + esc(line.status) + '"><td class="measure">' + esc(line.label) + '</td><td>' + esc(line.result) + '</td><td>' + esc(line.goal || '') + '</td><td>' + reportMark(line) + '</td></tr>';
         }).join('');
       }
       function list(items) { return (items || []).length ? '<ol>' + items.map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ol>' : '<p>None verified.</p>'; }
@@ -2365,9 +2361,9 @@
       var who = data.access && data.access.self ? '' : '<label>Associate<select id="report-name">' + people + '</select></label>';
       var span = '<label>Period<select id="report-span"><option value="completed"' + (data.span === 'completed' ? ' selected' : '') + '>Completed week</option><option value="week-to-date"' + (data.span === 'week-to-date' ? ' selected' : '') + '>Week to date</option></select></label>';
       var dates = data.span === 'week-to-date' ? '' : '<label>Week containing<input id="report-end" type="date" value="' + esc(reportQuery.end) + '"></label>';
-      return { controls: who + span + dates, body: '<p class="report-badge ' + (data.partial ? 'partial' : 'complete') + '">' + esc(data.partialLabel || '') + (data.newHire ? ' · NEW HIRE' : '') + '</p><h1>' + esc(data.title) + '</h1><p class="report-verify">' + esc(data.verification) + '</p>' +
-        '<h2>Performance</h2><table><thead><tr><th>Measure</th><th>Result</th><th>Goal</th><th>Versus goal</th><th>Source</th></tr></thead><tbody>' + rows(data.performance) + '</tbody></table>' +
-        '<h2>Sales quality · salesperson month, not this week</h2><table><thead><tr><th>Measure</th><th>Result</th><th>Goal</th><th>Versus goal</th><th>Source</th></tr></thead><tbody>' + rows(data.quality) + '</tbody></table>' +
+      return { controls: who + span + dates, body: '<p class="report-badge ' + (data.partial ? 'partial' : 'complete') + '">' + esc(data.partialLabel || '') + (data.newHire ? ' · NEW HIRE' : '') + '</p><h1>' + esc(data.title) + '</h1><p class="report-verify">' + reportUpdated(data) + '</p>' +
+        '<h2>Performance</h2><table><thead><tr><th>Measure</th><th>Result</th><th>Goal</th><th>Versus goal</th></tr></thead><tbody>' + rows(data.performance) + '</tbody></table>' +
+        '<h2>Sales quality</h2><table><thead><tr><th>Measure</th><th>Result</th><th>Goal</th><th>Versus goal</th></tr></thead><tbody>' + rows(data.quality) + '</tbody></table>' +
         '<h2>Opportunity</h2><ol>' + (data.opportunity || []).map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ol>' +
         '<div class="report-cols"><div><h2>Strengths</h2>' + list(coaching.strengths) + '</div><div><h2>Improve</h2>' + list(coaching.improvements) + '</div><div><h2>Next week</h2><p>' + esc(coaching.goal || '') + '</p></div></div>' +
         '<h2>Manager notes</h2><p class="report-foot">' + esc(coaching.notes || '') + '</p><div class="report-notes"><i></i><i></i><i></i></div>' };
@@ -2385,7 +2381,7 @@
         return '<h2>' + esc(person.name) + (person.newHire ? ' · NEW HIRE' : '') + '</h2>' + table(lines) + '<p>Coaching opportunity: ' + esc(person.opportunity) + '</p><p>Coming week: ' + esc(person.nextGoal) + '</p>';
       }
       var pages = [];
-      pages.push('<h1>' + esc(data.title) + '</h1><p class="report-foot">' + esc(data.displayDate || '') + '</p><p class="report-verify">' + esc(data.verification) + '</p><h2>This week · NWDSR</h2>' + table(data.weekly) + renderSnapCompare(data.snapLy) + renderWrittenGap(data.writtenGap) + '<h2>Store-month KPIs · not this week</h2>' + table(data.kpis) + '<h2>Store month through this week</h2>' + table(data.month) + '<p>NWDSR Written LAST YEAR ' + esc((data.lastYear && data.lastYear.written) || 'Pending') + '. NWDSR Delivered LAST YEAR ' + esc((data.lastYear && data.lastYear.delivered) || 'Pending') + '. ' + esc((data.lastYear && data.lastYear.note) || '') + '</p>');
+      pages.push('<h1>' + esc(data.title) + '</h1><p class="report-foot">' + esc(data.displayDate || '') + '</p><p class="report-verify">' + reportUpdated(data) + '</p><h2>This week · NWDSR</h2>' + table(data.weekly) + renderSnapCompare(data.snapLy) + renderWrittenGap(data.writtenGap) + '<h2>Store-month KPIs · not this week</h2>' + table(data.kpis) + '<h2>Store month through this week</h2>' + table(data.month) + '<p>Last year written ' + esc((data.lastYear && data.lastYear.written) || 'Pending') + '. Last year delivered ' + esc((data.lastYear && data.lastYear.delivered) || 'Pending') + '.</p>');
       if (data.packet !== 'executive') {
         var people = data.people || [];
         var index = 0;
@@ -2422,7 +2418,7 @@
       var rows = (data.rows || []).map(function (row) {
         return '<tr class="' + esc(row.status) + '"><td class="measure">' + esc(row.label) + '</td><td class="' + esc(row.status) + '">' + esc(row.actual) + '</td><td>' + esc(row.progress) + '</td><td>' + esc(row.variance) + '</td><td>' + esc(row.budget) + '</td><td>' + esc(row.ly) + '</td></tr>';
       }).join('');
-      return { controls: '<label>Month containing<input id="report-date" type="date" value="' + esc(reportQuery.date) + '"></label>', body: '<p class="report-badge ' + (data.partial ? 'partial' : 'complete') + '">' + esc(data.partialLabel || '') + '</p><h1>' + esc(data.title) + '</h1><p class="report-foot">' + esc(data.displayDate || '') + '</p><p class="report-verify">' + esc(data.verification) + '</p>' +
+      return { controls: '<label>Month containing<input id="report-date" type="date" value="' + esc(reportQuery.date) + '"></label>', body: '<p class="report-badge ' + (data.partial ? 'partial' : 'complete') + '">' + esc(data.partialLabel || '') + '</p><h1>' + esc(data.title) + '</h1><p class="report-foot">' + esc(data.displayDate || '') + '</p><p class="report-verify">' + reportUpdated(data) + '</p>' +
         '<table><thead><tr><th>Measure</th><th>Actual</th><th>Progress</th><th>Variance</th><th>BUDGET</th><th>NWDSR LY</th></tr></thead><tbody>' + rows + '</tbody></table>' + renderSnapCompare(data.snapLy) + renderWrittenGap(data.writtenGap) +
         '<p class="report-assess">' + esc(data.assessment || '') + '</p>' +
         '<div class="report-cols"><div><h2>Strengths</h2>' + list(summary.strengths) + '</div><div><h2>Improve</h2>' + list(summary.priorities) + '</div><div><h2>Next month</h2><p>' + esc(summary.focus || '') + '</p></div></div>' };
@@ -2504,8 +2500,8 @@
       var insights = (data.insights || []).map(function (item) { return '<p class="trend-note"><strong>' + esc(item.label) + '.</strong> ' + esc(item.text) + '</p>'; }).join('');
       var alerts = (data.alerts || []).map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('');
       var controls = '<label>KPI<select id="report-metric">' + options + '</select></label><label>View<select id="report-view"><option value="completed"' + (data.view === 'completed' ? ' selected' : '') + '>13 completed weeks</option><option value="partial"' + (data.view === 'partial' ? ' selected' : '') + '>Current partial week</option></select></label>';
-      var body = '<h1>' + esc(data.title) + '</h1><p class="report-foot">' + esc(data.view === 'partial' ? data.partialPeriod.label : data.displayDate) + '</p><p class="report-verify">' + esc(data.verification) + '</p>' + renderSnapCompare(data.writtenBalance) + renderWrittenGap(data.writtenGap) + insights +
-        '<h2>' + esc(selected.label) + '</h2><p class="trend-note">' + esc(selected.source) + (selected.goalText ? ' Goal ' + esc(selected.goalText) + '.' : '') + '</p>' +
+      var body = '<h1>' + esc(data.title) + '</h1><p class="report-foot">' + esc(data.view === 'partial' ? data.partialPeriod.label : data.displayDate) + '</p><p class="report-verify">' + reportUpdated(data) + '</p>' + renderSnapCompare(data.writtenBalance) + renderWrittenGap(data.writtenGap) + insights +
+        '<h2>' + esc(selected.label) + '</h2><p class="trend-note">' + reportUpdated(data) + (selected.goalText ? ' Goal ' + esc(selected.goalText) + '.' : '') + '</p>' +
         trendChart(selected, 'line') + trendChart(selected, 'bar') +
         '<p class="trend-note">' + esc(selected.comparison && selected.comparison.text || '') + '</p>' +
         '<table><thead><tr><th>Week</th><th>Actual</th><th>Four-week average</th><th>Coverage</th></tr></thead><tbody>' + rows + '</tbody></table>' +
@@ -2519,7 +2515,7 @@
         return '<button type="button" data-report-kind="' + esc(item.key) + '"' + (item.key === data.kind ? ' class="active"' : '') + '>' + esc(item.label) + '</button>';
       }).join('');
       var rows = (data.lines || []).map(function (line) {
-        return '<tr><td class="measure">' + esc(line.label) + '</td><td>' + esc(line.result) + '</td><td>' + esc(line.goal || '') + '</td><td>' + reportMark(line) + (line.status === 'ready' ? '' : '<br><span class="sub">' + esc(line.versus) + '</span>') + '</td><td>' + esc(line.source) + '</td></tr>';
+        return '<tr><td class="measure">' + esc(line.label) + '</td><td>' + esc(line.result) + '</td><td>' + esc(line.goal || '') + '</td><td>' + reportMark(line) + (line.status === 'ready' ? '' : '<br><span class="sub">' + esc(line.versus) + '</span>') + '</td></tr>';
       }).join('');
       var priorities = (data.priorities || []).map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('');
       var winners = data.winners || {};
@@ -2527,13 +2523,13 @@
       var period = weekly ? weekly.controls : (data.kind === 'daily'
         ? '<label>Business day<input id="report-date" type="date" value="' + esc(data.date || '') + '"></label>'
         : '<label>Period start<input id="report-start" type="date" value="' + esc((data.period && data.period.start) || reportQuery.start || '') + '"></label><label>Period end<input id="report-end" type="date" value="' + esc((data.period && data.period.end) || reportQuery.end || '') + '"></label>');
-      document.getElementById('header-note').textContent = 'Reports · ' + (data.displayDate || data.kind) + ' · no email sent';
+      document.getElementById('header-note').textContent = data.displayDate ? 'Last updated ' + data.displayDate + '.' : 'Last updated Pending.';
       document.getElementById('screen').innerHTML = '<div class="report-controls noprint"><div class="nav" id="report-kinds">' + kinds + '</div>' + period +
         '<button type="button" id="report-apply">Show report</button><button type="button" id="report-print"' + (data.ready ? '' : ' disabled') + '>Print</button><button type="button" id="report-pdf"' + (data.pdf ? '' : ' disabled') + '>Download PDF</button></div>' +
         '<article id="report-sheet" class="report-sheet' + (data.layout === 'individual' ? ' report-individual' : '') + (data.layout === 'monthly' ? ' report-monthly' : '') + (data.layout === 'meeting' ? ' report-meeting' : '') + (data.layout === 'trend' ? ' report-trend' : '') + '"><p class="report-kicker">KANE\'S FURNITURE · STORE 17</p>' +
-        (weekly ? weekly.body : ('<h1>' + esc(data.title || 'Report') + '</h1><p class="report-verify">' + esc(data.verification || '') + '</p>' + (data.writtenBalance ? renderSnapCompare(data.writtenBalance) : '') + renderWrittenGap(data.writtenGap) +
-        (data.ready ? '<table><thead><tr><th>Measure</th><th>Result</th><th>Goal</th><th>Versus goal</th><th>Source</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-          '<h2>Sales winners · ' + esc(winners.date || '') + '</h2><p>' + esc(winners.status === 'pending' ? 'Pending' : winners.text) + '</p><p class="report-foot">' + esc(winners.source || '') + (winners.quiet && winners.quiet !== 'Pending' ? ' No written sale: ' + winners.quiet : '') + '</p>' +
+        (weekly ? weekly.body : ('<h1>' + esc(data.title || 'Report') + '</h1><p class="report-verify">' + reportUpdated(data) + '</p>' + (data.writtenBalance ? renderSnapCompare(data.writtenBalance) : '') + renderWrittenGap(data.writtenGap) +
+        (data.ready ? '<table><thead><tr><th>Measure</th><th>Result</th><th>Goal</th><th>Versus goal</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+          '<h2>Sales winners · ' + esc(winners.date || '') + '</h2><p>' + esc(winners.status === 'pending' ? 'Pending' : winners.text) + '</p>' + (winners.quiet && winners.quiet !== 'Pending' ? '<p class="report-foot">No written sale: ' + esc(winners.quiet) + '</p>' : '') +
           '<h2>Management priorities</h2>' + (priorities ? '<ol>' + priorities + '</ol>' : '<p>No additional priority is supported by verified data.</p>') +
           '<p class="report-foot">' + esc(data.prioritySource || '') + '</p>' : '<p>' + esc(data.notice || 'This report is not built yet.') + '</p>'))) +
         '<p class="report-foot">' + esc(data.calendarNote || '') + (data.storePeriod ? ' Store month ' + esc(data.storePeriod) + '.' : '') + ' Salesperson month ' + esc(data.individualPeriod || '') + '. No email sent.</p></article>';
@@ -2776,8 +2772,8 @@
       var options = (data.people || []).map(function (person) {
         return '<option value="' + esc(person.name) + '"' + (accelWho === person.name ? ' selected' : '') + '>' + esc(person.name) + (person.newHire ? ' · new hire' : '') + '</option>';
       }).join('');
-      document.getElementById('header-note').textContent = 'Attachments · ' + (data.side === 'delivered' ? 'Delivered' : 'Written') + ' · not commission';
-      document.getElementById('screen').innerHTML = '<section class="opp-layout"><p class="opp-banner"><strong>A few more Maintenance Plans can close the gap.</strong> ' + esc(data.notice) + '</p>' +
+      document.getElementById('header-note').textContent = updatedOn(data.store && data.store.through);
+      document.getElementById('screen').innerHTML = '<section class="opp-layout"><p class="opp-banner"><strong>A few more Maintenance Plans can close the gap.</strong></p>' +
         '<div class="opp-controls noprint"><label>Report<select id="accel-side"><option value="written"' + (data.side !== 'delivered' ? ' selected' : '') + '>Written</option><option value="delivered"' + (data.side === 'delivered' ? ' selected' : '') + '>Delivered</option></select></label>' +
         (data.role === 'sales' ? '' : '<label>View<select id="accel-who"><option value="store"' + (accelWho === 'store' ? ' selected' : '') + '>Store</option>' + options + '</select></label>') +
         '<button type="button" id="accel-coach">Open Goal coach for commission scenarios</button></div>' +
@@ -3044,9 +3040,8 @@
         '<article class="card"><div class="score-controls noprint"><label for="score-person">Salesperson</label><select id="score-person">' + options + '</select>' +
         '<div class="nav"><button type="button" class="' + (scoreSide === 'written' ? 'active' : '') + '" data-side="written">Written</button><button type="button" class="' + (scoreSide === 'delivered' ? 'active' : '') + '" data-side="delivered">Delivered</button></div></div>' +
         '<h2>' + esc(person.name) + ' · ' + label + '</h2>' +
-        '<p class="sub">Data Analysis Group 17 ' + label + (side.through ? ' through ' + esc(side.through) + ' (' + esc(side.basis) + ')' : ': no report on file for this salesperson month, so every figure is Pending') + '. Salesperson month, the 1st through the last day.</p>' +
+        '<p class="sub">' + updatedOn(side.through) + '</p>' +
         attachmentTable(side, true) + attachmentFlags(side) +
-        '<p class="sub">Missed = qualified − sold, never below 0. Actual % = sold ÷ qualified, recalculated from month-to-date quantities, never averaged. To hit goal = qualified × goal rounded up, less sold. N/A means no qualified opportunity, which is not poor performance. Written and Delivered are never combined.</p>' +
         '<div class="goal-actual"><h2>Goal vs actual</h2><table class="score"><tr><th>Category</th><th>Actual %</th><th>Required goal</th><th>Difference</th><th>Additional attachments needed</th></tr>' + goalRows + '</table>' +
         '<p class="sub">' + totalAttachmentText(side) + '</p></div></article>';
       document.getElementById('score-person').addEventListener('change', function (event) { scorePerson = event.target.value; drawScorecard(); });
@@ -3478,33 +3473,25 @@
         '<article class="summary-sheet" id="summary-sheet">' +
         '<header class="summary-head"><div><p class="summary-kicker">Kane\'s Store 17 · Associate summary</p><h2 class="summary-name">' + esc(data.name) + '</h2>' +
         '<p class="sub">' + esc(data.start) + ' through ' + esc(data.end) + ' · salesperson month ' + esc(data.period.start) + ' through ' + esc(data.period.end) + '</p></div>' +
-        '<p class="sub summary-verified">Verified through: SNAP Written ' + esc(person.snapWritten === null || person.snapWritten === undefined ? 'Pending' : (data.snapThrough || 'Pending')) + ' · Group 17 Written ' + esc(person.analysisWrittenThrough || 'Pending') + ' · Group 17 Delivered ' + esc(person.deliveredThrough || 'Pending') + ' · Closing ' + esc(person.closingThrough || 'Pending') + '</p></header>' +
+        '<p class="sub summary-verified">Last updated. SNAP written ' + esc(dateLabel(data.snapThrough) || 'Pending') + '. Delivered ' + esc(dateLabel(person.deliveredThrough) || 'Pending') + '. Closing ' + esc(dateLabel(person.closingThrough) || 'Pending') + '.</p></header>' +
         '<div class="summary-grid">' +
-        summaryBox('SNAP Written sales', snapKnown ? money(person.snapWritten) : 'Not Available', data.snapPending && data.snapPending.length ? 'SNAP report Pending for ' + esc(data.snapPending.join(', ')) + ': not in the total, not zero.' : 'Individual written source.') +
-        summaryBox('Delivered sales', money(person.deliveredSales), 'Group 17 Delivered.') +
-        summaryBox('Monthly written goal', money(person.monthlyGoal), attained === null ? (data.fromFirst ? 'Attainment Pending.' : 'Not compared: the range does not start on the 1st.') : '<span class="' + (attained >= 1 ? 'good' : 'bad') + '">' + percent(attained) + ' attained</span> (SNAP ÷ goal).') +
-        summaryBox('Written orders', person.closingThrough ? count(person.closingOrders) : 'Pending', person.closingThrough ? 'Group 17 Written through ' + esc(person.closingThrough) + '.' : esc(closing.ratioStatus || '')) +
-        summaryBox('PERQ opportunities', person.closingThrough ? count(person.opportunities) : 'Pending', person.closingThrough ? 'Ups + Be Backs through ' + esc(person.closingThrough) + '.' : '') +
-        summaryBox('Closing ratio', closingKnown ? percent(person.closingRatio) : (person.closingThrough && person.opportunities === 0 ? 'N/A' : 'Pending'), 'Goal ' + percent(goals.closing) + (closingKnown ? ' · ' + pointsText(person.closingPoints) : ''), closingKnown ? personRatioTone(person) : 'pending') +
+        summaryBox('SNAP Written sales', snapKnown ? money(person.snapWritten) : 'Not Available', withUpdate(data.snapThrough, snapWaiting(data.snapPending))) +
+        summaryBox('Delivered sales', money(person.deliveredSales), updatedOn(person.deliveredThrough)) +
+        summaryBox('Monthly written goal', money(person.monthlyGoal), attained === null ? updatedOn(data.snapThrough) : withUpdate(data.snapThrough, '<span class="' + (attained >= 1 ? 'good' : 'bad') + '">' + percent(attained) + ' to goal.</span>')) +
+        summaryBox('Written orders', person.closingThrough ? count(person.closingOrders) : 'Pending', updatedOn(person.closingThrough)) +
+        summaryBox('PERQ opportunities', person.closingThrough ? count(person.opportunities) : 'Pending', updatedOn(person.closingThrough)) +
+        summaryBox('Closing ratio', closingKnown ? percent(person.closingRatio) : (person.closingThrough && person.opportunities === 0 ? 'N/A' : 'Pending'), withUpdate(person.closingThrough, closingKnown ? pointsText(person.closingPoints) + ' from the ' + percent(goals.closing) + ' goal.' : ''), closingKnown ? personRatioTone(person) : 'pending') +
         summaryBox('Average ticket', sideFigure(written, 'average'), 'Written · Delivered ' + sideFigure(delivered, 'average') + '.') +
         summaryBox('Bedding %', sideFigure(written, 'bedding'), 'Written · Delivered ' + sideFigure(delivered, 'bedding') + '. Goal ' + percent(goals.bedding) + '.') +
         '</div>' +
-        '<div class="summary-tables"><div><h3>Attachment KPIs · Written' + (attach.written.through ? ' through ' + esc(attach.written.through) : ' · Pending') + '</h3>' + attachmentTable(attach.written, false) + '</div>' +
-        '<div><h3>Attachment KPIs · Delivered' + (attach.delivered.through ? ' through ' + esc(attach.delivered.through) : ' · Pending') + '</h3>' + attachmentTable(attach.delivered, false) + '</div></div>' +
+        '<div class="summary-tables"><div><h3>Attachment KPIs · Written</h3><p class="sub">' + updatedOn(attach.written.through) + '</p>' + attachmentTable(attach.written, false) + '</div>' +
+        '<div><h3>Attachment KPIs · Delivered</h3><p class="sub">' + updatedOn(attach.delivered.through) + '</p>' + attachmentTable(attach.delivered, false) + '</div></div>' +
         (flags.length ? '<ul class="list warn summary-flags">' + flags.map(function (flag) { return '<li>' + esc(flag) + '</li>'; }).join('') + '</ul>' : '') +
         '<h3>Goal vs actual</h3><table class="score summary-goal"><tr><th rowspan="2">Measure</th><th rowspan="2">Goal</th><th colspan="3">Written</th><th colspan="3">Delivered</th></tr><tr><th>Actual</th><th>Difference</th><th>Needed to reach goal</th><th>Actual</th><th>Difference</th><th>Needed to reach goal</th></tr>' + goalRows + '</table>' +
-        '<p class="sub summary-foot">' + esc(totalAttachmentText(attach.written)) + ' Written sales and the monthly goal use SNAP Written only. Delivered sales, orders and KPIs are Data Analysis Group 17; opportunities are PERQ. Rates are recalculated from quantities, never averaged, and Written and Delivered are never combined. Pending means no verified report is on file; N/A means no qualified opportunity. Updated ' + esc(data.updated) + '.</p>' +
+        '<p class="sub summary-foot">' + esc(totalAttachmentText(attach.written)) + ' ' + updatedOn(data.snapThrough) + '</p>' +
         '</article>';
       bindTeamNav();
       bindSummaryControls();
-    }
-    function reconciliationNote(person) {
-      if (person.analysisWritten === null || person.analysisWritten === undefined) return 'Not on file. Reconciliation only; never used for the goal.';
-      var basis = esc(person.analysisWrittenBasis || '') + '. ';
-      if (person.snapWritten === null || person.snapWritten === undefined || person.analysisWrittenThrough !== peopleSnapThrough) {
-        return basis + 'Through ' + esc(person.analysisWrittenThrough) + ' and SNAP through ' + esc(peopleSnapThrough || 'Not Available') + ', so they are not compared. Reconciliation only; never used for the goal.';
-      }
-      return basis + 'Differs from SNAP written by ' + money(person.analysisWritten - person.snapWritten) + ' through ' + esc(peopleSnapThrough) + '. Reconciliation only; never used for the goal.';
     }
     function renderPerson(name) {
       displayHold = true;
@@ -3520,15 +3507,15 @@
         '<h2 class="section-title">' + esc(person.name) + '</h2>' +
         (person.leave ? '<p class="sub">' + esc(person.leave) + '</p>' : '') +
         '<div class="grid">' +
-        card('SNAP written', money(person.snapWritten), 'Individual written sales through ' + esc(peopleSnapThrough || 'the latest daily line') + '. The only source for the monthly goal.' + (peopleSnapPending.length ? ' ' + esc(peopleSnapPending.join(', ')) + ' Pending.' : '')) +
-        card('Monthly goal', person.monthlyGoal === null || person.monthlyGoal === undefined ? 'Data Pending' : money(person.monthlyGoal), goalProgress(person) + ' to goal: SNAP written ÷ the individual monthly goal. Store budgets are separate.') +
-        card('Delivered', money(person.deliveredSales), person.deliveredBasis ? 'Data Analysis Group 17 Delivered: ' + esc(person.deliveredBasis) + '.' : 'Data Analysis Group 17 Delivered is not on file.') +
-        card('Written orders', person.closingThrough ? count(person.closingOrders) : 'Pending', (person.closingThrough ? 'Data Analysis Group 17 Written orders, ' + esc(person.closing.ordersSource) + '.' : 'Group 17 Written orders for the same dates as PERQ are not on file.') + (person.writtenOrders !== null && person.writtenOrders !== undefined && person.analysisWrittenThrough !== person.closingThrough ? ' ' + count(person.writtenOrders) + ' through ' + esc(person.analysisWrittenThrough) + '.' : '')) +
-        card('Opportunities', person.closingThrough ? count(person.opportunities) : 'Pending', person.closingThrough ? 'PERQ Ups + Be Backs, ' + esc(person.closing.opportunitiesSource) + '.' : 'PERQ Ups + Be Backs for the same dates as Group 17 Written are not on file.') +
-        card('Closing ratio', personRatioText(person), 'Written orders ÷ PERQ opportunities × 100' + (person.closingThrough ? ': ' + count(person.closingOrders) + ' ÷ ' + count(person.opportunities) + ' through ' + esc(person.closingThrough) : '') + '. Goal ' + percent(person.closing && person.closing.goal) + (person.closingVersus ? ' · ' + esc(person.closingVersus) : '') + '. ' + esc(person.closingNote || ''), personRatioTone(person)) +
-        card('Data Analysis written', money(person.analysisWritten), reconciliationNote(person)) +
+        card('SNAP written', money(person.snapWritten), withUpdate(peopleSnapThrough, snapWaiting(peopleSnapPending))) +
+        card('Monthly goal', person.monthlyGoal === null || person.monthlyGoal === undefined ? 'Data Pending' : money(person.monthlyGoal), person.monthlyGoal === null || person.monthlyGoal === undefined || person.snapWritten === null || person.snapWritten === undefined ? updatedOn(peopleSnapThrough) : withUpdate(peopleSnapThrough, goalProgress(person) + ' to goal.')) +
+        card('Delivered', money(person.deliveredSales), updatedOn(person.deliveredThrough)) +
+        card('Written orders', person.closingThrough ? count(person.closingOrders) : 'Pending', person.closingThrough && person.analysisWrittenThrough && person.analysisWrittenThrough > person.closingThrough ? withUpdate(person.closingThrough, 'Written orders after ' + dateLabel(person.closingThrough) + ' wait on PERQ.') : updatedOn(person.closingThrough)) +
+        card('Opportunities', person.closingThrough ? count(person.opportunities) : 'Pending', updatedOn(person.closingThrough)) +
+        card('Closing ratio', personRatioText(person), person.closingReconcile ? withUpdate(person.closingThrough, 'Above 100%. Check the count.') : updatedOn(person.closingThrough), personRatioTone(person)) +
+        card('Data Analysis written', money(person.analysisWritten), updatedOn(person.analysisWrittenThrough)) +
         '</div>' +
-        '<article class="card kpi-wrap" style="margin-top:12px"><h2>Individual KPIs</h2><table class="kpi"><tr><th>KPI</th><th>Written</th><th>Delivered</th><th>Goal</th></tr>' + rows + '</table><p class="sub">From the Data Analysis Group 17 Written report through ' + esc(peopleAnalysisThrough.written || 'Not Available') + ' and the Delivered report through ' + esc(peopleAnalysisThrough.delivered || 'Not Available') + '. Rates are recalculated from counts and dollars, never averaged. A report with no line for this salesperson counts as 0. Not in report means the Group 17 report has no salesperson column for that KPI.</p></article>' +
+        '<article class="card kpi-wrap" style="margin-top:12px"><h2>Individual KPIs</h2><table class="kpi"><tr><th>KPI</th><th>Written</th><th>Delivered</th><th>Goal</th></tr>' + rows + '</table><p class="sub">Last updated. Written ' + esc(dateLabel(peopleAnalysisThrough.written) || 'Pending') + '. Delivered ' + esc(dateLabel(peopleAnalysisThrough.delivered) || 'Pending') + '.</p></article>' +
         '<article class="card" style="margin-top:12px"><h2>SNAP written days</h2>' + (trend ? '<ul class="list">' + trend + '</ul>' : '<p class="sub">No verified SNAP day is on file for this salesperson month.</p>') + '<p class="noprint"><button id="print-person" type="button">Print scorecard</button></p></article>';
       document.getElementById('back-people').addEventListener('click', function () { drawPeopleTable(); });
       document.getElementById('print-person').addEventListener('click', function () { window.print(); });
@@ -3674,28 +3661,19 @@
         if (Math.abs(pct) < 0.0005) return 'even with the goal';
         return Math.abs(pct * 100).toFixed(1) + '% ' + (pct > 0 ? 'above' : 'below') + ' the goal · ' + signed(perf.delta);
       }
-      function periodLabel(period) {
-        var match = String(period || '').match(/(\d{4}-\d{2}-\d{2})\s+through\s+(\d{4}-\d{2}-\d{2})/);
-        if (!match) return '';
-        return shortDate(match[1]) + '–' + shortDate(match[2]);
-      }
-      function resultCard(title, perf, source) {
-        var when = 'Yesterday · ' + shortDate(yesterday.date);
-        if (!perf || pending(perf.actual)) return '<article class="card"><h2>' + esc(title) + '</h2><p class="awaiting">Awaiting first report</p><p class="sub">' + esc(when) + ' · ' + source + '</p></article>';
-        if (pending(perf.goal) || !perf.result) return huddleCard(title, huddleMoney(perf.actual), when + ' · ' + source + ' Yesterday\'s saved goal is not on file.', 'pending');
+      function resultCard(title, perf) {
+        var when = updatedOn(yesterday.date);
+        if (!perf || pending(perf.actual)) return '<article class="card"><h2>' + esc(title) + '</h2><p class="awaiting">Pending</p><p class="sub">Last updated Pending.</p></article>';
+        if (pending(perf.goal) || !perf.result) return huddleCard(title, huddleMoney(perf.actual), when, 'pending');
         var tone = perf.result === 'HIT' ? 'good' : 'bad';
         var gap = gapText(perf);
-        return huddleCard(title, huddleMoney(perf.actual), when + ' · ' + source + ' ' + perf.result + ' · Goal ' + huddleMoney(perf.goal) + (gap ? ' · ' + gap : ''), tone);
+        return huddleCard(title, huddleMoney(perf.actual), when + ' ' + perf.result + '. Goal ' + huddleMoney(perf.goal) + (gap ? '. ' + gap : ''), tone);
       }
       function figureWhen(figure) {
         var scope = figure && figure.scope;
         if (scope === 'yesterday') return 'Yesterday · ' + shortDate(figure.date);
-        if (scope === 'latest-daily') return 'Latest verified: ' + shortDate(figure.date);
-        if (scope === 'mtd') {
-          var period = periodLabel(figure.period);
-          var through = figure.date ? 'through ' + shortDate(figure.date) : '';
-          return 'Latest verified MTD' + (period ? ' · ' + period : '') + (through ? ' · ' + through : '');
-        }
+        if (scope === 'latest-daily') return 'Last updated ' + (dateLabel(figure.date) || 'Pending');
+        if (scope === 'mtd') return 'Last updated ' + (dateLabel(figure.date) || 'Pending');
         return '';
       }
       function figureCard(title, figure, detail) {
@@ -3716,16 +3694,12 @@
       var yesterday = data.yesterday || {};
       var today = data.today || {};
       var closingFigure = yesterday.closing || { value: null, scope: 'none', customers: null, opportunities: null };
-      var closingDetail = 'Net Written customers ÷ PERQ opportunities';
+      var closingDetail = '';
       if (!pending(closingFigure.customers) && !pending(closingFigure.opportunities)) {
-        closingDetail = closingFigure.customers + ' customers ÷ ' + closingFigure.opportunities + ' opportunities';
+        closingDetail = closingFigure.customers + ' customers. ' + closingFigure.opportunities + ' opportunities.';
       }
       var closingMtd = closingFigure.mtd;
-      if (closingMtd && !pending(closingMtd.ratio)) {
-        closingDetail += ' · MTD ' + percent(closingMtd.ratio) + ' · ' + closingMtd.customers + ' ÷ ' + closingMtd.opportunities + (closingMtd.through ? ' · through ' + shortDate(closingMtd.through) : '');
-      } else if (closingMtd && closingMtd.gap) {
-        closingDetail += ' · ' + closingMtd.gap;
-      }
+      if (closingMtd && !pending(closingMtd.ratio)) closingDetail += (closingDetail ? ' ' : '') + 'Month to date ' + percent(closingMtd.ratio) + '.';
       var promo = data.promotion;
       var promoHtml = '<p class="sub">No approved promotion is on the calendar.</p>';
       if (promo) {
@@ -3805,18 +3779,18 @@
       document.getElementById('screen').innerHTML =
         '<div class="morning">' +
         '<h2 class="section-title">Results</h2><div class="morning-five">' +
-        resultCard('Yesterday written', yesterday.written, esc((data.labels && data.labels.written) || 'NWDSR Net Written') + '. ' + writtenBalanceNote(yesterday.writtenBalance, yesterday.snapWritten, yesterday.snapVariance)) +
-        resultCard('Yesterday delivered', yesterday.delivered, esc((data.labels && data.labels.delivered) || 'NWDSR Delivered') + '.') +
+        resultCard('Yesterday written', yesterday.written) +
+        resultCard('Yesterday delivered', yesterday.delivered) +
         figureCard('Closing ratio', closingFigure, closingDetail) +
         figureCard('Bedding written', yesterday.beddingWritten, '') +
         figureCard('Bedding delivered', yesterday.beddingDelivered, '') +
         '</div>' +
         '<h2 class="section-title">Today\'s goals</h2><div class="morning-grid">' +
-        huddleCard('Written sales goal', huddleMoney(today.written), 'Remaining budget divided by days left.', '') +
-        huddleCard('Delivered sales goal', huddleMoney(today.delivered), 'Remaining budget divided by days left.', '') +
-        huddleCard('Bedding target', percent(today.beddingGoal), 'Written and delivered.', '') +
-        huddleCard('Closing target', percent(today.closingGoal), 'Net Written customers divided by PERQ.', '') +
-        huddleCard('Per salesperson', huddleMoney(today.personalShare), pending(today.personalShare) ? 'Today\'s working roster is not on file.' : 'Today\'s written goal divided by associates working today.', pending(today.personalShare) ? 'pending' : '') +
+        huddleCard('Written sales goal', huddleMoney(today.written), updatedOn(data.date), '') +
+        huddleCard('Delivered sales goal', huddleMoney(today.delivered), updatedOn(data.date), '') +
+        huddleCard('Bedding target', percent(today.beddingGoal), updatedOn(data.date), '') +
+        huddleCard('Closing target', percent(today.closingGoal), updatedOn(data.date), '') +
+        huddleCard('Per salesperson', huddleMoney(today.personalShare), pending(today.personalShare) ? 'Last updated Pending.' : updatedOn(data.date), pending(today.personalShare) ? 'pending' : '') +
         '</div>' +
         winnersSectionHtml(data.winners, yesterday.date, data.rosterNotes, yesterday) +
         '<h2 class="section-title">Today\'s promotion</h2>' + promoHtml +
@@ -4513,11 +4487,11 @@
         if (units === null || units === undefined) return 'Not Available';
         return count(units) + (Number(units) === 1 ? ' unit · ' : ' units · ') + money(dollars);
       }
-      function ledgerNote(figure, side, source) {
-        return figure.ledgerThrough ? source + ' ' + side + ', store month through ' + esc(figure.ledgerThrough) + '.' : 'No ' + side + ' store-month figure is on file.';
+      function bedUpdated(figure) {
+        return updatedOn(figure && (figure.ledgerThrough || figure.through));
       }
       function attachmentNote(written, delivered, goal) {
-        return 'Written. Delivered ' + percent(delivered) + '. Goal ' + goal + '.' + (sw.through ? ' Store month through ' + esc(sw.through) + ', same figure as the Home tile.' : '');
+        return withUpdate(sw.through || sw.ledgerThrough, 'Delivered ' + percent(delivered) + '. Goal ' + goal + '.');
       }
       function goalTone(actual, goal, unit) {
         return unit && unit !== 'percent' ? '' : toneFor(actual, goal);
@@ -4527,29 +4501,29 @@
         : '';
       document.getElementById('screen').innerHTML =
         '<div class="bedding-page" id="bedding-dashboard">' +
-        '<h2 class="section-title">Store mattress sales</h2><p class="sub">Store reporting period ' + esc(data.storePeriod) + '</p>' +
+        '<h2 class="section-title">Store mattress sales</h2><p class="sub">' + bedUpdated(sw) + '</p>' +
         '<div class="grid bedding-band">' +
-        card('Mattress sales written', 'Not Available', 'Mattress dollars are not on a verified store-month report.') +
-        card('Mattress sales delivered', 'Not Available', 'Delivered mattress dollars are not on file.') +
-        card('Bedding written %', percent(data.writtenPercent), esc(data.writtenPercentNote || 'Written bedding dollars divided by written sales for this store month.') + ' Goal ' + percent(data.beddingGoal) + '.', toneFor(data.writtenPercent, data.beddingGoal)) +
-        card('Bedding delivered %', percent(data.deliveredPercent), esc(data.deliveredPercentNote || 'Delivered bedding is not copied from the written figure.') + ' Goal ' + percent(data.beddingGoal) + '.', toneFor(data.deliveredPercent, data.beddingGoal)) +
-        card('Bedding goal', percent(data.beddingGoal), 'Official bedding minimum.') +
-        card('Written mattress units', 'Not Available', 'Unit counts are not on the daily sales reports.') +
-        card('Delivered mattress units', 'Not Available', 'Unit counts are not on the daily sales reports.') +
-        card('Average mattress price', 'Not Available', 'Needs mattress dollars and mattress units for the same side.') +
-        card('Versus last year', 'Not Available', 'A prior-year bedding report for this store period is not on file.') +
+        card('Mattress sales written', 'Not Available', 'Last updated Pending.') +
+        card('Mattress sales delivered', 'Not Available', 'Last updated Pending.') +
+        card('Bedding written %', percent(data.writtenPercent), withUpdate(sw.through || sw.ledgerThrough, 'Goal ' + percent(data.beddingGoal) + '.'), toneFor(data.writtenPercent, data.beddingGoal)) +
+        card('Bedding delivered %', percent(data.deliveredPercent), withUpdate(sd.through || sd.ledgerThrough, 'Goal ' + percent(data.beddingGoal) + '.'), toneFor(data.deliveredPercent, data.beddingGoal)) +
+        card('Bedding goal', percent(data.beddingGoal), bedUpdated(sw)) +
+        card('Written mattress units', 'Not Available', 'Last updated Pending.') +
+        card('Delivered mattress units', 'Not Available', 'Last updated Pending.') +
+        card('Average mattress price', 'Not Available', 'Last updated Pending.') +
+        card('Versus last year', 'Not Available', 'Last updated Pending.') +
         '</div>' +
         '<h2 class="section-title">Store bedding attachments</h2>' +
         '<div class="grid bedding-band">' +
-        card('Protectors written', unitsAndDollars(sw.protectorUnits, sw.protectorDollars), 'Units and dollars. ' + ledgerNote(sw, 'written', 'Group 17 Data Analysis') + ' Goal ' + percent(data.protectorGoal) + ' attachment. Not divided by store sales.') +
-        card('Protectors delivered', unitsAndDollars(sd.protectorUnits, sd.protectorDollars), 'Units and dollars. ' + ledgerNote(sd, 'delivered', 'Group 17 Data Analysis')) +
+        card('Protectors written', unitsAndDollars(sw.protectorUnits, sw.protectorDollars), withUpdate(sw.ledgerThrough || sw.through, 'Goal ' + percent(data.protectorGoal) + '.')) +
+        card('Protectors delivered', unitsAndDollars(sd.protectorUnits, sd.protectorDollars), bedUpdated(sd)) +
         card('Protector attachment', percent(sw.protectors), attachmentNote(sw.protectors, sd.protectors, percent(data.protectorGoal)), toneFor(sw.protectors, data.protectorGoal)) +
-        card('Pillows written', unitsAndDollars(sw.pillowUnits, sw.pillowDollars), 'Units and dollars. ' + ledgerNote(sw, 'written', 'ASL Data Analysis') + ' Pillows are not included in the bedding percentage. Goal ' + goalLabel(data.pillowGoal, data.pillowUnit) + '.') +
-        card('Pillows delivered', unitsAndDollars(sd.pillowUnits, sd.pillowDollars), 'Units and dollars. ' + ledgerNote(sd, 'delivered', 'ASL Data Analysis')) +
-        card('Pillows per mattress', 'Not Available', 'Needs pillow units and mattress sales for the same side.') +
-        card('Adjustable bases written', unitsAndDollars(sw.baseUnits, sw.baseDollars), 'Units and dollars. ' + ledgerNote(sw, 'written', 'ASL Data Analysis') + ' Goal ' + goalLabel(data.baseGoal, data.baseUnit) + '.') +
-        card('Adjustable bases delivered', unitsAndDollars(sd.baseUnits, sd.baseDollars), 'Units and dollars. ' + ledgerNote(sd, 'delivered', 'ASL Data Analysis')) +
-        card('Adjustable base attachment', percent(sw.bases), attachmentNote(sw.bases, sd.bases, goalLabel(data.baseGoal, data.baseUnit)) + ' Packaged bases are not counted twice.', goalTone(sw.bases, data.baseGoal, data.baseUnit)) +
+        card('Pillows written', unitsAndDollars(sw.pillowUnits, sw.pillowDollars), withUpdate(sw.ledgerThrough || sw.through, 'Goal ' + goalLabel(data.pillowGoal, data.pillowUnit) + '.')) +
+        card('Pillows delivered', unitsAndDollars(sd.pillowUnits, sd.pillowDollars), bedUpdated(sd)) +
+        card('Pillows per mattress', 'Not Available', 'Last updated Pending.') +
+        card('Adjustable bases written', unitsAndDollars(sw.baseUnits, sw.baseDollars), withUpdate(sw.ledgerThrough || sw.through, 'Goal ' + goalLabel(data.baseGoal, data.baseUnit) + '.')) +
+        card('Adjustable bases delivered', unitsAndDollars(sd.baseUnits, sd.baseDollars), bedUpdated(sd)) +
+        card('Adjustable base attachment', percent(sw.bases), attachmentNote(sw.bases, sd.bases, goalLabel(data.baseGoal, data.baseUnit)), goalTone(sw.bases, data.baseGoal, data.baseUnit)) +
         '</div>' +
         '<article class="card kpi-wrap" style="margin-top:12px"><h2>Store KPI scoreboard</h2><table class="kpi"><tr><th>KPI</th><th>Written</th><th>Delivered</th><th>Goal</th></tr>' +
         '<tr><td>Bedding sales $</td><td>' + money(sw.beddingDollars) + '</td><td>' + money(sd.beddingDollars) + '</td><td>—</td></tr>' +
@@ -4558,11 +4532,11 @@
         '<tr><td>Mattress protectors</td><td class="' + toneFor(sw.protectors, data.protectorGoal) + '">' + percent(sw.protectors) + '</td><td class="' + toneFor(sd.protectors, data.protectorGoal) + '">' + percent(sd.protectors) + '</td><td>' + percent(data.protectorGoal) + ' attachment</td></tr>' +
         '<tr><td>Pillows</td><td class="' + goalTone(sw.pillows, data.pillowGoal, data.pillowUnit) + '">' + percent(sw.pillows) + '</td><td class="' + goalTone(sd.pillows, data.pillowGoal, data.pillowUnit) + '">' + percent(sd.pillows) + '</td><td>' + goalLabel(data.pillowGoal, data.pillowUnit) + '</td></tr>' +
         '<tr><td>Adjustable bases</td><td class="' + goalTone(sw.bases, data.baseGoal, data.baseUnit) + '">' + percent(sw.bases) + '</td><td class="' + goalTone(sd.bases, data.baseGoal, data.baseUnit) + '">' + percent(sd.bases) + '</td><td>' + goalLabel(data.baseGoal, data.baseUnit) + '</td></tr>' +
-        '</table><p class="sub">Green is at or above a confirmed goal. Amber is approaching. Red is below a confirmed figure. A missing source stays Not Available.</p>' +
+        '</table><p class="sub">' + bedUpdated(sw) + ' Green is at or above goal. Red is below.</p>' +
         '<p class="noprint"><button id="print-bedding" type="button">Print store bedding report</button></p></article>' +
-        '<h2 class="section-title">Salesperson bedding performance</h2><p class="sub">Salesperson reporting period ' + esc(data.individualPeriod) + '. These dates are not the store month, so the rows are not expected to add up to the store total.</p>' +
+        '<h2 class="section-title">Salesperson bedding performance</h2><p class="sub">' + updatedOn((data.people || []).reduce(function (latest, person) { return person.writtenThrough && person.writtenThrough > latest ? person.writtenThrough : latest; }, '')) + '</p>' +
         '<div class="nav noprint"><button class="sort" type="button" data-bed-sort="name">Name</button><button class="sort" type="button" data-bed-sort="beddingWritten">Written $</button><button class="sort" type="button" data-bed-sort="writtenPercent">Written %</button><button class="sort" type="button" data-bed-sort="protectorPercent">Protector %</button></div>' +
-        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Salesperson</th><th>Bedding written $</th><th>Bedding delivered $</th><th>Written %</th><th>Delivered %</th><th>Units</th><th>Protector %</th><th>Protector units</th><th>Pillow units</th><th>Pillow $</th><th>Base units</th><th>Base $</th><th>Base %</th></tr>' + rows + '</table><p class="sub">Bedding dollars, bedding % and protectors are from the Data Analysis Group 17 Written and Delivered reports for the salesperson month. The Group 17 report has no salesperson pillow or adjustable-base columns, and mattress units are not reported, so those stay Not Available and are not zero.</p></article>' +
+        '<article class="card kpi-wrap"><table class="kpi"><tr><th>Salesperson</th><th>Bedding written $</th><th>Bedding delivered $</th><th>Written %</th><th>Delivered %</th><th>Units</th><th>Protector %</th><th>Protector units</th><th>Pillow units</th><th>Pillow $</th><th>Base units</th><th>Base $</th><th>Base %</th></tr>' + rows + '</table><p class="sub">' + updatedOn((data.people || []).reduce(function (latest, person) { return person.writtenThrough && person.writtenThrough > latest ? person.writtenThrough : latest; }, '')) + '</p></article>' +
         admin +
         '</div>';
       var printButton = document.getElementById('print-bedding');
@@ -4598,18 +4572,18 @@
         '<div class="bedding-page"><p class="noprint"><button class="linkish" id="back-bedding" type="button">All bedding</button></p>' +
         '<h2 class="section-title">' + esc(person.name) + '</h2><p class="sub">Salesperson period ' + esc(beddingCache.individualPeriod) + '</p>' +
         '<div class="grid bedding-band">' +
-        card('Bedding written $', money(person.beddingWritten), 'Data Analysis Group 17 Written.') +
-        card('Bedding delivered $', money(person.beddingDelivered), 'Data Analysis Group 17 Delivered. Not copied from written.') +
-        card('Bedding written %', percent(person.writtenPercent), 'Goal 20%.') +
-        card('Bedding delivered %', percent(person.deliveredPercent), 'Goal 20%.') +
-        card('Protector attachment', percent(person.protectorPercent), 'Goal ' + percent(beddingCache.protectorGoal) + ' of eligible mattress opportunities.') +
-        card('Protector units', na(person.protectorUnits), '') +
-        card('Pillow units', na(person.pillowUnits), '') +
-        card('Pillow sales', money(person.pillowDollars), 'Not part of the bedding percentage.') +
-        card('Adjustable base units', na(person.baseUnits), '') +
-        card('Adjustable base sales', money(person.baseDollars), '') +
-        card('Adjustable base attachment', percent(person.basePercent), 'Goal ' + goalLabel(beddingCache.baseGoal, beddingCache.baseUnit) + '.') +
-        '</div><article class="card" style="margin-top:12px"><h2>Strengths and opportunities</h2><p>No salesperson pillow or adjustable-base lines are on file, so strengths are not ranked.</p><p class="noprint"><button id="print-person-bedding" type="button">Print individual bedding report</button></p></article></div>';
+        card('Bedding written $', money(person.beddingWritten), updatedOn(person.writtenThrough)) +
+        card('Bedding delivered $', money(person.beddingDelivered), updatedOn(person.deliveredThrough)) +
+        card('Bedding written %', percent(person.writtenPercent), withUpdate(person.writtenThrough, 'Goal 20%.')) +
+        card('Bedding delivered %', percent(person.deliveredPercent), withUpdate(person.deliveredThrough, 'Goal 20%.')) +
+        card('Protector attachment', percent(person.protectorPercent), withUpdate(person.writtenThrough, 'Goal ' + percent(beddingCache.protectorGoal) + '.')) +
+        card('Protector units', na(person.protectorUnits), updatedOn(person.writtenThrough)) +
+        card('Pillow units', na(person.pillowUnits), updatedOn(person.writtenThrough)) +
+        card('Pillow sales', money(person.pillowDollars), updatedOn(person.writtenThrough)) +
+        card('Adjustable base units', na(person.baseUnits), updatedOn(person.writtenThrough)) +
+        card('Adjustable base sales', money(person.baseDollars), updatedOn(person.writtenThrough)) +
+        card('Adjustable base attachment', percent(person.basePercent), withUpdate(person.writtenThrough, beddingCache.baseGoal === null || beddingCache.baseGoal === undefined ? '' : 'Goal ' + goalLabel(beddingCache.baseGoal, beddingCache.baseUnit) + '.')) +
+        '</div><article class="card" style="margin-top:12px"><h2>Strengths and opportunities</h2><p>' + updatedOn(person.writtenThrough) + '</p><p class="noprint"><button id="print-person-bedding" type="button">Print individual bedding report</button></p></article></div>';
       document.getElementById('back-bedding').addEventListener('click', function () { drawBedding(); });
       document.getElementById('print-person-bedding').addEventListener('click', function () { window.print(); });
     }
@@ -4617,9 +4591,9 @@
       var rows = (data.rows || []).map(function (row) {
         return '<tr><td>' + esc(row.report) + '</td><td>' + esc(row.earliest || '—') + '</td><td>' + esc(row.latest || '—') + '</td><td>' + esc(row.dailyRecords) + '</td><td>' + esc(row.missing) + '</td><td>' + esc(row.sheets) + '</td></tr>';
       }).join('');
-      document.getElementById('header-note').textContent = 'Data coverage · store month ' + (data.period || 'Pending') + (data.through ? ' · store days verified through ' + data.through : '');
+      document.getElementById('header-note').textContent = updatedOn(data.through);
       document.getElementById('screen').innerHTML =
-        '<article class="card kpi-wrap"><h2>Historical report coverage</h2><p class="sub">' + standardText(data) + ' A cumulative snapshot is not counted as a daily result. ' + (data.today ? 'Today, ' + esc(data.today) + ', is still open, so it is not listed as missing.' : '') + '</p><table class="kpi"><tr><th>Report</th><th>Earliest</th><th>Latest</th><th>Daily records</th><th>Missing daily dates</th><th>In Google Sheets</th></tr>' + rows + '</table></article>';
+        '<article class="card kpi-wrap"><h2>Historical report coverage</h2><p class="sub">' + updatedOn(data.through) + '</p><table class="kpi"><tr><th>Report</th><th>Earliest</th><th>Latest</th><th>Daily records</th><th>Missing daily dates</th><th>In Google Sheets</th></tr>' + rows + '</table></article>';
     }
     var uploadCache = null;
     var uploadFiles = [];
