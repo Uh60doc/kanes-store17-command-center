@@ -670,8 +670,8 @@ function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
       }
       days.push(cursor);
     } else if (!closed[cursor]) {
-      var emptyFact = family === 'group17' ? facts[cursor] : null;
-      var emptyAmount = emptyFact ? (side === 'written' ? emptyFact.nwdsrWritten : emptyFact.nwdsrDelivered) : null;
+      var emptyFact = facts[cursor];
+      var emptyAmount = emptyFact ? (side === 'delivered' ? emptyFact.nwdsrDelivered : (family === 'group17' ? emptyFact.nwdsrWritten : null)) : null;
       if (emptyAmount === 0) zeroDays.push(cursor);
       else break;
     }
@@ -849,8 +849,6 @@ function refreshStoreKpi_(date) {
     result.through[family] = through;
     var text = storeKpiThroughText_(period, written.through ? written : delivered);
     if (written.through && delivered.through && written.through !== delivered.through) text += ' (delivered through ' + delivered.through + ')';
-    var zeroDays = (written.zeroDays || []).concat(delivered.zeroDays || []);
-    if (zeroDays.length) text += '. Verified $0 store days with no Group 17 file, included as $0: ' + zeroDays.join(', ');
     var unsnapped = written.unsnapped.concat(delivered.unsnapped);
     storeKpiRows_(family, text, w, d).forEach(function (line) {
       var missing = (STORE_KPI_LINE_VIEWS_[line[0]] || []).filter(function (prefix) { return unsnapped.indexOf(prefix) !== -1; });
@@ -1008,9 +1006,9 @@ function uploadChecklist_(evidence, date) {
     else if (!onFile && last && last.status === 'Needs Review') { status = 'Needs Review'; message = last.message; }
     else if (!onFile && last && last.status === 'Failed' && /must be confirmed|Tick "These Excel files are for|not the business date|before the business date|prints .* which is after today/i.test(last.message)) status = 'Missing';
     else if (!onFile && last && last.status === 'Failed') { status = 'Failed'; message = last.message; }
-    if (item.key === 'g17Delivered' && fact.nwdsrDelivered === 0 && !onFile && !check) {
+    if ((item.key === 'g17Delivered' || item.key === 'aslDelivered') && fact.nwdsrDelivered === 0 && !onFile && !check) {
       status = 'Not expected';
-      message = dayText + '. Delivered was $0, so there is no individual Data Analysis report for this date. No salesperson delivered amount is invented.';
+      message = dayText + '. Delivered $0.';
     }
     if (status === 'Missing') {
       var cover = uploadCover_(evidence, date, item.key);

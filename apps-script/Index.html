@@ -3916,8 +3916,8 @@
     function renderReadiness(data) {
       var tone = data.status === 'READY' ? 'good' : (data.status === 'PARTIAL' || data.status === 'NOT DUE' ? 'warn' : 'bad');
       var rows = (data.items || []).map(function (item) {
-        var arrival = item.received === 'Received' ? 'good' : (item.received === 'Not due' ? 'warn' : 'bad');
-        var brought = item.imported === 'Imported' ? 'good' : (item.imported === 'Failed' ? 'bad' : 'pending');
+        var arrival = item.received === 'Received' || item.received === '$0' ? 'good' : (item.received === 'Not due' ? 'warn' : 'bad');
+        var brought = item.imported === 'Imported' || item.imported === '$0' ? 'good' : (item.imported === 'Failed' ? 'bad' : 'pending');
         var source = item.url ? '<a href="' + esc(item.url) + '" target="_blank" rel="noopener">Open ' + esc(item.file || 'source') + '</a>' : (item.file ? esc(item.file) : 'No original on file');
         return '<div class="ready-row"><div><strong>' + esc(item.label) + '</strong><span class="sub">' + esc(item.detail || '') + '</span></div>' +
           '<div><span class="ready-label">Business date</span><strong>' + esc(data.displayDate || item.date) + '</strong></div>' +
