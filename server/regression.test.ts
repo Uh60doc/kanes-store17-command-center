@@ -48,8 +48,8 @@ test('individual closing ratio is Group 17 written orders over PERQ salesperson 
   const { gs } = harness();
   const people = plain(gs.closing_({ session })).people as Row[];
   const byName = Object.fromEntries(people.map((person) => [person.name, [person.orders, person.opportunities, person.ratio, person.through]]));
-  assert.deepEqual(byName['Renzo Del Solar'], [9, 11, 0.818, '2026-10-14']);
-  assert.deepEqual(byName['Prakash Gandhi'], [11, 31, 0.355, '2026-10-14']);
+  assert.deepEqual(byName['Renzo Del Solar'], [9, 11, 0.818, '2026-10-15']);
+  assert.deepEqual(byName['Prakash Gandhi'], [11, 31, 0.355, '2026-10-15']);
   assert.deepEqual(byName['Eric Montes Rodriguez'], [12, 35, 0.343, '2026-10-15']);
   assert.deepEqual(byName['Ricky Nassif'], [17, 35, 0.486, '2026-10-15']);
 });

@@ -172,7 +172,7 @@ export function planPerqImport(input: { files: PerqFile[]; archives: PerqArchive
       });
     }
     if (counts.unassigned) {
-      flag(`PERQ ${day.date}: Store 17 shows ${counts.store} opportunities but the salesperson export lists ${counts.people.map((person) => `${person.name} ${person.opportunities}`).join(', ')} (${counts.store - counts.unassigned}). ${counts.unassigned} ${counts.unassigned === 1 ? 'opportunity is' : 'opportunities are'} not assigned to anyone. Salespeople not listed stay pending for ${day.date}.`);
+      flag(`PERQ ${day.date}: Store 17 shows ${counts.store} opportunities but the salesperson export lists ${counts.people.map((person) => `${person.name} ${person.opportunities}`).join(', ')} (${counts.store - counts.unassigned}). ${counts.unassigned} ${counts.unassigned === 1 ? 'opportunity is' : 'opportunities are'} not assigned to anyone. Salespeople not listed count as 0 for ${day.date}, including a day off.`);
     }
     plan.days.push({ date: day.date, store: counts.store, people: counts.people.map((person) => `${person.name} ${person.opportunities}`).join(', '), unassigned: counts.unassigned });
     const primary = (hashes: readonly string[]) => hashes.find((hash) => parsed.has(hash));

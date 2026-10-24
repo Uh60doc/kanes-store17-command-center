@@ -499,7 +499,7 @@ function monthEndPersonLines_(ctx, period, last) {
     var perq = monthEndLine_('Person', period, 'PERQ opportunities', '', person, 'count');
     var daily = personDailyOpportunities_(closing, person.name);
     countLine_(ctx, perq, closing, 'person', person.name, period, last, 'opportunities', daily, 'PERQ Salesperson Ups + Be Backs');
-    if (perq.through) perq.basis += '. A day whose salesperson rows add up to the store count is 0 for anyone not listed';
+    if (perq.through) perq.basis += '. A day with a salesperson export counts 0 for anyone not listed and for anyone listed at 0. A day with no salesperson export is the only gap';
     var perqFinal = closingFinalCount_(ctx.closing, 'person', person.name, period, 'opportunities');
     if (perqFinal) { perq.final = perqFinal.opportunities; perq.finalBasis = 'PERQ Salesperson ' + perqFinal.start + ' to ' + perqFinal.end; }
     lines.push(perq);
