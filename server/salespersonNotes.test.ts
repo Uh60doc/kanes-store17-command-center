@@ -126,5 +126,6 @@ test('store pages do not print system bookkeeping under the numbers', () => {
     assert.equal(html.includes(phrase), false, phrase);
   });
   assert.equal(html.includes('function updatedOn(iso)'), true);
+  assert.match(html, /still needs/);
   assert.equal(html.includes('Last updated '), true);
 });

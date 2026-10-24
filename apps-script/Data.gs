@@ -993,20 +993,26 @@ function countThrough_(facts, scope, name, start, date, field, closed, daily) {
   return null;
 }
 
-/** A daily store PERQ whose associate rows add up to the store count is complete, so an absent associate had 0 that day. */
+/**
+ * Daily PERQ opportunities for one salesperson. A day with any salesperson export counts 0 for everyone that export
+ * does not name, and a listed 0 stays 0. A day off or a zero day does not stop the month. The store total does not
+ * have to match the named rows. An opportunity the store export did not assign is not given to anyone. A day with no
+ * salesperson export stays unknown. Two different counts for the same person on the same day stay unknown.
+ */
 function personDailyOpportunities_(facts, name) {
   var map = dailyCountMap_(facts, 'person', name, 'opportunities');
-  var store = dailyCountMap_(facts, 'store', '', 'opportunities');
-  Object.keys(store).forEach(function (date) {
-    if (Object.prototype.hasOwnProperty.call(map, date)) return;
-    var total = 0;
-    var rows = 0;
-    facts.forEach(function (row) {
-      if (row.scope !== 'person' || row.start !== date || row.end !== date || row.opportunities === null) return;
-      total += row.opportunities;
-      rows += 1;
-    });
-    if (rows && total === store[date]) map[date] = 0;
+  var covered = {};
+  var own = {};
+  facts.forEach(function (row) {
+    if (row.scope !== 'person' || row.start !== row.end || row.opportunities === null) return;
+    covered[row.start] = true;
+    if (!rowMatchesPerson_(row, name)) return;
+    if (row.opportunityConflict || (Object.prototype.hasOwnProperty.call(own, row.start) && own[row.start] !== row.opportunities)) own[row.start] = null;
+    else if (own[row.start] !== null) own[row.start] = row.opportunities;
+  });
+  Object.keys(covered).forEach(function (date) {
+    if (own[date] === null || Object.prototype.hasOwnProperty.call(map, date)) return;
+    map[date] = 0;
   });
   return map;
 }
