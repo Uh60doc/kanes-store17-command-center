@@ -401,10 +401,21 @@ function peopleRows_(individualStart, individualEnd, options) {
 var PERSON_ANALYSIS_VIEWS_ = ['DA_SALES', 'BEDDING', 'MPPA', 'FABW', 'LTHW', 'PWAR', 'ATTACH', 'FINANCE', 'AVERAGE'];
 var PERSON_ANALYSIS_SOURCE_ = /DATA_ANALYSIS_KPI_17_/i;
 
+/** Dates whose official store total for this side is verified $0. Those days have no Group 17 salesperson file. */
+function verifiedStoreZeroDates_(side) {
+  var field = side === 'delivered' ? 'nwdsrDelivered' : 'nwdsrWritten';
+  var dates = {};
+  dailyFacts_().forEach(function (row) {
+    if (row[field] === 0) dates[row.date] = true;
+  });
+  return dates;
+}
+
 /**
  * What the Data Analysis Group 17 reports cover for the salesperson month on one side: the latest salesperson
  * snapshot that starts on the 1st, then each following day whose Group 17 day file is on file. Days inside the
- * snapshot are never added to it, and nothing after a missing open day is counted.
+ * snapshot are never added to it. A closed day, or a day whose NWDSR total is verified $0, is not a hole.
+ * A later day is not counted across a day that is still missing.
  */
 function personAnalysisCoverage_(ledger, side, period, closed) {
   var snapshot = '';
@@ -414,17 +425,24 @@ function personAnalysisCoverage_(ledger, side, period, closed) {
     if (row.view === 'DA_SALES_PERSON' && row.grain === 'cumulative' && row.fitsTrack && row.periodStart === period.start && row.verifiedThrough <= period.end && row.verifiedThrough > snapshot) snapshot = row.verifiedThrough;
     if (row.view === 'DA_SALES_STORE' && row.grain === 'daily') dayFiles[row.reportDate] = true;
   });
+  var zeros = verifiedStoreZeroDates_(side);
   var days = [];
+  var zeroDays = [];
   var through = snapshot;
   var cursor = snapshot ? shiftDate_(snapshot, 1) : period.start;
   while (cursor <= period.end) {
     if (dayFiles[cursor]) {
       days.push(cursor);
       through = cursor;
-    } else if (!closed[cursor]) break;
+    } else if (closed[cursor]) {
+      // The store was closed. There is no file, and the day is not a hole.
+    } else if (zeros[cursor]) {
+      zeroDays.push(cursor);
+      through = cursor;
+    } else break;
     cursor = shiftDate_(cursor, 1);
   }
-  return { side: side, period: period, snapshot: snapshot, days: days, through: through };
+  return { side: side, period: period, snapshot: snapshot, days: days, zeroDays: zeroDays, through: through };
 }
 
 function personAnalysisLedger_() {
@@ -508,7 +526,8 @@ function personAnalysisSide_(ledger, name, coverage) {
   return {
     through: coverage.through,
     basis: (coverage.snapshot ? 'Group 17 salesperson report ' + coverage.period.start + ' through ' + coverage.snapshot : '') +
-      (coverage.days.length ? (coverage.snapshot ? ' plus the ' : 'Group 17 ') + 'day files ' + coverage.days.join(', ') : ''),
+      (coverage.days.length ? (coverage.snapshot ? ' plus the ' : 'Group 17 ') + 'day files ' + coverage.days.join(', ') : '') +
+      (coverage.zeroDays && coverage.zeroDays.length ? '. Store ' + coverage.side + ' was $0 on ' + coverage.zeroDays.join(', ') + ', so there is no salesperson file and those days are included as $0' : ''),
     sales: round2(sales),
     orders: orders,
     beddingDollars: round2(bedding),

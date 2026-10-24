@@ -79,6 +79,19 @@ test('salesperson Data Analysis figures are the October 1 snapshot plus the foll
   assert.equal(gs.personAnalysis_(context, 'Eric Montes Rodriguez').delivered, null, 'no delivered report is Pending, not zero');
 });
 
+test('a verified $0 store day is not a hole, and a missing day with no verified zero still stops the count', () => {
+  const tabs = october();
+  tabs.CC_Daily.push(['2026-10-15', 0, 0, 0]);
+  const gs = load(tabs, '2026-10-18');
+  const context = gs.personAnalysisContext_({ start: '2026-10-01', end: '2026-10-31' });
+  assert.deepEqual(plain(context.written.days), ['2026-10-14', '2026-10-16']);
+  assert.deepEqual(plain(context.written.zeroDays), ['2026-10-15']);
+  assert.equal(context.written.through, '2026-10-16');
+  const ricky = gs.personAnalysis_(context, 'Ricky Nassif').written;
+  assert.equal(ricky.sales, 20180.84);
+  assert.match(ricky.basis, /Store written was \$0 on 2026-10-15/);
+});
+
 test('the salesperson record uses SNAP for written and the goal, Data Analysis for the rest, and has no NWDSR fields', () => {
   const gs = load(october(), '2026-10-18');
   const context = gs.personAnalysisContext_({ start: '2026-10-01', end: '2026-10-31' });

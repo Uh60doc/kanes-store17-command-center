@@ -616,8 +616,8 @@ function kpiRateOrNull_(top, bottom) {
 
 /**
  * The latest single-report store snapshot for the store month, then each following day whose report is on file.
- * A Group 17 day is added only when NWDSR for the same side and day is on file and matches its TOTAL. A missing open
- * day stops the count, so a later day is never added across a gap.
+ * A Group 17 day is added only when NWDSR for the same side and day is on file and matches its TOTAL. A verified $0
+ * NWDSR day has no Group 17 file and is not a hole. A missing open day still stops the count.
  */
 function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
   var spec = STORE_KPI_FAMILIES_[family];
@@ -654,6 +654,7 @@ function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
     }
   });
   var days = [];
+  var zeroDays = [];
   var issue = '';
   var limit = period.end < today ? period.end : today;
   var cursor = shiftDate_(snapshot || shiftDate_(period.start, -1), 1);
@@ -668,7 +669,12 @@ function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
         if (Math.abs(sales - nwdsr) > 1) { issue = 'Group 17 ' + side + ' TOTAL ' + moneyPlain_(sales) + ' does not match NWDSR ' + side + ' ' + moneyPlain_(nwdsr) + ' for ' + cursor + '.'; break; }
       }
       days.push(cursor);
-    } else if (!closed[cursor]) break;
+    } else if (!closed[cursor]) {
+      var emptyFact = family === 'group17' ? facts[cursor] : null;
+      var emptyAmount = emptyFact ? (side === 'written' ? emptyFact.nwdsrWritten : emptyFact.nwdsrDelivered) : null;
+      if (emptyAmount === 0) zeroDays.push(cursor);
+      else break;
+    }
     cursor = shiftDate_(cursor, 1);
   }
   var sources = [];
@@ -677,7 +683,7 @@ function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
     Object.keys(dayRows[date]).forEach(function (prefix) { if (sources.indexOf(dayRows[date][prefix].source) === -1) sources.push(dayRows[date][prefix].source); });
   });
   var unsnapped = snapshot ? spec.views.filter(function (prefix) { return !snapRows[prefix]; }) : [];
-  return { family: family, side: side, snapshot: snapshot, snapRows: snapRows, dayRows: dayRows, days: days, through: days.length ? days[days.length - 1] : snapshot, issue: issue, sources: sources, unsnapped: unsnapped };
+  return { family: family, side: side, snapshot: snapshot, snapRows: snapRows, dayRows: dayRows, days: days, zeroDays: zeroDays, through: days.length ? days[days.length - 1] : snapshot, issue: issue, sources: sources, unsnapped: unsnapped };
 }
 
 // The ledger views each CC_Kpi store line is built from. A line whose snapshot view is missing is left as recorded.
@@ -843,6 +849,8 @@ function refreshStoreKpi_(date) {
     result.through[family] = through;
     var text = storeKpiThroughText_(period, written.through ? written : delivered);
     if (written.through && delivered.through && written.through !== delivered.through) text += ' (delivered through ' + delivered.through + ')';
+    var zeroDays = (written.zeroDays || []).concat(delivered.zeroDays || []);
+    if (zeroDays.length) text += '. Verified $0 store days with no Group 17 file, included as $0: ' + zeroDays.join(', ');
     var unsnapped = written.unsnapped.concat(delivered.unsnapped);
     storeKpiRows_(family, text, w, d).forEach(function (line) {
       var missing = (STORE_KPI_LINE_VIEWS_[line[0]] || []).filter(function (prefix) { return unsnapped.indexOf(prefix) !== -1; });
