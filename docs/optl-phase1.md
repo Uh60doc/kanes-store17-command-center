@@ -1,6 +1,6 @@
-# OPTL Phase 1 — Admin page
+# OPTL Phase 1 — Admin page (spec v1.2)
 
-OPTL is a **new Admin dropdown page** on the live Store 17 Command Center (Apps Script). Home, Sales Team, and other existing screens are not redesigned.
+OPTL is a **new Admin dropdown page** on the live Store 17 Command Center (Apps Script). Home, Sales Team, and other existing screens are not redesigned. Spec: packet `STORE17_OPTL_COMPLETE_CURSOR_SPEC_V1_2.md`.
 
 ## Where it lives
 
@@ -12,10 +12,11 @@ OPTL is a **new Admin dropdown page** on the live Store 17 Command Center (Apps 
 ## Phase 1 scope
 
 - Demo associates / events only
-- Active matrix + permanent history
+- Active matrix (STEP I/II/III labels) + permanent history
 - +180 local-day unlinked occurrence expiration + left compaction
-- Print Active Matrix (Store 17 mark)
-- Entry / PIP escalation / live personnel Sheet: later phases
+- Late rule: 0–15 none; 16–119 Tardy; **120+ Attendance**
+- Print Active Matrix prototype (Store 17 mark)
+- Entry / STEP engine / live personnel Sheet: Phase 2+
 
 ## Tests
 
