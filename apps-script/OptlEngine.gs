@@ -36,20 +36,49 @@ function optlEmptyState_() {
 
 function optlQueueAlert_(state, alert) {
   state.alerts = state.alerts || [];
-  state.alerts.unshift({
+  var kind = alert.kind || 'notice';
+  var employeeId = alert.employeeId || null;
+  var duplicate = state.alerts.some(function (row) {
+    return row.status === 'open' && row.kind === kind && row.employeeId === employeeId;
+  });
+  if (duplicate) return null;
+  var row = {
     alertId: optlNewId_('alrt'),
     createdAt: optlToday_() + 'T12:00:00',
     channel: 'command-center',
-    emailQueued: false,
-    emailBlockedReason: (state.alertConfig && state.alertConfig.testSendingDisabled)
-      ? 'Email sending disabled until recipients are configured and approved'
-      : null,
+    emailSent: false,
+    emailBlockedReason: null,
     status: 'open',
-    employeeId: alert.employeeId || null,
-    kind: alert.kind || 'notice',
+    employeeId: employeeId,
+    kind: kind,
     title: alert.title || 'OPTL alert',
     detail: alert.detail || '',
-  });
+  };
+  var mail = optlDispatchManagementEmail_(state, row);
+  row.emailSent = !!mail.sent;
+  row.emailBlockedReason = mail.sent ? null : mail.reason;
+  state.alerts.unshift(row);
+  return row;
+}
+
+/**
+ * Email stays off until recipients are configured AND the GM sets gmEmailAuthorized.
+ * Subject and body omit incident facts and employee names.
+ */
+function optlDispatchManagementEmail_(state, alert) {
+  var cfg = (state && state.alertConfig) || {};
+  var recipients = cfg.emailRecipients || [];
+  if (!cfg.emailEnabled) return { sent: false, reason: 'Email disabled' };
+  if (cfg.testSendingDisabled !== false) return { sent: false, reason: 'Test sending disabled' };
+  if (cfg.gmEmailAuthorized !== true) return { sent: false, reason: 'GM has not authorized live OPTL email' };
+  if (!recipients.length) return { sent: false, reason: 'No approved recipients' };
+  var subject = 'Store 17 OPTL: management attention required';
+  var body = 'An OPTL item needs a manager in the Command Center (Admin → OPTL). This message does not include incident details. Kind: ' + String(alert.kind || 'notice') + '.';
+  if (typeof MailApp === 'undefined' || !MailApp.sendEmail) {
+    return { sent: false, reason: 'MailApp unavailable', subject: subject, body: body };
+  }
+  MailApp.sendEmail(recipients.join(','), subject, body);
+  return { sent: true, reason: '', subject: subject, body: body };
 }
 
 /** Map STEP/TERM to Kane's PIP counseling-level checkbox labels. */

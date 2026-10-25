@@ -370,13 +370,23 @@ function optlCloneDemoState_() {
     emailEnabled: false,
     emailRecipients: [],
     testSendingDisabled: true,
-    note: 'Command Center alerts are recorded in-app. Manager email waits for configured/approved recipients. Test sending is disabled.',
+    gmEmailAuthorized: false,
+    note: 'Command Center alerts are recorded in-app. Live email stays off until recipients are verified and the GM authorizes delivery.',
   };
   return state;
 }
 
-/** Synthetic demo state only — PropertiesService when available; never a live personnel Sheet. */
+/**
+ * Load OPTL state. Dedicated workbook when OPTL_SPREADSHEET_ID is set; otherwise
+ * script properties hold the fictional demo so refreshes survive without a sales-sheet write.
+ */
 function optlLoadState_() {
+  var bookId = optlSpreadsheetId_();
+  if (bookId && typeof SpreadsheetApp !== 'undefined') {
+    optlAssertDedicatedBook_(bookId);
+    var fromBook = optlLoadStateFromBook_(SpreadsheetApp.openById(bookId));
+    if (fromBook) return fromBook;
+  }
   try {
     if (typeof PropertiesService !== 'undefined') {
       var raw = PropertiesService.getScriptProperties().getProperty(OPTL_STATE_PROP_KEY_);
@@ -390,6 +400,11 @@ function optlLoadState_() {
 }
 
 function optlSaveState_(state) {
+  var bookId = optlSpreadsheetId_();
+  if (bookId && typeof SpreadsheetApp !== 'undefined') {
+    optlAssertDedicatedBook_(bookId);
+    optlSaveStateToBook_(SpreadsheetApp.openById(bookId), state);
+  }
   try {
     if (typeof PropertiesService !== 'undefined') {
       PropertiesService.getScriptProperties().setProperty(OPTL_STATE_PROP_KEY_, JSON.stringify(state));
@@ -558,11 +573,14 @@ function optlBuildPage_(state, payload, actionResult) {
     pipPrint: pipPrint,
     eventNotes: eventNotes,
     actionResult: actionResult || null,
+    storageMode: optlStorageMode_(),
     security: {
-      storage: 'Synthetic PropertiesService demo state only — STORE 17 OPTL DATA Sheet blocked until GM approval',
-      email: 'Disabled until recipients configured and approved; test sending off',
-      identity: 'Shared manager login · actions require explicit acting-manager declaration',
-      pipPrint: 'Kane\'s Personal Improvement Plan (PIP) template populated from entered facts; HR approval language preserved',
+      storage: optlStorageMode_() === 'dedicated-sheet'
+        ? 'Dedicated STORE 17 OPTL DATA workbook (not the sales spreadsheet)'
+        : 'Demo persistence in script properties until the GM runs optlCreateDedicatedStore_ — sales spreadsheet is never used',
+      email: 'Command Center alerts on. Live email blocked until recipients are verified and gmEmailAuthorized is set. Subjects omit incident details.',
+      identity: 'Existing manager/admin login only (GM, Sales Manager, Operations Manager share that login). Every mutation records a manager-declared actor. Shared credentials cannot verify which person typed the password. No SSN field exists.',
+      pipPrint: 'Kane\'s Personal Improvement Plan matches performance-improvement-plan-pip-blank.doc. Employee matrix print has no private notes.',
     },
     stillDemo: [
       'Synthetic employee IDs / PropertiesService demo state (not live Sheet)',

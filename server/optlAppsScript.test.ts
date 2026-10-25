@@ -85,6 +85,13 @@ type OptlGs = {
   optlFlagReviewRequired_: (state: unknown, draft: Record<string, unknown>, payload: Record<string, unknown>) => {
     tone: string;
   };
+  optlMemoryBook_: () => unknown;
+  optlSaveStateToBook_: (book: unknown, state: unknown) => void;
+  optlLoadStateFromBook_: (book: unknown) => { employees: { employeeId: string; status: string }[]; events: unknown[]; audit: unknown[] };
+  optlAssertDedicatedBook_: (id: string) => void;
+  optlQueueAlert_: (state: { alerts: { kind: string; status: string }[] }, alert: Record<string, unknown>) => unknown;
+  optlDispatchManagementEmail_: (state: unknown, alert: Record<string, unknown>) => { sent: boolean; subject?: string; body?: string; reason: string };
+  SPREADSHEET_ID_?: string;
   optl_: (payload: Record<string, unknown>) => {
     selectedEmployeeId: string;
     phase: number;
@@ -107,13 +114,16 @@ const actor = {
 
 function loadOptl(): OptlGs {
   const { services } = appsScriptServices();
-  const context: Record<string, unknown> = { ...services };
+  const context: Record<string, unknown> = { ...services, SPREADSHEET_ID_: 'sales-book-id' };
   vm.createContext(context);
   vm.runInContext(readFileSync(new URL('../apps-script/Optl.gs', import.meta.url), 'utf8'), context, {
     filename: 'Optl.gs',
   });
   vm.runInContext(readFileSync(new URL('../apps-script/OptlEngine.gs', import.meta.url), 'utf8'), context, {
     filename: 'OptlEngine.gs',
+  });
+  vm.runInContext(readFileSync(new URL('../apps-script/OptlStore.gs', import.meta.url), 'utf8'), context, {
+    filename: 'OptlStore.gs',
   });
   return context as unknown as OptlGs;
 }
@@ -783,6 +793,74 @@ test('optl_ mutation actions: new hire via page API and UI markers present', () 
   assert.match(html, /Personal Improvement Plan \(PIP\)/);
   assert.match(html, /optl-yr/);
   assert.match(html, /Management dashboard/);
+});
+
+test('dedicated OPTL book round-trips demo history and refuses the sales spreadsheet', () => {
+  const gs = loadOptl();
+  const state = gs.optlEmptyState_();
+  seedEmployee(state);
+  ['2026-08-01', '2026-08-10', '2026-08-20', '2026-09-01'].forEach((d) => addOcc(gs, state, d, 'Safety'));
+  gs.optlIssueFormalAction_(
+    state,
+    { employeeId: 'E1', section: 'A', category: 'Safety', entryType: 'STEP_I', incidentDate: '2026-09-01' },
+    { ...actor, asOfDate: '2026-09-05' },
+  );
+  gs.optlTerminateEmployee_(state, 'E1', { separationDate: '2026-09-20', reason: 'Demo end of period' }, actor);
+  gs.optlRehireEmployee_(state, 'E1', '2026-10-01', actor);
+  const book = gs.optlMemoryBook_();
+  gs.optlSaveStateToBook_(book, state);
+  const loaded = gs.optlLoadStateFromBook_(book);
+  assert.equal(loaded.employees.length, 1);
+  assert.equal(loaded.employees[0]?.status, 'active');
+  assert.ok(loaded.events.length >= 5);
+  assert.ok(loaded.audit.length >= 1);
+  const again = gs.optlEngineEmployeeView_(loaded, 'E1', '2026-10-25');
+  assert.equal(again.matrixRows.flatMap((row) => row.cells).filter((cell) => cell.occupied).length, 0);
+  assert.ok(again.history.length >= 5);
+  assert.throws(() => gs.optlAssertDedicatedBook_('sales-book-id'), /sales reporting/);
+  assert.throws(() => gs.optlAssertDedicatedBook_(''), /not configured/);
+});
+
+test('management email stays off and duplicate alerts collapse', () => {
+  const gs = loadOptl();
+  const state = gs.optlEmptyState_();
+  state.alertConfig = {
+    commandCenter: true,
+    emailEnabled: false,
+    emailRecipients: ['gm@example.invalid'],
+    testSendingDisabled: true,
+    gmEmailAuthorized: false,
+  };
+  const first = gs.optlQueueAlert_(state, { employeeId: 'E1', kind: 'ACTION_REQUIRED', title: 'Pending STEP', detail: 'secret incident text' });
+  const second = gs.optlQueueAlert_(state, { employeeId: 'E1', kind: 'ACTION_REQUIRED', title: 'Pending STEP', detail: 'secret incident text' });
+  assert.ok(first);
+  assert.equal(second, null);
+  assert.equal(state.alerts.length, 1);
+  const preview = gs.optlDispatchManagementEmail_(state, { kind: 'ACTION_REQUIRED' });
+  assert.equal(preview.sent, false);
+  state.alertConfig.emailEnabled = true;
+  state.alertConfig.testSendingDisabled = false;
+  state.alertConfig.gmEmailAuthorized = true;
+  const ready = gs.optlDispatchManagementEmail_(state, { kind: 'ACTION_REQUIRED', detail: 'Late — 40 min Alex Rivera' });
+  assert.equal(ready.sent, false);
+  assert.match(ready.subject || '', /management attention required/);
+  assert.doesNotMatch(ready.subject || '', /Alex|Late|min/);
+  assert.doesNotMatch(ready.body || '', /Alex Rivera|40 min/);
+});
+
+test('employee matrix print omits private notes and PIP keeps Kane form sections', () => {
+  const html = readFileSync(new URL('../apps-script/Index.html', import.meta.url), 'utf8');
+  assert.match(html, /no private notes/);
+  assert.match(html, /Employee Comments/);
+  assert.match(html, /refusalInstruction/);
+  assert.match(html, /Counseling Level/);
+  assert.match(html, /Type of Warning/);
+  assert.match(html, /Previous Notices/);
+  const matrixStart = html.indexOf('id="optl-print-matrix-sheet"');
+  const matrixEnd = html.indexOf('id="optl-print-history-sheet"');
+  const matrix = html.slice(matrixStart, matrixEnd);
+  assert.match(matrix, /no private notes/);
+  assert.equal(matrix.includes('id="optl-notes'), false);
 });
 
 test('flag review required marks yellow-red exception', () => {
