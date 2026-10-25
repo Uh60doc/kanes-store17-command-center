@@ -961,10 +961,11 @@ function evalMailSettings_() {
   try { config = config_(); } catch (error) { config = {}; }
   var hour = Number(config.eval_mail_hour);
   if (!isFinite(hour) || hour < 0 || hour > 23) hour = 7;
-  var to = String(config.eval_mail_to || config.brief_mail_to || '').trim();
-  if (!evalMailAddress_(to)) to = EVAL_MAIL_TO_;
+  var explicit = String(config.eval_mail_to || '').trim();
+  var recipientApproved = explicit.toLowerCase() === EVAL_MAIL_TO_.toLowerCase();
+  var to = EVAL_MAIL_TO_;
   var gm = String(config.admin_email || '').trim();
-  return { enabled: String(config.eval_mail_enabled || '').trim().toLowerCase() === 'yes', hour: hour, to: to, gm: evalMailAddress_(gm) ? gm : '' };
+  return { enabled: String(config.eval_mail_enabled || '').trim().toLowerCase() === 'yes', hour: hour, to: to, gm: evalMailAddress_(gm) ? gm : '', recipientApproved: recipientApproved };
 }
 
 function evalMailRows_() {
@@ -1020,7 +1021,10 @@ function evalMailPreview_(context, today) {
   var held = evalMailLogged_(info.cycle, 'held');
   var ready = !monthsOpen && !missing.length && !sent;
   var heldForData = missing.length ? 'Essential monthly reports are missing, so the management list is not emailed.' : '';
-  var heldForSwitch = settings.enabled ? '' : ' Automatic email is off until the GM approves the recipient list, the send time, the test workbook, and the email workflow.';
+  var hourLabel = (settings.hour % 12 || 12) + ':00 ' + (settings.hour < 12 ? 'AM' : 'PM') + ' America/New_York';
+  var heldForSwitch = settings.enabled ? '' : (settings.recipientApproved
+    ? ' The recipient list is approved: ' + settings.to + '. Automatic email stays off until the GM approves the ' + hourLabel + ' send time, the test workbook, and the email workflow.'
+    : ' Automatic email is off until the GM approves the recipient list, the send time, the test workbook, and the email workflow.');
   var reason = sent ? 'This month was already emailed. A second send is blocked.' : (monthsOpen ? 'A covered month is not finished, so the review is not emailed.' : (heldForData || heldForSwitch ? (heldForData + heldForSwitch).trim() : 'Ready to email on the 2nd at the configured hour.'));
   return {
     name: 'Monthly Sales Team Review',
@@ -1028,7 +1032,7 @@ function evalMailPreview_(context, today) {
     to: settings.to,
     gm: settings.gm || 'Not on file (CC_Config admin_email)',
     hour: settings.hour,
-    hourLabel: (settings.hour % 12 || 12) + ':00 ' + (settings.hour < 12 ? 'AM' : 'PM') + ' America/New_York',
+    hourLabel: hourLabel,
     subject: evalMailSubject_(info),
     prepare: info.prepare,
     ready: ready && settings.enabled,

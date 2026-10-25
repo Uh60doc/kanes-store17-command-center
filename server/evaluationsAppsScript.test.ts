@@ -359,6 +359,13 @@ test('the 2nd emails the management list once, and missing reports alert the GM 
   (gs as any).MailApp = { sendEmail: (to: any, subject?: string, body?: string) => { mail.push(typeof to === 'string' ? { to, subject, body } : to); } };
   assert.equal(plain(gs.maybeSendEvalMail_('2026-11-02')).reason, 'automatic email is off until the GM approves it');
   assert.equal(mail.length, 0, 'a disabled schedule does not email anyone');
+  tabs.CC_Config!.push(['eval_mail_to', 'Store17MGMT-Mail@kanesfurniture.onmicrosoft.com']);
+  const approved = plain(gs.evals_({ session: manager, cycle: '2026-11' }));
+  assert.equal(approved.mail.enabled, false);
+  assert.equal(approved.mail.to, 'Store17MGMT-Mail@kanesfurniture.onmicrosoft.com');
+  assert.match(approved.mail.reason, /recipient list is approved: Store17MGMT-Mail@kanesfurniture.onmicrosoft.com/);
+  assert.match(approved.mail.reason, /stays off until the GM approves the 12:00 AM America\/New_York send time/);
+  assert.equal(mail.length, 0, 'approving the recipient does not send the email');
   tabs.CC_Config!.find((row) => row[0] === 'eval_mail_enabled')![1] = 'yes';
   const held = plain(gs.maybeSendEvalMail_('2026-11-02'));
   assert.equal(held.held, true);
