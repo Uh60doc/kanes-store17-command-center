@@ -314,11 +314,22 @@ function uploadKpiWorkbook_(context, info) {
     base.start = period[1];
     base.end = period[2];
     if (period[1] !== period[2]) {
-      var final = recordKpiFinal_(info.grid, info.family, info.side, period[1], period[2], 'DATA_ANALYSIS_KPI_' + (info.family === 'asl' ? 'ASL' : '17') + '_' + info.side.toUpperCase() + '_' + period[1] + '_' + period[2] + '.xlsx');
+      var snapshotName = 'DATA_ANALYSIS_KPI_' + (info.family === 'asl' ? 'ASL' : '17') + '_' + info.side.toUpperCase() + '_' + period[1] + '_' + period[2] + '.xlsx';
+      var final = recordKpiFinal_(info.grid, info.family, info.side, period[1], period[2], snapshotName);
       if (final) {
         return finishImport_(context, uploadOutcome_(base, 'Imported', label + ' ' + period[1] + ' through ' + period[2] + ' is the official month-end final for the ' + (final.track === 'STORE' ? 'store' : 'salesperson') + ' month: ' + final.rows + ' figures recorded beside the daily record on CC_MonthEnd. The daily figures were not changed.'), 'official-final');
       }
-      return finishImport_(context, uploadOutcome_(base, 'Needs Review', label + ' covers ' + period[1] + ' through ' + period[2] + '. Month-to-date reports are not added to the daily figures, so nothing was changed. Upload the single-day report for ' + context.date + '.'), 'needs-review');
+      if (period[2] >= todayNy_()) {
+        return finishImport_(context, uploadOutcome_(base, 'Needs Review', label + ' covers ' + period[1] + ' through ' + period[2] + ', which includes today. A month-to-date snapshot has to end on a finished day. Upload it through yesterday, and upload the single-day file once the day is closed. Nothing was changed.'), 'needs-review');
+      }
+      var snapshot = recordKpiSnapshot_(info.grid, info.family, info.side, period[1], period[2], snapshotName);
+      if (snapshot) {
+        if (!context.deferRefresh) refreshStoreKpiQuietly_(period[2]);
+        var track = snapshot.store ? 'store' : 'salesperson';
+        var saved = snapshot.outcome || {};
+        return finishImport_(context, uploadOutcome_(base, 'Imported', label + ' ' + period[1] + ' through ' + period[2] + ' is the ' + track + ' month-to-date snapshot: ' + snapshot.rows + ' figures, including pillows, adjustable bases, mattress pads, furniture protection, rugs and pet protection when the file prints them. Days inside ' + period[1] + ' through ' + period[2] + ' are not added again. ' + (saved.added || 0) + ' new, ' + (saved.replaced || 0) + ' replaced, ' + (saved.same || 0) + ' already on file.'), 'imported', label + ' ' + period[1] + ' through ' + period[2]);
+      }
+      return finishImport_(context, uploadOutcome_(base, 'Needs Review', label + ' covers ' + period[1] + ' through ' + period[2] + '. A store snapshot has to start on the 2nd, and a salesperson snapshot on the 1st. Nothing was changed.'), 'needs-review');
     }
     if (period[1] !== context.date && !(period[1] === period[2] && adoptUploadDate_(context, period[1]))) {
       return uploadOutcome_(base, 'Failed', label + ' prints ' + period[1] + ', which is after today, so it was not filed. Nothing was changed.');
@@ -339,9 +350,10 @@ function uploadKpiWorkbook_(context, info) {
   if (!storeRecords.some(function (record) { return record[0] === storeView; })) {
     if (info.family === 'asl') {
       if (info.grid.length < 3) return finishImport_(context, uploadOutcome_(base, 'Needs Review', 'The ASL workbook has no store rows. Check that the report finished running. Nothing was changed.'), 'needs-review');
-      ['PILLOWS_STORE', 'BASES_STORE', 'FP_STORE'].forEach(function (view) { records.push(kpiRecord_(true, date, date, view, '', '', info.side, 0, 0, 0, 0, 0, source)); });
+      ['PILLOWS_STORE', 'BASES_STORE', 'FP_STORE', 'PET_STORE'].forEach(function (view) { records.push(kpiRecord_(true, date, date, view, '', '', info.side, 0, 0, 0, 0, 0, source)); });
       records.push(kpiRecord_(true, date, date, 'RUGS_STORE', '', '', info.side, 0, 0, null, 0, null, source));
-      notes.push('Store 17 is not listed, so it had no pillow, adjustable base, furniture protection or rug activity on this report; recorded as 0.');
+      records.push(kpiRecord_(true, date, date, 'PWRBASE_STORE', '', '', info.side, null, null, null, null, 0, source));
+      notes.push('Store 17 is not listed, so it had no pillow, adjustable base, furniture protection, rug or pet activity on this report; recorded as 0.');
     } else if (nwdsr === 0 && records.length === 0) {
       records.push(kpiRecord_(true, date, date, 'DA_SALES_STORE', '', '', info.side, 0, 0, null, null, null, source));
       records.push(kpiRecord_(true, date, date, 'BEDDING_STORE', '', '', info.side, 0, null, null, null, 0, source));
@@ -602,7 +614,7 @@ function uploadPerq_(context, info) {
 
 var STORE_KPI_FAMILIES_ = {
   group17: { anchor: 'DA_SALES', views: ['DA_SALES', 'BEDDING', 'FABW', 'PWAR', 'LTHW', 'MPPA', 'ATTACH', 'FINANCE'], source: /DATA_ANALYSIS_KPI_17_/i },
-  asl: { anchor: 'RUGS', views: ['PILLOWS', 'BASES', 'FP', 'RUGS'], source: /DATA_ANALYSIS_KPI_ASL_/i },
+  asl: { anchor: 'RUGS', views: ['PILLOWS', 'BASES', 'FP', 'RUGS', 'PET', 'PWRBASE'], source: /DATA_ANALYSIS_KPI_(ASL|17)_/i },
 };
 
 function kpiRound_(value, places) {
@@ -616,6 +628,9 @@ function kpiRateOrNull_(top, bottom) {
 
 /**
  * The latest single-report store snapshot for the store month, then each following day whose report is on file.
+ * A rebuilt total (its source joins the files with " + ") is not a new snapshot and is not added on top of the days.
+ * A column the snapshot does not have, such as pet protection, is taken from a cumulative row that ends on the
+ * same through-date. Its daily pieces are not added again.
  * A Group 17 day is added only when NWDSR for the same side and day is on file and matches its TOTAL. A verified $0
  * NWDSR day has no Group 17 file and is not a hole. A missing open day still stops the count.
  */
@@ -677,13 +692,30 @@ function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
     }
     cursor = shiftDate_(cursor, 1);
   }
+  var through = days.length ? days[days.length - 1] : snapshot;
+  // A column missing from the single-report snapshot can still be on file as one total through this same date.
+  if (through) {
+    var complete = {};
+    ledger.forEach(function (row) {
+      if (!storeRow(row) || row.grain !== 'cumulative' || !row.fitsTrack || row.periodStart !== period.start || row.verifiedThrough !== through) return;
+      var prefix = prefixOf(row);
+      if (snapRows[prefix]) return;
+      complete[prefix] = laterLedger_(complete[prefix], row);
+    });
+    Object.keys(complete).forEach(function (prefix) {
+      snapRows[prefix] = complete[prefix];
+      days.forEach(function (date) {
+        if (dayRows[date]) delete dayRows[date][prefix];
+      });
+    });
+  }
   var sources = [];
   Object.keys(snapRows).forEach(function (prefix) { if (sources.indexOf(snapRows[prefix].source) === -1) sources.push(snapRows[prefix].source); });
   days.forEach(function (date) {
     Object.keys(dayRows[date]).forEach(function (prefix) { if (sources.indexOf(dayRows[date][prefix].source) === -1) sources.push(dayRows[date][prefix].source); });
   });
   var unsnapped = snapshot ? spec.views.filter(function (prefix) { return !snapRows[prefix]; }) : [];
-  return { family: family, side: side, snapshot: snapshot, snapRows: snapRows, dayRows: dayRows, days: days, zeroDays: zeroDays, through: days.length ? days[days.length - 1] : snapshot, issue: issue, sources: sources, unsnapped: unsnapped };
+  return { family: family, side: side, snapshot: snapshot, snapRows: snapRows, dayRows: dayRows, days: days, zeroDays: zeroDays, through: through, issue: issue, sources: sources, unsnapped: unsnapped };
 }
 
 // The ledger views each CC_Kpi store line is built from. A line whose snapshot view is missing is left as recorded.
@@ -691,14 +723,26 @@ var STORE_KPI_LINE_VIEWS_ = {
   'Bedding': ['BEDDING', 'DA_SALES'], 'Mattress Protectors': ['MPPA'], 'Fabric Maintenance': ['FABW'], 'Leather Maintenance': ['LTHW'],
   'Power Upholstery': ['PWAR'], 'Total Attachment': ['ATTACH'], 'Finance': ['FINANCE', 'DA_SALES'], 'Average Ticket': ['DA_SALES'],
   'Adjustable Base Attachment': ['BASES'], 'Pillows': ['PILLOWS'], 'Wood / Furniture Protection': ['FP'], 'Rugs': ['RUGS'],
+  'Pet Protections': ['PET'], 'Power Adjustable Base': ['PWRBASE'],
 };
 
 function countedFrom_(row) {
-  return { qual: row && row.eligible !== null ? row.eligible : 0, sold: row && row.units !== null ? row.units : 0, dollars: row && row.sales !== null ? row.sales : 0 };
+  return {
+    qual: row && row.eligible !== null ? row.eligible : 0,
+    sold: row && row.units !== null ? row.units : 0,
+    dollars: row && row.sales !== null ? row.sales : 0,
+    // A printed row with a blank qualified quantity is not zero. A missing row still counts as 0 of 0.
+    qualBlank: !!(row && (row.eligible === null || row.eligible === undefined)),
+  };
 }
 
 function addCounted_(left, right) {
-  return { qual: left.qual + right.qual, sold: left.sold + right.sold, dollars: kpiRound_(left.dollars + right.dollars, 2) };
+  return {
+    qual: left.qual + right.qual,
+    sold: left.sold + right.sold,
+    dollars: kpiRound_(left.dollars + right.dollars, 2),
+    qualBlank: !!(left.qualBlank || right.qualBlank),
+  };
 }
 
 function storeKpiPart_(rows, family) {
@@ -715,9 +759,11 @@ function storeKpiPart_(rows, family) {
     };
   }
   return {
-    pillows: countedFrom_(rows.PILLOWS), bases: countedFrom_(rows.BASES), protection: countedFrom_(rows.FP),
+    pillows: countedFrom_(rows.PILLOWS), bases: countedFrom_(rows.BASES), protection: countedFrom_(rows.FP), pet: countedFrom_(rows.PET),
     rugs: rows.RUGS && rows.RUGS.units !== null ? rows.RUGS.units : 0,
     rugDollars: rows.RUGS && rows.RUGS.sales !== null ? rows.RUGS.sales : 0,
+    powerBase: rows.PWRBASE && rows.PWRBASE.percent !== null ? rows.PWRBASE.percent : null,
+    powerBaseQual: rows.BASES && rows.BASES.eligible !== null ? rows.BASES.eligible : 0,
   };
 }
 
@@ -734,8 +780,20 @@ function combineStoreKpi_(left, right, family) {
   }
   return {
     pillows: addCounted_(left.pillows, right.pillows), bases: addCounted_(left.bases, right.bases), protection: addCounted_(left.protection, right.protection),
+    pet: addCounted_(left.pet, right.pet),
     rugs: left.rugs + right.rugs, rugDollars: kpiRound_(left.rugDollars + right.rugDollars, 2),
+    powerBase: blendPowerBase_(left, right),
+    powerBaseQual: (left.powerBaseQual || 0) + (right.powerBaseQual || 0),
   };
+}
+
+function blendPowerBase_(left, right) {
+  if (left.powerBase === null || left.powerBase === undefined) return right.powerBase;
+  if (right.powerBase === null || right.powerBase === undefined) return left.powerBase;
+  var lq = left.powerBaseQual || 0;
+  var rq = right.powerBaseQual || 0;
+  if (!lq && !rq) return left.powerBase;
+  return kpiRound_((left.powerBase * lq + right.powerBase * rq) / ((lq + rq) || 1), 3);
 }
 
 function storeKpiTotals_(coverage) {
@@ -769,6 +827,10 @@ function storeKpiDerived_(period, coverage, value, importedAt) {
     out.push([view, 'cumulative', '', period.start, through, through, '17', '', '', coverage.side, cell(sales), cell(units), cell(eligible), cell(attachments), cell(percent), coverage.sources.join(' + '), importedAt, key]);
   };
   var qty = function (view, metric) {
+    if (metric.qualBlank) {
+      add(view, metric.dollars, metric.sold, null, metric.sold, null);
+      return;
+    }
     var percent = metric.qual === 0 ? 0 : kpiRound_(metric.sold / metric.qual, 3);
     add(view, metric.dollars, metric.sold, metric.qual, metric.sold, percent);
   };
@@ -786,9 +848,31 @@ function storeKpiDerived_(period, coverage, value, importedAt) {
     qty('PILLOWS_STORE', value.pillows);
     qty('BASES_STORE', value.bases);
     qty('FP_STORE', value.protection);
+    qty('PET_STORE', value.pet);
     add('RUGS_STORE', value.rugDollars, value.rugs, null, value.rugs, null);
+    if (value.powerBase !== null && value.powerBase !== undefined && coverage.unsnapped.indexOf('PWRBASE') === -1) add('PWRBASE_STORE', null, null, null, null, value.powerBase);
   }
   return out;
+}
+
+/** Blank qualified quantity stays blank: the tile is pets sold, not an attachment percent of zero. */
+function petFigure_(value) {
+  if (!value || !value.pet) return null;
+  if (value.pet.qualBlank) return value.pet.sold;
+  var rate = kpiRateOrNull_(value.pet.sold, value.pet.qual);
+  return rate === null ? 0 : rate;
+}
+
+function petNote_(through, written, delivered) {
+  var blank = (written && written.pet && written.pet.qualBlank) || (delivered && delivered.pet && delivered.pet.qualBlank);
+  var soldText = function (value) {
+    if (!value || !value.pet) return '0 sold';
+    return value.pet.sold + ' sold ($' + value.pet.dollars + ')';
+  };
+  if (blank) return 'Pet protections sold, ' + through + '. Qualified quantity was blank on the report, so this is pets sold, not an attachment percent. Written ' + soldText(written) + ', delivered ' + soldText(delivered) + '.';
+  var left = written && written.pet;
+  var right = delivered && delivered.pet;
+  return 'Pet protections, ' + through + '. Written ' + (left ? left.sold : 0) + ' of ' + (left ? left.qual : 0) + ', delivered ' + (right ? right.sold : 0) + ' of ' + (right ? right.qual : 0) + '.';
 }
 
 /** CC_Kpi store rows: [metric, written, delivered, note] for one family. */
@@ -815,6 +899,8 @@ function storeKpiRows_(family, through, w, d) {
     ['Pillows', side(w, function (v) { return pct(v.pillows.sold, v.pillows.qual); }), side(d, function (v) { return pct(v.pillows.sold, v.pillows.qual); }), countNote('ASL Store 17 Pillows, ' + through, w && w.pillows, d && d.pillows)],
     ['Wood / Furniture Protection', side(w, function (v) { return pct(v.protection.sold, v.protection.qual); }), side(d, function (v) { return pct(v.protection.sold, v.protection.qual); }), countNote('ASL Store 17 FURNITURE PROTECTION, ' + through, w && w.protection, d && d.protection)],
     ['Rugs', side(w, function (v) { return v.rugs; }), side(d, function (v) { return v.rugs; }), 'ASL Store 17 rugs sold, ' + through + '.'],
+    ['Pet Protections', side(w, petFigure_), side(d, petFigure_), petNote_(through, w, d)],
+    ['Power Adjustable Base', side(w, function (v) { return v.powerBase; }), side(d, function (v) { return v.powerBase; }), 'ADJ PWR %, ' + through + '.'],
   ];
 }
 

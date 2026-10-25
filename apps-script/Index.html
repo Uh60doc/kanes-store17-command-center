@@ -1203,6 +1203,7 @@
         return 'At goal';
       }
       function sideGap(row, actual) {
+        if (row.name === 'Pet Protections' && (row.goal === null || row.goal === undefined) && actual !== null && actual !== undefined && actual !== '') return 'No goal';
         if (actual === null || actual === undefined || row.goal === null || row.goal === undefined) return 'Data Pending';
         if (row.unit === 'percent') return pointGap(actual, row.goal);
         if (row.unit === 'dollars') return signedMoney(Number(actual) - Number(row.goal));
@@ -1236,8 +1237,10 @@
           var tone = kpiTone(actual, row.goal, row.reconcile);
           return '<div class="kpi-col"><p class="figure ' + tone + '">' + kpiValue(actual, row.unit) + '</p><p class="kpi-side">' + label + '</p><p class="kpi-gap ' + tone + '">' + sideGap(row, actual) + '</p></div>';
         }
-        return '<article class="kpi-card' + (row.tier === 'primary' ? ' kpi-primary-card' : '') + '"><div class="kpi-head"><h3>' + esc(row.name) + '</h3><p class="kpi-goal">Goal ' + boardGoal(row.goal, row.unit) + '</p></div><div class="kpi-split">' +
-          column('Written', hasWritten, row.written) + column('Delivered', hasDelivered, row.delivered) + '</div></article>';
+        var goalText = row.name === 'Pet Protections' && (row.goal === null || row.goal === undefined || row.goal === '') ? 'No goal' : boardGoal(row.goal, row.unit);
+        return '<article class="kpi-card' + (row.tier === 'primary' ? ' kpi-primary-card' : '') + '"><div class="kpi-head"><h3>' + esc(row.name) + '</h3><p class="kpi-goal">Goal ' + goalText + '</p></div><div class="kpi-split">' +
+          column('Written', hasWritten, row.written) + column('Delivered', hasDelivered, row.delivered) + '</div>' +
+          (row.detail ? '<p class="sub">' + esc(row.detail) + '</p>' : '') + '</article>';
       }
       var kpiRows = board.kpis || [];
       var featured = { 'Bedding': true, 'Closing Ratio': true, 'Total Attachment': true };
@@ -2210,7 +2213,7 @@
       if (row.unit === 'count' || value === null || value === undefined) return 'pending';
       return toneFor(value, row.goal);
     }
-    var PERSON_COMPARE = ['Bedding', 'Mattress Pads', 'Adjustable Bases', 'Pillows', 'Fabric', 'Leather', 'Power', 'Financing', 'Average Ticket', 'Orders'];
+    var PERSON_COMPARE = ['Bedding', 'Mattress Pads', 'Adjustable Bases', 'Pillows', 'Furniture Protection', 'Pet Protections', 'Rugs', 'Fabric', 'Leather', 'Power', 'Financing', 'Average Ticket', 'Orders'];
     function drawPeopleTable() {
       displayHold = false;
       document.body.classList.remove('print-summary');

@@ -26,6 +26,7 @@ var KPI_ALIASES_ = {
   'MUKHTAR JUNAID': ['', 'Mukhtar Junaid'],
   'MUKHTAR, JUNAID': ['', 'Mukhtar Junaid'],
   'JUNAID, MUKHTAR': ['', 'Mukhtar Junaid'],
+  'JUNAID MUKHTAR': ['', 'Mukhtar Junaid'],
   'CHAVES FELIPE': ['', 'Filepe Chaves'],
   'CHAVES, FELIPE': ['', 'Filepe Chaves'],
   'FELIPE CHAVES': ['', 'Filepe Chaves'],
@@ -58,7 +59,13 @@ function importKpiAttachment_(sha, attachment) {
       recordImport_(sha, name, 'official-final', side + ' ' + start + ' through ' + end + ': official month-end final for the ' + (final.track === 'STORE' ? 'store' : 'salesperson') + ' month, ' + final.rows + ' figures recorded beside the daily record (CC_MonthEnd). Not added to the daily totals.');
       return true;
     }
-    recordImport_(sha, name, 'cumulative-not-added', side + ' ' + start + ' through ' + end + ' was not added to the daily totals. Store NWDSR totals were not changed.');
+    var snapshot = recordKpiSnapshot_(grid, family, side, start, end, name);
+    if (snapshot) {
+      if (typeof refreshStoreKpiQuietly_ === 'function') refreshStoreKpiQuietly_(end);
+      recordImport_(sha, name, 'imported', side + ' ' + start + ' through ' + end + ': ' + (snapshot.store ? 'store' : 'salesperson') + ' month-to-date snapshot, ' + snapshot.rows + ' figures. Days inside that snapshot are not added again.');
+      return true;
+    }
+    recordImport_(sha, name, 'cumulative-not-added', side + ' ' + start + ' through ' + end + ' was not added. A month-to-date file has to start on the 2nd for the store or the 1st for salespeople, and end before today.');
     return true;
   }
   var records = kpiRecords_(grid, family, side, start, end, name);
@@ -183,6 +190,12 @@ function kpiQty_(row, group) {
   return { qual: qualified, sold: counted.sold, dollars: counted.dollars, percent: rate === null ? kpiPrinted_(kpiCell_(row, group['ATTACH %'])) : rate };
 }
 
+/** ADJ PWR % is printed on a 0–100 scale, same as the other attachment percents. */
+function kpiPwr_(row, group) {
+  if (!group || group['PWR %'] === undefined) return null;
+  return kpiPrinted_(kpiCell_(row, group['PWR %']));
+}
+
 function kpiRecords_(source, family, side, start, end, filename) {
   var columns = kpiColumns_(source);
   var daily = start === end;
@@ -217,12 +230,24 @@ function kpiRecords_(source, family, side, start, end, filename) {
         ['PWAR_' + scope, columns.groups['POWER FURNITURE'] || columns.groups.POWER],
         ['LTHW_' + scope, columns.groups.LEATHER],
         ['MPPA_' + scope, columns.groups['MATTRESS PADS']],
-        ['ATTACH_' + scope, columns.groups['TOTAL ATTACHMENTS %'] || columns.groups['TOTAL ATTACHMENTS']]
+        ['ATTACH_' + scope, columns.groups['TOTAL ATTACHMENTS %'] || columns.groups['TOTAL ATTACHMENTS']],
+        ['PILLOWS_' + scope, columns.groups.PILLOWS],
+        ['BASES_' + scope, columns.groups.ADJ],
+        ['FP_' + scope, columns.groups['FURNITURE PROTECTION']],
+        ['PET_' + scope, columns.groups['PET PROTECTIONS']]
       ].forEach(function (spec) {
         var qty = kpiQty_(row, spec[1]);
         if (!qty) return;
         records.push(kpiRecord_(daily, start, end, spec[0], code, display, side, qty.dollars, qty.sold, qty.qual, qty.sold, qty.percent, filename));
       });
+      var rugsGroup = columns.groups.RUGS;
+      if (rugsGroup) {
+        var personRugsQty = kpiNumber_(kpiCell_(row, rugsGroup['SOLD QTY']));
+        var personRugsDollars = kpiMoney_(kpiCell_(row, rugsGroup['SOLD $']));
+        if (personRugsQty !== null || personRugsDollars !== null) records.push(kpiRecord_(daily, start, end, 'RUGS_' + scope, code, display, side, personRugsDollars, personRugsQty, null, personRugsQty, null, filename));
+      }
+      var personPwr = kpiPwr_(row, columns.groups.ADJ);
+      if (personPwr !== null) records.push(kpiRecord_(daily, start, end, 'PWRBASE_' + scope, code, display, side, null, null, null, null, personPwr, filename));
       var finance = kpiNumber_(kpiCell_(row, columns.finance));
       if (finance !== null) {
         records.push(kpiRecord_(daily, start, end, 'FINANCE_' + scope, code, display, side, null, null, null, null, Math.round(finance * 10) / 1000, filename));
@@ -238,13 +263,36 @@ function kpiRecords_(source, family, side, start, end, filename) {
       var protection = kpiQty_(row, columns.groups['FURNITURE PROTECTION']);
       var rugsQty = columns.groups.RUGS ? kpiNumber_(kpiCell_(row, columns.groups.RUGS['SOLD QTY'])) : null;
       var rugsDollars = columns.groups.RUGS ? kpiMoney_(kpiCell_(row, columns.groups.RUGS['SOLD $'])) : null;
+      var pet = kpiQty_(row, columns.groups['PET PROTECTIONS']);
+      var pwr = kpiPwr_(row, columns.groups.ADJ);
       if (pillows) records.push(kpiRecord_(daily, start, end, 'PILLOWS_STORE', '', '', side, pillows.dollars, pillows.sold, pillows.qual, pillows.sold, pillows.percent, filename));
       if (bases) records.push(kpiRecord_(daily, start, end, 'BASES_STORE', '', '', side, bases.dollars, bases.sold, bases.qual, bases.sold, bases.percent, filename));
       if (protection) records.push(kpiRecord_(daily, start, end, 'FP_STORE', '', '', side, protection.dollars, protection.sold, protection.qual, protection.sold, protection.percent, filename));
+      if (pet) records.push(kpiRecord_(daily, start, end, 'PET_STORE', '', '', side, pet.dollars, pet.sold, pet.qual, pet.sold, pet.percent, filename));
       if (rugsQty !== null || rugsDollars !== null) records.push(kpiRecord_(daily, start, end, 'RUGS_STORE', '', '', side, rugsDollars, rugsQty, null, rugsQty, null, filename));
+      if (pwr !== null) records.push(kpiRecord_(daily, start, end, 'PWRBASE_STORE', '', '', side, null, null, null, null, pwr, filename));
     }
   }
   return records;
+}
+
+/**
+ * A month-to-date Data Analysis file that starts on its track's first day and ends before today is the catch-up
+ * snapshot. The store track starts on the 2nd; the salesperson track starts on the 1st. Days inside the snapshot
+ * are never added again. A file that includes today is not a finished snapshot.
+ */
+function recordKpiSnapshot_(grid, family, side, start, end, filename) {
+  var today = typeof todayNy_ === 'function' ? todayNy_() : '';
+  if (!today || !start || !end || end >= today) return null;
+  var storePeriod = storePeriodContaining_(start);
+  var personPeriod = individualPeriodContaining_(start);
+  var storeFit = storePeriod.start === start && end <= storePeriod.end;
+  var personFit = personPeriod.start === start && end <= personPeriod.end;
+  var records = kpiRecords_(grid, family, side, start, end, filename).filter(function (record) {
+    return /_STORE$/.test(record[0]) ? storeFit : personFit;
+  });
+  if (!records.length) return null;
+  return { store: storeFit, person: personFit, rows: records.length, outcome: upsertKpiRecords_(records), end: end };
 }
 
 /**

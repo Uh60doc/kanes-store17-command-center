@@ -398,7 +398,7 @@ function peopleRows_(individualStart, individualEnd, options) {
   return rows;
 }
 
-var PERSON_ANALYSIS_VIEWS_ = ['DA_SALES', 'BEDDING', 'MPPA', 'FABW', 'LTHW', 'PWAR', 'ATTACH', 'FINANCE', 'AVERAGE'];
+var PERSON_ANALYSIS_VIEWS_ = ['DA_SALES', 'BEDDING', 'MPPA', 'FABW', 'LTHW', 'PWAR', 'ATTACH', 'FINANCE', 'AVERAGE', 'PILLOWS', 'BASES', 'FP', 'PET', 'RUGS', 'PWRBASE'];
 var PERSON_ANALYSIS_SOURCE_ = /DATA_ANALYSIS_KPI_17_/i;
 
 /** Dates whose official store total for this side is verified $0. Those days have no Group 17 salesperson file. */
@@ -491,16 +491,51 @@ function personAnalysisSide_(ledger, name, coverage) {
       financed = finance && finance.percent !== null ? financed + finance.percent * amount : null;
     }
   });
+  var reported = {};
+  PERSON_ANALYSIS_VIEWS_.forEach(function (prefix) { reported[prefix] = false; });
+  ledger.forEach(function (row) {
+    if (row.scope !== 'PERSON' || row.side !== coverage.side || !PERSON_ANALYSIS_SOURCE_.test(row.source)) return;
+    var prefix = row.view.replace(/_PERSON$/, '');
+    if (!Object.prototype.hasOwnProperty.call(reported, prefix)) return;
+    var inSnapshot = row.grain === 'cumulative' && coverage.snapshot && row.fitsTrack && row.periodStart === coverage.period.start && row.verifiedThrough === coverage.snapshot;
+    var inDay = row.grain === 'daily' && coverage.days.indexOf(row.reportDate) !== -1;
+    if (inSnapshot || inDay) reported[prefix] = true;
+  });
   function counted(prefix) {
+    if (!reported[prefix] && (prefix === 'PILLOWS' || prefix === 'BASES' || prefix === 'FP' || prefix === 'PET' || prefix === 'RUGS' || prefix === 'PWRBASE')) {
+      return { value: null, detail: '', text: 'Not in report' };
+    }
     var eligible = 0;
     var attachments = 0;
+    var dollars = 0;
+    var qualBlank = false;
     keys.forEach(function (part) {
       var row = parts[prefix][part];
       if (!row) return;
-      eligible += row.eligible || 0;
+      if (row.eligible === null || row.eligible === undefined) qualBlank = true;
+      else eligible += row.eligible;
       attachments += row.attachments || 0;
+      dollars += row.sales || 0;
     });
+    var round4 = function (value) { return Math.round(value * 10000) / 10000; };
+    // Pet qualified quantity is often blank while sold quantity is printed. That is pets sold, not 0%.
+    if (prefix === 'PET' && qualBlank) {
+      return { value: null, sold: round4(attachments), detail: moneyText_(Math.round(dollars * 100) / 100), text: round4(attachments) + ' sold' };
+    }
     return { value: eligible ? Math.round((attachments / eligible) * 1000) / 1000 : null, sold: attachments, detail: attachments + ' of ' + eligible, text: eligible ? '' : 'No qualifying sales' };
+  }
+  function rugFigure() {
+    if (!reported.RUGS) return { value: null, detail: '', text: 'Not in report' };
+    var sold = 0;
+    var dollars = 0;
+    keys.forEach(function (part) {
+      var row = parts.RUGS[part];
+      if (!row) return;
+      sold += row.units || 0;
+      dollars += row.sales || 0;
+    });
+    var round4 = function (value) { return Math.round(value * 10000) / 10000; };
+    return { value: round4(sold), detail: moneyText_(Math.round(dollars * 100) / 100), text: '' };
   }
   // Group 17 quantities can be fractional on Delivered, so sums are rounded to 4 places. A covered part with
   // category lines but no Total Attachments line was loaded before that group was kept: the total is not on file.
@@ -535,7 +570,14 @@ function personAnalysisSide_(ledger, name, coverage) {
     fabric: counted('FABW'),
     leather: counted('LTHW'),
     power: counted('PWAR'),
-    tallies: { fabric: tally('FABW'), leather: tally('LTHW'), power: tally('PWAR'), pads: tally('MPPA'), total: tally('ATTACH') },
+    pillows: counted('PILLOWS'),
+    bases: counted('BASES'),
+    protection: counted('FP'),
+    pet: counted('PET'),
+    rugs: rugFigure(),
+    powerBase: reported.PWRBASE ? counted('PWRBASE') : { value: null, detail: '', text: 'Not in report' },
+    reported: reported,
+    tallies: { fabric: tally('FABW'), leather: tally('LTHW'), power: tally('PWAR'), pads: tally('MPPA'), total: tally('ATTACH'), pillows: reported.PILLOWS ? tally('PILLOWS') : null, bases: reported.BASES ? tally('BASES') : null, protection: reported.FP ? tally('FP') : null, pet: reported.PET ? tally('PET') : null },
     finance: { value: sales && financed !== null ? Math.round((financed / sales) * 1000) / 1000 : null, detail: '', text: sales ? (financed === null ? 'Not on file' : '') : 'No sales' },
     average: { value: orders ? round2(sales / orders) : null, detail: orders === null ? '' : moneyText_(sales) + ' ÷ ' + orders + ' orders', text: orders === 0 ? 'No orders' : (orders === null ? 'Not on file' : '') },
   };
@@ -622,6 +664,12 @@ function analysisKpi_(name, unit, goal, analysis, field, note) {
   return row;
 }
 
+function reportedKpi_(name, unit, goal, analysis, field, prefix, note) {
+  var seen = function (side) { return side && side.reported && side.reported[prefix]; };
+  if (!seen(analysis.written) && !seen(analysis.delivered)) return notInReportKpi_(name, unit, goal);
+  return analysisKpi_(name, unit, goal, analysis, field, note);
+}
+
 function notInReportKpi_(name, unit, goal) {
   var row = kpiRow_(name, null, null, goal, unit, 'The Group 17 report has no salesperson column for this. ASL reports it for the store only.');
   row.writtenText = 'Not in report';
@@ -662,8 +710,11 @@ function personRecord_(name, snapWritten, role, days, goals, closing, analysis) 
     kpis: [
       analysisKpi_('Bedding', 'percent', goals.bedding, analysis, 'bedding', 'Bedding dollars ÷ Group 17 sales.'),
       analysisKpi_('Mattress Pads', 'percent', goals.mattress, analysis, 'pads', 'Pads sold ÷ qualifying mattresses.'),
-      notInReportKpi_('Adjustable Bases', 'percent', goals.adjustableBase),
-      notInReportKpi_('Pillows', 'percent', goals.pillow),
+      reportedKpi_('Adjustable Bases', 'percent', goals.adjustableBase, analysis, 'bases', 'BASES', 'Adjustable bases sold ÷ qualified.'),
+      reportedKpi_('Pillows', 'percent', goals.pillow, analysis, 'pillows', 'PILLOWS', 'Pillows sold ÷ qualified.'),
+      reportedKpi_('Furniture Protection', 'percent', goals.wood, analysis, 'protection', 'FP', 'Furniture protection sold ÷ qualified.'),
+      reportedKpi_('Pet Protections', 'percent', null, analysis, 'pet', 'PET', 'Pet protection sold ÷ qualified.'),
+      reportedKpi_('Rugs', 'count', goals.rugs, analysis, 'rugs', 'RUGS', 'Rugs sold on the Group 17 report.'),
       analysisKpi_('Fabric', 'percent', goals.fabric, analysis, 'fabric', 'Protection sold ÷ qualifying fabric pieces.'),
       analysisKpi_('Leather', 'percent', goals.leather, analysis, 'leather', 'Protection sold ÷ qualifying leather pieces.'),
       analysisKpi_('Power', 'percent', goals.power, analysis, 'power', 'Warranties sold ÷ qualifying power pieces.'),
@@ -1522,6 +1573,11 @@ function homeKpiSpecs_(goals, actuals) {
   if (warranty && warranty.written !== null && warranty.written !== undefined && warranty.through) {
     specs.push(['Warranty % of Sales', 'Overall Warranty % of Sales', 'percent', goals.warranty, 'secondary', '']);
   }
+  var pet = actuals['Pet Protections'];
+  if (pet && pet.through && (pet.written !== null || pet.delivered !== null)) {
+    var petUnit = /qualified quantity was blank/i.test(String(pet.note || '')) ? 'count' : 'percent';
+    specs.push(['Pet Protections', 'Pet Protections', petUnit, null, 'secondary', '']);
+  }
   return specs;
 }
 
@@ -1589,7 +1645,7 @@ function pendingSourceReports_(facts, period, today, closed, closingThrough) {
 }
 
 function homeKpiFamily_(name) {
-  if (name === 'Rugs' || name === 'Adjustable Base Attachment' || name === 'Pillows' || name === 'Wood / Furniture Protection') return 'asl';
+  if (name === 'Rugs' || name === 'Adjustable Base Attachment' || name === 'Pillows' || name === 'Pet Protections' || name === 'Wood / Furniture Protection') return 'asl';
   return 'group17';
 }
 
@@ -1623,6 +1679,9 @@ function homeKpiStrip_(goals, actuals, closing, analysis) {
     var powerBase = actuals['Power Adjustable Base'];
     if (name === 'Adjustable Base Attachment' && powerBase && (powerBase.written !== null || powerBase.delivered !== null)) {
       detail = 'ADJ PWR % written ' + (powerBase.written === null ? 'Pending' : percentText_(powerBase.written)) + ', delivered ' + (powerBase.delivered === null ? 'Pending' : percentText_(powerBase.delivered));
+    }
+    if (name === 'Pet Protections' && spec[2] === 'count') {
+      detail = 'Pets sold. Qualified quantity was blank on the report, so this is not an attachment percent.';
     }
     var family = analysis && analysis[homeKpiFamily_(name)];
     var writtenThrough = family ? (family.written || '') : (row.through || '');

@@ -139,7 +139,14 @@ function coachCard_(person, hire, period) {
     powerGoal: powerGoal,
     pads: pads && !coachBlank_(pads.actual) ? pads.actual : null,
     padsGoal: padGoal,
-    rugs: { count: null, goal: hire.newHire ? 6 : 12, note: 'No salesperson rug count is on file. ASL rugs are a store total, so this card does not score rugs or estimate rug commission.' },
+    rugs: (function () {
+      var rugGoal = hire.newHire ? 6 : 12;
+      var figure = person.analysis && person.analysis.written ? person.analysis.written.rugs : null;
+      if (!figure || figure.text === 'Not in report' || figure.value === null || figure.value === undefined) {
+        return { count: null, goal: rugGoal, note: 'No salesperson rug count is on file. ASL rugs are a store total, so this card does not score rugs or estimate rug commission.' };
+      }
+      return { count: figure.value, goal: rugGoal, note: figure.value + ' rugs on the Group 17 written report for this salesperson month' + (figure.detail ? ' (' + figure.detail + ')' : '') + '.' };
+    })(),
     financial: {
       ticket: ticket.status === 'ready' && ticket.opportunity > 0 ? ticket.opportunity : null,
       ticketAtGoal: ticket.status === 'ready' && ticket.opportunity <= 0,
