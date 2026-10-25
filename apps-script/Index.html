@@ -752,6 +752,39 @@
       .morning-five .awaiting { color: #444; font-size: 12px; }
       .morning-finance { break-before: page; }
     }
+    /* OPTL — Admin page only. Does not change Home or Sales Team layouts. */
+    .optl-page .optl-brand { display: flex; gap: 14px; align-items: center; margin-bottom: 10px; }
+    .optl-page .optl-brand img { width: 72px; height: 72px; object-fit: contain; }
+    .optl-page .optl-kicker { margin: 0; color: #14c4d4; font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+    .optl-page .optl-title { margin: 2px 0 0; font-size: 22px; color: #f3f6f8; }
+    .optl-page .optl-sub { margin: 4px 0 0; color: #9eb0bc; font-size: 13px; }
+    .optl-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 8px; }
+    .optl-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0bc; }
+    .optl-controls select { min-width: 220px; padding: 7px 10px; border-radius: 8px; border: 1px solid #1d5c66; background: #10161c; color: #f3f6f8; font: inherit; text-transform: none; letter-spacing: 0; font-weight: 600; }
+    .optl-matrix-wrap { overflow-x: auto; }
+    .optl-matrix { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 980px; }
+    .optl-matrix th, .optl-matrix td { border: 1px solid #1d5c66; padding: 4px 5px; vertical-align: top; background: #0d1419; color: #e8eef2; }
+    .optl-matrix thead th { background: #102028; color: #14c4d4; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; text-align: center; }
+    .optl-matrix tbody th { text-align: left; min-width: 120px; background: #10181e; }
+    .optl-matrix .optl-section td { background: #143840; color: #f3f6f8; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; font-size: 10px; }
+    .optl-matrix td.filled { background: #122229; box-shadow: inset 0 0 0 1px rgba(20, 196, 212, 0.35); }
+    .optl-matrix .slot-key { display: block; color: #7f93a0; font-size: 9px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+    .optl-matrix .slot-date, .optl-matrix .slot-exp { display: block; color: #9eb0bc; font-variant-numeric: tabular-nums; }
+    .optl-matrix .slot-label { display: block; margin: 2px 0; font-weight: 700; color: #f3f6f8; }
+    .optl-history { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .optl-history th, .optl-history td { border-bottom: 1px solid #1d5c66; padding: 7px 8px; text-align: left; }
+    .optl-history thead th { color: #14c4d4; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .optl-status { display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 700; background: #143840; color: #7eecf6; text-transform: capitalize; }
+    .optl-status.expired { background: #242a30; color: #9eb0bc; }
+    .optl-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .optl-actions button[disabled] { opacity: 0.55; cursor: not-allowed; }
+    body.print-optl header.brand, body.print-optl .nav, body.print-optl .noprint, body.print-optl #data-refresh { display: none !important; }
+    body.print-optl #screen > :not(.optl-print-sheet) { display: none !important; }
+    body.print-optl .optl-print-sheet { display: block !important; color: #e8eef2; background: #0d1114; border: 2px solid #14c4d4; padding: 14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @media print {
+      body.print-optl { background: #0d1114 !important; }
+      @page { size: letter landscape; margin: 0.4in; }
+    }
   </style>
 </head>
 <body>
@@ -908,7 +941,7 @@
         ]},
         { label: 'Admin', alignEnd: true, items: [
           ['admin', 'Main Administration'], ['health', 'System Health'], ['coverage', 'Data Coverage'],
-          ['consistency', 'Data Consistency'], ['email', 'Email Controls']
+          ['consistency', 'Data Consistency'], ['optl', 'OPTL'], ['email', 'Email Controls']
         ]}
       ];
       return groups.map(function (group) {
@@ -5914,12 +5947,116 @@
       var active = document.activeElement;
       if (active && active.id !== 'display-refresh' && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return true;
       var body = document.body;
-      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd') || body.classList.contains('print-evalprep') || body.classList.contains('print-actions') || body.classList.contains('print-report') || body.classList.contains('print-variance') || body.classList.contains('print-order') || body.classList.contains('print-closeout') || body.classList.contains('print-training')) return true;
+      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd') || body.classList.contains('print-evalprep') || body.classList.contains('print-actions') || body.classList.contains('print-report') || body.classList.contains('print-variance') || body.classList.contains('print-order') || body.classList.contains('print-closeout') || body.classList.contains('print-training') || body.classList.contains('print-optl')) return true;
       return false;
     }
     function syncRefreshButton() {
       var button = document.getElementById('display-refresh');
       if (button) button.classList.remove('hidden');
+    }
+    function optlDisplayDate(iso) {
+      if (!iso || String(iso).length < 10) return '';
+      return dateLabel(iso) || String(iso).slice(0, 10);
+    }
+    function renderOptl(data) {
+      displayHold = false;
+      document.body.classList.remove('print-optl');
+      document.getElementById('header-note').textContent = 'OPTL · Admin · demo prototype';
+      var employees = data.employees || [];
+      var options = employees.map(function (row) {
+        return '<option value="' + esc(row.employeeId) + '"' + (row.employeeId === data.selectedEmployeeId ? ' selected' : '') + '>' +
+          esc(row.displayName) + (row.status === 'former' ? ' (Former)' : '') + '</option>';
+      }).join('');
+      var headers = ((data.matrixRows || [])[0] || { cells: [] }).cells.map(function (cell) {
+        return '<th scope="col">' + esc(cell.slotLabel) + '</th>';
+      }).join('');
+      function matrixRowsHtml(section) {
+        return (data.matrixRows || []).filter(function (row) { return row.section === section; }).map(function (row) {
+          var cells = row.cells.map(function (cell) {
+            if (!cell.occupied) {
+              return '<td><span class="slot-key">' + esc(cell.slotLabel) + '</span>—</td>';
+            }
+            return '<td class="filled"><span class="slot-key">' + esc(cell.slotLabel) + '</span>' +
+              '<span class="slot-date">' + esc(optlDisplayDate(cell.incidentDate)) + '</span>' +
+              '<span class="slot-label">' + esc(cell.shortDescription || '') + '</span>' +
+              '<span class="slot-exp">Exp ' + esc(optlDisplayDate(cell.expirationDate)) + '</span></td>';
+          }).join('');
+          return '<tr><th scope="row">' + esc(row.category) + '</th>' + cells + '</tr>';
+        }).join('');
+      }
+      var history = (data.history || []).map(function (line) {
+        return '<tr><td>' + esc(optlDisplayDate(line.incidentDate)) + '</td><td>' + esc(line.section) + '</td><td>' + esc(line.category) +
+          '</td><td>' + esc(line.entryType) + '</td><td>' + esc(line.shortDescription) + '</td><td>' + esc(optlDisplayDate(line.effectiveExpirationDate)) +
+          '</td><td><span class="optl-status ' + esc(line.status) + '">' + esc(line.status) + '</span></td></tr>';
+      }).join('');
+      var employee = data.employee || {};
+      var printCells = function (section) {
+        return (data.matrixRows || []).filter(function (row) { return row.section === section; }).map(function (row) {
+          return '<tr><th scope="row">' + esc(row.category) + '</th>' + row.cells.map(function (cell) {
+            if (!cell.occupied) return '<td>—</td>';
+            return '<td>' + esc(optlDisplayDate(cell.incidentDate)) + '<br><strong>' + esc(cell.shortDescription || '') +
+              '</strong><br>Exp ' + esc(optlDisplayDate(cell.expirationDate)) + '</td>';
+          }).join('') + '</tr>';
+        }).join('');
+      };
+      var storeLogo = document.querySelector('img.logo') ? document.querySelector('img.logo').src : '';
+      document.getElementById('screen').innerHTML =
+        '<div class="optl-page">' +
+        '<article class="card"><div class="optl-brand">' +
+        (storeLogo ? '<img src="' + storeLogo + '" alt="Kane\'s Furniture Store 17" width="72" height="72" />' : '') +
+        '<div><p class="optl-kicker">Kane\'s Furniture · Store 17</p><h2 class="optl-title">Store 17 Online · OPTL</h2>' +
+        '<p class="optl-sub">Online Performance Tracking Log · ' + esc(data.notice || 'Phase 1 prototype') + '</p></div></div>' +
+        '<div class="optl-controls noprint"><label>Associate<select id="optl-employee">' + options + '</select></label>' +
+        '<p class="sub">As of <strong>' + esc(data.asOfDate) + '</strong> · ' + esc(data.timezone || 'America/New_York') + '</p></div>' +
+        '<p class="sub">ID ' + esc(employee.employeeId || '') + ' · ' + esc(employee.jobTitle || '') + ' · hired ' + esc(employee.hireDate || '') +
+        ' · ' + esc(employee.status === 'former' ? 'Former archive' : 'Active') + '</p></article>' +
+        '<h2 class="section-title">Active matrix</h2>' +
+        '<article class="card"><div class="optl-matrix-wrap"><table class="optl-matrix"><thead><tr><th scope="col">Category</th>' + headers + '</tr></thead><tbody>' +
+        '<tr class="optl-section"><td colspan="13">Section A</td></tr>' + matrixRowsHtml('A') +
+        '<tr class="optl-section"><td colspan="13">Section B</td></tr>' + matrixRowsHtml('B') +
+        '</tbody></table></div></article>' +
+        '<h2 class="section-title">Permanent history</h2>' +
+        '<article class="card"><table class="optl-history"><thead><tr><th>Incident</th><th>Section</th><th>Category</th><th>Action</th><th>Description</th><th>Expiration</th><th>Status</th></tr></thead><tbody>' +
+        (history || '<tr><td colspan="7">No history for this associate in the demo set.</td></tr>') + '</tbody></table>' +
+        '<p class="sub">Expired events stay in history. Nothing is deleted.</p></article>' +
+        '<h2 class="section-title noprint">Actions</h2>' +
+        '<article class="card noprint"><div class="optl-actions">' +
+        '<button type="button" disabled title="Phase 3">New Accountability Entry</button>' +
+        '<button type="button" disabled title="Phase 3">New Hire</button>' +
+        '<button type="button" disabled title="Phase 3">Termination form</button>' +
+        '<button type="button" id="optl-print-matrix">Print Active Matrix</button>' +
+        '<button type="button" disabled title="Phase 3">Print History</button>' +
+        '<button type="button" disabled title="Phase 3">Print Incident Notes</button>' +
+        '</div><p class="sub">Entry forms wait for Phase 3. PIP escalation is Phase 2.</p></article>' +
+        '<article class="optl-print-sheet card" style="display:none" id="optl-print-matrix-sheet">' +
+        '<div class="optl-brand">' + (storeLogo ? '<img src="' + storeLogo + '" alt="" width="72" height="72" />' : '') +
+        '<div><p class="optl-kicker">Store 17 Online</p><h2 class="optl-title">OPTL Active Matrix</h2>' +
+        '<p class="optl-sub">' + esc(employee.displayName || '') + ' · ' + esc(employee.employeeId || '') + ' · as of ' + esc(data.asOfDate) + ' · no private notes</p></div></div>' +
+        '<div class="optl-matrix-wrap"><table class="optl-matrix"><thead><tr><th>Category</th>' + headers + '</tr></thead><tbody>' +
+        '<tr class="optl-section"><td colspan="13">Section A</td></tr>' + printCells('A') +
+        '<tr class="optl-section"><td colspan="13">Section B</td></tr>' + printCells('B') +
+        '</tbody></table></div><p class="sub">Store 17 Online · OPTL · Confidential management record</p></article>' +
+        '</div>';
+      document.getElementById('optl-employee').addEventListener('change', function () {
+        var id = document.getElementById('optl-employee').value;
+        api('optl', { employeeId: id, asOfDate: data.asOfDate }).then(function (page) {
+          if (screen !== 'optl') return;
+          displayPayload = page;
+          renderOptl(page);
+        }).catch(function (error) {
+          document.getElementById('screen').innerHTML = '<p class="error">' + esc(error.message) + '</p>';
+        });
+      });
+      document.getElementById('optl-print-matrix').addEventListener('click', function () {
+        document.body.classList.add('print-optl');
+        var sheet = document.getElementById('optl-print-matrix-sheet');
+        if (sheet) sheet.style.display = 'block';
+        window.print();
+        window.setTimeout(function () {
+          document.body.classList.remove('print-optl');
+          if (sheet) sheet.style.display = 'none';
+        }, 300);
+      });
     }
     function renderConsistency(data) {
       var tone = data.status === 'PASS' ? 'good' : (data.status === 'FAIL' ? 'bad' : '');
@@ -5981,6 +6118,7 @@
       else if (name === 'closeout') renderCloseout(data);
       else if (name === 'training') renderTraining(data);
       else if (name === 'consistency') renderConsistency(data);
+      else if (name === 'optl') renderOptl(data);
       else if (name === 'email') renderEmail(data);
       else if (name === 'coverage') renderCoverage(data);
     }
