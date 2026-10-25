@@ -57,7 +57,7 @@ test('manager navigation is the nine groups in order and keeps every manager pag
   assert.equal(groups.length, 9);
   const targets = groups.flatMap((group) => group.items ? group.items.map((item) => item[0]) : [group.screen]);
   ['written', 'delivered', 'closing', 'bedding', 'accel', 'variance', 'recovery', 'leakage', 'daily',
-    'reports:daily', 'reports:weekly', 'reports:monthly', 'brief', 'reports:trend', 'email', 'reports:meeting', 'reports:individual',
+    'reports:daily', 'reports:weekly', 'reports:monthly', 'brief', 'reports:trend', 'email', 'reports:meeting', 'reports:individual', 'evals',
     'readiness', 'delivery', 'orderQuality', 'closeout', 'actions',
     'documents', 'training', 'coaching', 'evalPrep',
     'health', 'consistency', 'email'].forEach((target) => assert.ok(targets.includes(target), target));

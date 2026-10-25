@@ -2302,8 +2302,9 @@ function activeAssociates_() {
 }
 
 /**
- * Evaluations cover the previous three completed salesperson months, prepared on the 3rd and delivered before the
- * 7th. Through the 6th the cycle is this month's; from the 7th it is next month's.
+ * Monthly Sales Team Review. The issue month covers the three salesperson months that just finished (the 1st through
+ * the last calendar day). It is prepared on the 2nd and the associate meeting is still due by the 6th. Through the
+ * 6th the open cycle is this month's; from the 7th the screen moves to next month's preview.
  */
 function evaluationCycle_(today) {
   var parts = isoParts_(today);
@@ -2320,7 +2321,7 @@ function evaluationCycle_(today) {
     return periodFor_('individual', y, m);
   });
   var label = year + '-' + pad2_(month);
-  return { cycle: label, prepare: label + '-03', deliverBy: label + '-06', covers: months.map(function (period) { return { start: period.start, end: period.end }; }) };
+  return { cycle: label, prepare: label + '-02', deliverBy: label + '-06', covers: months.map(function (period) { return { start: period.start, end: period.end }; }) };
 }
 
 /** Printable associate summary for one salesperson and a date range inside one salesperson month. */

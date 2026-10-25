@@ -58,7 +58,7 @@ test('a cycle covers the last three completed salesperson months, 1st through la
   assert.equal(october.label, 'October 2026');
   const november = plain(gs.evalCycleInfo_('2026-11'));
   assert.deepEqual(november.months.map((month: any) => [month.start, month.end]), [['2026-08-01', '2026-08-31'], ['2026-09-01', '2026-09-30'], ['2026-10-01', '2026-10-31']]);
-  assert.deepEqual([november.prepare, november.deliverBy], ['2026-11-03', '2026-11-06']);
+  assert.deepEqual([november.prepare, november.deliverBy], ['2026-11-02', '2026-11-06']);
   assert.deepEqual(plain(gs.evalCycleInfo_('2027-01')).months.map((month: any) => month.key), ['2026-10', '2026-11', '2026-12']);
 });
 
@@ -76,22 +76,25 @@ test('before the 3rd the next cycle is a preview: Sales Team only, new-hire temp
   assert.deepEqual(brenda.metrics[0].values.map((v: any) => v.status), ['Not Employed', 'Not Employed', 'Pending Verification']);
   const ricky = view.evaluations.find((e: any) => e.name === 'Ricky Nassif');
   assert.equal(ricky.template, 'standard');
-  for (const key of ['fabric', 'leather', 'power', 'protector']) assert.equal(ricky.metrics.find((m: any) => m.key === key).goal, 0.8, key);
+  assert.equal(ricky.metrics.find((m: any) => m.key === 'fabric').goal, 0.85);
+  assert.equal(ricky.metrics.find((m: any) => m.key === 'power').goal, 0.85);
+  assert.equal(ricky.metrics.find((m: any) => m.key === 'powerAdj').goal, 0.35);
+  for (const key of ['leather', 'protector']) assert.equal(ricky.metrics.find((m: any) => m.key === key).goal, 0.8, key);
   assert.equal(ricky.verification, 'Pending Verification');
   assert.ok(ricky.metrics.every((m: any) => m.values.every((v: any) => v.value === null)), 'no figure without a verified source');
   assert.match(ricky.metrics[0].values[2].note, /not complete/);
   assert.match(ricky.comments, /Pending Verification: no verified figures/);
   assert.deepEqual(ricky.focus.map((f: any) => f.metric), ['', '']);
-  assert.throws(() => gs.prepareEvals_({ session: manager, cycle: '2026-11' }), /prepared on 2026-11-03/);
+  assert.throws(() => gs.prepareEvals_({ session: manager, cycle: '2026-11' }), /prepared on 2026-11-02/);
 });
 
-test('drafts are prepared on the 3rd, labeled Pending Verification when reports are missing, and never replaced', () => {
+test('drafts are prepared on the 2nd, labeled Pending Verification when reports are missing, and never replaced', () => {
   const tabs = store();
-  const { gs: first, ...services } = boot(tabs, '2026-11-02');
-  assert.equal(first.prepareDueEvaluations_('2026-11-02'), 0);
-  const gs = at(tabs, '2026-11-03', services);
-  assert.equal(gs.prepareDueEvaluations_('2026-11-03'), 5);
-  assert.equal(gs.prepareDueEvaluations_('2026-11-03'), 0, 'a second run adds nothing');
+  const { gs: first, ...services } = boot(tabs, '2026-11-01');
+  assert.equal(first.prepareDueEvaluations_('2026-11-01'), 0);
+  const gs = at(tabs, '2026-11-02', services);
+  assert.equal(gs.prepareDueEvaluations_('2026-11-02'), 5);
+  assert.equal(gs.prepareDueEvaluations_('2026-11-02'), 0, 'a second run adds nothing');
   const rows = tabs.CC_Evaluations!;
   assert.equal(rows.length, 6);
   const header = rows[0] as string[];
@@ -125,10 +128,11 @@ test('coaching text uses verified figures, the two largest gaps, tenure, and sta
   gs.prepareDueEvaluations_('2026-11-03');
   const ricky = plain(gs.evals_({ session: manager })).evaluations.find((e: any) => e.name === 'Ricky Nassif');
   assert.equal(ricky.verification, 'Verified');
-  assert.deepEqual(ricky.focus.map((f: any) => f.metric), ['Finance % of Total Sales', 'Fabric Protection Attachment % (FABW)']);
-  assert.equal(ricky.focus[1].prior, '52.4%');
-  assert.equal(ricky.focus[1].goal, '80.0%');
-  assert.match(ricky.focus[1].plan, /October result: 52\.4%, 27\.6 points under the 80\.0% goal\. Three-month trend: August 60\.0%, September 55\.0%, October 52\.4%\./);
+  assert.deepEqual(ricky.focus.map((f: any) => f.metric), ['Fabric Protection Attachment % (FABW)', 'Finance % of Total Sales']);
+  assert.equal(ricky.focus[0].prior, '52.4%');
+  assert.equal(ricky.focus[0].goal, '85.0%');
+  assert.match(ricky.focus[0].plan, /October result: 52\.4%, 32\.6 points under the 85\.0% goal\. Three-month trend: August 60\.0%, September 55\.0%, October 52\.4%\./);
+  assert.match(ricky.focus[0].plan, /maintenance plan/);
   assert.match(ricky.recognition, /Met the goal every verified month in: Average Sale/);
   assert.match(ricky.comments, /met 11 of 14 goals with verified figures in October 2026/);
   const fabric = ricky.metrics.find((m: any) => m.key === 'fabric');
@@ -205,26 +209,26 @@ test('the Excel workbook has one worksheet per associate, both logos, print area
   const { gs } = boot(tabs, '2026-11-03');
   gs.prepareDueEvaluations_('2026-11-03');
   const all = plain(gs.evalWorkbook_({ session: manager, cycle: '2026-11' }));
-  assert.equal(all.fileName, 'Store17_Sales_Evaluations_November_2026.xlsx');
+  assert.equal(all.fileName, 'Store17_Monthly_Sales_Team_Review_August_September_October.xlsx');
   const parts = unzipEntries(Buffer.from(all.base64, 'base64'));
   const workbook = new TextDecoder().decode(parts['xl/workbook.xml']);
   const names = [...workbook.matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(names, ['Renzo Del Solar', 'Prakash Gandhi', 'Eric Montes Rodriguez', 'Ricky Nassif', 'Brenda Sanchez']);
   assert.equal([...workbook.matchAll(/_xlnm\.Print_Area/g)].length, 5);
-  assert.match(workbook, /<definedName name="_xlnm.Print_Area" localSheetId="3">'Ricky Nassif'!\$A\$1:\$G\$\d+<\/definedName>/);
+  assert.match(workbook, /<definedName name="_xlnm.Print_Area" localSheetId="3">'Ricky Nassif'!\$A\$1:\$F\$\d+<\/definedName>/);
   assert.deepEqual(Buffer.from(parts['xl/media/kanes.jpeg']!), readFileSync(new URL('../public/kanes-furniture-logo.jpg', import.meta.url)), 'the real Kane\'s logo, unchanged');
   assert.deepEqual(Buffer.from(parts['xl/media/store17.png']!), readFileSync(new URL('../public/store17-logo.png', import.meta.url)), 'the real Store 17 emblem, unchanged');
   for (let n = 1; n <= 5; n += 1) {
     const sheet = new TextDecoder().decode(parts[`xl/worksheets/sheet${n}.xml`]);
-    assert.match(sheet, /<rowBreaks count="1" manualBreakCount="1"><brk id="\d+"/);
     assert.match(sheet, /<pageSetup paperSize="1" orientation="portrait" fitToWidth="1" fitToHeight="0"\/>/);
     assert.match(sheet, /<drawing r:id="rId1"\/>/);
     const drawing = new TextDecoder().decode(parts[`xl/drawings/drawing${n}.xml`]);
-    assert.equal([...drawing.matchAll(/<xdr:pic>/g)].length, 4, 'both logos on page 1 and page 2');
-    for (const text of ['August 2026', 'September 2026', 'October 2026', 'Aug 1–31, 2026', 'Sep 1–30, 2026', 'Oct 1–31, 2026', 'Focus metric #1 action plan', 'Focus metric #2 action plan', 'Salesperson signature', 'Manager signature', 'OVERALL PERFORMANCE COMMENTS', 'RECOGNITION']) assert.ok(sheet.includes(text), `${n}: ${text}`);
+    assert.equal([...drawing.matchAll(/<xdr:pic>/g)].length, 2, 'both logos on the form');
+    for (const text of ['August', 'September', 'October', 'Use WDSRR Based on Delivered', 'Sales Volume', 'Focus Metric #1 Action Plan', 'Focus Metric #2 Action Plan', 'Associate Signature:', 'Managers’ Signature:', 'Sales Consultant Spotlight', '17 - Orlando', 'Pending Verification']) assert.ok(sheet.includes(text), `${n}: ${text}`);
+    assert.equal(sheet.includes('>0<'), false, 'a missing month is not written as zero');
   }
   const one = plain(gs.evalWorkbook_({ session: manager, cycle: '2026-11', names: ['Ricky Nassif'] }));
-  assert.equal(one.fileName, 'Store17_Sales_Evaluations_November_2026_Ricky_Nassif.xlsx');
+  assert.equal(one.fileName, 'Store17_Monthly_Sales_Team_Review_August_September_October_Ricky_Nassif.xlsx');
   const single = new TextDecoder().decode(unzipEntries(Buffer.from(one.base64, 'base64'))['xl/workbook.xml']);
   assert.deepEqual([...single.matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]), ['Ricky Nassif']);
 });
@@ -310,7 +314,7 @@ test('the historical October workbook is archived unchanged, read by label, and 
   assert.equal(afterRoster.evaluations.find((e: any) => e.name === 'Eric Montes Rodriguez').metrics[0].values[0].value, 52002);
 
   const november = plain(gs.evals_({ session: manager, cycle: '2026-11' }));
-  assert.ok(!november.evaluations.some((e: any) => e.name === 'Eric Montes Rodriguez'), 'the terminated associate is not in the next cycle');
+  assert.ok(november.evaluations.some((e: any) => e.name === 'Eric Montes Rodriguez'), 'October is in this review, and Eric sold until October 16');
   assert.ok(november.evaluations.some((e: any) => e.name === 'Maria Lopez'), 'the new hire is');
   const next = november.evaluations.find((e: any) => e.name === 'Ricky Nassif');
   assert.deepEqual(next.metrics[0].values.map((v: any) => v.status), ['Verified', 'Verified', 'Pending Verification'], 'August and September carry over from the workbook');
@@ -326,6 +330,37 @@ test('a volume goal left blank in the historical workbook stays blank, not the c
   assert.equal(renzo.volumeGoal, null);
   assert.equal(renzo.metrics[0].goalText, 'Manager sets');
   assert.equal(done.evaluations.find((e: any) => e.name === 'Ricky Nassif').volumeGoal, 80000);
+});
+
+test('the 2nd emails the management list once, and missing reports alert the GM instead', () => {
+  const tabs = store();
+  tabs.CC_Config!.push(['eval_mail_enabled', 'no'], ['eval_mail_hour', 0], ['admin_email', 'store17commandcenter@gmail.com']);
+  const { gs, ...services } = boot(tabs, '2026-11-02');
+  const mail: { to?: string; subject?: string; body?: string }[] = [];
+  (gs as any).MailApp = { sendEmail: (to: any, subject?: string, body?: string) => { mail.push(typeof to === 'string' ? { to, subject, body } : to); } };
+  assert.equal(plain(gs.maybeSendEvalMail_('2026-11-02')).reason, 'automatic email is off until the GM approves it');
+  assert.equal(mail.length, 0, 'a disabled schedule does not email anyone');
+  tabs.CC_Config!.find((row) => row[0] === 'eval_mail_enabled')![1] = 'yes';
+  const held = plain(gs.maybeSendEvalMail_('2026-11-02'));
+  assert.equal(held.held, true);
+  assert.equal(mail.length, 1);
+  assert.equal(mail[0]!.to, 'store17commandcenter@gmail.com');
+  assert.match(String(mail[0]!.body), /not sent to the management list/);
+  assert.equal(plain(gs.maybeSendEvalMail_('2026-11-02')).reason, 'GM already alerted');
+  assert.equal(mail.length, 1, 'the GM is not alerted twice');
+  for (const name of ['Renzo Del Solar', 'Prakash Gandhi', 'Eric Montes Rodriguez', 'Ricky Nassif', 'Brenda Sanchez']) {
+    for (const month of ['2026-08', '2026-09', '2026-10']) record(tabs, month, name, fullMonth());
+  }
+  const sent = plain(gs.maybeSendEvalMail_('2026-11-02'));
+  assert.equal(sent.sent, true);
+  assert.equal(sent.to, 'Store17MGMT-Mail@kanesfurniture.onmicrosoft.com');
+  assert.equal(mail.length, 2);
+  assert.equal((mail[1] as any).to, 'Store17MGMT-Mail@kanesfurniture.onmicrosoft.com');
+  assert.equal((mail[1] as any).subject, 'Store 17 — Monthly Sales Team Review — August / September / October');
+  assert.equal(plain(gs.maybeSendEvalMail_('2026-11-02')).reason, 'already sent');
+  assert.equal(mail.length, 2, 'a second trigger does not send again');
+  assert.throws(() => gs.resendEvalMail_({ session: manager, cycle: '2026-11', confirm: true }), /already emailed/);
+  void services;
 });
 
 test('only managers and admins see evaluations; only an admin uploads a historical workbook', () => {

@@ -14,7 +14,7 @@ function xmlUnescape_(text) {
 
 function xmlRunsText_(xml) {
   var out = [];
-  var re = /<t\b[^>]*>([\s\S]*?)<\/t>|<t\b[^>]*\/>/g;
+  var re = /<(?:[A-Za-z0-9]+:)?t\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z0-9]+:)?t>|<(?:[A-Za-z0-9]+:)?t\b[^>]*\/>/g;
   var m;
   while ((m = re.exec(xml))) out.push(m[1] ? xmlUnescape_(m[1]) : '');
   return out.join('');
@@ -41,19 +41,19 @@ function xlsxCells_(files) {
     return tag;
   });
   var shared = [];
-  String(files['xl/sharedStrings.xml'] || '').replace(/<si\b[^>]*>([\s\S]*?)<\/si>/g, function (all, inner) { shared.push(xmlRunsText_(inner)); return all; });
+  String(files['xl/sharedStrings.xml'] || '').replace(/<(?:[A-Za-z0-9]+:)?si\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z0-9]+:)?si>/g, function (all, inner) { shared.push(xmlRunsText_(inner)); return all; });
   var sheets = [];
-  workbook.replace(/<sheet\b[^>]*>/g, function (tag) {
+  workbook.replace(/<(?:[A-Za-z0-9]+:)?sheet\b[^>]*>/g, function (tag) {
     var name = /\bname="([^"]*)"/.exec(tag);
     var rid = /\br:id="([^"]+)"/.exec(tag);
     var hidden = /\bstate="(hidden|veryHidden)"/.test(tag);
     var xml = rid ? files['xl/' + rels[rid[1]]] : '';
     var cells = [];
-    String(xml || '').replace(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g, function (all, attrs, inner) {
+    String(xml || '').replace(/<(?:[A-Za-z0-9]+:)?c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:[A-Za-z0-9]+:)?c>)/g, function (all, attrs, inner) {
       var ref = /\br="([A-Z]+\d+)"/.exec(attrs);
       if (!ref || inner === undefined) return all;
       var type = (/\bt="([^"]+)"/.exec(attrs) || [])[1] || 'n';
-      var raw = /<v>([\s\S]*?)<\/v>/.exec(inner);
+      var raw = /<(?:[A-Za-z0-9]+:)?v>([\s\S]*?)<\/(?:[A-Za-z0-9]+:)?v>/.exec(inner);
       var value = null;
       if (type === 's' && raw) value = shared[Number(raw[1])];
       else if (type === 'inlineStr') value = xmlRunsText_(inner);

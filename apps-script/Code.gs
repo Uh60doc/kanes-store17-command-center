@@ -1,5 +1,5 @@
 var SPREADSHEET_ID_ = '1KtsfQPQRdg3IdNXomlM5t47IyE1psouxvgW-D8VSLfw';
-var APP_VERSION_ = '1.0.60';
+var APP_VERSION_ = '1.0.61';
 
 var ROUTES_ = {
   login: null,
@@ -36,6 +36,7 @@ var ROUTES_ = {
   evalWorkbook: ['manager', 'admin'],
   saveEvalMetric: ['manager', 'admin'],
   importEvalWorkbook: ['admin'],
+  resendEvalMail: ['manager', 'admin'],
   uploads: ['manager', 'admin'],
   uploadReport: ['manager', 'admin'],
   archiveOriginal: ['admin'],
@@ -288,6 +289,7 @@ function route_(name, payload) {
   if (name === 'setEvalStatus') return setEvalStatus_(payload);
   if (name === 'prepareEvals') return prepareEvals_(payload);
   if (name === 'evalWorkbook') return evalWorkbook_(payload);
+  if (name === 'resendEvalMail') return resendEvalMail_(payload);
   if (name === 'saveEvalMetric') return saveEvalMetric_(payload);
   if (name === 'importEvalWorkbook') return importEvalWorkbook_(payload);
   if (name === 'uploads') return uploads_(payload);
