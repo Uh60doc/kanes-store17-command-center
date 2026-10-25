@@ -31,7 +31,8 @@ var KPI_ALIASES_ = {
   'CHAVES, FELIPE': ['', 'Filepe Chaves'],
   'FELIPE CHAVES': ['', 'Filepe Chaves'],
   'FILEPE CHAVES': ['', 'Filepe Chaves'],
-  'CHAVES, FILEPE': ['', 'Filepe Chaves']
+  'CHAVES, FILEPE': ['', 'Filepe Chaves'],
+  'FILIPE CHAVES': ['', 'Filepe Chaves']
 };
 
 function importKpiAttachment_(sha, attachment) {

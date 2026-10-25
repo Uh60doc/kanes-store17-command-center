@@ -89,7 +89,7 @@ function sumField_(rows, field, start, end) {
   return seen ? Math.round(total * 100) / 100 : null;
 }
 
-/** The store-month written and delivered budgets: a month-specific CC_Config key, else the configured store month. */
+/** The store-month written and delivered budgets. A month key such as written_goal_2026-11 overrides the standing goal. */
 function storeSalesGoals_(config, store) {
   var writtenGoal = goalForMonth_(config, store, 'written_goal');
   var deliveredGoal = goalForMonth_(config, store, 'delivered_goal');
@@ -269,10 +269,8 @@ function operatingDaysRemaining_(period, today, closed) {
 function goalForMonth_(config, period, key) {
   var specific = config[key + '_' + period.year + '-' + pad2_(period.month)];
   if (specific !== undefined && specific !== '') return numberOrNull_(specific);
-  var configuredStart = isoDate_(config.store_period_start);
-  var configuredEnd = isoDate_(config.store_period_end);
-  if (configuredStart === period.start && configuredEnd === period.end) return numberOrNull_(config[key]);
-  return null;
+  // The standing written and delivered goals apply to every store month. CC_Config dates do not have to be edited at month end.
+  return numberOrNull_(config[key]);
 }
 
 function pace_(goal, actual, daysLeft) {
@@ -3067,6 +3065,8 @@ function morning_(payload) {
     role: payload.session.role,
     title: 'Morning meeting',
     date: home.today,
+    storePeriod: home.period,
+    individualPeriod: home.individualPeriod,
     updated: home.updated,
     labels: home.labels,
     yesterday: {

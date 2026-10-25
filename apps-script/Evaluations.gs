@@ -2,8 +2,10 @@
  * Three-month evaluations. A cycle is named for its issue month (2026-11) and covers the last three completed
  * salesperson months (August 1-31, September 1-30, October 1-31), never the store operating period.
  *
- * CC_EvalMetrics holds one value per associate, month and metric with its source. Rows are appended, never edited;
- * the latest row wins and earlier rows stay as the record of what was reported. CC_Evaluations holds one row per
+ * CC_EvalMetrics holds one value per associate, month and metric with its source. Rows are appended, never edited.
+ * A figure from the manager workbook stays the shown value. A later calculation that disagrees is flagged and does
+ * not replace it. A manager correction entered in the review is the approved exception and is what the review shows.
+ * CC_Evaluations holds one row per
  * cycle and associate with the editable coaching text and the status. An approved evaluation is frozen: its
  * snapshot and workbook are archived in CC_EvalArchive and Drive, and later data changes never alter it.
  */
@@ -151,14 +153,62 @@ function evalMetricRows_() {
   });
 }
 
-/** The latest recorded value for one associate, month and metric; earlier rows stay on the sheet. */
+/** Workbook history, a manager correction, or any other appended row. */
+function evalRowKind_(row) {
+  var origin = String(row.origin || '');
+  if (origin === 'entered in review') return 'correction';
+  if (/!/.test(origin) || /^sha256 /.test(origin) || /as recorded in/i.test(String(row.source || ''))) return 'historical';
+  return 'other';
+}
+
+function evalSameFigure_(left, right) {
+  if (String(left.status) !== String(right.status)) return false;
+  if (left.status !== 'Verified') return true;
+  return Number(left.value) === Number(right.value);
+}
+
+/**
+ * The shown figure for one associate, month and metric. The first workbook figure is kept. A manager correction
+ * entered in the review replaces what is shown, and the workbook row stays on the sheet. Any other row that
+ * disagrees is flagged and is not used.
+ */
 function evalCell_(rows, month, name, metricKey) {
-  var best = null;
+  var matches = [];
   rows.forEach(function (row) {
     if (row.month !== month.key || row.name !== name || row.metric !== metricKey) return;
-    if (!best || row.recordedAt >= best.recordedAt) best = row;
+    matches.push(row);
   });
-  return best;
+  if (!matches.length) return null;
+  var historical = null;
+  var correction = null;
+  var latest = null;
+  matches.forEach(function (row) {
+    var kind = evalRowKind_(row);
+    var at = String(row.recordedAt || '');
+    if (!latest || at >= String(latest.recordedAt || '')) latest = row;
+    if (kind === 'historical' && (!historical || at < String(historical.recordedAt || ''))) historical = row;
+    if (kind === 'correction' && (!correction || at >= String(correction.recordedAt || ''))) correction = row;
+  });
+  var chosen = correction || historical || latest;
+  var disagree = [];
+  matches.forEach(function (row) {
+    if (row === chosen || evalSameFigure_(row, chosen)) return;
+    disagree.push(row);
+  });
+  if (!disagree.length) return chosen;
+  var copy = {
+    month: chosen.month, name: chosen.name, metric: chosen.metric, value: chosen.value, unit: chosen.unit,
+    status: chosen.status, source: chosen.source, note: chosen.note, recordedAt: chosen.recordedAt,
+    recordedBy: chosen.recordedBy, origin: chosen.origin, discrepancy: true,
+  };
+  var bits = disagree.map(function (row) {
+    var shown = row.status === 'Verified' && row.value !== null && row.value !== '' ? String(row.value) : row.status;
+    return (row.origin || row.source || 'another row') + ' shows ' + shown;
+  });
+  var kept = correction ? 'The manager correction is shown. The earlier figure stays on file.' : 'The workbook figure was kept.';
+  var flag = 'Discrepancy for review: ' + kept + ' ' + bits.join('; ') + '.';
+  copy.note = copy.note ? String(copy.note) + ' ' + flag : flag;
+  return copy;
 }
 
 function evalSavedRows_() {
@@ -249,9 +299,9 @@ function evalMetricsFor_(info, person, template, volumeGoal, rows, config, today
         var valueUnit = cell.unit || metric.unit;
         var comparable = goal !== null && goal !== undefined && goal !== '' && valueUnit === unit;
         var target = typeof goal === 'object' && goal ? goal.count : goal;
-        return { status: 'Verified', value: cell.value, unit: valueUnit, text: evalNumberText_(cell.value, valueUnit), met: comparable ? cell.value >= target - 1e-9 : null, source: cell.source, note: cell.note };
+        return { status: 'Verified', value: cell.value, unit: valueUnit, text: evalNumberText_(cell.value, valueUnit), met: comparable ? cell.value >= target - 1e-9 : null, source: cell.source, note: cell.note, discrepancy: !!cell.discrepancy };
       }
-      if (cell && cell.status === 'Not Available') return { status: 'Not Available', value: null, unit: metric.unit, text: 'Not available', met: null, source: cell.source, note: cell.note };
+      if (cell && cell.status === 'Not Available') return { status: 'Not Available', value: null, unit: metric.unit, text: 'Not available', met: null, source: cell.source, note: cell.note, discrepancy: !!cell.discrepancy };
       if (person.hireDate && person.hireDate > month.end) return { status: 'Not Employed', value: null, unit: metric.unit, text: 'Not yet hired', met: null, source: '', note: 'Hired ' + person.hireDate + '.' };
       var open = month.end >= today;
       return { status: 'Pending Verification', value: null, unit: metric.unit, text: 'Pending Verification', met: null, source: metric.source, note: open ? 'The month is not complete yet.' : metric.source + ' for ' + month.label + ' is not verified yet.' };
@@ -757,9 +807,14 @@ function evalBand_(sheet, row, evaluation, compact) {
   return row + 4;
 }
 
+function evalThreeMonths_(info) {
+  return info.months.map(function (month) { return month.name; }).join(', ');
+}
+
 function evalReviewFileName_(info, suffix) {
-  var months = info.months.map(function (month) { return month.name; }).join('_');
-  return 'Store17_Monthly_Sales_Team_Review_' + months + (suffix ? '_' + suffix : '') + '.xlsx';
+  var name = 'Store 17 - Monthly Sales Team Review - ' + evalThreeMonths_(info);
+  if (suffix) name += ' - ' + suffix;
+  return name + '.xlsx';
 }
 
 function evalCellText_(cell) {
@@ -871,7 +926,14 @@ function evalSheet_(styles, evaluation, used) {
   sheet.set(39, 1, 'Manager’s Name (Print):', label);
   sheet.merge(39, 2, 39, 4, signed ? (evaluation.managerName || '') : '', { size: 11, color: c.text, border: { bottom: thin } });
   sheet.height(41, 32);
+  var flagged = [];
+  evaluation.metrics.forEach(function (metric) {
+    metric.values.forEach(function (cell, i) {
+      if (cell.discrepancy) flagged.push(metric.label + ' ' + evaluation.months[i].name);
+    });
+  });
   var sourceNote = 'Sales Volume uses SPR TOTAL line 8. Every other line uses the WDSRR for that salesperson month, the 1st through the last day. Pending Verification means the report is not on file. It is not zero. ' + (evaluation.volumeGoalNote || '');
+  if (flagged.length) sourceNote += ' Discrepancy for review (the workbook figure was kept): ' + flagged.join('; ') + '.';
   sheet.merge(41, 1, 42, 6, sourceNote, { size: 8, italic: true, color: c.muted, wrap: true, valign: 'top' });
   return sheet;
 }
@@ -884,7 +946,7 @@ function evalWorkbookBytes_(evaluations, info) {
     { name: 'kanes.jpeg', type: 'jpeg', bytes: base64Bytes_(KANES_LOGO_JPEG_) },
     { name: 'store17.png', type: 'png', bytes: base64Bytes_(STORE17_LOGO_PNG_) },
   ];
-  return xlsxWorkbook_(sheets, media, 'Store 17 Monthly Sales Team Review · ' + info.months.map(function (month) { return month.name; }).join(' / '));
+  return xlsxWorkbook_(sheets, media, 'Store 17 - Monthly Sales Team Review - ' + evalThreeMonths_(info));
 }
 
 var EVAL_MAIL_HEADERS_ = ['sent_at', 'cycle', 'status', 'to_address', 'subject', 'file_name', 'sha256', 'missing', 'reason', 'by_role'];
@@ -916,7 +978,7 @@ function evalMailLogged_(cycle, status) {
 }
 
 function evalMailSubject_(info) {
-  return 'Store 17 — Monthly Sales Team Review — ' + info.months.map(function (month) { return month.name; }).join(' / ');
+  return 'Store 17 - Monthly Sales Team Review - ' + evalThreeMonths_(info);
 }
 
 function evalMissingLines_(context) {
@@ -957,7 +1019,9 @@ function evalMailPreview_(context, today) {
   var sent = evalMailLogged_(info.cycle, 'sent');
   var held = evalMailLogged_(info.cycle, 'held');
   var ready = !monthsOpen && !missing.length && !sent;
-  var reason = sent ? 'This month was already emailed. A second send is blocked.' : (monthsOpen ? 'A covered month is not finished, so the review is not emailed.' : (missing.length ? 'Essential monthly reports are missing, so the management list is not emailed.' : (settings.enabled ? 'Ready to email on the 2nd at the configured hour.' : 'Automatic email is off until the GM approves it.')));
+  var heldForData = missing.length ? 'Essential monthly reports are missing, so the management list is not emailed.' : '';
+  var heldForSwitch = settings.enabled ? '' : ' Automatic email is off until the GM approves the recipient list, the send time, the test workbook, and the email workflow.';
+  var reason = sent ? 'This month was already emailed. A second send is blocked.' : (monthsOpen ? 'A covered month is not finished, so the review is not emailed.' : (heldForData || heldForSwitch ? (heldForData + heldForSwitch).trim() : 'Ready to email on the 2nd at the configured hour.'));
   return {
     name: 'Monthly Sales Team Review',
     enabled: settings.enabled,
@@ -1001,7 +1065,7 @@ function maybeSendEvalMail_(today, force) {
       return { sent: false, held: true, missing: missing };
     }
     if (typeof MailApp === 'undefined' || !MailApp.sendEmail) throw new Error('Mail is not available.');
-    MailApp.sendEmail(settings.gm, 'Store 17 — Monthly Sales Team Review held — ' + info.label, 'The ' + info.label + ' Monthly Sales Team Review was not sent to the management list.\n\nMissing verified months:\n' + missing.join('\n') + '\n\nRecord the SPR TOTAL line 8 and WDSRR figures, then a manager can send the corrected workbook. Pending is not zero.');
+    MailApp.sendEmail(settings.gm, 'Store 17 - Monthly Sales Team Review held - ' + info.label, 'The ' + info.label + ' Monthly Sales Team Review was not sent to the management list.\n\nMissing verified months:\n' + missing.join('\n') + '\n\nRecord the SPR TOTAL line 8 and WDSRR figures, then a manager can send the corrected workbook. Pending is not zero.');
     recordEvalMail_('held', cycle, settings.gm, subject, '', '', missing.join('; '), 'GM alerted. The management list was not emailed.', 'schedule');
     return { sent: false, held: true, missing: missing };
   }

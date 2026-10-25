@@ -23,7 +23,7 @@ var ROSTER_SEED_EXTRA_ = [
   { name: 'Valentina Lopez', role: 'former', employee_id: '', full_name: 'Valentina Lopez', preferred_name: 'Valentina', position: 'Sales Associate', status: 'Terminated', aliases: 'LOPEZ, VALENTINA', roster_note: 'Former associate. Termination date not on file.' },
   /** GM-confirmed former identities. Maria Rafalik stays unmatched and is intentionally not seeded. */
   { name: 'Mukhtar Junaid', role: 'former', employee_id: '', full_name: 'Mukhtar Junaid', preferred_name: 'Jimmy', position: 'Sales Associate', status: 'Terminated', aliases: 'MUKHTAR JUNAID; MUKHTAR, JUNAID; JUNAID, MUKHTAR; JIMMY', roster_note: 'Former associate. Went by Jimmy. GM confirmed Mukhtar Junaid / Jimmy only — no other alias or employee ID. Termination date not on file.' },
-  { name: 'Filepe Chaves', role: 'former', employee_id: '', full_name: 'Filepe Chaves', preferred_name: 'Filepe', position: 'Sales Associate', status: 'Terminated', aliases: 'CHAVES FELIPE; FELIPE CHAVES; CHAVES, FELIPE; FILEPE CHAVES; CHAVES, FILEPE', roster_note: 'Former associate. GM confirmed first name Filepe and last name Chaves. Report aliases CHAVES FELIPE and FELIPE CHAVES. Preserve original report spellings. Termination date not on file.' },
+  { name: 'Filepe Chaves', role: 'former', employee_id: '', full_name: 'Filepe Chaves', preferred_name: 'Filepe', position: 'Sales Associate', status: 'Terminated', aliases: 'CHAVES FELIPE; FELIPE CHAVES; CHAVES, FELIPE; FILEPE CHAVES; CHAVES, FILEPE; FILIPE CHAVES; FILIPE', roster_note: 'Former associate. GM confirmed first name Filepe and last name Chaves. The July-September 2026 workbook prints Filipe Chaves. Report aliases CHAVES FELIPE and FELIPE CHAVES. Preserve original report spellings. Termination date not on file.' },
 ];
 
 var rosterCache_ = null;
@@ -221,6 +221,33 @@ function ensureRosterColumns_() {
   }
   // Seed only — rematch AssociateDays from Sales Team / rematchAssociateDays_, never as a side effect here.
   if (ensureKnownFormerEmployees_(tab, header, present, stamp, history)) changed = true;
+  if (mergeSeedAliases_(tab, header, stamp, history)) changed = true;
+  if (changed) rosterCache_ = null;
+  return changed;
+}
+
+/** Adds a confirmed spelling that is missing from an existing alias cell. Does not change the name, status, or any sales. */
+function mergeSeedAliases_(tab, header, stamp, history) {
+  var aliasCol = header.indexOf('aliases');
+  if (aliasCol < 0) return false;
+  var values = tab.getDataRange().getValues();
+  var changed = false;
+  ROSTER_SEED_EXTRA_.forEach(function (extra) {
+    var r;
+    for (r = 1; r < values.length; r += 1) {
+      if (String(values[r][0] || '') !== extra.name) continue;
+      var current = String(values[r][aliasCol] || '');
+      var have = current.split(/[;\n]/).map(function (part) { return aliasKey_(part); });
+      var missing = String(extra.aliases || '').split(/[;\n]/).map(function (part) { return part.trim(); }).filter(function (part) {
+        return part && have.indexOf(aliasKey_(part)) === -1;
+      });
+      if (!missing.length) continue;
+      var next = (current ? current.replace(/[;\s]+$/, '') + '; ' : '') + missing.join('; ');
+      tab.getRange(r + 1, aliasCol + 1).setValue(next);
+      history.appendRow([stamp, 'alias added', extra.employee_id || '', extra.name, 'aliases', current, next, '', 'system', 'Added a workbook spelling already confirmed as this person. Sales were not changed.']);
+      changed = true;
+    }
+  });
   if (changed) rosterCache_ = null;
   return changed;
 }

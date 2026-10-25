@@ -1383,7 +1383,7 @@
         (routeAllowed('reports') ? ' · <button type="button" class="linkish" data-home="reports:individual">Individual reports</button>' : '') +
         '</p>';
       document.getElementById('screen').innerHTML =
-        '<h2 class="section-title">Store performance</h2><div class="home-kpis">' + five + '</div>' +
+        '<h2 class="section-title">Store performance</h2><p class="sub">Today ' + esc(data.today || '') + ' America/New_York. Store month ' + esc(data.period || '') + '. Salesperson month ' + esc(data.individualPeriod || '') + '. Verified through ' + esc(freshWritten.through || freshDelivered.through || 'Pending') + '.</p><div class="home-kpis">' + five + '</div>' +
         '<div class="home-targets">' + still + targets + stretch + '</div>' +
         '<h2 class="section-title">Year over year</h2><div class="home-compare">' + compare +
         '<article class="card glow-card trend-card"><div class="trend-head"><h2>NWDSR this year and SNAP last year</h2><div class="trend-legend"><span><i class="swatch nw"></i>NWDSR this year</span><span class="' + (homeTrendHasLy(data.chart) ? '' : 'is-pending') + '"><i class="swatch ly"></i>SNAP last year' + (homeTrendHasLy(data.chart) ? '' : ' · Pending') + '</span></div></div>' + homeTrend(data.chart, data.today) + '</article></div>' +
@@ -2191,6 +2191,7 @@
       peopleDeliveredVariance = data.deliveredVariance || null;
       peopleEvaluation = data.evaluation || null;
       peopleToday = data.today || '';
+      peoplePeriod = data.period || '';
       if (!peopleSort) peopleSort = 'snapWritten';
       document.getElementById('header-note').textContent = 'Last updated. SNAP written ' + (dateLabel(peopleSnapThrough) || 'Pending') + '. Delivered ' + (dateLabel(peopleAnalysisThrough.delivered) || 'Pending') + '.';
       drawPeopleTable();
@@ -2231,7 +2232,7 @@
       }).join('');
       var heads = sortedPeople().map(function (person) { return '<th>' + esc(person.name) + '</th>'; }).join('');
       document.getElementById('screen').innerHTML =
-        '<h2 class="section-title">Sales Team leaderboard</h2>' +
+        '<h2 class="section-title">Sales Team leaderboard</h2><p class="sub">Today ' + esc(peopleToday) + ' America/New_York. Salesperson month ' + esc(peoplePeriod) + '.</p>' +
         teamNav('board') +
         '<article class="card kpi-wrap"><table class="kpi"><tr><th>Sales Team</th><th>SNAP written</th><th>Monthly goal</th><th>% to goal</th><th>Delivered</th><th>Written orders</th><th>Opportunities</th><th>Closing ratio</th></tr>' + rows + '</table><p class="sub">Last updated. SNAP written ' + esc(dateLabel(peopleSnapThrough) || 'Pending') + '. Delivered ' + esc(dateLabel(peopleAnalysisThrough.delivered) || 'Pending') + '.' + (snapWaiting(peopleSnapPending) ? ' ' + esc(snapWaiting(peopleSnapPending)) : '') + '</p>' +
         (peopleDeliveredVariance ? '<p class="sub">Store delivered ' + money(peopleDeliveredVariance.storeDelivered) + '. ' + updatedOn(peopleDeliveredVariance.storeDeliveredThrough) + ' Sales team delivered ' + (peopleDeliveredVariance.activeAssociateDelivered === null || peopleDeliveredVariance.activeAssociateDelivered === undefined ? 'Pending' : money(peopleDeliveredVariance.activeAssociateDelivered)) + '.</p>' : '') +
@@ -2249,6 +2250,7 @@
     var scoreSide = 'written';
     var peopleEvaluation = null;
     var peopleToday = '';
+    var peoplePeriod = '';
     function canManage() { return role === 'manager' || role === 'admin'; }
     function actionOptions(list, selected) {
       return list.map(function (item) {
@@ -3648,7 +3650,7 @@
     }
 
     function renderMorning(data) {
-      document.getElementById('header-note').textContent = 'Morning meeting · ' + data.date;
+      document.getElementById('header-note').textContent = 'Morning meeting · ' + data.date + ' · Store month ' + (data.storePeriod || '') + ' · Salesperson month ' + (data.individualPeriod || '');
       function pending(value) {
         return value === null || value === undefined || value === '';
       }

@@ -191,7 +191,9 @@ function importedValue_(metric, cell, goalCount) {
   var unit = metric.key === 'rugs' || goalCount ? 'count' : metric.unit;
   var value = cell ? cell.value : null;
   if (typeof value === 'number' && isFinite(value)) {
-    if (unit === 'percent' && Math.abs(value) > 1.5) return { status: 'Verified', value: Math.round((value / 100) * 10000) / 10000, unit: unit, note: 'Recorded as ' + value + ' in the workbook; read as a percent.' };
+    // Excel stores 233.3% as 2.333. Only a whole number of 10 or more was typed as percent points.
+    if (unit === 'percent' && Math.abs(value) >= 10) return { status: 'Verified', value: Math.round((value / 100) * 10000) / 10000, unit: unit, note: 'Recorded as ' + value + ' in the workbook; read as a percent.' };
+    if (unit === 'percent') return { status: 'Verified', value: Math.round(value * 10000) / 10000, unit: unit, note: '' };
     return { status: 'Verified', value: value, unit: unit, note: '' };
   }
   var textValue = String(value === null || value === undefined ? '' : value).trim();

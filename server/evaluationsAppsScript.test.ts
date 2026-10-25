@@ -209,7 +209,7 @@ test('the Excel workbook has one worksheet per associate, both logos, print area
   const { gs } = boot(tabs, '2026-11-03');
   gs.prepareDueEvaluations_('2026-11-03');
   const all = plain(gs.evalWorkbook_({ session: manager, cycle: '2026-11' }));
-  assert.equal(all.fileName, 'Store17_Monthly_Sales_Team_Review_August_September_October.xlsx');
+  assert.equal(all.fileName, 'Store 17 - Monthly Sales Team Review - August, September, October.xlsx');
   const parts = unzipEntries(Buffer.from(all.base64, 'base64'));
   const workbook = new TextDecoder().decode(parts['xl/workbook.xml']);
   const names = [...workbook.matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]);
@@ -228,7 +228,7 @@ test('the Excel workbook has one worksheet per associate, both logos, print area
     assert.equal(sheet.includes('>0<'), false, 'a missing month is not written as zero');
   }
   const one = plain(gs.evalWorkbook_({ session: manager, cycle: '2026-11', names: ['Ricky Nassif'] }));
-  assert.equal(one.fileName, 'Store17_Monthly_Sales_Team_Review_August_September_October_Ricky_Nassif.xlsx');
+  assert.equal(one.fileName, 'Store 17 - Monthly Sales Team Review - August, September, October - Ricky_Nassif.xlsx');
   const single = new TextDecoder().decode(unzipEntries(Buffer.from(one.base64, 'base64'))['xl/workbook.xml']);
   assert.deepEqual([...single.matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]), ['Ricky Nassif']);
 });
@@ -321,6 +321,25 @@ test('the historical October workbook is archived unchanged, read by label, and 
   assert.equal(next.volumeGoal, 80000, 'the volume goal ladder carries forward from the approved October evaluation');
 });
 
+test('a later calculation does not replace a workbook figure; a manager correction does', () => {
+  const tabs = store();
+  const { gs } = boot(tabs, '2026-11-03');
+  tabs.CC_EvalMetrics = [['month', 'name', 'employee_id', 'metric', 'value', 'unit', 'status', 'source', 'note', 'recorded_at', 'recorded_by', 'origin']];
+  tabs.CC_EvalMetrics.push(['2026-08', 'Ricky Nassif', 'TNASSI', 'volume', 15938, 'dollars', 'Verified', 'SPR TOTAL line 8 as recorded in workbook.xlsx', '', '2026-10-12T12:00:00Z', 'admin', 'sha256 abc · Ricky!D8']);
+  tabs.CC_EvalMetrics.push(['2026-08', 'Ricky Nassif', 'TNASSI', 'volume', 99999, 'dollars', 'Verified', 'calculated from daily sales', '', '2026-11-03T12:00:00Z', 'system', 'calculated from daily']);
+  const view = plain(gs.evals_({ session: manager, cycle: '2026-11' }));
+  const august = view.evaluations.find((e: any) => e.name === 'Ricky Nassif').metrics[0].values[0];
+  assert.equal(august.value, 15938);
+  assert.equal(august.discrepancy, true);
+  assert.match(august.note, /workbook figure was kept/);
+  assert.match(august.note, /calculated from daily shows 99999/);
+  const corrected = plain(gs.saveEvalMetric_({ session: manager, cycle: '2026-11', month: '2026-08', name: 'Ricky Nassif', metric: 'volume', value: 16000, source: 'SPR TOTAL line 8, August 2026', note: 'GM confirmed' }));
+  const after = corrected.evaluations.find((e: any) => e.name === 'Ricky Nassif').metrics[0].values[0];
+  assert.equal(after.value, 16000);
+  assert.match(after.note, /manager correction is shown/);
+  assert.equal(tabs.CC_EvalMetrics.filter((row) => row[1] === 'Ricky Nassif' && row[3] === 'volume' && row[0] === '2026-08').length, 3);
+});
+
 test('a volume goal left blank in the historical workbook stays blank, not the configured goal', () => {
   const tabs = store();
   const { gs } = boot(tabs, '2026-10-16');
@@ -356,7 +375,7 @@ test('the 2nd emails the management list once, and missing reports alert the GM 
   assert.equal(sent.to, 'Store17MGMT-Mail@kanesfurniture.onmicrosoft.com');
   assert.equal(mail.length, 2);
   assert.equal((mail[1] as any).to, 'Store17MGMT-Mail@kanesfurniture.onmicrosoft.com');
-  assert.equal((mail[1] as any).subject, 'Store 17 — Monthly Sales Team Review — August / September / October');
+  assert.equal((mail[1] as any).subject, 'Store 17 - Monthly Sales Team Review - August, September, October');
   assert.equal(plain(gs.maybeSendEvalMail_('2026-11-02')).reason, 'already sent');
   assert.equal(mail.length, 2, 'a second trigger does not send again');
   assert.throws(() => gs.resendEvalMail_({ session: manager, cycle: '2026-11', confirm: true }), /already emailed/);
