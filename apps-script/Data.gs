@@ -360,24 +360,35 @@ function snapAssociateLines_(individualStart, individualEnd) {
   return { byDay: byDay, order: order, latest: latest };
 }
 
+/** A SNAP report is on file for this salesperson month when any associate line or store SNAP total is dated inside it. */
+function snapReportedIn_(start, end, lines) {
+  if (lines && lines.latest) return true;
+  var reported = false;
+  dailyFacts_().forEach(function (row) {
+    if (row.date >= start && row.date <= end && row.snapWritten !== null) reported = true;
+  });
+  return reported;
+}
+
 /**
- * options.only limits the rows to one salesperson. options.cachedSnap false never falls back to the month total
- * saved on CC_People, which is only right for the current salesperson month.
+ * options.only limits the rows to one salesperson. options.cachedSnap false keeps a person with no lines Pending.
+ * The dashboard never reuses the SNAP Written cell on CC_People: that cell is only a copy of the current
+ * salesperson month, and a new month must not inherit the previous month's dollars.
+ * A filed SNAP report with no line for this person is $0. No report yet is Pending, not zero.
  */
 function peopleRows_(individualStart, individualEnd, options) {
   options = options || {};
   var lines = snapAssociateLines_(individualStart, individualEnd);
   var totals = {};
-  var seenAny = {};
   var days = {};
   lines.order.forEach(function (key) {
     var line = lines.byDay[key];
     if (line.role === 'management' || line.role === 'unknown' || line.role === 'former') return;
-    seenAny[line.name] = true;
     totals[line.name] = (totals[line.name] || 0) + line.amount;
     if (!days[line.name]) days[line.name] = [];
     days[line.name].push({ date: line.date, snapWritten: line.amount, note: line.note });
   });
+  var reported = snapReportedIn_(individualStart, individualEnd, lines);
   var goals = approvedGoals_(config_());
   var closingFacts = loadClosing_();
   var analysis = personAnalysisContext_({ start: individualStart, end: individualEnd });
@@ -388,7 +399,7 @@ function peopleRows_(individualStart, individualEnd, options) {
     var name = String(row.name);
     var written = Object.prototype.hasOwnProperty.call(totals, name)
       ? Math.round(totals[name] * 100) / 100
-      : (seenAny[name] || options.cachedSnap === false ? null : numberOrNull_(peopleSnapCell_(row)));
+      : (options.cachedSnap === false ? null : (reported ? 0 : null));
     return personRecord_(name, written, String(row.role || 'associate'), days[name] || [], goals, personClosing_(closingFacts, name, individualStart, individualEnd, goals.closing, analysis.ledger), personAnalysis_(analysis, name));
   }) : Object.keys(totals).map(function (name) {
     return personRecord_(name, Math.round(totals[name] * 100) / 100, 'associate', days[name] || [], goals, personClosing_(closingFacts, name, individualStart, individualEnd, goals.closing, analysis.ledger), personAnalysis_(analysis, name));
