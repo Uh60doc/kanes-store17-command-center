@@ -72,7 +72,13 @@ type OptlGs = {
   ) => Record<string, unknown>;
   optlBuildPipPrint_: (state: unknown, eventId: string) => {
     documentTitle: string;
+    sourceTemplate?: string;
     counselingLevel: string;
+    counselingLevels?: { label: string; checked: boolean }[];
+    warningOptions?: { label: string; checked: boolean }[];
+    policyIntro?: string;
+    consequenceText?: string;
+    filingNote?: string;
     hrApprovalNote: string;
     signatureLinesBlank: boolean;
   };
@@ -700,7 +706,13 @@ test('new hire clean slate, acknowledgment, terminate retain history, PIP print 
   );
   const pip = gs.optlBuildPipPrint_(state, String(step.eventId));
   assert.equal(pip.documentTitle, 'Personal Improvement Plan (PIP)');
+  assert.equal(pip.sourceTemplate, 'performance-improvement-plan-pip-blank.doc');
   assert.equal(pip.counselingLevel, 'Coaching Session');
+  assert.ok(pip.counselingLevels?.some((row) => row.label === 'Coaching Session' && row.checked));
+  assert.ok(pip.warningOptions?.some((row) => row.label === 'Violation of Safety Policy' && row.checked));
+  assert.match(pip.policyIntro || '', /Code of Conduct/);
+  assert.match(pip.consequenceText || '', /continued corrective action/);
+  assert.match(pip.filingNote || '', /same day/);
   assert.match(pip.hrApprovalNote || '', /Human Resources/i);
   assert.equal(pip.signatureLinesBlank, true);
 

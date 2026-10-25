@@ -935,6 +935,55 @@ function optlFlagReviewRequired_(state, draft, payload) {
   return ex;
 }
 
+/** Official Kane's PIP warning checkboxes (performance-improvement-plan-pip-blank.doc). */
+var OPTL_PIP_WARNING_TYPES_ = [
+  'Attendance/Punctuality',
+  'Customer Service',
+  'Failure to Act with Integrity/Honesty',
+  'Failure to Follow Instruction',
+  'Failure to pass Drug Test',
+  'Inappropriate/Unprofessional behavior',
+  'Other, specify',
+  'Performance',
+  'Possession of Weapons/Explosives',
+  'Violation of Drug Free Workplace Policy',
+  'Violation of Respect',
+  'Violation of Safety Policy',
+  'Workplace Violence/Threats of Violence',
+];
+
+var OPTL_PIP_COUNSELING_LEVELS_ = [
+  'Coaching Session',
+  'Counseling Session',
+  'Final Counseling Session',
+  'Termination Session',
+];
+
+/** Map OPTL category onto the source form's Type of Warning. Does not invent extra types. */
+function optlDefaultWarningTypes_(category) {
+  if (category === 'Attendance' || category === 'Tardy') return ['Attendance/Punctuality'];
+  if (category === 'Sales Performance') return ['Performance'];
+  if (category === 'Quality of Orders') return ['Customer Service'];
+  if (category === 'Safety') return ['Violation of Safety Policy'];
+  if (category === 'Behavior') return ['Inappropriate/Unprofessional behavior'];
+  return [];
+}
+
+function optlPriorWrittenNotices_(state, event) {
+  var asOf = String(event.entryAt || event.incidentDate || '').slice(0, 10);
+  var windowStart = asOf ? optlAddCalendarDays_(asOf, -365) : null;
+  var found = false;
+  (state.events || []).forEach(function (row) {
+    if (row.eventId === event.eventId) return;
+    if (row.employeeId !== event.employeeId) return;
+    if (!(row.entryType === 'STEP_I' || row.entryType === 'STEP_II' || row.entryType === 'STEP_III' || row.entryType === 'TERM')) return;
+    if (row.status === 'voided') return;
+    var when = String(row.incidentDate || '').slice(0, 10);
+    if (windowStart && when && when >= windowStart && when <= asOf) found = true;
+  });
+  return found;
+}
+
 /** Build Kane's PIP print payload from a formal STEP/TERM event. Never invents facts. */
 function optlBuildPipPrint_(state, eventId) {
   var event = null;
@@ -948,17 +997,29 @@ function optlBuildPipPrint_(state, eventId) {
   var openReview = (state.exceptions || []).some(function (ex) {
     return ex.employeeId === event.employeeId && ex.status === 'open';
   });
+  var counseling = event.pipCounselingLabel || optlPipCounselingLabel_(event.entryType);
+  var selectedWarnings = (event.warningTypes && event.warningTypes.length) ? event.warningTypes : optlDefaultWarningTypes_(event.category);
+  var isTerm = event.entryType === 'TERM';
+  var previousYes = optlPriorWrittenNotices_(state, event);
   return {
     documentTitle: 'Personal Improvement Plan (PIP)',
-    brand: 'Kane\'s Furniture',
+    sourceTemplate: 'performance-improvement-plan-pip-blank.doc',
+    brand: 'KANE\'S FURNITURE',
     store: 'Store 17',
+    policyIntro: 'Kane\'s recognizes that employees want to be informed of what is expected of them and what consequences may occur as a result of their failure to fulfill those expectations. It is the employee\'s responsibility to read our Company\'s policy and abide by our Code of Conduct. Employees will be held accountable for their conduct in the workplace. The purpose of this notice is to inform you of an improvement needed and provide you with an opportunity to work with your manager. Failure to improve could jeopardize your continued employment at Kane\'s without further warning. We welcome your comments in the space provided below.',
     locationStoreNumber: '17',
     employeeName: employee ? employee.displayName : event.employeeId,
     jobTitle: employee ? employee.jobTitle : '',
     dateOfDiscussion: event.entryAt || event.incidentDate,
-    counselingLevel: event.pipCounselingLabel || optlPipCounselingLabel_(event.entryType),
+    counselingLevel: counseling,
+    counselingLevels: OPTL_PIP_COUNSELING_LEVELS_.map(function (label) {
+      return { label: label, checked: label === counseling };
+    }),
     entryType: event.entryType,
-    warningTypes: event.warningTypes || [],
+    warningTypes: selectedWarnings,
+    warningOptions: OPTL_PIP_WARNING_TYPES_.map(function (label) {
+      return { label: label, checked: selectedWarnings.indexOf(label) !== -1 };
+    }),
     category: event.category,
     incidentDate: event.incidentDate,
     peopleInvolved: event.peopleInvolved || '',
@@ -969,7 +1030,13 @@ function optlBuildPipPrint_(state, eventId) {
     description: event.notes || event.shortDescription || '',
     improvementPlan: event.improvementPlan || '',
     consequencesNonTerm: 'Further infractions may result in continued corrective action up to and including termination.',
-    previousNoticesUnknown: true,
+    consequencesTerm: 'Termination of employment effective immediately.',
+    consequenceText: isTerm
+      ? 'Termination of employment effective immediately.'
+      : 'Further infractions may result in continued corrective action up to and including termination.',
+    previousNotices: previousYes,
+    previousNoticesYes: previousYes,
+    previousNoticesNo: !previousYes,
     hrApprovalRequired: !!event.hrApprovalRequired,
     hrApprovalObtained: !!event.hrApprovalObtained,
     hrApprovalNote: 'Approval from Human Resources or your department\'s Executive is requested for Disciplinary Action resulting in a Counseling, Final Counseling, or Termination',
@@ -977,6 +1044,8 @@ function optlBuildPipPrint_(state, eventId) {
     watermark: openReview ? 'PENDING MANAGEMENT REVIEW' : (event.hrApprovalRequired && !event.hrApprovalObtained ? 'HR APPROVAL REQUESTED — NOT YET CONFIRMED' : null),
     signatureLinesBlank: true,
     refusalInstruction: 'Managers: should the associate refuse to sign, write "Employee Refused to Sign" where they would sign per procedure. The document is still valid if refused to sign.',
+    filingNote: 'This doc must be filed in the employee\'s file same day as delivery along with any additional related documentation.',
+    terminationChecklistNote: isTerm ? 'For terminations, file this with the required Termination Checklist found on the HR Kaneweb.' : '',
     privateNotesExcluded: true,
   };
 }

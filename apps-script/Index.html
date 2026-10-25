@@ -6191,27 +6191,39 @@
         '<article class="optl-formal-sheet" style="display:none" id="optl-print-pip-sheet">' +
         '<div class="optl-pip-brand">KANE\'S FURNITURE</div><h1>Personal Improvement Plan (PIP)</h1>' +
         (pip.watermark ? '<div class="watermark">' + esc(pip.watermark) + '</div>' : '') +
-        '<p>Kane\'s recognizes that employees want to be informed of what is expected of them and what consequences may occur as a result of their failure to fulfill those expectations. It is the employee\'s responsibility to read our Company\'s policy and abide by our Code of Conduct.</p>' +
+        '<p>' + esc(pip.policyIntro || '') + '</p>' +
         '<table><tr><th>Employee Name</th><td>' + esc(pip.employeeName || employee.displayName || '') + '</td><th>Job Title</th><td>' + esc(pip.jobTitle || employee.jobTitle || '') + '</td></tr>' +
         '<tr><th>Location/Store #</th><td>' + esc(pip.locationStoreNumber || '17') + '</td><th>Date of Discussion</th><td>' + esc(pip.dateOfDiscussion || '') + '</td></tr></table>' +
-        '<p><strong>Counseling Level:</strong> ' + esc(pip.counselingLevel || '') + '</p>' +
-        '<p><strong>Type of Warning / Category:</strong> ' + esc(pip.category || '') + '</p>' +
-        '<p><strong>Description of Infraction</strong><br>When: ' + esc(pip.incidentDate || '') +
-        '<br>Who: ' + esc(pip.peopleInvolved || '') +
-        '<br>Where: ' + esc(pip.locationDetail || '') +
-        '<br>Impact: ' + esc(pip.companyImpact || '') +
-        '<br>Policy: ' + esc(pip.policyViolated || '') +
-        '<br>Prior conversations: ' + esc(pip.priorConversations || '') +
-        '<br>' + esc(pip.description || '') + '</p>' +
-        '<p><strong>Plan for Improvement &amp; Consequences</strong><br>' + esc(pip.improvementPlan || '') +
-        '<br>' + esc(pip.consequencesNonTerm || '') + '</p>' +
+        '<p><strong>Counseling Level</strong><br>' +
+        ((pip.counselingLevels || []).map(function (row) {
+          return (row.checked ? '[X] ' : '[ ] ') + esc(row.label);
+        }).join(' &nbsp; ') || esc(pip.counselingLevel || '')) + '</p>' +
+        '<p><strong>Type of Warning</strong><br>' +
+        ((pip.warningOptions || []).map(function (row) {
+          return (row.checked ? '[X] ' : '[ ] ') + esc(row.label);
+        }).join('<br>') || esc(pip.category || '')) + '</p>' +
+        '<p><strong>Description of Infraction</strong></p>' +
+        '<table><tr><th>When did it occur? (dates)</th><td>' + esc(pip.incidentDate || '') + '</td></tr>' +
+        '<tr><th>Who was involved? (titles/names)</th><td>' + esc(pip.peopleInvolved || '') + '</td></tr>' +
+        '<tr><th>Where did it occur?</th><td>' + esc(pip.locationDetail || '') + '</td></tr>' +
+        '<tr><th>Impact to the Company</th><td>' + esc(pip.companyImpact || '') + '</td></tr>' +
+        '<tr><th>Policy violated</th><td>' + esc(pip.policyViolated || '') + '</td></tr>' +
+        '<tr><th>Prior dates &amp; details of conversations about violations</th><td>' + esc(pip.priorConversations || '') + '</td></tr>' +
+        '<tr><th>Details</th><td>' + esc(pip.description || '') + '</td></tr></table>' +
+        '<p><strong>Plan for Improvement &amp; Consequences of Further Infractions:</strong><br>' +
+        esc(pip.improvementPlan || '') + '<br>' + esc(pip.consequenceText || pip.consequencesNonTerm || '') + '</p>' +
+        '<p><strong>Previous Notices</strong><br>Has Associate Received Previous, Disciplinary Notices in the past 12 months in writing? ' +
+        (pip.previousNoticesYes ? '[X] Yes &nbsp; [ ] No' : '[ ] Yes &nbsp; [X] No') + '</p>' +
         '<p><em>' + esc(pip.hrApprovalNote || '') + '</em></p>' +
-        '<div class="sig"><p><strong>Manager Signature</strong> — Print Name ______________________ Signature ______________________ Date __________</p>' +
-        '<p><strong>Employee Signature</strong> — Print Name ______________________ Signature ______________________ Date __________</p>' +
+        '<div class="sig"><p><strong>Manager Signature</strong><br>Print Name ____________________________________________<br>Signature ________________________________________ Date ______________</p>' +
+        '<p><strong>Employee Signature</strong><br>Print Name ____________________________________________<br>Signature ________________________________________ Date ______________</p>' +
         '<p>' + esc(pip.refusalInstruction || '') + '</p>' +
         '<p><strong>Employee Comments</strong><br><br><br></p>' +
-        '<p><strong>Witness Signature</strong> — Print Name ______________________ Signature ______________________ Date __________</p>' +
-        '<p>Manager (declared for online record): ' + esc(pip.managerDeclared || '') + '</p></div></article>' +
+        '<p><strong>Witness Signature</strong><br>Print Name ____________________________________________<br>Signature ________________________________________ Date ______________</p>' +
+        '<p>' + esc(pip.filingNote || '') + '</p>' +
+        (pip.terminationChecklistNote ? '<p>' + esc(pip.terminationChecklistNote) + '</p>' : '') +
+        '<p class="sub">Online acting manager (manager-declared, not a signature): ' + esc(pip.managerDeclared || '') + '</p></div></article>' +
+
         '</div>';
 
       function optlActorFields() {
