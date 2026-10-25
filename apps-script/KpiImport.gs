@@ -152,7 +152,7 @@ function kpiColumns_(grid) {
     var label = String(sub[i] || '').trim().toUpperCase();
     var group = groups[i] || '';
     if (label === 'SALES PERSON' || label === 'STORE') mapped.name = i;
-    if (group === 'WRITTEN ORDERS' || group === 'DELIVERED ORDERS' || group.indexOf('GROUP') === 0) {
+    if (group === 'WRITTEN ORDERS' || group === 'DELIVERED ORDERS' || group === 'STORE 17' || group.indexOf('GROUP') === 0) {
       if (label === 'SALES') mapped.sales = i;
       if (label === 'AVG SALES') mapped.average = i;
       if (label === 'FIN %') mapped.finance = i;
