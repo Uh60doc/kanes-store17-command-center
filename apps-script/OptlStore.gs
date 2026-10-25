@@ -146,13 +146,20 @@ function optlCreateDedicatedStore_() {
   if (typeof SpreadsheetApp === 'undefined') throw new Error('SpreadsheetApp is only available inside Apps Script.');
   var existing = optlSpreadsheetId_();
   if (existing) throw new Error('OPTL_SPREADSHEET_ID is already set. Refusing to create a second book.');
-  var created = SpreadsheetApp.create('STORE 17 OPTL DATA');
+  var created = SpreadsheetApp.create('STORE 17 OPTL DATA — FICTIONAL DEMO');
   var id = created.getId();
   optlAssertDedicatedBook_(id);
   PropertiesService.getScriptProperties().setProperty('OPTL_SPREADSHEET_ID', id);
   var state = optlCloneDemoState_();
+  state.alertConfig.dataClass = 'FICTIONAL-DEMO-NOT-REAL-EMPLOYEES';
   optlSaveStateToBook_(SpreadsheetApp.openById(id), state);
-  return { spreadsheetId: id, name: 'STORE 17 OPTL DATA', seeded: 'demo-only' };
+  return {
+    spreadsheetId: id,
+    name: 'STORE 17 OPTL DATA — FICTIONAL DEMO',
+    seeded: 'FICTIONAL-DEMO-NOT-REAL-EMPLOYEES',
+    salesSpreadsheetTouched: false,
+    emailSent: false,
+  };
 }
 
 function optlStorageMode_() {

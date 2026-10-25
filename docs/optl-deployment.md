@@ -6,13 +6,27 @@ Do not run these steps until the GM authorizes them. This branch is not deployed
 
 Sales spreadsheet, SNAP, NWDSR, PERQ, KPI, and monthly reporting code are not modified. OPTL refuses to open the sales spreadsheet id (`SPREADSHEET_ID_`).
 
+## Put the code in the Apps Script editor without a new web-app version
+
+This cloud environment cannot sign in as `store17commandcenter@gmail.com`. A push has to be done from a computer that can.
+
+On that computer, in this repo, on branch `cursor/optl-phase1-404d`:
+
+```bash
+npx @google/clasp login
+npx @google/clasp push
+```
+
+Do **not** run `clasp deploy`. `clasp push` updates the script editor only. The current production web-app deployment stays on its existing version.
+
+Then open the script and confirm the function list includes `optlCreateDedicatedStore_`. Do not run it until you intend to create the fictional workbook.
+
 ## Create the dedicated book (one time, Apps Script editor)
 
-1. Push this branch with clasp only after review (`clasp push` is a deploy-adjacent step — GM approval first).
-2. In the script editor run `optlCreateDedicatedStore_`.
-3. It creates **STORE 17 OPTL DATA**, saves `OPTL_SPREADSHEET_ID`, and seeds fictional demo employees.
-4. Share that file with the GM, Sales Manager, and Operations Manager only. Do not share it with sales logins.
-5. Confirm the id is not the sales workbook id.
+1. In the editor, choose `optlCreateDedicatedStore_` and click Run. Approve the Sheets permission if Google asks.
+2. It creates **STORE 17 OPTL DATA — FICTIONAL DEMO** in that Google account's Drive, saves `OPTL_SPREADSHEET_ID`, and seeds records named `FICTIONAL DEMO` with ids `S17-DEMO-*`. It does not open the sales spreadsheet and it does not send email.
+3. Leave the file owned by `store17commandcenter@gmail.com`. Do not share it with the sales login. The three managers already use that account's Command Center password; the sheet itself is not a separate login.
+4. Confirm the new file's id is not the sales workbook id.
 
 Until that function runs, OPTL keeps fictional demo state in script properties so a refresh still reloads the last demo edit. That properties copy is not the production book.
 

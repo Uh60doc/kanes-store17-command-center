@@ -103,8 +103,8 @@ function optlDemoEmployees_() {
   return [
     {
       employeeId: 'S17-DEMO-101',
-      displayName: 'Alex Rivera',
-      jobTitle: 'Sales Associate',
+      displayName: 'FICTIONAL DEMO 101 — Not a real employee',
+      jobTitle: 'Fictional demo only — not HR',
       department: 'Sales',
       hireDate: '2024-03-12',
       status: 'active',
@@ -115,8 +115,8 @@ function optlDemoEmployees_() {
     },
     {
       employeeId: 'S17-DEMO-102',
-      displayName: 'Jordan Lee',
-      jobTitle: 'Sales Associate',
+      displayName: 'FICTIONAL DEMO 102 — Not a real employee',
+      jobTitle: 'Fictional demo only — not HR',
       department: 'Sales',
       hireDate: '2023-08-01',
       status: 'active',
@@ -127,8 +127,8 @@ function optlDemoEmployees_() {
     },
     {
       employeeId: 'S17-DEMO-103',
-      displayName: 'Taylor Brooks',
-      jobTitle: 'Sales Associate',
+      displayName: 'FICTIONAL DEMO 103 — Not a real employee',
+      jobTitle: 'Fictional demo only — not HR',
       department: 'Sales',
       hireDate: '2025-01-06',
       status: 'active',
@@ -139,8 +139,8 @@ function optlDemoEmployees_() {
     },
     {
       employeeId: 'S17-DEMO-199',
-      displayName: 'Casey Morgan (Former)',
-      jobTitle: 'Sales Associate',
+      displayName: 'FICTIONAL DEMO 199 — Not a real employee (Former)',
+      jobTitle: 'Fictional demo only — not HR',
       department: 'Sales',
       hireDate: '2022-01-10',
       status: 'former',
