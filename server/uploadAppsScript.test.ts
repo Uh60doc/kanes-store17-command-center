@@ -243,7 +243,9 @@ test('a report is filed on the date it prints, and a run stamp does not change t
   assert.equal(wrongKpiDay.start, '2026-10-15');
   assert.match(wrongKpiDay.message, /Filed on 2026-10-15, the date printed in the report/);
   const mtdKpi = send('2026-10-14', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-10-14.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]], 'mtd'));
-  assert.equal(mtdKpi.status, 'Needs Review');
+  assert.equal(mtdKpi.status, 'Imported');
+  assert.match(mtdKpi.message, /store month-to-date snapshot/);
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-14')![2], 1000, 'the month-to-date snapshot is not added to the daily figure');
   const mislabeled = send('2026-10-14', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-14_2026-10-14.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]], 'mislabeled'));
   assert.equal(mislabeled.status, 'Needs Review');
   assert.match(mislabeled.message, /file name says ASL written, but the contents are Group 17 Written/);
@@ -385,6 +387,75 @@ test('the checklist shows Imported, Missing, Failed and Needs Review for the cho
   assert.deepEqual([mailbox.report, mailbox.via, mailbox.at], ['Group 17 Delivered', 'mailbox', '2099-01-01T07:00:00Z'], 'a newer mailbox import of one of the nine reports counts; other reports and held files do not');
 });
 
+test('a salesperson month-to-date file records pillows, bases, rugs and pet, and does not include today', () => {
+  const { send, tabs } = boot(store(), '2026-10-24');
+  const file = xlsx([
+    ['GROUP 17', 'WRITTEN ORDERS', '', '', 'PILLOWS', '', '', '', 'ADJ', '', '', '', '', 'RUGS', '', 'PET PROTECTIONS', '', '', ''],
+    ['Sales Person', 'Sales', 'Avg Sales', 'Fin %', 'Qual Qty', 'Sold Qty', 'Sold $', 'Attach %', 'Qual Qty', 'Sold Qty', 'Sold $', 'Attach %', 'PWR %', 'Sold Qty', 'Sold $', 'Qual Qty', 'Sold Qty', 'Sold $', 'Attach %'],
+    ['TARIK NASSIF', 1000, 500, 0, 2, 1, 20, 50, 4, 1, 800, 25, 40, 2, 150, 3, 1, 30, 33.3],
+    ['TOTAL', 1000, 500, 0, 2, 1, 20, 50, 4, 1, 800, 25, 40, 2, 150, 3, 1, 30, 33.3],
+  ]);
+  const result = send('2026-10-23', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-01_2026-10-23.xlsx', file);
+  assert.equal(result.status, 'Imported');
+  assert.match(result.message, /salesperson month-to-date snapshot/);
+  const pillows = tabs.CC_Ledger!.filter((row) => row[0] === 'PILLOWS_PERSON' && row[8] === 'Ricky Nassif');
+  assert.deepEqual(pillows.map((row) => [row[1], row[3], row[4], row[11], row[12]]), [['cumulative', '2026-10-01', '2026-10-23', 1, 2]]);
+  const bases = tabs.CC_Ledger!.find((row) => row[0] === 'BASES_PERSON' && row[8] === 'Ricky Nassif');
+  assert.equal(bases && bases[14], 0.25);
+  const pwr = tabs.CC_Ledger!.find((row) => row[0] === 'PWRBASE_PERSON' && row[8] === 'Ricky Nassif');
+  assert.equal(pwr && pwr[14], 0.4);
+  const rugs = tabs.CC_Ledger!.find((row) => row[0] === 'RUGS_PERSON' && row[8] === 'Ricky Nassif');
+  assert.deepEqual(rugs && [rugs[10], rugs[11]], [150, 2]);
+  const pet = tabs.CC_Ledger!.find((row) => row[0] === 'PET_PERSON' && row[8] === 'Ricky Nassif');
+  assert.deepEqual(pet && [pet[11], pet[12]], [1, 3]);
+  assert.equal(tabs.CC_Ledger!.some((row) => row[0] === 'PILLOWS_STORE' && row[3] === '2026-10-01'), false, 'October 1 is the salesperson month, not the store month');
+  const open = send('2026-10-24', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-01_2026-10-24.xlsx', xlsx([
+    ['GROUP 17', 'WRITTEN ORDERS', '', '', 'PILLOWS', '', '', '', 'ADJ', '', '', '', '', 'RUGS', '', 'PET PROTECTIONS', '', '', ''],
+    ['Sales Person', 'Sales', 'Avg Sales', 'Fin %', 'Qual Qty', 'Sold Qty', 'Sold $', 'Attach %', 'Qual Qty', 'Sold Qty', 'Sold $', 'Attach %', 'PWR %', 'Sold Qty', 'Sold $', 'Qual Qty', 'Sold Qty', 'Sold $', 'Attach %'],
+    ['TARIK NASSIF', 1100, 550, 0, 2, 1, 20, 50, 4, 1, 800, 25, 40, 2, 150, 3, 1, 30, 33.3],
+    ['TOTAL', 1100, 550, 0, 2, 1, 20, 50, 4, 1, 800, 25, 40, 2, 150, 3, 1, 30, 33.3],
+  ], 'open'));
+  assert.equal(open.status, 'Needs Review');
+  assert.match(open.message, /includes today/);
+});
+
+test('a column missing from the snapshot is taken from the same through-date, and blank pet qualified quantity is pets sold', () => {
+  const tabs = store();
+  const raw = (view: string, side: string, through: string, sales: number | string, units: number | string, eligible: number | string, attachments: number | string, percent: number | string) =>
+    [view, 'cumulative', '', '2026-10-02', through, through, '17', '', '', side, sales, units, eligible, attachments, percent, 'DATA_ANALYSIS_KPI_ASL_' + side.toUpperCase() + '_2026-10-02_' + through + '.xlsx', '2026-10-15T00:00:00Z', `${view}|cumulative|2026-10-02|${through}||${side}|STORE`];
+  const day = (view: string, sales: number, units: number) =>
+    [view, 'daily', '2026-10-14', '2026-10-14', '2026-10-14', '2026-10-14', '17', '', '', 'written', sales, units, '', units, '', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-14_2026-10-14.xlsx', '2026-10-15T00:00:00Z', `${view}|daily|2026-10-14`];
+  tabs.CC_Ledger!.push(
+    raw('RUGS_STORE', 'written', '2026-10-13', 2000, 9, '', 9, ''),
+    raw('RUGS_STORE', 'delivered', '2026-10-14', 500, 4, '', 4, ''),
+    raw('PILLOWS_STORE', 'written', '2026-10-13', 100, 1, 10, 1, 0.1),
+    raw('PILLOWS_STORE', 'delivered', '2026-10-14', 0, 0, 8, 0, 0),
+    raw('BASES_STORE', 'written', '2026-10-13', 800, 1, 4, 1, 0.25),
+    raw('BASES_STORE', 'delivered', '2026-10-14', 0, 0, 4, 0, 0),
+    day('RUGS_STORE', 150, 2),
+    day('PET_STORE', 30, 1),
+    ['PET_STORE', 'cumulative', '', '2026-10-02', '2026-10-14', '2026-10-14', '17', '', '', 'written', 199.98, 2, '', 2, '', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-10-14.xlsx', '2026-10-15T00:00:00Z', 'pet-w'],
+    ['PET_STORE', 'cumulative', '', '2026-10-02', '2026-10-14', '2026-10-14', '17', '', '', 'delivered', 299.97, 3, '', 3, '', 'DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-02_2026-10-14.xlsx', '2026-10-15T00:00:00Z', 'pet-d'],
+    ['PWRBASE_STORE', 'cumulative', '', '2026-10-02', '2026-10-14', '2026-10-14', '17', '', '', 'written', '', '', '', '', 0.25, 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-10-14.xlsx', '2026-10-15T00:00:00Z', 'pwr-w'],
+    ['PWRBASE_STORE', 'cumulative', '', '2026-10-02', '2026-10-14', '2026-10-14', '17', '', '', 'delivered', '', '', '', '', 0.5, 'DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-02_2026-10-14.xlsx', '2026-10-15T00:00:00Z', 'pwr-d'],
+    ['DA_SALES_STORE', 'cumulative', '', '2026-10-02', '2026-10-23', '2026-10-23', '17', '', '', 'written', 172724.85, 98, '', '', '', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-10-16.xlsx + DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-23_2026-10-23.xlsx', '2026-10-24T00:00:00Z', 'rebuilt'],
+    ['DA_SALES_STORE', 'daily', '2026-10-23', '2026-10-23', '2026-10-23', '2026-10-23', '17', '', '', 'written', 11232.74, 10, '', '', '', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-23_2026-10-23.xlsx', '2026-10-24T00:00:00Z', 'day-23'],
+  );
+  const { gs } = boot(tabs, '2026-10-24');
+  plain(gs.refreshStoreKpi_('2026-10-14'));
+  assert.equal(kpi(tabs, 'Average Ticket')![1], 1000, 'a rebuilt total is not a new snapshot and October 23 is not added across the gap');
+  assert.equal(kpi(tabs, 'Rugs')![1], 11, 'the October 14 rug file is added to the snapshot');
+  assert.deepEqual(kpi(tabs, 'Pet Protections')!.slice(1, 3), [2, 3], 'the daily pet line inside that total is not added again');
+  assert.match(String(kpi(tabs, 'Pet Protections')![3]), /Qualified quantity was blank/);
+  assert.match(String(kpi(tabs, 'Pet Protections')![3]), /not an attachment percent/);
+  assert.deepEqual(kpi(tabs, 'Power Adjustable Base')!.slice(1, 3), [0.25, 0.5]);
+  const goals = plain(gs.approvedGoals_({}));
+  const actuals = plain(gs.readKpiActuals_());
+  const strip = plain(gs.homeKpiStrip_(goals, actuals, { ratio: null }, null)) as { name: string; unit: string; written: number; delivered: number }[];
+  const pet = strip.find((row) => row.name === 'Pet Protections');
+  assert.deepEqual(pet && [pet.unit, pet.written, pet.delivered], ['count', 2, 3]);
+});
+
 test('a $0 delivered day does not expect an individual Data Analysis report', () => {
   const { send, gs } = boot();
   const before = plain(gs.uploads_({ date: '2026-10-14', session: manager }));
@@ -455,12 +526,18 @@ test('a report printed for exactly a finished month is its official final, recor
   assert.deepEqual(tabs.CC_Imports!.slice(1).map((row) => row[3]), ['official-final', 'official-final', 'official-final']);
 
   const partial = send('2026-11-01', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-10-31.xlsx', group17('WRITTEN', [['TARIK NASSIF', 4000]]));
-  assert.equal(partial.status, 'Needs Review', 'October 2-31 is not the whole store month, so it is not a final');
+  assert.equal(partial.status, 'Imported', 'October 2-31 is not the official final, and it is the store month-to-date snapshot');
+  assert.match(partial.message, /store month-to-date snapshot/);
+  assert.match(partial.message, /Days inside 2026-10-02 through 2026-10-31 are not added again/);
+  const caughtUp = tabs.CC_Ledger!.filter((row) => row[1] === 'cumulative' && row[3] === '2026-10-02' && row[4] === '2026-10-31' && row[0] === 'DA_SALES_STORE');
+  assert.deepEqual(caughtUp.map((row) => [row[10], row[8]]), [[4000, '']]);
+  assert.equal(tabs.CC_Ledger!.some((row) => row[15] === 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-10-31.xlsx' && String(row[0]).endsWith('_PERSON')), false, 'a store-month file does not become salesperson figures');
   assert.deepEqual(archived(drive).sort(), [
+    'Store 17 Command Center Report Archive/2026/2026-10/Period reports/DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-10-31.xlsx',
     'Store 17 Command Center Report Archive/2026/2026-10/Period reports/DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-11-01.xlsx',
     'Store 17 Command Center Report Archive/2026/2026-10/Period reports/output (7).pdf',
     'Store 17 Command Center Report Archive/2026/2026-10/Period reports/snap-october.pdf',
-  ], 'each recorded original is archived once; the file sent for review is not');
+  ], 'each recorded original is archived once');
 });
 
 test('reprocessing the October 16 manual backfill does not add a second store figure', () => {

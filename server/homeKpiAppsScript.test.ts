@@ -68,6 +68,8 @@ test('Warranty % of Sales appears only with a verified store-period figure, and 
   assert.deepEqual([warranty[0]?.tier, warranty[0]?.goal], ['secondary', 0.055]);
   assert.equal(rows.find((row) => row.name === 'Adjustable Base Attachment')?.detail, 'ADJ PWR % written 50.0%, delivered Pending');
   assert.equal(rows.some((row) => row.name === 'Power Adjustable Base'), false);
+  const withPet = plain(gs.homeKpiStrip_(goals, actuals({ 'Pet Protections': { written: 0.25, delivered: 0, note: '', through } }), closing)) as { name: string; written: number | null }[];
+  assert.equal(withPet.find((row) => row.name === 'Pet Protections')?.written, 0.25);
 
   const noDate = plain(gs.homeKpiStrip_(goals, actuals({ 'Overall Warranty % of Sales': { written: 0.041, delivered: null, note: '', through: '' } }), closing)) as { name: string }[];
   assert.equal(noDate.some((row) => row.name === 'Warranty % of Sales'), false);

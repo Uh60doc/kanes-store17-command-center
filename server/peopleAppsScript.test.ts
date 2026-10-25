@@ -105,7 +105,7 @@ test('the salesperson record uses SNAP for written and the goal, Data Analysis f
   assert.equal(person.deliveredSales, null);
   assert.ok(!('nwdsrWritten' in person) && !('nwdsrDelivered' in person));
   const kpi = (name: string) => person.kpis.find((item: { name: string }) => item.name === name);
-  assert.deepEqual(plain(person.kpis.map((item: { name: string }) => item.name)), ['Bedding', 'Mattress Pads', 'Adjustable Bases', 'Pillows', 'Fabric', 'Leather', 'Power', 'Financing', 'Average Ticket', 'Orders', 'Closing Ratio']);
+  assert.deepEqual(plain(person.kpis.map((item: { name: string }) => item.name)), ['Bedding', 'Mattress Pads', 'Adjustable Bases', 'Pillows', 'Furniture Protection', 'Pet Protections', 'Rugs', 'Fabric', 'Leather', 'Power', 'Financing', 'Average Ticket', 'Orders', 'Closing Ratio']);
   assert.equal(kpi('Adjustable Bases').writtenText, 'Not in report');
   assert.equal(kpi('Fabric').writtenText, 'No qualifying sales');
   assert.equal(kpi('Fabric').written, null);
