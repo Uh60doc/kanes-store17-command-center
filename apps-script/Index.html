@@ -2237,9 +2237,9 @@
         '<article class="card kpi-wrap"><table class="kpi"><tr><th>Sales Team</th><th>SNAP written</th><th>Monthly goal</th><th>% to goal</th><th>Delivered</th><th>Written orders</th><th>Opportunities</th><th>Closing ratio</th></tr>' + rows + '</table><p class="sub">Last updated. SNAP written ' + esc(dateLabel(peopleSnapThrough) || 'Pending') + '. Delivered ' + esc(dateLabel(peopleAnalysisThrough.delivered) || 'Pending') + '.' + (snapWaiting(peopleSnapPending) ? ' ' + esc(snapWaiting(peopleSnapPending)) : '') + '</p>' +
         (peopleDeliveredVariance ? '<p class="sub">Store delivered ' + money(peopleDeliveredVariance.storeDelivered) + '. ' + updatedOn(peopleDeliveredVariance.storeDeliveredThrough) + ' Sales team delivered ' + (peopleDeliveredVariance.activeAssociateDelivered === null || peopleDeliveredVariance.activeAssociateDelivered === undefined ? 'Pending' : money(peopleDeliveredVariance.activeAssociateDelivered)) + '.</p>' : '') +
         '</article>' +
-        '<h2 class="section-title">Individual KPI scorecard</h2><div id="kpi-scorecard"></div>' +
         '<h2 class="section-title">KPI comparison</h2>' +
-        '<article class="card kpi-wrap"><table class="kpi"><tr><th>KPI</th>' + heads + '</tr>' + compare + '</table><p class="sub">' + updatedOn(peopleAnalysisThrough.written) + '</p></article>';
+        '<article class="card kpi-wrap"><table class="kpi"><tr><th>KPI</th>' + heads + '</tr>' + compare + '</table><p class="sub">' + updatedOn(peopleAnalysisThrough.written) + '</p></article>' +
+        '<h2 class="section-title">Individual KPI scorecard</h2><div id="kpi-scorecard"></div>';
       bindTeamNav();
       document.querySelectorAll('[data-person]').forEach(function (button) {
         button.addEventListener('click', function () { renderPerson(button.getAttribute('data-person')); });

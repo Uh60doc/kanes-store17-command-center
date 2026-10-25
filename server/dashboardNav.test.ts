@@ -47,6 +47,17 @@ function client() {
 
 const managerOrder = ['Home', 'Sales Team', 'Morning Meeting', 'Upload Reports', 'Sales & KPIs', 'Reports', 'Operations', 'Resources', 'Admin'];
 
+test('the sales team comparison includes rugs and the individual scorecard follows the team tables', () => {
+  const list = html.match(/var PERSON_COMPARE = \[([^\]]+)\]/);
+  assert.ok(list, 'the comparison list is present');
+  ['Bedding', 'Mattress Pads', 'Adjustable Bases', 'Pillows', 'Furniture Protection', 'Pet Protections', 'Rugs', 'Fabric', 'Leather', 'Power', 'Financing', 'Average Ticket', 'Orders'].forEach((name) => {
+    assert.match(list[1], new RegExp("'" + name + "'"));
+  });
+  const compare = html.indexOf('<h2 class="section-title">KPI comparison</h2>');
+  const score = html.indexOf('<h2 class="section-title">Individual KPI scorecard</h2>');
+  assert.ok(compare > 0 && score > compare, 'the individual scorecard comes after the team comparison');
+});
+
 test('manager navigation is the nine groups in order and keeps every manager page', () => {
   const page = client();
   page.role = 'manager';
