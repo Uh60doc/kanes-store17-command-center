@@ -1,7 +1,9 @@
 /**
  * OPTL — Online Performance Tracking Log (Phase 1).
+ * Spec authority: STORE17_OPTL_COMPLETE_CURSOR_SPEC_V1_2.md
  * Own Admin-area system. Demo records only. Does not write sales sheets.
  * Unlinked occurrence expiration: incident date + 180 Store 17 local calendar days.
+ * STEP I/II/III are display labels; PIP I/II/III remain internal aliases.
  */
 
 var OPTL_OCCURRENCE_DAYS_ = 180;
@@ -10,15 +12,17 @@ var OPTL_STORE_TZ_ = 'America/New_York';
 var OPTL_SECTION_A_ = ['Safety', 'Sales Performance', 'Quality of Orders', 'Behavior'];
 var OPTL_SECTION_B_ = ['Attendance', 'Tardy'];
 var OPTL_SLOT_KEYS_ = [
-  'occurrence-1', 'occurrence-2', 'occurrence-3', 'occurrence-4', 'pip-i',
-  'occurrence-5', 'occurrence-6', 'pip-ii', 'occurrence-7', 'pip-iii',
+  'occurrence-1', 'occurrence-2', 'occurrence-3', 'occurrence-4', 'step-i',
+  'occurrence-5', 'occurrence-6', 'step-ii', 'occurrence-7', 'step-iii',
   'occurrence-8', 'term',
 ];
 var OPTL_SLOT_LABELS_ = {
   'occurrence-1': 'Occ 1', 'occurrence-2': 'Occ 2', 'occurrence-3': 'Occ 3', 'occurrence-4': 'Occ 4',
-  'pip-i': 'PIP I', 'occurrence-5': 'Occ 5', 'occurrence-6': 'Occ 6', 'pip-ii': 'PIP II',
-  'occurrence-7': 'Occ 7', 'pip-iii': 'PIP III', 'occurrence-8': 'Occ 8', term: 'TERM',
+  'step-i': 'STEP I', 'occurrence-5': 'Occ 5', 'occurrence-6': 'Occ 6', 'step-ii': 'STEP II',
+  'occurrence-7': 'Occ 7', 'step-iii': 'STEP III', 'occurrence-8': 'Occ 8', term: 'TERM',
 };
+/** Online STEP colors (print remains grayscale words). */
+var OPTL_STEP_TONES_ = { 'step-i': 'step-yellow', 'step-ii': 'step-orange', 'step-iii': 'step-red', term: 'step-term' };
 var OPTL_OCC_SLOTS_ = [
   'occurrence-1', 'occurrence-2', 'occurrence-3', 'occurrence-4',
   'occurrence-5', 'occurrence-6', 'occurrence-7', 'occurrence-8',
@@ -43,6 +47,36 @@ function optlUnlinkedActive_(incidentDate, asOfDate, expirationDate) {
 
 function optlToday_() {
   return Utilities.formatDate(new Date(), OPTL_STORE_TZ_, 'yyyy-MM-dd');
+}
+
+/**
+ * Store 17 late-arrival classification (v1.2 confirmed).
+ * 0–15 min: none; 16–119: Tardy; 120+: Attendance (exactly 120 is Attendance).
+ */
+function optlLateClassification_(minutesLate) {
+  var minutes = Number(minutesLate);
+  if (!isFinite(minutes) || minutes < 0) {
+    return { category: null, section: null, label: null, reason: 'invalid-minutes' };
+  }
+  if (minutes <= 15) {
+    return { category: null, section: null, label: null, reason: 'within-grace' };
+  }
+  if (minutes < 120) {
+    return {
+      category: 'Tardy',
+      section: 'B',
+      label: 'Late — ' + Math.round(minutes) + ' min',
+      reason: 'tardy',
+    };
+  }
+  var hours = minutes / 60;
+  var hourLabel = Number.isInteger(hours) ? String(hours) : String(Math.round(hours * 10) / 10);
+  return {
+    category: 'Attendance',
+    section: 'B',
+    label: 'Late — ' + hourLabel + ' hr',
+    reason: 'attendance',
+  };
 }
 
 function optlDemoEmployees_() {
@@ -115,6 +149,7 @@ function optlMatrixRow_(view) {
         incidentDate: hit ? hit.incidentDate : null,
         expirationDate: hit ? hit.expirationDate : null,
         shortDescription: hit ? hit.shortDescription : null,
+        stepTone: OPTL_STEP_TONES_[slotKey] || null,
         pipState: 'none',
       };
     }),

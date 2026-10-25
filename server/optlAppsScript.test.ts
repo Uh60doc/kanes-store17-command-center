@@ -19,6 +19,13 @@ function loadOptl() {
     optlAddCalendarDays_: (iso: string, days: number) => string;
     optlOccurrenceExpiration_: (iso: string) => string;
     optlUnlinkedActive_: (incident: string, asOf: string, exp?: string) => boolean;
+    optlLateClassification_: (minutes: number) => {
+      category: string | null;
+      section: string | null;
+      label: string | null;
+      reason: string;
+    };
+    OPTL_SLOT_LABELS_: Record<string, string>;
     optlCategoryView_: (
       events: unknown[],
       section: string,
@@ -80,6 +87,32 @@ test('OPTL tardy occurrences compact left after the oldest expires', () => {
 test('OPTL civil-day math crosses the spring DST boundary', () => {
   const gs = loadOptl();
   assert.equal(gs.optlAddCalendarDays_('2026-03-08', 10), '2026-03-18');
+});
+
+test('OPTL late classification uses the confirmed 2-hour Attendance boundary', () => {
+  const gs = loadOptl();
+  const cases: [number, string | null][] = [
+    [0, null],
+    [15, null],
+    [16, 'Tardy'],
+    [119, 'Tardy'],
+    [120, 'Attendance'],
+    [121, 'Attendance'],
+  ];
+  cases.forEach(([minutes, category]) => {
+    const result = gs.optlLateClassification_(minutes);
+    assert.equal(result.category, category, String(minutes));
+  });
+  assert.equal(gs.optlLateClassification_(120).section, 'B');
+  assert.match(gs.optlLateClassification_(25).label || '', /Late — 25 min/);
+  assert.match(gs.optlLateClassification_(120).label || '', /Late — 2 hr/);
+});
+
+test('OPTL matrix slots display STEP I/II/III labels', () => {
+  const gs = loadOptl();
+  assert.equal(gs.OPTL_SLOT_LABELS_['step-i'], 'STEP I');
+  assert.equal(gs.OPTL_SLOT_LABELS_['step-ii'], 'STEP II');
+  assert.equal(gs.OPTL_SLOT_LABELS_['step-iii'], 'STEP III');
 });
 
 test('optl_ returns the demo associate matrix without touching sales routes', () => {

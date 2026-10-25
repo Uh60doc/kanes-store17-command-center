@@ -768,6 +768,10 @@
     .optl-matrix tbody th { text-align: left; min-width: 120px; background: #10181e; }
     .optl-matrix .optl-section td { background: #143840; color: #f3f6f8; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; font-size: 10px; }
     .optl-matrix td.filled { background: #122229; box-shadow: inset 0 0 0 1px rgba(20, 196, 212, 0.35); }
+    .optl-matrix th.step-yellow, .optl-matrix .slot-key.step-yellow { color: #f3d48a; }
+    .optl-matrix th.step-orange, .optl-matrix .slot-key.step-orange { color: #f0a46a; }
+    .optl-matrix th.step-red, .optl-matrix .slot-key.step-red { color: #f07178; }
+    .optl-matrix th.step-term, .optl-matrix .slot-key.step-term { color: #f3f6f8; }
     .optl-matrix .slot-key { display: block; color: #7f93a0; font-size: 9px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
     .optl-matrix .slot-date, .optl-matrix .slot-exp { display: block; color: #9eb0bc; font-variant-numeric: tabular-nums; }
     .optl-matrix .slot-label { display: block; margin: 2px 0; font-weight: 700; color: #f3f6f8; }
@@ -5968,15 +5972,16 @@
           esc(row.displayName) + (row.status === 'former' ? ' (Former)' : '') + '</option>';
       }).join('');
       var headers = ((data.matrixRows || [])[0] || { cells: [] }).cells.map(function (cell) {
-        return '<th scope="col">' + esc(cell.slotLabel) + '</th>';
+        return '<th scope="col"' + (cell.stepTone ? ' class="' + esc(cell.stepTone) + '"' : '') + '>' + esc(cell.slotLabel) + '</th>';
       }).join('');
       function matrixRowsHtml(section) {
         return (data.matrixRows || []).filter(function (row) { return row.section === section; }).map(function (row) {
           var cells = row.cells.map(function (cell) {
+            var keyClass = 'slot-key' + (cell.stepTone ? ' ' + cell.stepTone : '');
             if (!cell.occupied) {
-              return '<td><span class="slot-key">' + esc(cell.slotLabel) + '</span>—</td>';
+              return '<td><span class="' + keyClass + '">' + esc(cell.slotLabel) + '</span>—</td>';
             }
-            return '<td class="filled"><span class="slot-key">' + esc(cell.slotLabel) + '</span>' +
+            return '<td class="filled"><span class="' + keyClass + '">' + esc(cell.slotLabel) + '</span>' +
               '<span class="slot-date">' + esc(optlDisplayDate(cell.incidentDate)) + '</span>' +
               '<span class="slot-label">' + esc(cell.shortDescription || '') + '</span>' +
               '<span class="slot-exp">Exp ' + esc(optlDisplayDate(cell.expirationDate)) + '</span></td>';
