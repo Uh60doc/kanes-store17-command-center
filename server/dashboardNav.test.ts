@@ -47,6 +47,17 @@ function client() {
 
 const managerOrder = ['Home', 'Sales Team', 'Morning Meeting', 'Upload Reports', 'Sales & KPIs', 'Reports', 'Operations', 'Resources', 'Admin'];
 
+test('the sales team comparison includes rugs and the individual scorecard follows the team tables', () => {
+  const list = html.match(/var PERSON_COMPARE = \[([^\]]+)\]/);
+  assert.ok(list, 'the comparison list is present');
+  ['Bedding', 'Mattress Pads', 'Adjustable Bases', 'Pillows', 'Furniture Protection', 'Pet Protections', 'Rugs', 'Fabric', 'Leather', 'Power', 'Financing', 'Average Ticket', 'Orders'].forEach((name) => {
+    assert.match(list[1], new RegExp("'" + name + "'"));
+  });
+  const compare = html.indexOf('<h2 class="section-title">KPI comparison</h2>');
+  const score = html.indexOf('<h2 class="section-title">Individual KPI scorecard</h2>');
+  assert.ok(compare > 0 && score > compare, 'the individual scorecard comes after the team comparison');
+});
+
 test('manager navigation is the nine groups in order and keeps every manager page', () => {
   const page = client();
   page.role = 'manager';
@@ -57,7 +68,7 @@ test('manager navigation is the nine groups in order and keeps every manager pag
   assert.equal(groups.length, 9);
   const targets = groups.flatMap((group) => group.items ? group.items.map((item) => item[0]) : [group.screen]);
   ['written', 'delivered', 'closing', 'bedding', 'accel', 'variance', 'recovery', 'leakage', 'daily',
-    'reports:daily', 'reports:weekly', 'reports:monthly', 'brief', 'reports:trend', 'email', 'reports:meeting', 'reports:individual',
+    'reports:daily', 'reports:weekly', 'reports:monthly', 'brief', 'reports:trend', 'email', 'reports:meeting', 'reports:individual', 'evals',
     'readiness', 'delivery', 'orderQuality', 'closeout', 'actions',
     'documents', 'training', 'coaching', 'evalPrep',
     'health', 'consistency', 'email'].forEach((target) => assert.ok(targets.includes(target), target));

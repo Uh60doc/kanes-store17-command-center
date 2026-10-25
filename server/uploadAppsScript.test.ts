@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { crc32 } from 'node:zlib';
 import { appsScriptServices } from './appsScriptServices.ts';
@@ -74,8 +75,8 @@ const snapPdf = (date: string, total: number, lines: [string, number][], salt = 
 const nwdsrPdf = (kind: 'written' | 'delivered', start: string, end: string, total: number, customers = 2, salt = '') =>
   pdf(`${kind === 'written' ? 'NET WRITTEN STORE SALES' : 'DELIVERED STORE SALES'}\nFROM ${day(start)} TO ${day(end)}\nKANE FURNITURE #17 Totals: ${total.toLocaleString('en-US')} -79.7 ${customers} -71.4`, salt);
 
-function group17(side: 'WRITTEN' | 'DELIVERED', people: [string, number][], salt = '') {
-  const header = ['GROUP 17', `${side} ORDERS`, '', '', 'FABRIC', '', '', '', `${side} BEDDING`, '', 'TOTAL ATTACHMENTS', '', '', ''];
+function group17(side: 'WRITTEN' | 'DELIVERED', people: [string, number][], salt = '', banner = 'GROUP 17') {
+  const header = [banner, `${side} ORDERS`, '', '', 'FABRIC', '', '', '', `${side} BEDDING`, '', 'TOTAL ATTACHMENTS', '', '', ''];
   const sub = ['Sales Person', 'Sales', 'Avg Sales', 'Fin %', 'Qual Qty', 'Sold Qty', 'Sold $', 'Attach %', 'Sales', '%', 'Qual Qty', 'Sold Qty', 'Sold $', 'Attach %'];
   const line = (name: string, sales: number) => [name, sales, sales / 2, 50, 2, 1, 49.99, 50, sales / 5, 20, 4, 2, 99.98, 50];
   const total = people.reduce((sum, [, sales]) => sum + sales, 0);
@@ -172,6 +173,79 @@ test('each of the nine reports is identified from its contents, whatever the fil
   assert.deepEqual(tabs.CC_Closing!.filter((row) => row[8] === 'PERQ Ups + Be Backs').map((row) => [row[1], row[2], row[5]]), [['store', '', 7], ['person', 'TNASSI', 4]]);
   assert.deepEqual(tabs.CC_AssociateDays!.slice(1).map((row) => [row[0], row[2], row[4]]), [['2026-10-14', 'Ricky Nassif', 1000]]);
   assert.deepEqual(ledger(tabs, 'SNAP_PERSON', '2026-10-14').map((row) => [row[8], row[10]]), [['Ricky Nassif', 1000]], 'SNAP_PERSON mirrors CC_AssociateDays');
+});
+
+test('a sales-team workbook headed STORE 17 is the individual written and delivered report', () => {
+  const { send, tabs } = boot(store(), '2026-10-25');
+  tabs.CC_Daily!.push(['2026-10-24', 12159, 12158, 8363]);
+  const written = send('2026-10-24', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-24_2026-10-24.xlsx', group17('WRITTEN', [
+    ['PRAKASH GANDHI', 2399.96],
+    ['ERIC MONTES', 6014.69],
+    ['RENZO DELSOLAR', 3735.61],
+    ['TARIK NASSIF', 8.22],
+  ], '', 'STORE 17'), true);
+  const delivered = send('2026-10-24', 'DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-24_2026-10-24.xlsx', group17('DELIVERED', [
+    ['RENZO DELSOLAR', 2714.55],
+    ['PRAKASH GANDHI', 1133.36],
+    ['TARIK NASSIF', 3341.57],
+    ['ERIC MONTES', 1173.66],
+  ], '', 'STORE 17'), true);
+  assert.equal(written.report, 'Group 17 Written');
+  assert.equal(delivered.report, 'Group 17 Delivered');
+  assert.deepEqual([written.status, delivered.status], ['Imported', 'Imported']);
+  const people = (side: string) => ledger(tabs, 'DA_SALES_PERSON', '2026-10-24')
+    .filter((row) => row[9] === side)
+    .map((row) => [row[8], row[10]])
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+  assert.deepEqual(people('written'), [
+    ['Eric Montes Rodriguez', 6014.69],
+    ['Prakash Gandhi', 2399.96],
+    ['Renzo Del Solar', 3735.61],
+    ['Ricky Nassif', 8.22],
+  ]);
+  assert.deepEqual(people('delivered'), [
+    ['Eric Montes Rodriguez', 1173.66],
+    ['Prakash Gandhi', 1133.36],
+    ['Renzo Del Solar', 2714.55],
+    ['Ricky Nassif', 3341.57],
+  ]);
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-24').find((row) => row[9] === 'written')![10], 12158.48);
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-24').find((row) => row[9] === 'delivered')![10], 8363.14);
+  const aslWritten = send('2026-10-24', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-24_2026-10-24.xlsx', asl('WRITTEN'), true);
+  assert.equal(aslWritten.report, 'ASL Written');
+  assert.equal(aslWritten.status, 'Imported');
+  assert.equal(ledger(tabs, 'FP_STORE', '2026-10-24').filter((row) => row[15].includes('ASL')).length, 1, 'ASL still contributes only the Store 17 line');
+});
+
+test('the October 24 sales-team workbooks import the printed people and the TOTAL line', () => {
+  const writtenPath = '/home/ubuntu/.cursor/projects/workspace/uploads/DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-24_2026-10-24_9c33.xlsx';
+  const deliveredPath = '/home/ubuntu/.cursor/projects/workspace/uploads/DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-24_2026-10-24_a128.xlsx';
+  const { send, tabs } = boot(store(), '2026-10-25');
+  tabs.CC_Daily!.push(['2026-10-24', 12159, 12158, 8363]);
+  const written = send('2026-10-24', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-24_2026-10-24.xlsx', readFileSync(writtenPath), true);
+  const delivered = send('2026-10-24', 'DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-24_2026-10-24.xlsx', readFileSync(deliveredPath), true);
+  assert.equal(written.status, 'Imported', written.message);
+  assert.equal(delivered.status, 'Imported', delivered.message);
+  assert.equal(written.report, 'Group 17 Written');
+  assert.equal(delivered.report, 'Group 17 Delivered');
+  const people = (side: string) => ledger(tabs, 'DA_SALES_PERSON', '2026-10-24')
+    .filter((row) => row[9] === side)
+    .map((row) => [row[8], row[10]])
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+  assert.deepEqual(people('written'), [
+    ['Eric Montes Rodriguez', 6014.69],
+    ['Prakash Gandhi', 2399.96],
+    ['Renzo Del Solar', 3735.61],
+    ['Ricky Nassif', 8.22],
+  ]);
+  assert.deepEqual(people('delivered'), [
+    ['Eric Montes Rodriguez', 1173.66],
+    ['Prakash Gandhi', 1133.36],
+    ['Renzo Del Solar', 2714.55],
+    ['Ricky Nassif', 3341.57],
+  ]);
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-24').find((row) => row[9] === 'written')![10], 12158.48);
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-24').find((row) => row[9] === 'delivered')![10], 8363.14);
 });
 
 test('SNAP salesperson lines are read when the PDF conversion joins rows onto one line', () => {

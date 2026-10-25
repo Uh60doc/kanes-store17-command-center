@@ -89,7 +89,7 @@ function sumField_(rows, field, start, end) {
   return seen ? Math.round(total * 100) / 100 : null;
 }
 
-/** The store-month written and delivered budgets: a month-specific CC_Config key, else the configured store month. */
+/** The store-month written and delivered budgets. A month key such as written_goal_2026-11 overrides the standing goal. */
 function storeSalesGoals_(config, store) {
   var writtenGoal = goalForMonth_(config, store, 'written_goal');
   var deliveredGoal = goalForMonth_(config, store, 'delivered_goal');
@@ -269,10 +269,8 @@ function operatingDaysRemaining_(period, today, closed) {
 function goalForMonth_(config, period, key) {
   var specific = config[key + '_' + period.year + '-' + pad2_(period.month)];
   if (specific !== undefined && specific !== '') return numberOrNull_(specific);
-  var configuredStart = isoDate_(config.store_period_start);
-  var configuredEnd = isoDate_(config.store_period_end);
-  if (configuredStart === period.start && configuredEnd === period.end) return numberOrNull_(config[key]);
-  return null;
+  // The standing written and delivered goals apply to every store month. CC_Config dates do not have to be edited at month end.
+  return numberOrNull_(config[key]);
 }
 
 function pace_(goal, actual, daysLeft) {
@@ -362,24 +360,35 @@ function snapAssociateLines_(individualStart, individualEnd) {
   return { byDay: byDay, order: order, latest: latest };
 }
 
+/** A SNAP report is on file for this salesperson month when any associate line or store SNAP total is dated inside it. */
+function snapReportedIn_(start, end, lines) {
+  if (lines && lines.latest) return true;
+  var reported = false;
+  dailyFacts_().forEach(function (row) {
+    if (row.date >= start && row.date <= end && row.snapWritten !== null) reported = true;
+  });
+  return reported;
+}
+
 /**
- * options.only limits the rows to one salesperson. options.cachedSnap false never falls back to the month total
- * saved on CC_People, which is only right for the current salesperson month.
+ * options.only limits the rows to one salesperson. options.cachedSnap false keeps a person with no lines Pending.
+ * The dashboard never reuses the SNAP Written cell on CC_People: that cell is only a copy of the current
+ * salesperson month, and a new month must not inherit the previous month's dollars.
+ * A filed SNAP report with no line for this person is $0. No report yet is Pending, not zero.
  */
 function peopleRows_(individualStart, individualEnd, options) {
   options = options || {};
   var lines = snapAssociateLines_(individualStart, individualEnd);
   var totals = {};
-  var seenAny = {};
   var days = {};
   lines.order.forEach(function (key) {
     var line = lines.byDay[key];
     if (line.role === 'management' || line.role === 'unknown' || line.role === 'former') return;
-    seenAny[line.name] = true;
     totals[line.name] = (totals[line.name] || 0) + line.amount;
     if (!days[line.name]) days[line.name] = [];
     days[line.name].push({ date: line.date, snapWritten: line.amount, note: line.note });
   });
+  var reported = snapReportedIn_(individualStart, individualEnd, lines);
   var goals = approvedGoals_(config_());
   var closingFacts = loadClosing_();
   var analysis = personAnalysisContext_({ start: individualStart, end: individualEnd });
@@ -390,7 +399,7 @@ function peopleRows_(individualStart, individualEnd, options) {
     var name = String(row.name);
     var written = Object.prototype.hasOwnProperty.call(totals, name)
       ? Math.round(totals[name] * 100) / 100
-      : (seenAny[name] || options.cachedSnap === false ? null : numberOrNull_(peopleSnapCell_(row)));
+      : (options.cachedSnap === false ? null : (reported ? 0 : null));
     return personRecord_(name, written, String(row.role || 'associate'), days[name] || [], goals, personClosing_(closingFacts, name, individualStart, individualEnd, goals.closing, analysis.ledger), personAnalysis_(analysis, name));
   }) : Object.keys(totals).map(function (name) {
     return personRecord_(name, Math.round(totals[name] * 100) / 100, 'associate', days[name] || [], goals, personClosing_(closingFacts, name, individualStart, individualEnd, goals.closing, analysis.ledger), personAnalysis_(analysis, name));
@@ -2302,8 +2311,9 @@ function activeAssociates_() {
 }
 
 /**
- * Evaluations cover the previous three completed salesperson months, prepared on the 3rd and delivered before the
- * 7th. Through the 6th the cycle is this month's; from the 7th it is next month's.
+ * Monthly Sales Team Review. The issue month covers the three salesperson months that just finished (the 1st through
+ * the last calendar day). It is prepared on the 2nd and the associate meeting is still due by the 6th. Through the
+ * 6th the open cycle is this month's; from the 7th the screen moves to next month's preview.
  */
 function evaluationCycle_(today) {
   var parts = isoParts_(today);
@@ -2320,7 +2330,7 @@ function evaluationCycle_(today) {
     return periodFor_('individual', y, m);
   });
   var label = year + '-' + pad2_(month);
-  return { cycle: label, prepare: label + '-03', deliverBy: label + '-06', covers: months.map(function (period) { return { start: period.start, end: period.end }; }) };
+  return { cycle: label, prepare: label + '-02', deliverBy: label + '-06', covers: months.map(function (period) { return { start: period.start, end: period.end }; }) };
 }
 
 /** Printable associate summary for one salesperson and a date range inside one salesperson month. */
@@ -3066,6 +3076,8 @@ function morning_(payload) {
     role: payload.session.role,
     title: 'Morning meeting',
     date: home.today,
+    storePeriod: home.period,
+    individualPeriod: home.individualPeriod,
     updated: home.updated,
     labels: home.labels,
     yesterday: {

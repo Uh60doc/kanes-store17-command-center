@@ -105,6 +105,72 @@ test('reporting periods: the store month runs 2nd to 1st and the salesperson mon
   assert.equal(home.board.month.snapWritten, 101166);
 });
 
+test('salesperson and store months stay on their own calendars through the year change', () => {
+  const { gs, tabs, setToday } = harness();
+  const show = (day: string) => {
+    setToday(day);
+    const home = plain(gs.home_({ session }));
+    const people = plain(gs.people_({ session }));
+    const review = plain(gs.evaluationCycle_(day));
+    return { store: home.period, sales: people.period, written: home.board.month.written, writtenGoal: home.board.month.writtenGoal, covers: review.covers.map((period: Row) => period.start + ' to ' + period.end), prepare: review.prepare };
+  };
+  const oct31 = show('2026-10-31');
+  assert.equal(oct31.sales, '2026-10-01 through 2026-10-31');
+  assert.equal(oct31.store, '2026-10-02 through 2026-11-01');
+  assert.equal(oct31.written, 109993);
+  assert.equal(oct31.writtenGoal, 400000);
+  const nov1 = show('2026-11-01');
+  assert.equal(nov1.sales, '2026-11-01 through 2026-11-30');
+  assert.equal(nov1.store, '2026-10-02 through 2026-11-01');
+  assert.equal(nov1.written, 109993, 'November 1 still shows the October store total');
+  const nov2 = show('2026-11-02');
+  assert.equal(nov2.sales, '2026-11-01 through 2026-11-30');
+  assert.equal(nov2.store, '2026-11-02 through 2026-12-01');
+  assert.equal(nov2.written, null, 'November store has no verified days yet, so it is pending rather than October reset to zero');
+  assert.equal(nov2.writtenGoal, 400000, 'the standing store goal carries into November without a config edit');
+  assert.equal(nov2.prepare, '2026-11-02');
+  assert.deepEqual(nov2.covers, ['2026-08-01 to 2026-08-31', '2026-09-01 to 2026-09-30', '2026-10-01 to 2026-10-31']);
+  const dec1 = show('2026-12-01');
+  assert.equal(dec1.sales, '2026-12-01 through 2026-12-31');
+  assert.equal(dec1.store, '2026-11-02 through 2026-12-01');
+  const dec2 = show('2026-12-02');
+  assert.equal(dec2.sales, '2026-12-01 through 2026-12-31');
+  assert.equal(dec2.store, '2026-12-02 through 2027-01-01');
+  assert.deepEqual(dec2.covers, ['2026-09-01 to 2026-09-30', '2026-10-01 to 2026-10-31', '2026-11-01 to 2026-11-30']);
+  const jan1 = show('2027-01-01');
+  assert.equal(jan1.sales, '2027-01-01 through 2027-01-31');
+  assert.equal(jan1.store, '2026-12-02 through 2027-01-01');
+  const jan2 = show('2027-01-02');
+  assert.equal(jan2.sales, '2027-01-01 through 2027-01-31');
+  assert.equal(jan2.store, '2027-01-02 through 2027-02-01');
+  assert.deepEqual(jan2.covers, ['2026-10-01 to 2026-10-31', '2026-11-01 to 2026-11-30', '2026-12-01 to 2026-12-31']);
+  const feb2 = show('2027-02-02');
+  assert.deepEqual(feb2.covers, ['2026-11-01 to 2026-11-30', '2026-12-01 to 2026-12-31', '2027-01-01 to 2027-01-31']);
+  // Day math stays on the calendar date across the daylight-saving changes.
+  assert.equal(gs.shiftDate_('2026-11-01', -1), '2026-10-31');
+  assert.equal(gs.shiftDate_('2027-03-14', 1), '2027-03-15');
+  assert.equal(gs.individualPeriodContaining_('2026-11-01').start, '2026-11-01');
+  assert.equal(gs.individualPeriodContaining_('2026-10-31').end, '2026-10-31');
+
+  const october15 = rows(tabs, 'CC_Daily').find((row) => row.date === '2026-10-15')!;
+  const october15Written = Number(october15.nwdsr_written);
+  const dailyBefore = rows(tabs, 'CC_Daily').length;
+  setToday('2026-11-02');
+  assert.equal(gs.writeDailyAmount_({ reportType: 'NWDSR Written', start: '2026-10-31', storeTotal: -250 }), 'imported');
+  assert.equal(gs.writeDailyAmount_({ reportType: 'NWDSR Written', start: '2026-11-01', storeTotal: 400 }), 'imported');
+  assert.equal(rows(tabs, 'CC_Daily').length, dailyBefore + 2);
+  assert.equal(Number(rows(tabs, 'CC_Daily').find((row) => row.date === '2026-10-15')!.nwdsr_written), october15Written);
+  const dated = (start: string, end: string) => rows(tabs, 'CC_Daily').filter((row) => row.date >= start && row.date <= end).reduce((total, row) => total + Number(row.nwdsr_written || 0), 0);
+  assert.equal(dated('2026-10-02', '2026-11-01'), 109993 - 250 + 400, 'October store keeps October 31 and November 1');
+  assert.equal(dated('2026-10-01', '2026-10-31'), dated('2026-10-02', '2026-10-31'), 'November 1 is not an October salesperson day');
+  assert.equal(dated('2026-11-02', '2026-12-01'), 0, 'the late October report does not land in the November store month');
+  setToday('2026-11-01');
+  assert.equal(plain(gs.home_({ session })).board.month.written, 109993 - 250 + 400);
+  setToday('2026-11-02');
+  assert.equal(plain(gs.home_({ session })).board.month.written, null);
+  assert.equal(plain(gs.people_({ session })).period, '2026-11-01 through 2026-11-30');
+});
+
 test('a duplicate or conflicting daily import never adds a second figure', () => {
   const { gs, tabs } = harness();
   const before = textGrid(tabs.CC_Daily);

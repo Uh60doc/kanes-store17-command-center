@@ -130,7 +130,9 @@ function classifyWorkbook_(bytes, fileName) {
   var second = uploadText_(grid[0] && grid[0][1]);
   if (/^Performance Stats by Location$/i.test(first)) return { key: 'perqLocation', grid: grid };
   if (/^Performance Stats by Salesperson$/i.test(first)) return { key: 'perqSalesperson', grid: grid };
-  var family = /^GROUP 17$/i.test(first) ? 'group17' : /^GROUP ASL$/i.test(first) ? 'asl' : '';
+  // Sales-team workbooks are Store 17's own people (sheet SLSP KPI). Older files are headed GROUP 17;
+  // the current files are headed STORE 17. ASL is every location and is a different family: only row 17 is kept.
+  var family = /^(?:GROUP 17|STORE 17)$/i.test(first) ? 'group17' : /^GROUP ASL$/i.test(first) ? 'asl' : '';
   var side = /^WRITTEN ORDERS$/i.test(second) ? 'written' : /^DELIVERED ORDERS$/i.test(second) ? 'delivered' : '';
   if (family && side) {
     return { key: (family === 'asl' ? 'asl' : 'g17') + (side === 'written' ? 'Written' : 'Delivered'), grid: grid, family: family, side: side };

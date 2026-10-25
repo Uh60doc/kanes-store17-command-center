@@ -895,7 +895,8 @@
         { label: 'Reports', items: [
           ['reports:daily', 'Daily'], ['reports:weekly', 'Weekly'], ['reports:monthly', 'Monthly'],
           ['brief', 'Manager Brief'], ['reports:trend', '13-Week Trends'], ['email', 'Morning and MTD Email'],
-          ['reports:meeting', 'Monday Meeting Packet'], ['reports:individual', 'Individual']
+          ['reports:meeting', 'Monday Meeting Packet'], ['reports:individual', 'Individual'],
+          ['evals', 'Monthly Sales Team Review']
         ]},
         { label: 'Operations', items: [
           ['readiness', 'Report Readiness'], ['delivery', 'Delivery Rescue'], ['orderQuality', 'Sales Order Quality'],
@@ -1382,7 +1383,7 @@
         (routeAllowed('reports') ? ' · <button type="button" class="linkish" data-home="reports:individual">Individual reports</button>' : '') +
         '</p>';
       document.getElementById('screen').innerHTML =
-        '<h2 class="section-title">Store performance</h2><div class="home-kpis">' + five + '</div>' +
+        '<h2 class="section-title">Store performance</h2><p class="sub">Today ' + esc(data.today || '') + ' America/New_York. Store month ' + esc(data.period || '') + '. Salesperson month ' + esc(data.individualPeriod || '') + '. Verified through ' + esc(freshWritten.through || freshDelivered.through || 'Pending') + '.</p><div class="home-kpis">' + five + '</div>' +
         '<div class="home-targets">' + still + targets + stretch + '</div>' +
         '<h2 class="section-title">Year over year</h2><div class="home-compare">' + compare +
         '<article class="card glow-card trend-card"><div class="trend-head"><h2>NWDSR this year and SNAP last year</h2><div class="trend-legend"><span><i class="swatch nw"></i>NWDSR this year</span><span class="' + (homeTrendHasLy(data.chart) ? '' : 'is-pending') + '"><i class="swatch ly"></i>SNAP last year' + (homeTrendHasLy(data.chart) ? '' : ' · Pending') + '</span></div></div>' + homeTrend(data.chart, data.today) + '</article></div>' +
@@ -2190,6 +2191,7 @@
       peopleDeliveredVariance = data.deliveredVariance || null;
       peopleEvaluation = data.evaluation || null;
       peopleToday = data.today || '';
+      peoplePeriod = data.period || '';
       if (!peopleSort) peopleSort = 'snapWritten';
       document.getElementById('header-note').textContent = 'Last updated. SNAP written ' + (dateLabel(peopleSnapThrough) || 'Pending') + '. Delivered ' + (dateLabel(peopleAnalysisThrough.delivered) || 'Pending') + '.';
       drawPeopleTable();
@@ -2230,14 +2232,14 @@
       }).join('');
       var heads = sortedPeople().map(function (person) { return '<th>' + esc(person.name) + '</th>'; }).join('');
       document.getElementById('screen').innerHTML =
-        '<h2 class="section-title">Sales Team leaderboard</h2>' +
+        '<h2 class="section-title">Sales Team leaderboard</h2><p class="sub">Today ' + esc(peopleToday) + ' America/New_York. Salesperson month ' + esc(peoplePeriod) + '.</p>' +
         teamNav('board') +
         '<article class="card kpi-wrap"><table class="kpi"><tr><th>Sales Team</th><th>SNAP written</th><th>Monthly goal</th><th>% to goal</th><th>Delivered</th><th>Written orders</th><th>Opportunities</th><th>Closing ratio</th></tr>' + rows + '</table><p class="sub">Last updated. SNAP written ' + esc(dateLabel(peopleSnapThrough) || 'Pending') + '. Delivered ' + esc(dateLabel(peopleAnalysisThrough.delivered) || 'Pending') + '.' + (snapWaiting(peopleSnapPending) ? ' ' + esc(snapWaiting(peopleSnapPending)) : '') + '</p>' +
         (peopleDeliveredVariance ? '<p class="sub">Store delivered ' + money(peopleDeliveredVariance.storeDelivered) + '. ' + updatedOn(peopleDeliveredVariance.storeDeliveredThrough) + ' Sales team delivered ' + (peopleDeliveredVariance.activeAssociateDelivered === null || peopleDeliveredVariance.activeAssociateDelivered === undefined ? 'Pending' : money(peopleDeliveredVariance.activeAssociateDelivered)) + '.</p>' : '') +
         '</article>' +
-        '<h2 class="section-title">Individual KPI scorecard</h2><div id="kpi-scorecard"></div>' +
         '<h2 class="section-title">KPI comparison</h2>' +
-        '<article class="card kpi-wrap"><table class="kpi"><tr><th>KPI</th>' + heads + '</tr>' + compare + '</table><p class="sub">' + updatedOn(peopleAnalysisThrough.written) + '</p></article>';
+        '<article class="card kpi-wrap"><table class="kpi"><tr><th>KPI</th>' + heads + '</tr>' + compare + '</table><p class="sub">' + updatedOn(peopleAnalysisThrough.written) + '</p></article>' +
+        '<h2 class="section-title">Individual KPI scorecard</h2><div id="kpi-scorecard"></div>';
       bindTeamNav();
       document.querySelectorAll('[data-person]').forEach(function (button) {
         button.addEventListener('click', function () { renderPerson(button.getAttribute('data-person')); });
@@ -2248,6 +2250,7 @@
     var scoreSide = 'written';
     var peopleEvaluation = null;
     var peopleToday = '';
+    var peoplePeriod = '';
     function canManage() { return role === 'manager' || role === 'admin'; }
     function actionOptions(list, selected) {
       return list.map(function (item) {
@@ -3094,13 +3097,25 @@
       var host = document.getElementById(target || 'eval-error');
       if (host) host.textContent = error.message;
     }
+    function evalMailCard(mail) {
+      if (!mail) return '';
+      var missing = (mail.missing || []).map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('');
+      var gaps = (mail.gaps || []).map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('');
+      return '<article class="card" style="margin-top:12px"><h2>Management email</h2>' +
+        '<p>Automatic email is ' + (mail.enabled ? 'on' : 'off until the GM approves it') + '. Nothing has been sent to the management list from this screen.</p>' +
+        '<p class="sub">To: ' + esc(mail.to) + ' · Time: ' + esc(mail.hourLabel) + ' · Subject: ' + esc(mail.subject) + '</p>' +
+        '<p class="sub">GM alert address: ' + esc(mail.gm) + '. ' + esc(mail.reason) + '</p>' +
+        (missing ? '<p><strong>Missing reports</strong></p><ul class="list warn">' + missing + '</ul>' : '') +
+        (gaps ? '<ul class="list">' + gaps + '</ul>' : '') +
+        '</article>';
+    }
     function drawEvals() {
       document.body.classList.remove('print-eval');
-      document.getElementById('screen').innerHTML = '<h2 class="section-title">Evals</h2>' + teamNav('evals') + '<p class="sub">Loading evaluations…</p>';
+      document.getElementById('screen').innerHTML = '<h2 class="section-title">Monthly Sales Team Review</h2>' + teamNav('evals') + '<p class="sub">Loading the review…</p>';
       bindTeamNav();
       api('evals', { cycle: evalCycle }).then(function (data) { renderEvals(data, ''); }).catch(function (error) {
         if (/sign in/i.test(error.message)) { showLogin(error.message); return; }
-        document.getElementById('screen').innerHTML = '<h2 class="section-title">Evals</h2>' + teamNav('evals') + '<p class="error">' + esc(error.message) + '</p>';
+        document.getElementById('screen').innerHTML = '<h2 class="section-title">Monthly Sales Team Review</h2>' + teamNav('evals') + '<p class="error">' + esc(error.message) + '</p>';
         bindTeamNav();
       });
     }
@@ -3322,12 +3337,13 @@
       var single = evalPick ? list.filter(function (entry) { return entry.name === evalPick; })[0] : null;
       var editing = evalEditing ? list.filter(function (entry) { return entry.name === evalEditing; })[0] : null;
       document.getElementById('screen').innerHTML =
-        '<h2 class="section-title noprint">Evals</h2>' + teamNav('evals') +
+        '<h2 class="section-title noprint">Monthly Sales Team Review</h2>' + teamNav('evals') +
         '<div class="noprint">' +
         '<article class="card"><div class="summary-controls"><div><label for="ev-cycle">Evaluation month</label><select id="ev-cycle">' + cycles + '</select></div>' +
         '<div><label for="ev-person">Associate</label><select id="ev-person">' + people + '</select></div>' +
         '<div class="summary-actions"><button type="button" id="ev-download">Download Excel</button><button type="button" id="ev-print">Print</button>' + (data.canPrepare && unprepared ? '<button type="button" class="secondary" id="ev-prepare">Prepare drafts (' + unprepared + ')</button>' : '') + '</div></div>' +
-        '<p><strong>' + esc(info.label) + ' evaluation</strong> covers ' + esc(evalRange(info.months)) + ' — calendar months, the 1st through the last day, never the store period. Drafts are prepared on ' + esc(dayText(info.prepare)) + ' and given by ' + esc(dayText(info.deliverBy)) + '.</p>' +
+        '<p><strong>' + esc(info.label) + ' Monthly Sales Team Review</strong> covers ' + esc(evalRange(info.months)) + ' — salesperson months, the 1st through the last day, never the store period. It is prepared on ' + esc(dayText(info.prepare)) + '. The associate meeting is still due by ' + esc(dayText(info.deliverBy)) + '.</p>' +
+        evalMailCard(data.mail) +
         '<p class="sub">Status moves Draft → Ready for Review → Approved → Given to Associate, each confirmed by a manager. Nothing is marked given or signed automatically. An evaluation with any month Pending Verification cannot be approved; approval freezes it and archives the workbook unchanged.' + (!data.canPrepare ? ' Drafts for this month can be prepared from ' + esc(dayText(info.prepare)) + '.' : '') + '</p>' +
         (message ? '<p class="good">' + esc(message) + '</p>' : '') + '<p id="eval-error" class="error"></p><div id="eval-confirm"></div></article>' +
         '<article class="card kpi-wrap" style="margin-top:12px"><h2>' + esc(info.label) + ' status</h2>' + (list.length ? '<table class="kpi roster-table"><tr><th>Associate</th><th>Verification</th><th>Status</th><th>Given</th><th></th></tr>' + rows + '</table>' : '<p class="sub">No associate was on the Sales Team for this cycle.</p>') + '</article>' +
@@ -3634,7 +3650,7 @@
     }
 
     function renderMorning(data) {
-      document.getElementById('header-note').textContent = 'Morning meeting · ' + data.date;
+      document.getElementById('header-note').textContent = 'Morning meeting · ' + data.date + ' · Store month ' + (data.storePeriod || '') + ' · Salesperson month ' + (data.individualPeriod || '');
       function pending(value) {
         return value === null || value === undefined || value === '';
       }

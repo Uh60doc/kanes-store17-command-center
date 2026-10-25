@@ -278,10 +278,10 @@ test('the associate summary defaults to the salesperson month and refuses ranges
 
 test('the evaluation cycle covers the previous three completed salesperson months', () => {
   const gs = load(october(), '2026-10-16');
-  assert.deepEqual(plain(gs.evaluationCycle_('2026-10-16')), { cycle: '2026-11', prepare: '2026-11-03', deliverBy: '2026-11-06', covers: [
+  assert.deepEqual(plain(gs.evaluationCycle_('2026-10-16')), { cycle: '2026-11', prepare: '2026-11-02', deliverBy: '2026-11-06', covers: [
     { start: '2026-08-01', end: '2026-08-31' }, { start: '2026-09-01', end: '2026-09-30' }, { start: '2026-10-01', end: '2026-10-31' },
   ] });
   assert.equal(plain(gs.evaluationCycle_('2026-10-05')).covers[0].start, '2026-07-01', 'through the 6th the current cycle is still open');
-  assert.equal(plain(gs.evaluationCycle_('2026-12-20')).prepare, '2027-01-03');
+  assert.equal(plain(gs.evaluationCycle_('2026-12-20')).prepare, '2027-01-02');
   assert.equal(plain(gs.evaluationCycle_('2027-01-02')).covers[0].start, '2026-10-01');
 });

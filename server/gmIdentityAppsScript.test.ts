@@ -20,6 +20,7 @@ test('Mukhtar/Jimmy and Filepe Chaves match as former; Maria stays unmatched; am
   assert.equal(gs.rosterMatch_('', 'Jimmy').name, 'Mukhtar Junaid');
   assert.equal(gs.rosterMatch_('', 'CHAVES, FELIPE').name, 'Filepe Chaves');
   assert.equal(gs.rosterMatch_('', 'FELIPE CHAVES').name, 'Filepe Chaves');
+  assert.equal(gs.rosterMatch_('', 'Filipe Chaves').name, 'Filepe Chaves');
   assert.equal(gs.rosterMatch_('', 'MARIA RAFALIK'), null);
   assert.equal(gs.rosterMatch_('', 'Maria Rafalik'), null);
 

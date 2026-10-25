@@ -2,8 +2,10 @@
  * Three-month evaluations. A cycle is named for its issue month (2026-11) and covers the last three completed
  * salesperson months (August 1-31, September 1-30, October 1-31), never the store operating period.
  *
- * CC_EvalMetrics holds one value per associate, month and metric with its source. Rows are appended, never edited;
- * the latest row wins and earlier rows stay as the record of what was reported. CC_Evaluations holds one row per
+ * CC_EvalMetrics holds one value per associate, month and metric with its source. Rows are appended, never edited.
+ * A figure from the manager workbook stays the shown value. A later calculation that disagrees is flagged and does
+ * not replace it. A manager correction entered in the review is the approved exception and is what the review shows.
+ * CC_Evaluations holds one row per
  * cycle and associate with the editable coaching text and the status. An approved evaluation is frozen: its
  * snapshot and workbook are archived in CC_EvalArchive and Drive, and later data changes never alter it.
  */
@@ -16,7 +18,8 @@ var EVAL_EDITABLE_ = ['volume_goal', 'focus1_metric', 'focus1_prior', 'focus1_go
 
 /**
  * Rows follow the established evaluation format. Standard goals are the company sales goal metrics with the approved
- * 80% Fabric, Leather and Power; new-hire goals (under 90 days) are the established new-hire template. CC_Config keys
+ * Fabric and power 85%, leather 80%, and power adjustable base 35% match the approved evaluation workbook. New-hire
+ * goals (under 90 days) stay on the new-hire template. CC_Config keys
  * eval_goal_<key> and eval_new_hire_goal_<key> replace a goal without a code change.
  */
 var EVAL_METRICS_ = [
@@ -27,9 +30,9 @@ var EVAL_METRICS_ = [
   { key: 'pillows', label: 'Pillows (MPPA)', source: 'WDSRR', unit: 'percent', standard: 0.65, newHire: { count: 5 } },
   { key: 'protector', label: 'Mattress Protector Attachment (MPPA)', source: 'WDSRR', unit: 'percent', standard: 0.8, newHire: 0.6 },
   { key: 'warranty', label: 'Overall Warranty % of Total Sales', source: 'WDSRR', unit: 'percent', standard: 0.055, newHire: 0.0425 },
-  { key: 'fabric', label: 'Fabric Protection Attachment % (FABW)', source: 'WDSRR', unit: 'percent', standard: 0.8, newHire: 0.8 },
-  { key: 'power', label: 'Power Upholstery Attachment % (PWAR)', source: 'WDSRR', unit: 'percent', standard: 0.8, newHire: 0.8 },
-  { key: 'powerAdj', label: 'Power Adj Base Attachment % (PWAR)', source: 'WDSRR', unit: 'percent', standard: 0.5, newHire: 0.5 },
+  { key: 'fabric', label: 'Fabric Protection Attachment % (FABW)', source: 'WDSRR', unit: 'percent', standard: 0.85, newHire: 0.8 },
+  { key: 'power', label: 'Power Upholstery Attachment % (PWAR)', source: 'WDSRR', unit: 'percent', standard: 0.85, newHire: 0.8 },
+  { key: 'powerAdj', label: 'Power Adj Base Attachment % (PWAR)', source: 'WDSRR', unit: 'percent', standard: 0.35, newHire: 0.5 },
   { key: 'leather', label: 'Leather Protection Attachment % (LTHW)', source: 'WDSRR', unit: 'percent', standard: 0.8, newHire: 0.8 },
   { key: 'wood', label: 'Wood Kits / Furniture Protection (UVWL)', source: 'WDSRR', unit: 'percent', standard: 0.5, newHire: { count: 5 } },
   { key: 'finance', label: 'Finance % of Total Sales', source: 'WDSRR', unit: 'percent', standard: 0.5, newHire: 0.5 },
@@ -37,20 +40,20 @@ var EVAL_METRICS_ = [
 ];
 
 var EVAL_ADVICE_ = {
-  volume: 'Follow up on every be-back and open quote from the month, and set call-back appointments each shift so more of the traffic turns into written sales.',
-  average: 'Present the complete room (bedding, protection and accessories) before discussing price, so each ticket reflects everything the customer needs.',
-  mattress: 'Bring up sleep on every furniture sale and walk each customer through the mattress gallery.',
-  adjBase: 'Demonstrate an adjustable base with every mattress presentation, starting with the customer lying down on it.',
-  pillows: 'Fit the customer for a pillow on every mattress sale.',
-  protector: 'Present the mattress protector with every mattress and explain that it protects the mattress warranty.',
-  warranty: 'Offer protection on every ticket and explain the coverage before the total is given.',
-  fabric: 'Present fabric protection on every upholstered piece and explain the stain and spill coverage before the price.',
-  power: 'Present power protection on every power piece and explain the motor and mechanism coverage.',
-  powerAdj: 'Offer power protection on every adjustable base.',
-  leather: 'Present leather protection on every leather piece and explain the coverage for cracking, fading and spills.',
-  wood: 'Offer furniture protection on every case-goods piece and dining set.',
-  finance: 'Offer the financing options early on every larger sale, before the customer hears the total.',
-  rugs: 'Show a rug with every living room and bedroom set.',
+  volume: 'Call every be-back and open quote. Set the next visit before the customer leaves.',
+  average: 'Show the whole room, then talk about price.',
+  mattress: 'Walk every furniture customer through the mattress gallery.',
+  adjBase: 'Have the customer lie on an adjustable base with every mattress.',
+  pillows: 'Fit a pillow on every mattress sale.',
+  protector: 'Offer a mattress protector with every mattress and tie it to the warranty.',
+  warranty: 'Offer a maintenance plan on every ticket before you give the total.',
+  fabric: 'Show the fabric maintenance plan on every cloth piece before the price.',
+  power: 'Show the power maintenance plan on every power piece.',
+  powerAdj: 'Offer the power maintenance plan on every adjustable base.',
+  leather: 'Show the leather maintenance plan on every leather piece.',
+  wood: 'Offer the furniture maintenance plan on every wood piece and dining set.',
+  finance: 'Explain monthly payments before the customer picks the final pieces.',
+  rugs: 'Show a rug with every living room and bedroom.',
 };
 
 function evalTab_(name, headers) {
@@ -84,7 +87,7 @@ function evalCycleInfo_(cycle) {
     var period = periodFor_('individual', Number(parts[0]), Number(parts[1]));
     return { key: key, label: monthLabel_(key), name: EVAL_MONTH_NAMES_[Number(parts[1]) - 1], start: period.start, end: period.end };
   });
-  return { cycle: cycle, label: monthLabel_(cycle), months: months, prepare: cycle + '-03', deliverBy: cycle + '-06' };
+  return { cycle: cycle, label: monthLabel_(cycle), months: months, prepare: cycle + '-02', deliverBy: cycle + '-06' };
 }
 
 /** The New York calendar day of a stored ISO timestamp. */
@@ -150,14 +153,62 @@ function evalMetricRows_() {
   });
 }
 
-/** The latest recorded value for one associate, month and metric; earlier rows stay on the sheet. */
+/** Workbook history, a manager correction, or any other appended row. */
+function evalRowKind_(row) {
+  var origin = String(row.origin || '');
+  if (origin === 'entered in review') return 'correction';
+  if (/!/.test(origin) || /^sha256 /.test(origin) || /as recorded in/i.test(String(row.source || ''))) return 'historical';
+  return 'other';
+}
+
+function evalSameFigure_(left, right) {
+  if (String(left.status) !== String(right.status)) return false;
+  if (left.status !== 'Verified') return true;
+  return Number(left.value) === Number(right.value);
+}
+
+/**
+ * The shown figure for one associate, month and metric. The first workbook figure is kept. A manager correction
+ * entered in the review replaces what is shown, and the workbook row stays on the sheet. Any other row that
+ * disagrees is flagged and is not used.
+ */
 function evalCell_(rows, month, name, metricKey) {
-  var best = null;
+  var matches = [];
   rows.forEach(function (row) {
     if (row.month !== month.key || row.name !== name || row.metric !== metricKey) return;
-    if (!best || row.recordedAt >= best.recordedAt) best = row;
+    matches.push(row);
   });
-  return best;
+  if (!matches.length) return null;
+  var historical = null;
+  var correction = null;
+  var latest = null;
+  matches.forEach(function (row) {
+    var kind = evalRowKind_(row);
+    var at = String(row.recordedAt || '');
+    if (!latest || at >= String(latest.recordedAt || '')) latest = row;
+    if (kind === 'historical' && (!historical || at < String(historical.recordedAt || ''))) historical = row;
+    if (kind === 'correction' && (!correction || at >= String(correction.recordedAt || ''))) correction = row;
+  });
+  var chosen = correction || historical || latest;
+  var disagree = [];
+  matches.forEach(function (row) {
+    if (row === chosen || evalSameFigure_(row, chosen)) return;
+    disagree.push(row);
+  });
+  if (!disagree.length) return chosen;
+  var copy = {
+    month: chosen.month, name: chosen.name, metric: chosen.metric, value: chosen.value, unit: chosen.unit,
+    status: chosen.status, source: chosen.source, note: chosen.note, recordedAt: chosen.recordedAt,
+    recordedBy: chosen.recordedBy, origin: chosen.origin, discrepancy: true,
+  };
+  var bits = disagree.map(function (row) {
+    var shown = row.status === 'Verified' && row.value !== null && row.value !== '' ? String(row.value) : row.status;
+    return (row.origin || row.source || 'another row') + ' shows ' + shown;
+  });
+  var kept = correction ? 'The manager correction is shown. The earlier figure stays on file.' : 'The workbook figure was kept.';
+  var flag = 'Discrepancy for review: ' + kept + ' ' + bits.join('; ') + '.';
+  copy.note = copy.note ? String(copy.note) + ' ' + flag : flag;
+  return copy;
 }
 
 function evalSavedRows_() {
@@ -181,15 +232,39 @@ function evalArchiveRows_() {
   });
 }
 
-/** Associates in a cycle: on the Sales Team on the preparation day (or today, before it) and hired by the last covered day. */
+/** The General Manager is never given a sales-associate worksheet. */
+function evalIsGeneralManager_(row) {
+  var position = String(row.position || '').toLowerCase();
+  var name = String(row.name || '').toLowerCase();
+  return position === 'general manager' || name === 'kelly meyers' || name === 'james meyers';
+}
+
+/** True when this person was on the sales floor for any part of the salesperson month. */
+function evalOnSalesFloor_(row, month) {
+  if (evalIsGeneralManager_(row)) return false;
+  var hired = isoDate_(row.hire_date);
+  if (hired && hired > month.end) return false;
+  if (rosterRole_(row, month.start) === 'associate' || rosterRole_(row, month.end) === 'associate') return true;
+  var effective = isoDate_(row.status_effective);
+  if (!effective || effective < month.start || effective > month.end) return false;
+  if (hired && hired > effective) return false;
+  var prior = String(row.prior_status || '').toLowerCase();
+  return prior === 'active' || prior === 'leave';
+}
+
+/**
+ * Associates who sold during the three months. A promotion or termination inside the window still keeps the months
+ * they worked. Someone hired after the window, and the General Manager, are left out.
+ */
 function evalAssociates_(info, today, saved) {
-  var on = today < info.prepare ? today : info.prepare;
   var names = [];
   var rows = sheet_('CC_People');
   rows.forEach(function (row) {
+    if (evalIsGeneralManager_(row)) return;
     var hired = isoDate_(row.hire_date);
-    if (rosterRole_(row, on) !== 'associate') return;
     if (hired && hired > info.months[2].end) return;
+    var sold = info.months.some(function (month) { return evalOnSalesFloor_(row, month); });
+    if (!sold) return;
     names.push(String(row.name));
   });
   saved.forEach(function (row) { if (row.cycle === info.cycle && names.indexOf(row.name) === -1) names.push(row.name); });
@@ -224,9 +299,9 @@ function evalMetricsFor_(info, person, template, volumeGoal, rows, config, today
         var valueUnit = cell.unit || metric.unit;
         var comparable = goal !== null && goal !== undefined && goal !== '' && valueUnit === unit;
         var target = typeof goal === 'object' && goal ? goal.count : goal;
-        return { status: 'Verified', value: cell.value, unit: valueUnit, text: evalNumberText_(cell.value, valueUnit), met: comparable ? cell.value >= target - 1e-9 : null, source: cell.source, note: cell.note };
+        return { status: 'Verified', value: cell.value, unit: valueUnit, text: evalNumberText_(cell.value, valueUnit), met: comparable ? cell.value >= target - 1e-9 : null, source: cell.source, note: cell.note, discrepancy: !!cell.discrepancy };
       }
-      if (cell && cell.status === 'Not Available') return { status: 'Not Available', value: null, unit: metric.unit, text: 'Not available', met: null, source: cell.source, note: cell.note };
+      if (cell && cell.status === 'Not Available') return { status: 'Not Available', value: null, unit: metric.unit, text: 'Not available', met: null, source: cell.source, note: cell.note, discrepancy: !!cell.discrepancy };
       if (person.hireDate && person.hireDate > month.end) return { status: 'Not Employed', value: null, unit: metric.unit, text: 'Not yet hired', met: null, source: '', note: 'Hired ' + person.hireDate + '.' };
       var open = month.end >= today;
       return { status: 'Pending Verification', value: null, unit: metric.unit, text: 'Pending Verification', met: null, source: metric.source, note: open ? 'The month is not complete yet.' : metric.source + ' for ' + month.label + ' is not verified yet.' };
@@ -406,13 +481,12 @@ function evalContext_(cycle, today) {
 }
 
 /**
- * Drafts for this month's cycle are prepared automatically from the 3rd through the 6th, the delivery window. Outside
- * it a manager prepares them from EVALS. A cycle with an archived historical workbook is never re-drafted, and
- * existing rows are never replaced.
+ * Drafts are prepared on the 2nd. If that run is missed, the 3rd through the 6th still prepare anyone who has no
+ * draft. A cycle with an archived historical workbook is never re-drafted, and existing rows are never replaced.
  */
 function prepareDueEvaluations_(today) {
   var parts = isoParts_(today);
-  if (parts.day < 3 || parts.day > 6) return 0;
+  if (parts.day < 2 || parts.day > 6) return 0;
   var cycle = monthKey_(parts.year, parts.month);
   if (evalArchiveRows_().some(function (entry) { return entry.cycle === cycle && entry.kind === 'historical original'; })) return 0;
   return prepareCycle_(cycle, today, 'scheduled');
@@ -620,7 +694,7 @@ function archiveMonthlyWorkbook_(cycle, today) {
   var done = context.archive.some(function (entry) { return entry.cycle === cycle && entry.kind === 'monthly workbook' && entry.note === key; });
   if (done) return null;
   var bytes = evalWorkbookBytes_(context.evaluations, context.info);
-  return archiveFile_(bytesBase64_(bytes), 'Store17_Sales_Evaluations_' + context.info.label.replace(' ', '_') + '.xlsx', 'monthly workbook', cycle, '', '', null, key);
+  return archiveFile_(bytesBase64_(bytes), evalReviewFileName_(context.info, ''), 'monthly workbook', cycle, '', '', null, key);
 }
 
 function evalCycleList_(today, saved, archive) {
@@ -655,6 +729,8 @@ function evals_(payload) {
     evaluations: context.evaluations,
     archive: archive,
     logo: 'data:image/jpeg;base64,' + KANES_LOGO_JPEG_,
+    mail: evalMailPreview_(context, today),
+    reviewName: 'Monthly Sales Team Review',
   };
 }
 
@@ -693,7 +769,7 @@ function evalWorkbook_(payload) {
   var chosen = context.evaluations.filter(function (entry) { return !names || names.indexOf(entry.name) !== -1; });
   if (!chosen.length) throw new Error('Choose at least one associate.');
   var bytes = evalWorkbookBytes_(chosen, context.info);
-  var fileName = 'Store17_Sales_Evaluations_' + context.info.label.replace(' ', '_') + (chosen.length === 1 ? '_' + safeFilePart_(chosen[0].name) : '') + '.xlsx';
+  var fileName = evalReviewFileName_(context.info, chosen.length === 1 ? safeFilePart_(chosen[0].name) : '');
   return { fileName: fileName, base64: bytesBase64_(bytes), archived: false };
 }
 
@@ -731,151 +807,134 @@ function evalBand_(sheet, row, evaluation, compact) {
   return row + 4;
 }
 
+function evalThreeMonths_(info) {
+  return info.months.map(function (month) { return month.name; }).join(', ');
+}
+
+function evalReviewFileName_(info, suffix) {
+  var name = 'Store 17 - Monthly Sales Team Review - ' + evalThreeMonths_(info);
+  if (suffix) name += ' - ' + suffix;
+  return name + '.xlsx';
+}
+
+function evalCellText_(cell) {
+  if (!cell) return 'Pending Verification';
+  if (cell.status === 'Verified') return cell.value;
+  if (cell.status === 'Not Employed') return 'N/A — not employed';
+  if (cell.status === 'Not Available') {
+    var note = String(cell.note || '');
+    var quoted = /Workbook shows "([^"]+)"/.exec(note);
+    if (quoted) return quoted[1];
+    return cell.text && cell.text !== 'Not available' ? cell.text : 'N/A — no eligible activity';
+  }
+  return 'Pending Verification';
+}
+
+/** One associate sheet in the approved evaluation form: goals, three months, coaching, and blank signatures. */
 function evalSheet_(styles, evaluation, used) {
   var c = EVAL_COLORS_;
   var sheet = new XlsxSheet_(evalSheetName_(evaluation.name, used), styles);
-  sheet.widths = [32, 12, 12, 13, 13, 13, 12];
-  sheet.footer = '&L&8Kane\'s Furniture Store 17 · Confidential&C&8' + evaluation.name + ' · ' + evaluation.cycleLabel + '&R&8Page &P of &N';
+  sheet.widths = [28, 29, 18, 32, 32, 32];
+  sheet.footer = '&L&8Kane\'s Furniture Store 17 · Confidential&C&8' + evaluation.name + ' · Monthly Sales Team Review&R&8Page &P of &N';
   var thin = 'thin ' + c.line;
   var box = { left: thin, right: thin, top: thin, bottom: thin };
-  var label = { bold: true, size: 9, color: c.muted, fill: c.gray, border: box, indent: 1 };
-  var value = { size: 10, bold: true, color: c.text, border: box, indent: 1 };
-  var band = { bold: true, size: 10, color: c.white, fill: c.navy, indent: 1 };
-  var row = evalBand_(sheet, 1, evaluation, false);
-
-  row += 1;
-  var info = [
-    ['Salesperson', evaluation.name, 'Employee ID', evaluation.employeeId || 'Not on file'],
-    ['Store', 'Store 17 · South Orlando', 'Hire date', evaluation.hireDate || 'Not on file'],
-    ['Evaluation', evaluation.cycleLabel + (evaluation.revision > 1 ? ' · revision ' + evaluation.revision : ''), 'Deliver by', evaluation.deliverBy],
-    ['Status', evaluation.status + (evaluation.verification === 'Verified' ? '' : ' · Pending Verification'), 'Template', evaluation.tenureLabel || (evaluation.template === 'newHire' ? 'New hire (under 90 days)' : 'Standard')],
-  ];
-  info.forEach(function (line) {
-    var flagged = line[0] === 'Status' && evaluation.verification !== 'Verified';
-    sheet.height(row, flagged ? 28 : 19);
-    sheet.set(row, 1, line[0], label);
-    sheet.merge(row, 2, row, 3, line[1], flagged ? { size: 9, bold: true, color: c.amberText, fill: c.amber, border: box, indent: 1, wrap: true, valign: 'center' } : value);
-    sheet.set(row, 4, line[2], label);
-    sheet.merge(row, 5, row, 7, line[3], value);
-    row += 1;
-  });
-
-  row += 1;
-  sheet.height(row, 20);
-  sheet.merge(row, 1, row, 7, 'PERFORMANCE RESULTS · LAST THREE COMPLETED MONTHS', band);
-  row += 1;
-  var head = { bold: true, size: 9, color: c.white, fill: c.teal, border: box, align: 'center', wrap: true };
-  sheet.height(row, 30);
-  ['Sales metric', 'Source', 'Goal'].concat(evaluation.months.map(function (month) { return month.label; })).concat(['Goals met']).forEach(function (text, i) {
-    sheet.set(row, i + 1, text, i === 0 ? { bold: true, size: 9, color: c.white, fill: c.teal, border: box, indent: 1 } : head);
-  });
-  row += 1;
-  sheet.height(row, 15);
-  var rangeStyle = { size: 8, italic: true, color: c.muted, fill: c.tealLight, border: box, align: 'center' };
-  sheet.set(row, 1, 'Reporting dates', { size: 8, italic: true, color: c.muted, fill: c.tealLight, border: box, indent: 1 });
-  sheet.set(row, 2, '', rangeStyle);
-  sheet.set(row, 3, '', rangeStyle);
-  evaluation.months.forEach(function (month, i) {
-    var start = isoParts_(month.start);
-    var end = isoParts_(month.end);
-    sheet.set(row, 4 + i, month.name.slice(0, 3) + ' ' + start.day + '–' + end.day + ', ' + start.year, rangeStyle);
-  });
-  sheet.set(row, 7, '', rangeStyle);
-  row += 1;
+  var label = { bold: true, size: 10, color: c.text, valign: 'center', wrap: true };
+  var goalStyle = { size: 11, bold: true, color: c.text, align: 'center', valign: 'center', border: box };
+  var monthHead = { bold: true, size: 11, color: c.white, fill: c.teal, align: 'center', valign: 'center', border: box };
+  var title = evaluation.template === 'newHire' ? 'New Hire Coaching Evaluation\n3 Month Performance' : '3 Month Performance and Coaching Evaluation';
+  sheet.height(1, 22);
+  sheet.height(2, 18);
+  sheet.height(3, 16);
+  sheet.height(4, 8);
+  sheet.merge(1, 3, 3, 5, title, { bold: true, size: 16, color: c.navy, align: 'center', valign: 'center', wrap: true });
+  sheet.picture('kanes.jpeg', 1, 1, 1.35, 0.59, 0.04, 0.02);
+  sheet.picture('store17.png', 1, 6, 0.55, 0.55, 0.08, 0.02);
+  if (evaluation.template === 'newHire') {
+    sheet.merge(3, 6, 3, 6, evaluation.hireDate ? 'Hire date: ' + evaluation.hireDate : 'Hire date: not verified', { size: 8, color: c.muted, align: 'right' });
+  }
+  sheet.height(5, 22);
+  sheet.set(5, 1, 'Salesperson:', label);
+  sheet.set(5, 2, evaluation.name, { size: 12, bold: true, color: c.navy, valign: 'center' });
+  sheet.set(5, 3, 'Date:', label);
+  sheet.set(5, 4, evaluation.givenOn || '', { size: 11, color: c.text, align: 'center', border: { bottom: thin } });
+  sheet.set(5, 5, 'Store #', label);
+  sheet.set(5, 6, '17 - Orlando', { size: 11, bold: true, color: c.text, align: 'center' });
+  sheet.height(6, 20);
+  sheet.merge(6, 1, 6, 3, 'Use WDSRR Based on Delivered (unless specified)', { size: 9, italic: true, color: c.muted, valign: 'center', wrap: true });
+  sheet.set(6, 4, '1st Month', monthHead);
+  sheet.set(6, 5, '2nd Month', monthHead);
+  sheet.set(6, 6, '3rd Month', monthHead);
+  sheet.height(7, 22);
+  sheet.merge(7, 1, 7, 2, 'Sales Metrics', { bold: true, size: 11, color: c.white, fill: c.navy, align: 'center', valign: 'center' });
+  sheet.set(7, 3, 'GOALS', { bold: true, size: 11, color: c.white, fill: c.navy, align: 'center', valign: 'center' });
+  evaluation.months.forEach(function (month, i) { sheet.set(7, 4 + i, month.name, monthHead); });
   evaluation.metrics.forEach(function (metric, index) {
+    var row = 8 + index;
     var stripe = index % 2 ? c.white : 'F8FAFB';
-    sheet.height(row, 18);
-    sheet.set(row, 1, metric.label, { size: 9.5, color: c.text, fill: stripe, border: box, indent: 1 });
-    sheet.set(row, 2, metric.source, { size: 8, color: c.muted, fill: stripe, border: box, align: 'center' });
-    var goalFormat = metric.unit === 'dollars' ? '$#,##0' : metric.unit === 'percent' ? (Math.round(metric.goal * 1000) !== Math.round(metric.goal * 10000) / 10 ? '0.00%' : '0.0%') : '0';
-    if (metric.goal === null || metric.goal === undefined || metric.goal === '' || metric.unit === 'count') sheet.set(row, 3, metric.goalText, { size: 9.5, bold: true, color: c.text, fill: stripe, border: box, align: 'center' });
-    else sheet.set(row, 3, Number(metric.goal), { size: 9.5, bold: true, color: c.text, fill: stripe, border: box, align: 'center', format: goalFormat });
+    sheet.height(row, 20);
+    sheet.merge(row, 1, row, 2, metric.label, { size: 10, color: c.text, fill: stripe, valign: 'center', border: box, wrap: true });
+    var goalFormat = metric.unit === 'dollars' ? '$#,##0' : metric.unit === 'percent' ? (metric.goal !== null && Math.round(metric.goal * 1000) !== Math.round(metric.goal * 10000) / 10 ? '0.00%' : '0.0%') : '0';
+    if (metric.goal === null || metric.goal === undefined || metric.goal === '' || metric.unit === 'count') sheet.set(row, 3, metric.goalText, goalStyle);
+    else sheet.set(row, 3, Number(metric.goal), { size: 11, bold: true, color: c.text, align: 'center', valign: 'center', border: box, format: goalFormat });
     metric.values.forEach(function (cell, i) {
-      if (cell.status === 'Verified') {
+      var shown = evalCellText_(cell);
+      if (cell.status === 'Verified' && typeof shown === 'number') {
         var format = cell.unit === 'dollars' ? '$#,##0' : cell.unit === 'percent' ? '0.0%' : '0';
         var tone = cell.met === true ? { fill: c.good, color: c.goodText } : cell.met === false ? { fill: c.bad, color: c.badText } : { fill: stripe, color: c.text };
-        sheet.set(row, 4 + i, cell.value, { size: 10, bold: true, color: tone.color, fill: tone.fill, border: box, align: 'center', format: format });
+        sheet.set(row, 4 + i, shown, { size: 11, bold: true, color: tone.color, fill: tone.fill, border: box, align: 'center', format: format });
       } else {
-        var muted = cell.status === 'Pending Verification' ? { fill: c.amber, color: c.amberText } : { fill: c.gray, color: c.muted };
-        sheet.set(row, 4 + i, cell.status === 'Pending Verification' ? 'Pending' : cell.text, { size: 8, italic: true, color: muted.color, fill: muted.fill, border: box, align: 'center' });
+        var pending = cell.status === 'Pending Verification';
+        sheet.set(row, 4 + i, shown, { size: 8, italic: true, color: pending ? c.amberText : c.muted, fill: pending ? c.amber : c.gray, border: box, align: 'center', wrap: true });
       }
     });
-    sheet.set(row, 7, metric.metText, { size: 9, color: c.text, fill: stripe, border: box, align: 'center' });
-    row += 1;
   });
-  var notes = 'Green: at or above goal. Red: below goal. Pending: the source report for that month is not verified, so no figure is shown. Sales volume is SPR TOTAL line 8; the other metrics are WDSRR based on delivered unless specified. Volume goal: ' + evaluation.volumeGoalNote;
-  var noteLines = lineCount_(notes, 120);
-  sheet.height(row, Math.max(24, noteLines * 11.5));
-  sheet.merge(row, 1, row, 7, notes, { size: 8, italic: true, color: c.muted, wrap: true, valign: 'top' });
-  row += 2;
-
-  sheet.height(row, 20);
-  sheet.merge(row, 1, row, 7, 'COACHING FOCUS AREAS · PRIOR MONTH AND NEXT MONTH GOALS', band);
-  row += 1;
-  var halves = [[1, 3], [4, 7]];
-  var focusLabel = { bold: true, size: 8.5, color: c.muted, fill: c.gray, border: box, indent: 0 };
-  [['Focus metric #', 'metric'], ['Prior month', 'prior'], ['Next month goal', 'goal']].forEach(function (line) {
-    sheet.height(row, 19);
-    evaluation.focus.forEach(function (focus, i) {
-      var cols = halves[i];
-      sheet.set(row, cols[0], line[0] === 'Focus metric #' ? 'Focus metric #' + (i + 1) : line[0], focusLabel);
-      sheet.merge(row, cols[0] + 1, row, cols[1], focus[line[1]] || '—', { size: 10, bold: true, color: line[1] === 'metric' ? c.teal : c.text, border: box, indent: 1 });
+  var focus = evaluation.focus || [{}, {}];
+  sheet.height(22, 20);
+  sheet.set(22, 1, 'Focus Metric #1 ', label);
+  sheet.merge(22, 2, 22, 3, focus[0].metric || '', { size: 10, bold: true, color: c.teal, valign: 'center', wrap: true });
+  sheet.set(22, 4, 'Focus Metric #2 ', label);
+  sheet.merge(22, 5, 22, 6, focus[1].metric || '', { size: 10, bold: true, color: c.teal, valign: 'center', wrap: true });
+  sheet.height(23, 18);
+  sheet.set(23, 1, 'Prior Month ', label);
+  sheet.merge(23, 2, 23, 3, focus[0].prior || '', { size: 10, color: c.text, valign: 'center' });
+  sheet.set(23, 4, 'Prior Month', label);
+  sheet.merge(23, 5, 23, 6, focus[1].prior || '', { size: 10, color: c.text, valign: 'center' });
+  sheet.height(24, 18);
+  sheet.set(24, 1, 'Goal End of Month', label);
+  sheet.merge(24, 2, 24, 3, focus[0].goal || '', { size: 10, color: c.text, valign: 'center' });
+  sheet.set(24, 4, 'Goal End of Month', label);
+  sheet.merge(24, 5, 24, 6, focus[1].goal || '', { size: 10, color: c.text, valign: 'center' });
+  sheet.height(25, 18);
+  sheet.merge(25, 1, 25, 3, 'Focus Metric #1 Action Plan', { bold: true, size: 10, color: c.white, fill: c.teal, align: 'center', valign: 'center' });
+  sheet.merge(25, 4, 25, 6, 'Focus Metric #2 Action Plan', { bold: true, size: 10, color: c.white, fill: c.teal, align: 'center', valign: 'center' });
+  sheet.merge(26, 1, 29, 3, focus[0].plan || '', { size: 10, color: c.text, wrap: true, valign: 'top', border: box });
+  sheet.merge(26, 4, 29, 6, focus[1].plan || '', { size: 10, color: c.text, wrap: true, valign: 'top', border: box });
+  [26, 27, 28, 29].forEach(function (row) { sheet.height(row, 18); });
+  sheet.height(30, 28);
+  sheet.merge(30, 1, 30, 6, 'Sales Consultant Spotlight:\nPerformance Highlights, Anniversaries, Rankings, Improvement Shout Out', { bold: true, size: 10, color: c.white, fill: c.navy, wrap: true, valign: 'center' });
+  sheet.merge(31, 1, 33, 6, evaluation.recognition || '', { size: 10, color: c.text, wrap: true, valign: 'top', border: box });
+  [31, 32, 33].forEach(function (row) { sheet.height(row, 16); });
+  sheet.height(34, 8);
+  var signed = evaluation.status === 'Given to Associate';
+  sheet.height(35, 22);
+  sheet.set(35, 1, 'Associate Signature:', label);
+  sheet.merge(35, 2, 35, 4, '', { border: { bottom: thin } });
+  sheet.height(37, 22);
+  sheet.set(37, 1, 'Managers’ Signature:', label);
+  sheet.merge(37, 2, 37, 4, '', { border: { bottom: thin } });
+  sheet.height(39, 22);
+  sheet.set(39, 1, 'Manager’s Name (Print):', label);
+  sheet.merge(39, 2, 39, 4, signed ? (evaluation.managerName || '') : '', { size: 11, color: c.text, border: { bottom: thin } });
+  sheet.height(41, 32);
+  var flagged = [];
+  evaluation.metrics.forEach(function (metric) {
+    metric.values.forEach(function (cell, i) {
+      if (cell.discrepancy) flagged.push(metric.label + ' ' + evaluation.months[i].name);
     });
-    row += 1;
   });
-  sheet.height(row, 18);
-  evaluation.focus.forEach(function (focus, i) { sheet.merge(row, halves[i][0], row, halves[i][1], 'Focus metric #' + (i + 1) + ' action plan', { bold: true, size: 9, color: c.white, fill: c.teal, border: box, indent: 1 }); });
-  row += 1;
-  var planLines = Math.max(lineCount_(evaluation.focus[0].plan, 58), lineCount_(evaluation.focus[1].plan, 53), 6);
-  var planRows = 6;
-  var perRow = Math.max(15, Math.ceil((planLines * 13.2 + 8) / planRows));
-  var r;
-  for (r = 0; r < planRows; r += 1) sheet.height(row + r, perRow);
-  evaluation.focus.forEach(function (focus, i) {
-    sheet.merge(row, halves[i][0], row + planRows - 1, halves[i][1], focus.plan || '', { size: 10, color: c.text, border: box, wrap: true, valign: 'top', indent: 1 });
-  });
-  row += planRows;
-  sheet.breaks.push(row);
-  row += 1;
-
-  row = evalBand_(sheet, row, evaluation, true);
-  row += 1;
-  var textSection = function (title, text, minLines) {
-    sheet.height(row, 20);
-    sheet.merge(row, 1, row, 7, title, band);
-    row += 1;
-    var lines = Math.max(lineCount_(text, 105), minLines);
-    var rows = 4;
-    var height = Math.max(16, Math.ceil((lines * 13.2 + 10) / rows));
-    var k;
-    for (k = 0; k < rows; k += 1) sheet.height(row + k, height);
-    sheet.merge(row, 1, row + rows - 1, 7, text || '', { size: 10, color: c.text, border: box, wrap: true, valign: 'top', indent: 1 });
-    row += rows + 1;
-  };
-  textSection('RECOGNITION · SALES CONSULTANT SPOTLIGHT (HIGHLIGHTS, ANNIVERSARIES, RANKINGS, IMPROVEMENT)', evaluation.recognition, 4);
-  textSection('OVERALL PERFORMANCE COMMENTS', evaluation.comments, 6);
-
-  sheet.height(row, 20);
-  sheet.merge(row, 1, row, 7, 'ACKNOWLEDGEMENT', band);
-  row += 1;
-  sheet.height(row, 30);
-  sheet.merge(row, 1, row, 7, 'By signing, the salesperson confirms this evaluation was reviewed with them. A signature does not mean agreement with every comment.', { size: 9, italic: true, color: c.muted, wrap: true, valign: 'center', indent: 1 });
-  row += 1;
-  var line = { border: { bottom: 'thin ' + c.text } };
-  var sign = function (title, dateLabel, prefill) {
-    sheet.height(row, 34);
-    sheet.set(row, 1, title, { bold: true, size: 10, color: c.text, valign: 'bottom', indent: 1 });
-    sheet.merge(row, 2, row, 4, prefill || '', { size: 10, color: c.text, valign: 'bottom', border: { bottom: 'thin ' + c.text } });
-    sheet.set(row, 5, dateLabel, { bold: true, size: 10, color: c.text, valign: 'bottom', align: 'right' });
-    sheet.merge(row, 6, row, 7, '', line);
-    row += 1;
-  };
-  sign('Salesperson signature', 'Date');
-  sign('Manager signature', 'Date');
-  sign('Manager name (print)', '', evaluation.managerName);
-  row += 1;
-  sheet.height(row, 16);
-  sheet.merge(row, 1, row, 7, 'Prepared ' + (evaluation.preparedAt ? stampDay_(evaluation.preparedAt) : 'not yet') + (evaluation.approvedAt ? ' · approved ' + stampDay_(evaluation.approvedAt) : '') + (evaluation.givenOn ? ' · given to associate ' + evaluation.givenOn : ' · given to associate: record after the meeting') + '.', { size: 8, italic: true, color: c.muted, indent: 1 });
+  var sourceNote = 'Sales Volume uses SPR TOTAL line 8. Every other line uses the WDSRR for that salesperson month, the 1st through the last day. Pending Verification means the report is not on file. It is not zero. ' + (evaluation.volumeGoalNote || '');
+  if (flagged.length) sourceNote += ' Discrepancy for review (the workbook figure was kept): ' + flagged.join('; ') + '.';
+  sheet.merge(41, 1, 42, 6, sourceNote, { size: 8, italic: true, color: c.muted, wrap: true, valign: 'top' });
   return sheet;
 }
 
@@ -887,5 +946,157 @@ function evalWorkbookBytes_(evaluations, info) {
     { name: 'kanes.jpeg', type: 'jpeg', bytes: base64Bytes_(KANES_LOGO_JPEG_) },
     { name: 'store17.png', type: 'png', bytes: base64Bytes_(STORE17_LOGO_PNG_) },
   ];
-  return xlsxWorkbook_(sheets, media, "Store 17 Sales Evaluations · " + info.label);
+  return xlsxWorkbook_(sheets, media, 'Store 17 - Monthly Sales Team Review - ' + evalThreeMonths_(info));
+}
+
+var EVAL_MAIL_HEADERS_ = ['sent_at', 'cycle', 'status', 'to_address', 'subject', 'file_name', 'sha256', 'missing', 'reason', 'by_role'];
+var EVAL_MAIL_TO_ = 'Store17MGMT-Mail@kanesfurniture.onmicrosoft.com';
+
+function evalMailAddress_(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+}
+
+function evalMailSettings_() {
+  var config = {};
+  try { config = config_(); } catch (error) { config = {}; }
+  var hour = Number(config.eval_mail_hour);
+  if (!isFinite(hour) || hour < 0 || hour > 23) hour = 7;
+  var explicit = String(config.eval_mail_to || '').trim();
+  var recipientApproved = explicit.toLowerCase() === EVAL_MAIL_TO_.toLowerCase();
+  var to = EVAL_MAIL_TO_;
+  var gm = String(config.admin_email || '').trim();
+  return { enabled: String(config.eval_mail_enabled || '').trim().toLowerCase() === 'yes', hour: hour, to: to, gm: evalMailAddress_(gm) ? gm : '', recipientApproved: recipientApproved };
+}
+
+function evalMailRows_() {
+  return sheet_('CC_EvalMail').map(function (row) {
+    return { sentAt: String(row.sent_at || ''), cycle: String(row.cycle || '').slice(0, 7), status: String(row.status || ''), to: String(row.to_address || ''), subject: String(row.subject || ''), fileName: String(row.file_name || ''), sha: String(row.sha256 || ''), missing: String(row.missing || ''), reason: String(row.reason || ''), by: String(row.by_role || '') };
+  });
+}
+
+function evalMailLogged_(cycle, status) {
+  return evalMailRows_().some(function (row) { return row.cycle === cycle && row.status === status; });
+}
+
+function evalMailSubject_(info) {
+  return 'Store 17 - Monthly Sales Team Review - ' + evalThreeMonths_(info);
+}
+
+function evalMissingLines_(context) {
+  var lines = [];
+  context.evaluations.forEach(function (evaluation) {
+    if (evaluation.verification === 'Verified') return;
+    lines.push(evaluation.name + ': ' + (evaluation.pendingMonths.length ? evaluation.pendingMonths.join(', ') : 'pending'));
+  });
+  return lines;
+}
+
+function evalRosterGaps_() {
+  var notes = [];
+  sheet_('CC_People').forEach(function (row) {
+    var name = String(row.name || '');
+    if (name === 'Cordell Primous' && !isoDate_(row.status_effective)) notes.push('Cordell Primous is Sales Manager. The roster has no date he left the sales floor, so this review does not invent a worksheet or any sales for him.');
+    if (name === 'Filepe Chaves' && String(row.status || '').toLowerCase() === 'terminated' && !isoDate_(row.status_effective)) notes.push('Filepe Chaves is terminated with no date on file, so the review does not guess which months he sold.');
+  });
+  return notes;
+}
+
+function evalHourNow_() {
+  if (typeof nowHourNy_ === 'function') return nowHourNy_();
+  if (typeof Utilities !== 'undefined' && Utilities.formatDate) return Number(Utilities.formatDate(new Date(), 'America/New_York', 'H'));
+  return 12;
+}
+
+function recordEvalMail_(status, cycle, to, subject, fileName, sha, missing, reason, by) {
+  evalTab_('CC_EvalMail', EVAL_MAIL_HEADERS_).appendRow([new Date().toISOString(), cycle, status, to || '', subject || '', fileName || '', sha || '', missing || '', reason || '', by || 'schedule']);
+}
+
+function evalMailPreview_(context, today) {
+  var settings = evalMailSettings_();
+  var info = context.info;
+  var missing = evalMissingLines_(context);
+  var gaps = evalRosterGaps_();
+  var monthsOpen = info.months.some(function (month) { return month.end >= today; });
+  var sent = evalMailLogged_(info.cycle, 'sent');
+  var held = evalMailLogged_(info.cycle, 'held');
+  var ready = !monthsOpen && !missing.length && !sent;
+  var heldForData = missing.length ? 'Essential monthly reports are missing, so the management list is not emailed.' : '';
+  var hourLabel = (settings.hour % 12 || 12) + ':00 ' + (settings.hour < 12 ? 'AM' : 'PM') + ' America/New_York';
+  var heldForSwitch = settings.enabled ? '' : (settings.recipientApproved
+    ? ' The recipient list is approved: ' + settings.to + '. Automatic email stays off until the GM approves the ' + hourLabel + ' send time, the test workbook, and the email workflow.'
+    : ' Automatic email is off until the GM approves the recipient list, the send time, the test workbook, and the email workflow.');
+  var reason = sent ? 'This month was already emailed. A second send is blocked.' : (monthsOpen ? 'A covered month is not finished, so the review is not emailed.' : (heldForData || heldForSwitch ? (heldForData + heldForSwitch).trim() : 'Ready to email on the 2nd at the configured hour.'));
+  return {
+    name: 'Monthly Sales Team Review',
+    enabled: settings.enabled,
+    to: settings.to,
+    gm: settings.gm || 'Not on file (CC_Config admin_email)',
+    hour: settings.hour,
+    hourLabel: hourLabel,
+    subject: evalMailSubject_(info),
+    prepare: info.prepare,
+    ready: ready && settings.enabled,
+    built: ready,
+    sent: sent,
+    held: held,
+    reason: reason,
+    missing: missing,
+    gaps: gaps,
+  };
+}
+
+/**
+ * On or after the 2nd, once the configured New York hour has passed. A finished verified review goes to the
+ * management list one time. Missing reports alert the GM instead. Nothing is sent while automatic email is off.
+ */
+function maybeSendEvalMail_(today, force) {
+  var parts = isoParts_(today);
+  if (!force && parts.day < 2) return { sent: false, reason: 'before the 2nd' };
+  var settings = evalMailSettings_();
+  if (!force && evalHourNow_() < settings.hour) return { sent: false, reason: 'before ' + settings.hour + ':00 America/New_York' };
+  var cycle = monthKey_(parts.year, parts.month);
+  var info = evalCycleInfo_(cycle);
+  if (info.months.some(function (month) { return month.end >= today; })) return { sent: false, reason: 'a covered month is not finished' };
+  if (evalMailLogged_(cycle, 'sent')) return { sent: false, reason: 'already sent' };
+  if (!settings.enabled) return { sent: false, reason: 'automatic email is off until the GM approves it', to: settings.to, hour: settings.hour };
+  var context = evalContext_(cycle, today);
+  var missing = evalMissingLines_(context);
+  var subject = evalMailSubject_(info);
+  if (missing.length) {
+    if (evalMailLogged_(cycle, 'held')) return { sent: false, reason: 'GM already alerted', missing: missing };
+    if (!settings.gm) {
+      recordEvalMail_('held', cycle, '', subject, '', '', missing.join('; '), 'No GM address on CC_Config admin_email. The management list was not emailed.', 'schedule');
+      return { sent: false, held: true, missing: missing };
+    }
+    if (typeof MailApp === 'undefined' || !MailApp.sendEmail) throw new Error('Mail is not available.');
+    MailApp.sendEmail(settings.gm, 'Store 17 - Monthly Sales Team Review held - ' + info.label, 'The ' + info.label + ' Monthly Sales Team Review was not sent to the management list.\n\nMissing verified months:\n' + missing.join('\n') + '\n\nRecord the SPR TOTAL line 8 and WDSRR figures, then a manager can send the corrected workbook. Pending is not zero.');
+    recordEvalMail_('held', cycle, settings.gm, subject, '', '', missing.join('; '), 'GM alerted. The management list was not emailed.', 'schedule');
+    return { sent: false, held: true, missing: missing };
+  }
+  if (typeof MailApp === 'undefined' || !MailApp.sendEmail) throw new Error('Mail is not available.');
+  var bytes = evalWorkbookBytes_(context.evaluations, info);
+  var fileName = evalReviewFileName_(info, '');
+  var blob = Utilities.newBlob(bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fileName);
+  MailApp.sendEmail({ to: settings.to, subject: subject, body: 'The Store 17 Monthly Sales Team Review for ' + info.months.map(function (month) { return month.label; }).join(', ') + ' is attached. Salesperson months run the 1st through the last day. Signature lines are blank until the review is signed.', attachments: [blob] });
+  var sha = sha256Hex_(bytes);
+  archiveFile_(Utilities.base64Encode(bytes), fileName, 'monthly workbook sent', cycle, '', '', null, 'Emailed to ' + settings.to + ' once.');
+  recordEvalMail_('sent', cycle, settings.to, subject, fileName, sha, '', 'Sent once.', 'schedule');
+  return { sent: true, to: settings.to, fileName: fileName };
+}
+
+/** A manager can resend a reviewed workbook. Automatic email must already be on, and a sent month is not sent again. */
+function resendEvalMail_(payload) {
+  if (payload.confirm !== true) return { confirmed: false, summary: 'Resend the ' + evalCycleInfo_(String(payload.cycle || '')).label + ' Monthly Sales Team Review to the approved management list. This does not send until you confirm, and a month already emailed is blocked.' };
+  var settings = evalMailSettings_();
+  if (!settings.enabled) throw new Error('Automatic email is off until the GM approves it. The management list was not emailed.');
+  var today = todayNy_();
+  var cycle = String(payload.cycle || '');
+  var info = evalCycleInfo_(cycle);
+  if (today < info.months[2].end) throw new Error('A covered month is not finished. The management list was not emailed.');
+  if (evalMailLogged_(cycle, 'sent')) throw new Error('This month was already emailed. A second send is blocked.');
+  var forced = maybeSendEvalMail_(info.prepare, true);
+  if (!forced.sent) throw new Error(forced.reason || 'The review was not emailed.');
+  var result = evals_({ session: payload.session, cycle: cycle });
+  result.saved = 'Emailed ' + info.label + ' to the management list.';
+  return result;
 }

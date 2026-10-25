@@ -22,6 +22,7 @@ function scheduledImport_() {
     try { refreshHistory_(); } catch (error) { appendException_('Update Failed', 'Permanent history could not be refreshed. Nothing already recorded was changed. ' + String(error && error.message ? error.message : error)); }
     try { refreshMetricRegistry_(); } catch (error) { appendException_('Update Failed', 'CC_MetricDefinitions could not be refreshed. ' + String(error && error.message ? error.message : error)); }
     try { prepareDueEvaluations_(todayNy_()); } catch (error) { appendException_('Update Failed', 'Evaluation drafts could not be prepared. ' + String(error && error.message ? error.message : error)); }
+    try { if (typeof maybeSendEvalMail_ === 'function') maybeSendEvalMail_(todayNy_()); } catch (error) { appendException_('Update Failed', 'The Monthly Sales Team Review email could not be sent. ' + String(error && error.message ? error.message : error)); }
     markMissingReports_();
     noteHealth_('last_calculation', new Date().toISOString());
     noteHealth_('version', APP_VERSION_);
