@@ -785,15 +785,42 @@
     .optl-banner { margin: 10px 0; padding: 10px 12px; border-radius: 8px; border: 1px solid #1d5c66; background: #122229; color: #e8eef2; font-size: 13px; }
     .optl-banner.lock { border-color: #a86b2d; background: #2a1c10; color: #f3d48a; }
     .optl-banner.exception { border-color: #a83d45; background: #2a1216; color: #f07178; }
-    .optl-pending-list, .optl-exception-list { margin: 0; padding-left: 18px; }
-    .optl-pending-list li, .optl-exception-list li { margin: 4px 0; }
-    .optl-matrix td.review-required { box-shadow: inset 0 0 0 2px #f0a46a, inset 0 0 0 4px #f07178; background: #2a1a14; }
+    .optl-pending-list, .optl-exception-list, .optl-alert-list { margin: 0; padding-left: 18px; }
+    .optl-pending-list li, .optl-exception-list li, .optl-alert-list li { margin: 4px 0; }
+    .optl-matrix td.review-required { box-shadow: inset 0 0 0 2px #f0a46a, inset 0 0 0 4px #f07178; background: #2a1a14; animation: optl-yr 1.8s ease-in-out infinite; }
+    @keyframes optl-yr { 0%, 100% { background: #2a2410; box-shadow: inset 0 0 0 2px #f3d48a; } 50% { background: #2a1216; box-shadow: inset 0 0 0 2px #f07178; } }
+    @media (prefers-reduced-motion: reduce) { .optl-matrix td.review-required { animation: none; } }
     .optl-matrix td.filled.step-cell.step-yellow { background: #2a2410; }
     .optl-matrix td.filled.step-cell.step-orange { background: #2a1c10; }
     .optl-matrix td.filled.step-cell.step-red { background: #2a1216; }
     .optl-actor { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 8px; }
     .optl-actor label.confirm { flex-direction: row; align-items: center; text-transform: none; letter-spacing: 0; font-weight: 600; gap: 8px; }
     .optl-actor .attr { color: #f3d48a; font-size: 12px; }
+    .optl-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+    .optl-form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0bc; }
+    .optl-form-grid input, .optl-form-grid select, .optl-form-grid textarea { padding: 7px 10px; border-radius: 8px; border: 1px solid #1d5c66; background: #10161c; color: #f3f6f8; font: inherit; text-transform: none; letter-spacing: 0; font-weight: 600; }
+    .optl-form-grid textarea { min-height: 72px; }
+    .optl-form-grid .span-2 { grid-column: span 2; }
+    .optl-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+    .optl-tabs button { background: #143840; }
+    .optl-tabs button.active { background: #14c4d4; color: #0d1114; }
+    .optl-panel[hidden] { display: none !important; }
+    .optl-msg { margin: 8px 0; color: #7eecf6; }
+    .optl-msg.err { color: #f07178; }
+    body.print-optl-formal { background: #fff !important; color: #000 !important; }
+    body.print-optl-formal header.brand, body.print-optl-formal .nav, body.print-optl-formal .noprint, body.print-optl-formal #data-refresh { display: none !important; }
+    body.print-optl-formal #screen > :not(.optl-formal-sheet) { display: none !important; }
+    body.print-optl-formal .optl-formal-sheet { display: block !important; background: #fff; color: #000; border: 1px solid #000; padding: 18px; font-family: "Times New Roman", Times, serif; font-size: 12px; }
+    .optl-formal-sheet h1 { font-size: 18px; margin: 0 0 6px; text-align: center; }
+    .optl-formal-sheet .optl-pip-brand { text-align: center; font-weight: 700; letter-spacing: 0.04em; }
+    .optl-formal-sheet table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+    .optl-formal-sheet td, .optl-formal-sheet th { border: 1px solid #000; padding: 4px 6px; vertical-align: top; }
+    .optl-formal-sheet .sig { margin-top: 10px; }
+    .optl-formal-sheet .watermark { color: #666; font-weight: 700; text-align: center; border: 1px solid #666; padding: 6px; margin: 8px 0; }
+    @media print {
+      body.print-optl-formal { background: #fff !important; }
+      body.print-optl-formal .optl-formal-sheet { box-shadow: none; }
+    }
     body.print-optl header.brand, body.print-optl .nav, body.print-optl .noprint, body.print-optl #data-refresh { display: none !important; }
     body.print-optl #screen > :not(.optl-print-sheet) { display: none !important; }
     body.print-optl .optl-print-sheet { display: block !important; color: #e8eef2; background: #0d1114; border: 2px solid #14c4d4; padding: 14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -5977,7 +6004,8 @@
     function renderOptl(data) {
       displayHold = false;
       document.body.classList.remove('print-optl');
-      document.getElementById('header-note').textContent = 'OPTL · Admin · Stage 2 demo';
+      document.body.classList.remove('print-optl-formal');
+      document.getElementById('header-note').textContent = 'OPTL · Admin · forms + print demo';
       var employees = data.employees || [];
       var options = employees.map(function (row) {
         return '<option value="' + esc(row.employeeId) + '"' + (row.employeeId === data.selectedEmployeeId ? ' selected' : '') + '>' +
@@ -5986,6 +6014,10 @@
       var managerOptions = (data.actingManagers || []).map(function (name) {
         return '<option value="' + esc(name) + '"' + (name === data.actingManagerDeclared ? ' selected' : '') + '>' + esc(name) + '</option>';
       }).join('');
+      var catOptions = function (section) {
+        var list = section === 'B' ? (data.sectionB || []) : (data.sectionA || []);
+        return list.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+      };
       var headers = ((data.matrixRows || [])[0] || { cells: [] }).cells.map(function (cell) {
         return '<th scope="col"' + (cell.stepTone ? ' class="' + esc(cell.stepTone) + '"' : '') + '>' + esc(cell.slotLabel) + '</th>';
       }).join('');
@@ -5997,10 +6029,8 @@
             if (cell.occupied) tdClass.push('filled');
             if (cell.stepTone && cell.occupied) tdClass.push('step-cell', cell.stepTone);
             if (cell.reviewRequired) tdClass.push('review-required');
-            if (!cell.occupied) {
-              return '<td><span class="' + keyClass + '">' + esc(cell.slotLabel) + '</span>—</td>';
-            }
-            return '<td class="' + esc(tdClass.join(' ')) + '"><span class="' + keyClass + '">' + esc(cell.slotLabel) + '</span>' +
+            if (!cell.occupied) return '<td><span class="' + keyClass + '">' + esc(cell.slotLabel) + '</span>—</td>';
+            return '<td class="' + esc(tdClass.join(' ')) + '" data-event-id="' + esc(cell.eventId || '') + '"><span class="' + keyClass + '">' + esc(cell.slotLabel) + '</span>' +
               '<span class="slot-date">' + esc(optlDisplayDate(cell.incidentDate)) + '</span>' +
               '<span class="slot-label">' + esc(cell.shortDescription || '') + '</span>' +
               '<span class="slot-exp">Exp ' + esc(optlDisplayDate(cell.expirationDate)) + '</span></td>';
@@ -6009,10 +6039,11 @@
         }).join('');
       }
       var history = (data.history || []).map(function (line) {
-        return '<tr><td>' + esc(optlDisplayDate(line.incidentDate)) + '</td><td>' + esc(line.section) + '</td><td>' + esc(line.category) +
+        return '<tr data-event-id="' + esc(line.eventId || '') + '"><td>' + esc(optlDisplayDate(line.incidentDate)) + '</td><td>' + esc(line.section) + '</td><td>' + esc(line.category) +
           '</td><td>' + esc(line.entryType) + '</td><td>' + esc(line.shortDescription) + '</td><td>' + esc(optlDisplayDate(line.effectiveExpirationDate)) +
           '</td><td><span class="optl-status ' + esc(line.status) + '">' + esc(line.status) + '</span></td></tr>';
       }).join('');
+      var dash = data.dashboard || {};
       var pending = (data.pendingActions || []).map(function (row) {
         return '<li><strong>' + esc(row.kind) + '</strong> · ' + esc(row.proposedLevel) + ' · ' + esc(row.section) + '/' + esc(row.category) +
           ' — ' + esc(row.reason || '') + '</li>';
@@ -6020,10 +6051,23 @@
       var exceptions = (data.exceptions || []).map(function (row) {
         return '<li><strong>' + esc(row.tone || 'review') + '</strong> · ' + esc(row.section) + '/' + esc(row.category) + ' — ' + esc(row.reason || '') + '</li>';
       }).join('');
+      var alertItems = ((dash.alerts || []).slice(0, 12)).map(function (row) {
+        return '<li><strong>' + esc(row.kind) + '</strong> · ' + esc(row.title) + ' — ' + esc(row.detail || '') +
+          ' <span class="sub">(email not sent)</span></li>';
+      }).join('');
+      var formalOpts = (data.formalEvents || []).map(function (row) {
+        return '<option value="' + esc(row.eventId) + '">' + esc(row.entryType) + ' · ' + esc(row.category) + ' · ' + esc(row.incidentDate) + '</option>';
+      }).join('');
+      var histOpts = (data.history || []).map(function (row) {
+        return '<option value="' + esc(row.eventId) + '">' + esc(row.incidentDate) + ' · ' + esc(row.entryType) + ' · ' + esc(row.shortDescription || '') + '</option>';
+      }).join('');
       var employee = data.employee || {};
       var ack = data.acknowledgment || {};
       var alerts = data.alertConfig || {};
       var security = data.security || {};
+      var pip = data.pipPrint || {};
+      var actionMsg = data.actionResult && data.actionResult.message ? data.actionResult.message : '';
+      var actionErr = data.actionResult && data.actionResult.ok === false;
       var printCells = function (section) {
         return (data.matrixRows || []).filter(function (row) { return row.section === section; }).map(function (row) {
           return '<tr><th scope="row">' + esc(row.category) + '</th>' + row.cells.map(function (cell) {
@@ -6035,20 +6079,20 @@
       };
       var storeLogo = document.querySelector('img.logo') ? document.querySelector('img.logo').src : '';
       var lockBanner = data.lock
-        ? '<div class="optl-banner lock noprint"><strong>Pending STEP/TERM lock</strong> — scored and formal accountability for this associate is blocked until the manager issues the pending action. Unscored factual notes remain allowed.</div>'
+        ? '<div class="optl-banner lock noprint"><strong>Pending STEP/TERM lock</strong> — scored/formal accountability blocked until the pending action is issued. Unscored factual notes remain allowed.</div>'
         : '';
       var pendingBlock = pending
         ? '<div class="optl-banner noprint"><strong>Pending manager actions</strong><ul class="optl-pending-list">' + pending + '</ul></div>'
         : '';
       var exceptionBlock = exceptions
-        ? '<div class="optl-banner exception noprint"><strong>Integrity exceptions</strong><ul class="optl-exception-list">' + exceptions + '</ul></div>'
+        ? '<div class="optl-banner exception noprint"><strong>Integrity exceptions (yellow/red)</strong><ul class="optl-exception-list">' + exceptions + '</ul></div>'
         : '';
       document.getElementById('screen').innerHTML =
         '<div class="optl-page">' +
         '<article class="card"><div class="optl-brand">' +
         (storeLogo ? '<img src="' + storeLogo + '" alt="Kane\'s Furniture Store 17" width="72" height="72" />' : '') +
         '<div><p class="optl-kicker">Kane\'s Furniture · Store 17</p><h2 class="optl-title">Store 17 Online · OPTL</h2>' +
-        '<p class="optl-sub">Online Performance Tracking Log · ' + esc(data.notice || 'Stage 2 demo') + '</p></div></div>' +
+        '<p class="optl-sub">Online Performance Tracking Log · ' + esc(data.notice || '') + '</p></div></div>' +
         '<div class="optl-controls noprint"><label>Associate<select id="optl-employee">' + options + '</select></label>' +
         '<p class="sub">As of <strong>' + esc(data.asOfDate) + '</strong> · ' + esc(data.timezone || 'America/New_York') + '</p></div>' +
         '<div class="optl-actor noprint"><label>Acting manager (declared)<select id="optl-acting-manager"><option value="">Select…</option>' + managerOptions + '</select></label>' +
@@ -6056,7 +6100,14 @@
         '<span class="attr">Attribution: manager-declared (not verified identity)</span></div>' +
         '<p class="sub">ID ' + esc(employee.employeeId || '') + ' · ' + esc(employee.jobTitle || '') + ' · hired ' + esc(employee.hireDate || '') +
         ' · ' + esc(employee.status === 'former' ? 'Former archive' : 'Active') + '</p>' +
-        lockBanner + pendingBlock + exceptionBlock + '</article>' +
+        lockBanner + pendingBlock + exceptionBlock +
+        (actionMsg ? '<p class="optl-msg' + (actionErr ? ' err' : '') + ' noprint">' + esc(actionMsg) + '</p>' : '') +
+        '</article>' +
+        '<h2 class="section-title noprint">Management dashboard</h2>' +
+        '<article class="card noprint"><p><strong>' + esc(String(dash.pendingCount || 0)) + '</strong> open pending · <strong>' +
+        esc(String(dash.exceptionCount || 0)) + '</strong> open exceptions · email send <strong>disabled</strong></p>' +
+        (alertItems ? '<ul class="optl-alert-list">' + alertItems + '</ul>' : '<p class="sub">No Command Center alerts yet.</p>') +
+        '<p class="sub">' + esc(alerts.note || '') + '</p></article>' +
         '<h2 class="section-title">Active matrix</h2>' +
         '<article class="card"><div class="optl-matrix-wrap"><table class="optl-matrix"><thead><tr><th scope="col">Category</th>' + headers + '</tr></thead><tbody>' +
         '<tr class="optl-section"><td colspan="13">Section A</td></tr>' + matrixRowsHtml('A') +
@@ -6064,25 +6115,62 @@
         '</tbody></table></div></article>' +
         '<h2 class="section-title">Permanent history</h2>' +
         '<article class="card"><table class="optl-history"><thead><tr><th>Incident</th><th>Section</th><th>Category</th><th>Action</th><th>Description</th><th>Expiration</th><th>Status</th></tr></thead><tbody>' +
-        (history || '<tr><td colspan="7">No history for this associate in the demo set.</td></tr>') + '</tbody></table>' +
+        (history || '<tr><td colspan="7">No history for this associate.</td></tr>') + '</tbody></table>' +
         '<p class="sub">Expired, voided, and rescinded events stay in history. Nothing is deleted.</p></article>' +
-        '<h2 class="section-title noprint">Stage 2 policy (demo)</h2>' +
-        '<article class="card noprint"><p><strong>Acknowledgment</strong> — ' + esc(ack.note || 'Typed full name + checkbox; no SSN.') + '</p>' +
-        '<p><strong>Alerts</strong> — Command Center: ' + esc(String(!!alerts.commandCenter)) +
-        ' · Email enabled: ' + esc(String(!!alerts.emailEnabled)) +
-        ' · Test sending disabled: ' + esc(String(alerts.testSendingDisabled !== false)) +
-        '. ' + esc(alerts.note || '') + '</p>' +
-        '<p class="sub">Storage: ' + esc(security.storage || '') + ' · Identity: ' + esc(security.identity || '') +
-        ' · PIP print: ' + esc(security.pipPrint || '') + '</p></article>' +
-        '<h2 class="section-title noprint">Actions</h2>' +
-        '<article class="card noprint"><div class="optl-actions">' +
-        '<button type="button" disabled title="Engine ready in tests; live forms wait for GM approval">New Accountability Entry</button>' +
-        '<button type="button" disabled title="Later">New Hire</button>' +
-        '<button type="button" disabled title="TERM_REQUIRED is manager action — no auto-terminate">Termination form</button>' +
+        '<h2 class="section-title noprint">Forms &amp; print</h2>' +
+        '<article class="card noprint"><div class="optl-tabs" id="optl-tabs">' +
+        '<button type="button" data-panel="entry" class="active">Accountability Entry</button>' +
+        '<button type="button" data-panel="hire">New Hire</button>' +
+        '<button type="button" data-panel="term">Termination</button>' +
+        '<button type="button" data-panel="ack">Acknowledgment</button>' +
+        '<button type="button" data-panel="void">Correct / Void</button>' +
+        '</div>' +
+        '<div class="optl-panel" id="optl-panel-entry">' +
+        '<div class="optl-form-grid">' +
+        '<label>Incident date<input type="date" id="optl-inc-date" /></label>' +
+        '<label>Section<select id="optl-section"><option value="A">A</option><option value="B">B</option></select></label>' +
+        '<label>Category<select id="optl-category">' + catOptions('A') + '</select></label>' +
+        '<label>Entry type<select id="optl-entry-type"><option value="Occurrence">Occurrence</option><option value="STEP_I">STEP I</option><option value="STEP_II">STEP II</option><option value="STEP_III">STEP III</option><option value="TERM">TERM</option></select></label>' +
+        '<label>Short description<input type="text" id="optl-short" placeholder="Unsafe Behavior / Late — 25 min" /></label>' +
+        '<label>Minutes late / detail<input type="number" id="optl-qty" /></label>' +
+        '<label class="span-2">Private notes<textarea id="optl-notes"></textarea></label>' +
+        '<label class="confirm" style="flex-direction:row;text-transform:none;letter-spacing:0"><input type="checkbox" id="optl-unscored" /> Unscored factual note only</label>' +
+        '<label class="confirm" style="flex-direction:row;text-transform:none;letter-spacing:0"><input type="checkbox" id="optl-direct" /> Direct STEP (skip occurrences)</label>' +
+        '<label class="span-2">Direct-issue justification<textarea id="optl-justify"></textarea></label>' +
+        '</div>' +
+        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-entry">Save entry</button>' +
+        '<button type="button" id="optl-issue-formal">Issue formal STEP/TERM</button></div></div>' +
+        '<div class="optl-panel" id="optl-panel-hire" hidden><div class="optl-form-grid">' +
+        '<label>Employee ID<input id="optl-hire-id" placeholder="S17-DEMO-2xx" /></label>' +
+        '<label>Display name<input id="optl-hire-name" /></label>' +
+        '<label>Job title<input id="optl-hire-title" value="Sales Associate" /></label>' +
+        '<label>Hire date<input type="date" id="optl-hire-date" /></label></div>' +
+        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-hire">Create new hire</button></div></div>' +
+        '<div class="optl-panel" id="optl-panel-term" hidden><div class="optl-form-grid">' +
+        '<label>Separation date<input type="date" id="optl-term-date" /></label>' +
+        '<label>Reason<input id="optl-term-reason" /></label>' +
+        '<label class="span-2">Notes<textarea id="optl-term-notes"></textarea></label>' +
+        '<label class="confirm" style="flex-direction:row;text-transform:none;letter-spacing:0"><input type="checkbox" id="optl-term-hr" /> HR/executive approval obtained</label></div>' +
+        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-term">Complete termination form</button></div>' +
+        '<p class="sub">Does not auto-terminate from TERM_REQUIRED. History is retained for former associates.</p></div>' +
+        '<div class="optl-panel" id="optl-panel-ack" hidden><p class="sub">' + esc(ack.note || '') + ' No SSN.</p><div class="optl-form-grid">' +
+        '<label class="span-2">Event<select id="optl-ack-event">' + histOpts + '</select></label>' +
+        '<label>Typed full name<input id="optl-ack-name" autocomplete="off" /></label>' +
+        '<label class="confirm" style="flex-direction:row;text-transform:none;letter-spacing:0"><input type="checkbox" id="optl-ack-box" /> I acknowledge this matter was discussed with me. Acknowledgment does not necessarily mean agreement.</label>' +
+        '<label class="confirm" style="flex-direction:row;text-transform:none;letter-spacing:0"><input type="checkbox" id="optl-ack-refuse" /> Document refusal instead</label></div>' +
+        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-ack">Record acknowledgment</button></div></div>' +
+        '<div class="optl-panel" id="optl-panel-void" hidden><div class="optl-form-grid">' +
+        '<label class="span-2">Event to void/correct<select id="optl-void-event">' + histOpts + '</select></label>' +
+        '<label class="span-2">Reason<textarea id="optl-void-reason"></textarea></label></div>' +
+        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-void">Void / correct (cascade rescind)</button></div></div>' +
+        '<div class="optl-actions" style="margin-top:14px">' +
         '<button type="button" id="optl-print-matrix">Print Active Matrix</button>' +
-        '<button type="button" disabled title="Later">Print History</button>' +
-        '<button type="button" disabled title="Later — Kane\'s PIP template">Print PIP</button>' +
-        '</div><p class="sub">Synthetic Stage 2 engine is covered by unit tests. No live Sheet writes or email.</p></article>' +
+        '<button type="button" id="optl-print-history">Print History</button>' +
+        '<button type="button" id="optl-print-notes">Print Notes</button>' +
+        '<label class="sub">PIP event<select id="optl-pip-event">' + formalOpts + '</select></label>' +
+        '<button type="button" id="optl-print-pip">Print Kane\'s PIP</button>' +
+        '<button type="button" id="optl-reset-demo">Reset demo data</button>' +
+        '</div><p class="sub">Storage: ' + esc(security.storage || '') + ' · ' + esc(security.pipPrint || '') + '</p></article>' +
         '<article class="optl-print-sheet card" style="display:none" id="optl-print-matrix-sheet">' +
         '<div class="optl-brand">' + (storeLogo ? '<img src="' + storeLogo + '" alt="" width="72" height="72" />' : '') +
         '<div><p class="optl-kicker">Store 17 Online</p><h2 class="optl-title">OPTL Active Matrix</h2>' +
@@ -6091,38 +6179,208 @@
         '<tr class="optl-section"><td colspan="13">Section A</td></tr>' + printCells('A') +
         '<tr class="optl-section"><td colspan="13">Section B</td></tr>' + printCells('B') +
         '</tbody></table></div><p class="sub">Store 17 Online · OPTL · Confidential management record</p></article>' +
+        '<article class="optl-formal-sheet" style="display:none" id="optl-print-history-sheet">' +
+        '<div class="optl-pip-brand">Kane\'s Furniture · Store 17</div><h1>OPTL Permanent History</h1>' +
+        '<p>' + esc(employee.displayName || '') + ' · ' + esc(employee.employeeId || '') + ' · generated ' + esc(data.asOfDate) + '</p>' +
+        '<table><thead><tr><th>Incident</th><th>Section</th><th>Category</th><th>Action</th><th>Description</th><th>Expiration</th><th>Status</th></tr></thead><tbody>' +
+        (history || '<tr><td colspan="7">None</td></tr>') + '</tbody></table></article>' +
+        '<article class="optl-formal-sheet" style="display:none" id="optl-print-notes-sheet">' +
+        '<div class="optl-pip-brand">Kane\'s Furniture · Store 17</div><h1>OPTL Incident Notes</h1>' +
+        '<p class="sub">Management-facing · not for employee matrix print</p>' +
+        '<p id="optl-notes-body">Select an event from history (click a row) then Print Notes.</p></article>' +
+        '<article class="optl-formal-sheet" style="display:none" id="optl-print-pip-sheet">' +
+        '<div class="optl-pip-brand">KANE\'S FURNITURE</div><h1>Personal Improvement Plan (PIP)</h1>' +
+        (pip.watermark ? '<div class="watermark">' + esc(pip.watermark) + '</div>' : '') +
+        '<p>Kane\'s recognizes that employees want to be informed of what is expected of them and what consequences may occur as a result of their failure to fulfill those expectations. It is the employee\'s responsibility to read our Company\'s policy and abide by our Code of Conduct.</p>' +
+        '<table><tr><th>Employee Name</th><td>' + esc(pip.employeeName || employee.displayName || '') + '</td><th>Job Title</th><td>' + esc(pip.jobTitle || employee.jobTitle || '') + '</td></tr>' +
+        '<tr><th>Location/Store #</th><td>' + esc(pip.locationStoreNumber || '17') + '</td><th>Date of Discussion</th><td>' + esc(pip.dateOfDiscussion || '') + '</td></tr></table>' +
+        '<p><strong>Counseling Level:</strong> ' + esc(pip.counselingLevel || '') + '</p>' +
+        '<p><strong>Type of Warning / Category:</strong> ' + esc(pip.category || '') + '</p>' +
+        '<p><strong>Description of Infraction</strong><br>When: ' + esc(pip.incidentDate || '') +
+        '<br>Who: ' + esc(pip.peopleInvolved || '') +
+        '<br>Where: ' + esc(pip.locationDetail || '') +
+        '<br>Impact: ' + esc(pip.companyImpact || '') +
+        '<br>Policy: ' + esc(pip.policyViolated || '') +
+        '<br>Prior conversations: ' + esc(pip.priorConversations || '') +
+        '<br>' + esc(pip.description || '') + '</p>' +
+        '<p><strong>Plan for Improvement &amp; Consequences</strong><br>' + esc(pip.improvementPlan || '') +
+        '<br>' + esc(pip.consequencesNonTerm || '') + '</p>' +
+        '<p><em>' + esc(pip.hrApprovalNote || '') + '</em></p>' +
+        '<div class="sig"><p><strong>Manager Signature</strong> — Print Name ______________________ Signature ______________________ Date __________</p>' +
+        '<p><strong>Employee Signature</strong> — Print Name ______________________ Signature ______________________ Date __________</p>' +
+        '<p>' + esc(pip.refusalInstruction || '') + '</p>' +
+        '<p><strong>Employee Comments</strong><br><br><br></p>' +
+        '<p><strong>Witness Signature</strong> — Print Name ______________________ Signature ______________________ Date __________</p>' +
+        '<p>Manager (declared for online record): ' + esc(pip.managerDeclared || '') + '</p></div></article>' +
         '</div>';
-      function optlReload() {
-        var id = document.getElementById('optl-employee').value;
+
+      function optlActorFields() {
         var acting = document.getElementById('optl-acting-manager');
         var confirm = document.getElementById('optl-acting-confirm');
-        api('optl', {
-          employeeId: id,
-          asOfDate: data.asOfDate,
+        return {
           actingManagerDeclared: acting ? acting.value : '',
           actingManagerConfirmed: !!(confirm && confirm.checked),
-        }).then(function (page) {
+        };
+      }
+      function optlCall(extra) {
+        var base = Object.assign({
+          employeeId: document.getElementById('optl-employee').value,
+          asOfDate: data.asOfDate,
+        }, optlActorFields(), extra || {});
+        return api('optl', base).then(function (page) {
           if (screen !== 'optl') return;
           displayPayload = page;
           renderOptl(page);
         }).catch(function (error) {
-          document.getElementById('screen').innerHTML = '<p class="error">' + esc(error.message) + '</p>';
+          var note = document.querySelector('.optl-msg');
+          if (!note) {
+            document.getElementById('screen').insertAdjacentHTML('afterbegin', '<p class="error">' + esc(error.message) + '</p>');
+          } else {
+            note.textContent = error.message;
+            note.classList.add('err');
+          }
         });
       }
-      document.getElementById('optl-employee').addEventListener('change', optlReload);
+      document.getElementById('optl-employee').addEventListener('change', function () { optlCall({}); });
       var actingEl = document.getElementById('optl-acting-manager');
       var confirmEl = document.getElementById('optl-acting-confirm');
-      if (actingEl) actingEl.addEventListener('change', optlReload);
-      if (confirmEl) confirmEl.addEventListener('change', optlReload);
-      document.getElementById('optl-print-matrix').addEventListener('click', function () {
-        document.body.classList.add('print-optl');
-        var sheet = document.getElementById('optl-print-matrix-sheet');
-        if (sheet) sheet.style.display = 'block';
+      if (actingEl) actingEl.addEventListener('change', function () { optlCall({}); });
+      if (confirmEl) confirmEl.addEventListener('change', function () { optlCall({}); });
+      document.getElementById('optl-section').addEventListener('change', function () {
+        var sec = document.getElementById('optl-section').value;
+        document.getElementById('optl-category').innerHTML = catOptions(sec);
+      });
+      document.querySelectorAll('#optl-tabs button').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          document.querySelectorAll('#optl-tabs button').forEach(function (b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          ['entry', 'hire', 'term', 'ack', 'void'].forEach(function (name) {
+            var panel = document.getElementById('optl-panel-' + name);
+            if (panel) panel.hidden = btn.getAttribute('data-panel') !== name;
+          });
+        });
+      });
+      document.getElementById('optl-save-entry').addEventListener('click', function () {
+        optlCall({
+          action: 'addEvent',
+          draft: {
+            employeeId: document.getElementById('optl-employee').value,
+            incidentDate: document.getElementById('optl-inc-date').value,
+            section: document.getElementById('optl-section').value,
+            category: document.getElementById('optl-category').value,
+            entryType: 'Occurrence',
+            shortDescription: document.getElementById('optl-short').value,
+            quantitativeDetail: document.getElementById('optl-qty').value,
+            notes: document.getElementById('optl-notes').value,
+            scored: !document.getElementById('optl-unscored').checked,
+          },
+        });
+      });
+      document.getElementById('optl-issue-formal').addEventListener('click', function () {
+        optlCall({
+          action: 'issueFormal',
+          acceptEffective: true,
+          draft: {
+            employeeId: document.getElementById('optl-employee').value,
+            incidentDate: document.getElementById('optl-inc-date').value,
+            section: document.getElementById('optl-section').value,
+            category: document.getElementById('optl-category').value,
+            entryType: document.getElementById('optl-entry-type').value,
+            shortDescription: document.getElementById('optl-short').value,
+            notes: document.getElementById('optl-notes').value,
+            directIssue: document.getElementById('optl-direct').checked,
+            justification: document.getElementById('optl-justify').value,
+          },
+        });
+      });
+      document.getElementById('optl-save-hire').addEventListener('click', function () {
+        optlCall({
+          action: 'newHire',
+          draft: {
+            employeeId: document.getElementById('optl-hire-id').value,
+            displayName: document.getElementById('optl-hire-name').value,
+            jobTitle: document.getElementById('optl-hire-title').value,
+            hireDate: document.getElementById('optl-hire-date').value,
+          },
+        });
+      });
+      document.getElementById('optl-save-term').addEventListener('click', function () {
+        optlCall({
+          action: 'terminate',
+          draft: {
+            employeeId: document.getElementById('optl-employee').value,
+            separationDate: document.getElementById('optl-term-date').value,
+            reason: document.getElementById('optl-term-reason').value,
+            notes: document.getElementById('optl-term-notes').value,
+            hrApprovalObtained: document.getElementById('optl-term-hr').checked,
+          },
+        });
+      });
+      document.getElementById('optl-save-ack').addEventListener('click', function () {
+        optlCall({
+          action: 'acknowledge',
+          draft: {
+            eventId: document.getElementById('optl-ack-event').value,
+            typedFullName: document.getElementById('optl-ack-name').value,
+            acknowledgedCheckbox: document.getElementById('optl-ack-box').checked,
+            refused: document.getElementById('optl-ack-refuse').checked,
+          },
+        });
+      });
+      document.getElementById('optl-save-void').addEventListener('click', function () {
+        optlCall({
+          action: 'voidEvent',
+          draft: { eventId: document.getElementById('optl-void-event').value },
+          reason: document.getElementById('optl-void-reason').value,
+        });
+      });
+      document.getElementById('optl-reset-demo').addEventListener('click', function () {
+        optlCall({ action: 'resetDemo' });
+      });
+      function runPrint(mode, sheetId) {
+        document.body.classList.remove('print-optl');
+        document.body.classList.remove('print-optl-formal');
+        document.body.classList.add(mode);
+        ['optl-print-matrix-sheet', 'optl-print-history-sheet', 'optl-print-notes-sheet', 'optl-print-pip-sheet'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.style.display = id === sheetId ? 'block' : 'none';
+        });
         window.print();
         window.setTimeout(function () {
           document.body.classList.remove('print-optl');
-          if (sheet) sheet.style.display = 'none';
+          document.body.classList.remove('print-optl-formal');
+          ['optl-print-matrix-sheet', 'optl-print-history-sheet', 'optl-print-notes-sheet', 'optl-print-pip-sheet'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+          });
         }, 300);
+      }
+      document.getElementById('optl-print-matrix').addEventListener('click', function () { runPrint('print-optl', 'optl-print-matrix-sheet'); });
+      document.getElementById('optl-print-history').addEventListener('click', function () { runPrint('print-optl-formal', 'optl-print-history-sheet'); });
+      document.getElementById('optl-print-notes').addEventListener('click', function () {
+        var id = document.getElementById('optl-void-event').value || document.getElementById('optl-ack-event').value;
+        var line = (data.history || []).filter(function (row) { return row.eventId === id; })[0];
+        var body = document.getElementById('optl-notes-body');
+        if (body) {
+          body.innerHTML = line
+            ? '<p><strong>' + esc(line.entryType) + '</strong> · ' + esc(line.category) + ' · ' + esc(line.incidentDate) +
+              '</p><p>' + esc(line.shortDescription || 'No detailed notes on this history line. Open entry notes in the live record when persisted.') + '</p>'
+            : '<p>No notes selected.</p>';
+        }
+        runPrint('print-optl-formal', 'optl-print-notes-sheet');
+      });
+      document.getElementById('optl-print-pip').addEventListener('click', function () {
+        var id = document.getElementById('optl-pip-event').value;
+        api('optl', Object.assign({
+          employeeId: document.getElementById('optl-employee').value,
+          asOfDate: data.asOfDate,
+          printEventId: id
+        }, optlActorFields())).then(function (page) {
+          if (screen !== 'optl') return;
+          displayPayload = page;
+          renderOptl(page);
+          window.setTimeout(function () { runPrint('print-optl-formal', 'optl-print-pip-sheet'); }, 50);
+        });
       });
     }
     function renderConsistency(data) {

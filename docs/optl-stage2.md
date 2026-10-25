@@ -1,57 +1,43 @@
-# OPTL Stage 2 (spec v1.3) — in development
+# OPTL Stage 2–3 (spec v1.3) — forms, print, alerts
 
 Branch: `cursor/optl-phase1-404d` · PR: https://github.com/Uh60doc/kanes-store17-command-center/pull/56  
-Authority: `STORE17_OPTL_COMPLETE_CURSOR_SPEC_V1_3.md` (paste / supersedes v1.2).
+Authority: `STORE17_OPTL_COMPLETE_CURSOR_SPEC_V1_3.md` (supersedes v1.2).
 
-## What Stage 2 delivers (synthetic only)
+## Completed in this development build (synthetic only)
 
-| Item | Status |
+| Priority item | Status |
 | --- | --- |
-| Scored-event validation (>15 min Tardy; 16–119 vs 120+ Attendance) | Done + tested |
-| Demo tardies corrected to 22 / 25 minutes | Done |
-| Progression 4→STEP I→2→STEP II→1→STEP III→1→TERM_REQUIRED | Engine + tested |
-| Pending STEP/TERM lock; unscored factual notes still allowed | Done + tested |
-| Cross-category section escalation; dual STEP III → TERM_REQUIRED | Done + tested |
-| +180 occ / +365 STEP expiry; linked chain freeze on issue | Done + tested |
-| Late STEP issuance clock = incident date | Done + tested |
-| Void → rescission cascade + yellow/red exceptions | Done + tested |
-| Rehire: same ID, new period, clean matrix, prior history kept | Done + tested |
-| Acting manager declared + confirmed (shared login) | UI + engine gate |
-| Acknowledgment policy: typed name + checkbox, no SSN | Spec in payload |
-| Alerts: Command Center planned; email disabled / no test send | Config only |
-| Live Sheet / email / auto-TERM / deploy / merge | **Blocked** |
+| Automatic occurrence → STEP progression (`ACTION_REQUIRED`, no auto-issue) | Done |
+| 180-day occurrence expiry + 365-day STEP freeze/reset | Done |
+| Cross-category (within section) + cross-section (independent A/B; dual STEP III → TERM_REQUIRED) | Done |
+| Accountability / New Hire / Termination forms | Done (UI + engine) |
+| Employee acknowledgment (typed name + checkbox / refusal; no SSN) | Done |
+| Permanent history (active/expired/voided/rescinded) | Done |
+| Automatic corrections + yellow/red integrity warnings | Done |
+| Kane's **Personal Improvement Plan (PIP)** print + matrix/history/notes prints | Done |
+| Management dashboard + Command Center alerts (email **not** sent) | Done |
+| Scenario unit tests | Done (30 OPTL cases + nav) |
 
-## Files
+## Preview
 
-- `apps-script/Optl.gs` — demo seed, page payload, Phase 1 helpers
-- `apps-script/OptlEngine.gs` — Stage 2 engine (NEW)
-- `apps-script/Index.html` — Stage 2 banners, acting manager, policy panel
-- `apps-script/Code.gs` — `optl` route (unchanged beyond Phase 1)
-- `server/optlAppsScript.test.ts` — Phase 1 + Stage 2 regressions
-- `server/dashboardNav.test.ts` — Admin → OPTL
+Manager/admin → **Admin → OPTL**.
 
-## Preview the actual screen
-
-1. Open the live Store 17 Command Center (existing Apps Script web app — **do not** use the Vite board).
-2. Sign in as **manager** or **admin** (sales cannot open OPTL).
-3. Top nav → **Admin** → **OPTL**.
-4. Select associates:
-   - **Jordan Lee** — pending STEP I lock (Safety ×4)
-   - **Taylor Brooks** — issued STEP I + frozen chain
-   - **Alex Rivera** — valid tardies + mixed history
-5. Select / confirm an **acting manager** (labeled manager-declared).
-6. Optional: Print Active Matrix (overlay print).
-
-Until `clasp push` is authorized for this branch, run unit tests locally:
+1. Confirm **acting manager** (manager-declared).
+2. Use form tabs: Accountability Entry, New Hire, Termination, Acknowledgment, Correct/Void.
+3. Dashboard shows pending / exceptions / in-app alerts.
+4. Print: Active Matrix, History, Notes, Kane's PIP (HR approval language preserved; blank signature lines).
 
 ```bash
 node --experimental-strip-types --test server/optlAppsScript.test.ts server/dashboardNav.test.ts
 ```
 
-## Still demo / not live
+## Still blocked / demo
 
-Employee IDs, in-memory engine (no Sheet), entry/TERM forms, email send, PIP print from Kane's template, deployment, merge.
+- No live `STORE 17 OPTL DATA` Sheet (demo state may use Script Properties only)
+- No email send (`emailEnabled: false`, test sending disabled)
+- No real employees / auto-termination / merge / deploy without GM approval
+- Paycor upload remains manual after paper PIP signatures
 
-## Stop line
+## Hygiene
 
-No live personnel Sheet, no real employees, no email, no auto-termination, no merge/deploy without GM approval.
+Retarget PR base to `cursor/monthly-sales-team-review-32b5` before merge review. Large commit count vs `main` is inherited CC history, not OPTL-only churn.

@@ -359,6 +359,8 @@ function optlEmployeeView_(events, employeeId, asOfDate) {
   return { matrixRows: rows, history: history };
 }
 
+var OPTL_STATE_PROP_KEY_ = 'optl_demo_state_v13';
+
 function optlCloneDemoState_() {
   var state = optlEmptyState_();
   state.employees = JSON.parse(JSON.stringify(optlDemoEmployees_()));
@@ -368,43 +370,168 @@ function optlCloneDemoState_() {
     emailEnabled: false,
     emailRecipients: [],
     testSendingDisabled: true,
-    note: 'Command Center alerts planned; manager email waits for configured/approved recipients. Test sending is disabled.',
+    note: 'Command Center alerts are recorded in-app. Manager email waits for configured/approved recipients. Test sending is disabled.',
   };
   return state;
 }
 
-/**
- * Manager/Admin OPTL page payload. Stage 2 uses synthetic demo records only.
- * No personnel Sheet writes. Sales metrics are not read. Email is not sent.
- */
-function optl_(payload) {
+/** Synthetic demo state only — PropertiesService when available; never a live personnel Sheet. */
+function optlLoadState_() {
+  try {
+    if (typeof PropertiesService !== 'undefined') {
+      var raw = PropertiesService.getScriptProperties().getProperty(OPTL_STATE_PROP_KEY_);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && parsed.employees && parsed.events) return parsed;
+      }
+    }
+  } catch (ignore) {}
+  return optlCloneDemoState_();
+}
+
+function optlSaveState_(state) {
+  try {
+    if (typeof PropertiesService !== 'undefined') {
+      PropertiesService.getScriptProperties().setProperty(OPTL_STATE_PROP_KEY_, JSON.stringify(state));
+    }
+  } catch (ignore) {}
+}
+
+function optlStandardLabels_() {
+  return {
+    Safety: ['Unsafe Behavior'],
+    'Sales Performance': ['Below Goal'],
+    'Quality of Orders': ['Error on Ticket'],
+    Behavior: ['Unacceptable Behavior'],
+    Attendance: ['Absent'],
+    Tardy: ['Late'],
+  };
+}
+
+function optlActorPayload_(payload) {
+  return {
+    actingManagerDeclared: payload && payload.actingManagerDeclared,
+    actingManagerConfirmed: payload && payload.actingManagerConfirmed === true,
+    asOfDate: payload && payload.asOfDate,
+    reason: payload && payload.reason,
+  };
+}
+
+function optlApplyAction_(state, payload) {
+  var action = String((payload && payload.action) || '');
+  var actor = optlActorPayload_(payload);
+  var draft = (payload && payload.draft) || {};
+  var result = { ok: true, action: action };
+  if (!action || action === 'load' || action === 'preview') return result;
+  if (action === 'resetDemo') {
+    state = optlCloneDemoState_();
+    optlSaveState_(state);
+    result.state = state;
+    result.message = 'Demo state reset to seed data';
+    return result;
+  }
+  if (action === 'addEvent') {
+    result.event = optlAddEvent_(state, draft, actor);
+  } else if (action === 'issueFormal') {
+    result.resolved = optlResolveEffectiveLevel_(state, draft, actor.asOfDate);
+    if (payload.previewOnly) {
+      result.message = 'Preview only — not issued';
+      return result;
+    }
+    if (result.resolved.adjusted && !payload.acceptEffective) {
+      result.ok = false;
+      result.needsConfirm = true;
+      result.message = result.resolved.reason;
+      return result;
+    }
+    if (result.resolved.adjusted) draft.entryType = result.resolved.effective;
+    result.event = optlIssueFormalAction_(state, draft, actor);
+  } else if (action === 'voidEvent') {
+    result.event = optlVoidEvent_(state, draft.eventId || payload.eventId, actor);
+  } else if (action === 'newHire') {
+    result.employee = optlNewHireEmployee_(state, draft, actor);
+  } else if (action === 'terminate') {
+    result.employee = optlTerminateEmployee_(state, draft.employeeId || payload.employeeId, draft, actor);
+  } else if (action === 'acknowledge') {
+    result.acknowledgment = optlAcknowledgeEvent_(state, draft.eventId || payload.eventId, draft, actor);
+  } else if (action === 'flagReview') {
+    result.exception = optlFlagReviewRequired_(state, draft, actor);
+  } else if (action === 'rehire') {
+    result.employee = optlRehireEmployee_(state, draft.employeeId || payload.employeeId, draft.hireDate || optlToday_(), actor);
+  } else {
+    throw new Error('Unknown OPTL action: ' + action);
+  }
+  optlSaveState_(state);
+  result.state = state;
+  return result;
+}
+
+function optlDashboard_(state, asOf) {
+  var pending = [];
+  var exceptions = [];
+  (state.pendingActions || []).forEach(function (row) {
+    if (row.status === 'open') pending.push(row);
+  });
+  (state.exceptions || []).forEach(function (row) {
+    if (row.status === 'open') exceptions.push(row);
+  });
+  return {
+    pendingCount: pending.length,
+    exceptionCount: exceptions.length,
+    pending: pending,
+    exceptions: exceptions,
+    alerts: (state.alerts || []).slice(0, 25),
+    alertConfig: state.alertConfig,
+  };
+}
+
+function optlBuildPage_(state, payload, actionResult) {
   var asOf = String((payload && payload.asOfDate) || optlToday_()).slice(0, 10);
-  var state = optlCloneDemoState_();
-  var employees = state.employees;
+  var employees = state.employees || [];
   var selectedId = String((payload && payload.employeeId) || '') ||
-    (employees.filter(function (row) { return row.status === 'active'; })[0] || employees[0]).employeeId;
+    (employees.filter(function (row) { return row.status === 'active'; })[0] || employees[0] || {}).employeeId;
+  if (actionResult && actionResult.employee && actionResult.employee.employeeId) {
+    selectedId = actionResult.employee.employeeId;
+  }
+  if (actionResult && actionResult.event && actionResult.event.employeeId) {
+    selectedId = actionResult.event.employeeId;
+  }
   var selected = null;
   employees.forEach(function (row) { if (row.employeeId === selectedId) selected = row; });
-  if (!selected) selected = employees[0];
-
-  // Refresh pending from thresholds (Jordan Safety ×4 → ACTION_REQUIRED)
+  if (!selected) selected = employees[0] || null;
   employees.forEach(function (row) {
     if (row.status === 'active') optlRefreshPending_(state, row.employeeId, asOf);
   });
-
-  var view = optlEngineEmployeeView_(state, selected.employeeId, asOf);
+  var view = selected
+    ? optlEngineEmployeeView_(state, selected.employeeId, asOf)
+    : { matrixRows: [], history: [], pendingActions: [], exceptions: [], lock: false };
   var actingDeclared = String((payload && payload.actingManagerDeclared) || '').trim();
   var actingConfirmed = !!(payload && payload.actingManagerConfirmed === true);
-
+  var formalEvents = (state.events || []).filter(function (event) {
+    return selected && event.employeeId === selected.employeeId &&
+      (event.entryType === 'STEP_I' || event.entryType === 'STEP_II' || event.entryType === 'STEP_III' || event.entryType === 'TERM');
+  });
+  var pipPrint = null;
+  if (payload && payload.printEventId) {
+    try { pipPrint = optlBuildPipPrint_(state, payload.printEventId); } catch (ignore) { pipPrint = null; }
+  } else if (formalEvents.length) {
+    try { pipPrint = optlBuildPipPrint_(state, formalEvents[formalEvents.length - 1].eventId); } catch (ignore) { pipPrint = null; }
+  }
+  var eventNotes = null;
+  if (payload && payload.notesEventId) {
+    (state.events || []).forEach(function (event) {
+      if (event.eventId === payload.notesEventId) eventNotes = event;
+    });
+  }
   return {
-    phase: 2,
-    stage: 'stage-2-development',
+    phase: 3,
+    stage: 'forms-print-alerts-development',
     prototype: true,
-    notice: 'Stage 2 in development · synthetic demo only · no live HR Sheet · email send disabled',
+    notice: 'OPTL forms + print + alerts in development · synthetic demo only · no live HR Sheet · email send disabled',
     asOfDate: asOf,
     timezone: OPTL_STORE_TZ_,
     employees: employees,
-    selectedEmployeeId: selected.employeeId,
+    selectedEmployeeId: selected ? selected.employeeId : null,
     employee: selected,
     matrixRows: view.matrixRows,
     history: view.history,
@@ -412,26 +539,51 @@ function optl_(payload) {
     exceptions: view.exceptions,
     lock: view.lock,
     slotLabels: OPTL_SLOT_LABELS_,
+    sectionA: OPTL_SECTION_A_,
+    sectionB: OPTL_SECTION_B_,
+    standardLabels: optlStandardLabels_(),
     actingManagers: OPTL_DEMO_ACTING_MANAGERS_,
     actingManagerDeclared: actingDeclared || null,
     actingManagerConfirmed: actingConfirmed,
     actingManagerAttribution: 'manager-declared',
     acknowledgment: optlAcknowledgmentSpec_(),
+    acknowledgments: (state.acknowledgments || []).filter(function (row) {
+      return selected && row.employeeId === selected.employeeId;
+    }),
     alertConfig: state.alertConfig,
-    auditCount: state.audit.length,
+    dashboard: optlDashboard_(state, asOf),
+    audit: (state.audit || []).slice(-40).reverse(),
+    auditCount: (state.audit || []).length,
+    formalEvents: formalEvents,
+    pipPrint: pipPrint,
+    eventNotes: eventNotes,
+    actionResult: actionResult || null,
     security: {
-      storage: 'Not created — STORE 17 OPTL DATA Sheet blocked until GM approval',
+      storage: 'Synthetic PropertiesService demo state only — STORE 17 OPTL DATA Sheet blocked until GM approval',
       email: 'Disabled until recipients configured and approved; test sending off',
       identity: 'Shared manager login · actions require explicit acting-manager declaration',
-      pipPrint: 'Kane\'s Personal Improvement Plan template retained for later print; HR approval note still applies',
+      pipPrint: 'Kane\'s Personal Improvement Plan (PIP) template populated from entered facts; HR approval language preserved',
     },
     stillDemo: [
-      'Employee records (synthetic IDs only)',
-      'In-memory engine — no Sheet persistence',
-      'Entry / new-hire / TERM forms (UI stubs)',
-      'Email delivery (planned, not sent)',
-      'PIP print from Kane\'s template (later)',
-      'Live deployment / merge',
+      'Synthetic employee IDs / PropertiesService demo state (not live Sheet)',
+      'Email delivery (queued in Command Center alerts only — not sent)',
+      'Paycor upload remains manual',
+      'Live deployment / merge without GM approval',
     ],
   };
+}
+
+/**
+ * Manager/Admin OPTL page + synthetic mutations.
+ * No personnel Sheet writes. Sales metrics are not read. Email is not sent.
+ */
+function optl_(payload) {
+  var state = optlLoadState_();
+  var actionResult = null;
+  if (payload && payload.action) {
+    actionResult = optlApplyAction_(state, payload);
+    if (actionResult.state) state = actionResult.state;
+    else state = optlLoadState_();
+  }
+  return optlBuildPage_(state, payload || {}, actionResult);
 }

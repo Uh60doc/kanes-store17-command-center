@@ -22,7 +22,80 @@ function optlEmptyState_() {
     pendingActions: [],
     audit: [],
     exceptions: [],
-    alertConfig: { commandCenter: true, emailEnabled: false, emailRecipients: [], testSendingDisabled: true },
+    acknowledgments: [],
+    alerts: [],
+    alertConfig: {
+      commandCenter: true,
+      emailEnabled: false,
+      emailRecipients: [],
+      testSendingDisabled: true,
+      note: 'Command Center alerts are recorded in-app. Manager email waits for configured/approved recipients. Test sending is disabled.',
+    },
+  };
+}
+
+function optlQueueAlert_(state, alert) {
+  state.alerts = state.alerts || [];
+  state.alerts.unshift({
+    alertId: optlNewId_('alrt'),
+    createdAt: optlToday_() + 'T12:00:00',
+    channel: 'command-center',
+    emailQueued: false,
+    emailBlockedReason: (state.alertConfig && state.alertConfig.testSendingDisabled)
+      ? 'Email sending disabled until recipients are configured and approved'
+      : null,
+    status: 'open',
+    employeeId: alert.employeeId || null,
+    kind: alert.kind || 'notice',
+    title: alert.title || 'OPTL alert',
+    detail: alert.detail || '',
+  });
+}
+
+/** Map STEP/TERM to Kane's PIP counseling-level checkbox labels. */
+function optlPipCounselingLabel_(entryType) {
+  if (entryType === 'STEP_I') return 'Coaching Session';
+  if (entryType === 'STEP_II') return 'Counseling Session';
+  if (entryType === 'STEP_III') return 'Final Counseling Session';
+  if (entryType === 'TERM') return 'Termination Session';
+  return '';
+}
+
+/**
+ * Resolve requested formal level against section progression + dual STEP III rule.
+ * Manager sees effective required action before finalizing.
+ */
+function optlResolveEffectiveLevel_(state, draft, asOfDate) {
+  var asOf = String(asOfDate || optlToday_()).slice(0, 10);
+  var employee = null;
+  state.employees.forEach(function (row) { if (row.employeeId === draft.employeeId) employee = row; });
+  var period = employee ? optlActiveEmploymentPeriod_(employee) : null;
+  var periodId = period ? period.periodId : null;
+  var requested = draft.entryType || 'Occurrence';
+  if (requested === 'Occurrence') {
+    return { requested: requested, effective: 'Occurrence', adjusted: false, reason: '' };
+  }
+  var proposal = optlProposeNextStep_(state, draft.employeeId, draft.section, draft.category, asOf);
+  var effective = requested;
+  var reason = '';
+  if (!draft.directIssue) {
+    effective = proposal.proposedLevel;
+    if (effective !== requested) {
+      reason = 'Threshold/section rules require ' + String(effective).replace(/_/g, ' ') + ' instead of ' + String(requested).replace(/_/g, ' ');
+    }
+  } else {
+    var stepIIIs = optlCountActiveStepIII_(state.events, draft.employeeId, periodId, asOf);
+    if (requested === 'STEP_III' && stepIIIs >= 1) {
+      effective = 'TERM';
+      reason = 'Second concurrent STEP III is not permitted; effective action is TERM';
+    }
+  }
+  return {
+    requested: requested,
+    effective: effective,
+    adjusted: effective !== requested,
+    reason: reason,
+    proposalKind: proposal.kind,
   };
 }
 
@@ -241,6 +314,12 @@ function optlRefreshPending_(state, employeeId, asOfDate) {
         status: 'open',
         createdAt: asOfDate,
       });
+      optlQueueAlert_(state, {
+        employeeId: employeeId,
+        kind: proposal.kind,
+        title: proposal.kind.replace(/_/g, ' '),
+        detail: block.section + '/' + category + ' · ' + proposal.reason,
+      });
     });
   });
 }
@@ -288,11 +367,21 @@ function optlAddEvent_(state, draft, payload) {
     quantitativeDetail: draft.quantitativeDetail === undefined ? null : draft.quantitativeDetail,
     status: 'active',
     scored: scored,
+    notes: draft.notes || '',
     originalExpirationDate: originalExp,
     effectiveExpirationDate: originalExp,
     chainId: null,
     createdByDeclared: manager,
   };
+  // Auto-label late arrivals when minutes provided
+  if (scored && (draft.category === 'Tardy' || draft.category === 'Attendance') && draft.quantitativeDetail !== null && draft.quantitativeDetail !== undefined && draft.quantitativeDetail !== '') {
+    var late = optlLateClassification_(draft.quantitativeDetail);
+    if (late.label) event.shortDescription = draft.shortDescription || late.label;
+    if (late.category && draft.autoClassify !== false) {
+      event.category = late.category;
+      event.section = late.section;
+    }
+  }
   state.events.push(event);
   optlAudit_(state, scored ? 'add-scored-event' : 'add-unscored-note', {
     actingManagerDeclared: manager,
@@ -336,8 +425,20 @@ function optlIssueFormalAction_(state, draft, payload) {
   }
 
   var incidentDate = String(draft.incidentDate || asOf).slice(0, 10);
-  var exp = level === 'TERM' ? null : optlStepExpiration_(incidentDate);
   var chainId = draft.chainId || optlNewId_('chain');
+  // Threshold path may elevate requested STEP I→II etc. Second STEP III never auto-issues; manager must choose TERM.
+  var resolved = optlResolveEffectiveLevel_(state, draft, asOf);
+  if (!draft.directIssue && resolved.effective !== level && resolved.effective !== 'Occurrence') {
+    if (resolved.effective === 'TERM' && level !== 'TERM') {
+      throw new Error('TERM_REQUIRED — complete the Termination / TERM issuance form; cannot issue another STEP III');
+    }
+    level = resolved.effective;
+  }
+  if (level === 'STEP_III' && optlCountActiveStepIII_(state.events, draft.employeeId, period.periodId, asOf) >= 1) {
+    throw new Error('Cannot issue a second STEP III; resolve TERM_REQUIRED instead');
+  }
+  var exp = level === 'TERM' ? null : optlStepExpiration_(incidentDate);
+
   var formal = {
     eventId: optlNewId_('evt'),
     employeeId: draft.employeeId,
@@ -347,10 +448,18 @@ function optlIssueFormalAction_(state, draft, payload) {
     section: draft.section,
     category: draft.category,
     entryType: level,
-    shortDescription: draft.shortDescription || level.replace('_', ' '),
+    shortDescription: draft.shortDescription || ('STEP ' + String(level).replace('STEP_', '').replace('_', ' ')),
     quantitativeDetail: null,
     status: 'active',
     scored: true,
+    notes: draft.notes || '',
+    peopleInvolved: draft.peopleInvolved || '',
+    locationDetail: draft.locationDetail || 'Store 17',
+    companyImpact: draft.companyImpact || '',
+    policyViolated: draft.policyViolated || '',
+    priorConversations: draft.priorConversations || '',
+    improvementPlan: draft.improvementPlan || '',
+    warningTypes: draft.warningTypes || [],
     originalExpirationDate: exp,
     effectiveExpirationDate: exp,
     chainId: chainId,
@@ -358,11 +467,24 @@ function optlIssueFormalAction_(state, draft, payload) {
     justification: draft.justification || '',
     directIssue: !!draft.directIssue,
     officialAtIssuance: true,
+    pipCounselingLabel: optlPipCounselingLabel_(level),
+    hrApprovalRequired: level === 'STEP_II' || level === 'STEP_III' || level === 'TERM',
+    hrApprovalObtained: !!draft.hrApprovalObtained,
   };
   state.events.push(formal);
 
-  // Freeze linked supporting occurrences + prior steps in this section chain: inherit STEP expiry.
+  // Freeze section progressive PIP chain: category occs + prior STEPs in section + already-linked chain members.
   if (exp) {
+    var priorChainIds = {};
+    state.events.forEach(function (event) {
+      if (event.employeeId !== draft.employeeId) return;
+      if (event.employmentPeriodId !== period.periodId) return;
+      if (event.section !== draft.section) return;
+      if (event.status !== 'active') return;
+      if (event.entryType && String(event.entryType).indexOf('STEP') === 0 && event.chainId) {
+        priorChainIds[event.chainId] = true;
+      }
+    });
     state.events.forEach(function (event) {
       if (event.employeeId !== draft.employeeId) return;
       if (event.employmentPeriodId !== period.periodId) return;
@@ -371,19 +493,20 @@ function optlIssueFormalAction_(state, draft, payload) {
       if (event.eventId === formal.eventId) return;
       var link = false;
       if (event.category === draft.category && event.entryType === 'Occurrence' && event.scored !== false) link = true;
-      if (event.chainId && event.chainId === chainId) link = true;
-      if (event.section === draft.section && event.entryType && String(event.entryType).indexOf('STEP') === 0) link = true;
+      if (event.chainId && (event.chainId === chainId || priorChainIds[event.chainId])) link = true;
+      if (event.entryType && String(event.entryType).indexOf('STEP') === 0) link = true;
       if (!link) return;
       event.chainId = chainId;
       event.effectiveExpirationDate = exp;
-      event.freezeReason = 'Inherited from ' + level + ' issued on ' + incidentDate;
+      event.freezeReason = 'Inherited from ' + level + ' issued for incident ' + incidentDate;
     });
+    formal.chainId = chainId;
   }
 
   // Close matching pending
   state.pendingActions.forEach(function (row) {
     if (row.employeeId !== draft.employeeId || row.status !== 'open') return;
-    if (row.section === draft.section && (row.category === draft.category || level === 'TERM')) {
+    if (row.section === draft.section && (row.category === draft.category || level === 'TERM' || row.kind === 'TERM_REQUIRED')) {
       row.status = 'closed';
       row.closedAt = asOf;
       row.closedByDeclared = manager;
@@ -399,12 +522,17 @@ function optlIssueFormalAction_(state, draft, payload) {
     reason: draft.justification || 'Manager issued formal action',
   });
 
-  // Alerts planned only — no send
   formal.alertPlan = {
     commandCenter: !!(state.alertConfig && state.alertConfig.commandCenter),
     email: false,
     emailBlockedReason: 'Test/production OPTL email sending is disabled until recipients are configured and approved',
   };
+  optlQueueAlert_(state, {
+    employeeId: draft.employeeId,
+    kind: level === 'TERM' ? 'TERM_ISSUED' : 'STEP_ISSUED',
+    title: (formal.pipCounselingLabel || level) + ' issued',
+    detail: draft.category + ' · incident ' + incidentDate + ' · manager-declared: ' + manager,
+  });
 
   optlRefreshPending_(state, draft.employeeId, asOf);
   return formal;
@@ -627,5 +755,228 @@ function optlEngineEmployeeView_(state, employeeId, asOfDate) {
     pendingActions: optlPendingForEmployee_(state, employeeId),
     exceptions: (state.exceptions || []).filter(function (row) { return row.employeeId === employeeId && row.status === 'open'; }),
     lock: optlHasBlockingPending_(state, employeeId),
+  };
+}
+
+/** New Hire — synthetic roster only; clean active matrix. */
+function optlNewHireEmployee_(state, draft, payload) {
+  var manager = optlAssertActingManager_(payload || {});
+  var employeeId = String(draft.employeeId || '').trim();
+  if (!employeeId) throw new Error('Employee ID required');
+  var exists = false;
+  state.employees.forEach(function (row) { if (row.employeeId === employeeId) exists = true; });
+  if (exists) throw new Error('Employee ID already exists');
+  var hireDate = String(draft.hireDate || optlToday_()).slice(0, 10);
+  var employee = {
+    employeeId: employeeId,
+    displayName: String(draft.displayName || '').trim() || employeeId,
+    jobTitle: draft.jobTitle || 'Sales Associate',
+    department: draft.department || 'Sales',
+    hireDate: hireDate,
+    status: 'active',
+    separationDate: null,
+    employmentPeriods: [
+      { periodId: optlNewId_('emp'), hireDate: hireDate, separationDate: null, status: 'active' },
+    ],
+  };
+  state.employees.push(employee);
+  optlAudit_(state, 'new-hire', {
+    actingManagerDeclared: manager,
+    employeeId: employeeId,
+    after: employee,
+    reason: payload.reason || 'New hire — clean slate matrix',
+  });
+  optlQueueAlert_(state, {
+    employeeId: employeeId,
+    kind: 'NEW_HIRE',
+    title: 'New hire added to OPTL roster',
+    detail: employee.displayName + ' · ' + hireDate,
+  });
+  return employee;
+}
+
+/**
+ * Termination form — moves to Former; retains full history/matrix for reprint.
+ * Does not auto-fire from TERM_REQUIRED; manager must complete this form.
+ */
+function optlTerminateEmployee_(state, employeeId, draft, payload) {
+  var manager = optlAssertActingManager_(payload || {});
+  var employee = null;
+  state.employees.forEach(function (row) { if (row.employeeId === employeeId) employee = row; });
+  if (!employee) throw new Error('Unknown employee');
+  var separationDate = String((draft && draft.separationDate) || optlToday_()).slice(0, 10);
+  var period = optlActiveEmploymentPeriod_(employee);
+  if (period) {
+    period.status = 'ended';
+    period.separationDate = separationDate;
+  }
+  employee.status = 'former';
+  employee.separationDate = separationDate;
+  employee.terminationReason = (draft && draft.reason) || '';
+  employee.terminationNotes = (draft && draft.notes) || '';
+  // Close open pending; record TERM event if not already present for this period
+  state.pendingActions.forEach(function (row) {
+    if (row.employeeId === employeeId && row.status === 'open') {
+      row.status = 'closed';
+      row.closedAt = separationDate;
+      row.closedByDeclared = manager;
+    }
+  });
+  var hasTerm = state.events.some(function (event) {
+    return event.employeeId === employeeId && event.entryType === 'TERM' && event.status === 'active' &&
+      (!period || event.employmentPeriodId === period.periodId);
+  });
+  if (!hasTerm) {
+    state.events.push({
+      eventId: optlNewId_('evt'),
+      employeeId: employeeId,
+      employmentPeriodId: period ? period.periodId : null,
+      incidentDate: separationDate,
+      entryAt: separationDate,
+      section: (draft && draft.section) || 'A',
+      category: (draft && draft.category) || 'Behavior',
+      entryType: 'TERM',
+      shortDescription: 'Termination Session',
+      status: 'active',
+      scored: true,
+      notes: (draft && draft.notes) || '',
+      createdByDeclared: manager,
+      officialAtIssuance: true,
+      pipCounselingLabel: 'Termination Session',
+      hrApprovalRequired: true,
+      hrApprovalObtained: !!(draft && draft.hrApprovalObtained),
+    });
+  }
+  optlAudit_(state, 'terminate-employee', {
+    actingManagerDeclared: manager,
+    employeeId: employeeId,
+    after: { separationDate: separationDate, reason: employee.terminationReason },
+    reason: employee.terminationReason || 'Termination form completed',
+  });
+  optlQueueAlert_(state, {
+    employeeId: employeeId,
+    kind: 'TERMINATED',
+    title: 'Associate moved to Former Employees',
+    detail: employee.displayName + ' · ' + separationDate + ' · history retained',
+  });
+  return employee;
+}
+
+/**
+ * Supervised acknowledgment — typed full name + checkbox, or manager-documented refusal.
+ * No SSN. Does not make STEP official (issuance already did).
+ */
+function optlAcknowledgeEvent_(state, eventId, draft, payload) {
+  var manager = optlAssertActingManager_(payload || {});
+  var asOf = String((payload && payload.asOfDate) || optlToday_()).slice(0, 10);
+  var target = null;
+  state.events.forEach(function (event) { if (event.eventId === eventId) target = event; });
+  if (!target) throw new Error('Event not found');
+  var refused = !!(draft && draft.refused === true);
+  var typedName = String((draft && draft.typedFullName) || '').trim();
+  if (!refused) {
+    if (!typedName) throw new Error('Typed full name is required for acknowledgment');
+    if (!(draft && draft.acknowledgedCheckbox === true)) {
+      throw new Error('Employee must check the acknowledgment statement');
+    }
+  }
+  var ack = {
+    acknowledgmentId: optlNewId_('ack'),
+    eventId: eventId,
+    employeeId: target.employeeId,
+    typedFullName: refused ? '' : typedName,
+    refused: refused,
+    refusalNote: refused ? (draft.refusalNote || 'Employee Refused to Sign') : '',
+    statement: 'I acknowledge this matter was discussed with me. Acknowledgment does not necessarily mean agreement.',
+    acknowledgedAt: asOf + 'T12:00:00',
+    supervisingManagerDeclared: manager,
+    actorAttribution: 'manager-declared',
+  };
+  state.acknowledgments = state.acknowledgments || [];
+  state.acknowledgments.push(ack);
+  target.acknowledgmentId = ack.acknowledgmentId;
+  target.acknowledgmentStatus = refused ? 'refused' : 'acknowledged';
+  optlAudit_(state, refused ? 'acknowledgment-refused' : 'acknowledgment-recorded', {
+    actingManagerDeclared: manager,
+    employeeId: target.employeeId,
+    eventId: eventId,
+    after: ack,
+    reason: refused ? ack.refusalNote : 'Supervised acknowledgment',
+  });
+  return ack;
+}
+
+/** Flag an ambiguous linkage for yellow/red REVIEW_REQUIRED on the exact matrix box. */
+function optlFlagReviewRequired_(state, draft, payload) {
+  var manager = optlAssertActingManager_(payload || {});
+  var asOf = String((payload && payload.asOfDate) || optlToday_()).slice(0, 10);
+  var ex = {
+    exceptionId: optlNewId_('ex'),
+    employeeId: draft.employeeId,
+    section: draft.section,
+    category: draft.category,
+    eventId: draft.eventId || null,
+    slotKey: draft.slotKey || null,
+    severity: 'review',
+    status: 'open',
+    reason: draft.reason || 'Unresolvable ordering/linkage — management review required',
+    tone: 'yellow-red',
+    createdAt: asOf,
+    createdByDeclared: manager,
+  };
+  state.exceptions.push(ex);
+  optlAudit_(state, 'flag-review-required', {
+    actingManagerDeclared: manager,
+    employeeId: draft.employeeId,
+    eventId: draft.eventId || null,
+    after: ex,
+    reason: ex.reason,
+  });
+  return ex;
+}
+
+/** Build Kane's PIP print payload from a formal STEP/TERM event. Never invents facts. */
+function optlBuildPipPrint_(state, eventId) {
+  var event = null;
+  state.events.forEach(function (row) { if (row.eventId === eventId) event = row; });
+  if (!event) throw new Error('Event not found');
+  if (!(event.entryType === 'STEP_I' || event.entryType === 'STEP_II' || event.entryType === 'STEP_III' || event.entryType === 'TERM')) {
+    throw new Error('PIP print requires a formal STEP or TERM');
+  }
+  var employee = null;
+  state.employees.forEach(function (row) { if (row.employeeId === event.employeeId) employee = row; });
+  var openReview = (state.exceptions || []).some(function (ex) {
+    return ex.employeeId === event.employeeId && ex.status === 'open';
+  });
+  return {
+    documentTitle: 'Personal Improvement Plan (PIP)',
+    brand: 'Kane\'s Furniture',
+    store: 'Store 17',
+    locationStoreNumber: '17',
+    employeeName: employee ? employee.displayName : event.employeeId,
+    jobTitle: employee ? employee.jobTitle : '',
+    dateOfDiscussion: event.entryAt || event.incidentDate,
+    counselingLevel: event.pipCounselingLabel || optlPipCounselingLabel_(event.entryType),
+    entryType: event.entryType,
+    warningTypes: event.warningTypes || [],
+    category: event.category,
+    incidentDate: event.incidentDate,
+    peopleInvolved: event.peopleInvolved || '',
+    locationDetail: event.locationDetail || 'Store 17',
+    companyImpact: event.companyImpact || '',
+    policyViolated: event.policyViolated || '',
+    priorConversations: event.priorConversations || '',
+    description: event.notes || event.shortDescription || '',
+    improvementPlan: event.improvementPlan || '',
+    consequencesNonTerm: 'Further infractions may result in continued corrective action up to and including termination.',
+    previousNoticesUnknown: true,
+    hrApprovalRequired: !!event.hrApprovalRequired,
+    hrApprovalObtained: !!event.hrApprovalObtained,
+    hrApprovalNote: 'Approval from Human Resources or your department\'s Executive is requested for Disciplinary Action resulting in a Counseling, Final Counseling, or Termination',
+    managerDeclared: event.createdByDeclared || '',
+    watermark: openReview ? 'PENDING MANAGEMENT REVIEW' : (event.hrApprovalRequired && !event.hrApprovalObtained ? 'HR APPROVAL REQUESTED — NOT YET CONFIRMED' : null),
+    signatureLinesBlank: true,
+    refusalInstruction: 'Managers: should the associate refuse to sign, write "Employee Refused to Sign" where they would sign per procedure. The document is still valid if refused to sign.',
+    privateNotesExcluded: true,
   };
 }
