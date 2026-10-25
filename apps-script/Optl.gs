@@ -1,9 +1,10 @@
 /**
- * OPTL — Online Performance Tracking Log (Phase 1).
- * Spec authority: STORE17_OPTL_COMPLETE_CURSOR_SPEC_V1_2.md
- * Own Admin-area system. Demo records only. Does not write sales sheets.
+ * OPTL — Online Performance Tracking Log (Stage 2 in development).
+ * Spec authority: STORE17_OPTL_COMPLETE_CURSOR_SPEC_V1_3.md (supersedes v1.2).
+ * Own Admin-area system. Synthetic demo records only. Does not write sales sheets.
  * Unlinked occurrence expiration: incident date + 180 Store 17 local calendar days.
  * STEP I/II/III are display labels; PIP I/II/III remain internal aliases.
+ * No live personnel Sheet, no email send, no auto-termination.
  */
 
 var OPTL_OCCURRENCE_DAYS_ = 180;
@@ -28,6 +29,13 @@ var OPTL_OCC_SLOTS_ = [
   'occurrence-5', 'occurrence-6', 'occurrence-7', 'occurrence-8',
 ];
 
+/** Declared managers for shared-login audit (manager-declared, not verified identity). */
+var OPTL_DEMO_ACTING_MANAGERS_ = [
+  'Pat Nguyen (GM)',
+  'Sam Ortiz (ASM)',
+  'Riley Chen (Floor Manager)',
+];
+
 function optlAddCalendarDays_(isoDate, days) {
   var parts = String(isoDate).slice(0, 10).split('-');
   var utc = new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])));
@@ -50,7 +58,7 @@ function optlToday_() {
 }
 
 /**
- * Store 17 late-arrival classification (v1.2 confirmed).
+ * Store 17 late-arrival classification (v1.2/v1.3 confirmed).
  * 0–15 min: none; 16–119: Tardy; 120+: Attendance (exactly 120 is Attendance).
  */
 function optlLateClassification_(minutesLate) {
@@ -79,22 +87,170 @@ function optlLateClassification_(minutesLate) {
   };
 }
 
+/** GM Stage 2 decision (4): typed full name + checkbox; no SSN. */
+function optlAcknowledgmentSpec_() {
+  return {
+    mode: 'typed-full-name-plus-checkbox',
+    requiresSsn: false,
+    signatureRequiredForOfficial: false,
+    officialAt: 'manager-issuance',
+    fields: ['typedFullName', 'acknowledgedCheckbox', 'acknowledgedAt'],
+    note: 'Ordinary acknowledgment is typed full name plus an explicit checkbox. Official STEP timing is manager issuance, not employee signature.',
+  };
+}
+
 function optlDemoEmployees_() {
   return [
-    { employeeId: 'S17-DEMO-101', displayName: 'Alex Rivera', jobTitle: 'Sales Associate', department: 'Sales', hireDate: '2024-03-12', status: 'active', separationDate: null },
-    { employeeId: 'S17-DEMO-102', displayName: 'Jordan Lee', jobTitle: 'Sales Associate', department: 'Sales', hireDate: '2023-08-01', status: 'active', separationDate: null },
-    { employeeId: 'S17-DEMO-199', displayName: 'Casey Morgan (Former)', jobTitle: 'Sales Associate', department: 'Sales', hireDate: '2022-01-10', status: 'former', separationDate: '2026-06-15' },
+    {
+      employeeId: 'S17-DEMO-101',
+      displayName: 'Alex Rivera',
+      jobTitle: 'Sales Associate',
+      department: 'Sales',
+      hireDate: '2024-03-12',
+      status: 'active',
+      separationDate: null,
+      employmentPeriods: [
+        { periodId: 'emp-101-a', hireDate: '2024-03-12', separationDate: null, status: 'active' },
+      ],
+    },
+    {
+      employeeId: 'S17-DEMO-102',
+      displayName: 'Jordan Lee',
+      jobTitle: 'Sales Associate',
+      department: 'Sales',
+      hireDate: '2023-08-01',
+      status: 'active',
+      separationDate: null,
+      employmentPeriods: [
+        { periodId: 'emp-102-a', hireDate: '2023-08-01', separationDate: null, status: 'active' },
+      ],
+    },
+    {
+      employeeId: 'S17-DEMO-103',
+      displayName: 'Taylor Brooks',
+      jobTitle: 'Sales Associate',
+      department: 'Sales',
+      hireDate: '2025-01-06',
+      status: 'active',
+      separationDate: null,
+      employmentPeriods: [
+        { periodId: 'emp-103-a', hireDate: '2025-01-06', separationDate: null, status: 'active' },
+      ],
+    },
+    {
+      employeeId: 'S17-DEMO-199',
+      displayName: 'Casey Morgan (Former)',
+      jobTitle: 'Sales Associate',
+      department: 'Sales',
+      hireDate: '2022-01-10',
+      status: 'former',
+      separationDate: '2026-06-15',
+      employmentPeriods: [
+        { periodId: 'emp-199-a', hireDate: '2022-01-10', separationDate: '2026-06-15', status: 'ended' },
+      ],
+    },
   ];
 }
 
+/**
+ * Synthetic demo events. Tardy quantitativeDetail must be >15 minutes (v1.3).
+ * Jordan has 4 Safety occurrences → pending STEP I lock for Stage 2 demo.
+ * Taylor has STEP I issued with linked freeze for chain demo.
+ */
 function optlDemoEvents_() {
   return [
-    { eventId: 'evt-demo-001', employeeId: 'S17-DEMO-101', incidentDate: '2026-01-15', section: 'B', category: 'Tardy', entryType: 'Occurrence', shortDescription: 'Tardy', quantitativeDetail: 12, status: 'active' },
-    { eventId: 'evt-demo-002', employeeId: 'S17-DEMO-101', incidentDate: '2026-08-20', section: 'B', category: 'Tardy', entryType: 'Occurrence', shortDescription: 'Tardy', quantitativeDetail: 8, status: 'active' },
-    { eventId: 'evt-demo-003', employeeId: 'S17-DEMO-101', incidentDate: '2026-09-05', section: 'A', category: 'Safety', entryType: 'Occurrence', shortDescription: 'Unsafe Behavior', quantitativeDetail: null, status: 'active' },
-    { eventId: 'evt-demo-004', employeeId: 'S17-DEMO-101', incidentDate: '2026-09-28', section: 'A', category: 'Quality of Orders', entryType: 'Occurrence', shortDescription: 'Error on Ticket', quantitativeDetail: null, status: 'active' },
-    { eventId: 'evt-demo-005', employeeId: 'S17-DEMO-101', incidentDate: '2026-04-01', section: 'A', category: 'Behavior', entryType: 'Occurrence', shortDescription: 'Unacceptable Behavior', quantitativeDetail: null, status: 'active' },
-    { eventId: 'evt-demo-006', employeeId: 'S17-DEMO-102', incidentDate: '2026-10-02', section: 'A', category: 'Sales Performance', entryType: 'Occurrence', shortDescription: 'Below Goal −32%', quantitativeDetail: -32, status: 'active' },
+    // Alex — valid tardies (>15); oldest will expire by 2026-10-25 asOf
+    {
+      eventId: 'evt-demo-001', employeeId: 'S17-DEMO-101', employmentPeriodId: 'emp-101-a',
+      incidentDate: '2026-01-15', section: 'B', category: 'Tardy', entryType: 'Occurrence',
+      shortDescription: 'Tardy — 22 min', quantitativeDetail: 22, status: 'active', scored: true,
+      originalExpirationDate: '2026-07-14', effectiveExpirationDate: '2026-07-14',
+    },
+    {
+      eventId: 'evt-demo-002', employeeId: 'S17-DEMO-101', employmentPeriodId: 'emp-101-a',
+      incidentDate: '2026-08-20', section: 'B', category: 'Tardy', entryType: 'Occurrence',
+      shortDescription: 'Tardy — 25 min', quantitativeDetail: 25, status: 'active', scored: true,
+      originalExpirationDate: '2027-02-16', effectiveExpirationDate: '2027-02-16',
+    },
+    {
+      eventId: 'evt-demo-003', employeeId: 'S17-DEMO-101', employmentPeriodId: 'emp-101-a',
+      incidentDate: '2026-09-05', section: 'A', category: 'Safety', entryType: 'Occurrence',
+      shortDescription: 'Unsafe Behavior', quantitativeDetail: null, status: 'active', scored: true,
+      originalExpirationDate: '2027-03-04', effectiveExpirationDate: '2027-03-04',
+    },
+    {
+      eventId: 'evt-demo-004', employeeId: 'S17-DEMO-101', employmentPeriodId: 'emp-101-a',
+      incidentDate: '2026-09-28', section: 'A', category: 'Quality of Orders', entryType: 'Occurrence',
+      shortDescription: 'Error on Ticket', quantitativeDetail: null, status: 'active', scored: true,
+      originalExpirationDate: '2027-03-27', effectiveExpirationDate: '2027-03-27',
+    },
+    {
+      eventId: 'evt-demo-005', employeeId: 'S17-DEMO-101', employmentPeriodId: 'emp-101-a',
+      incidentDate: '2026-04-01', section: 'A', category: 'Behavior', entryType: 'Occurrence',
+      shortDescription: 'Unacceptable Behavior', quantitativeDetail: null, status: 'active', scored: true,
+      originalExpirationDate: '2026-09-28', effectiveExpirationDate: '2026-09-28',
+    },
+    // Jordan — one Sales Performance (no lock) … replaced by four Safety for pending STEP demo
+    {
+      eventId: 'evt-demo-006', employeeId: 'S17-DEMO-102', employmentPeriodId: 'emp-102-a',
+      incidentDate: '2026-07-10', section: 'A', category: 'Safety', entryType: 'Occurrence',
+      shortDescription: 'Unsafe Behavior', quantitativeDetail: null, status: 'active', scored: true,
+      originalExpirationDate: '2027-01-06', effectiveExpirationDate: '2027-01-06',
+    },
+    {
+      eventId: 'evt-demo-007', employeeId: 'S17-DEMO-102', employmentPeriodId: 'emp-102-a',
+      incidentDate: '2026-08-02', section: 'A', category: 'Safety', entryType: 'Occurrence',
+      shortDescription: 'Unsafe Behavior', quantitativeDetail: null, status: 'active', scored: true,
+      originalExpirationDate: '2027-01-29', effectiveExpirationDate: '2027-01-29',
+    },
+    {
+      eventId: 'evt-demo-008', employeeId: 'S17-DEMO-102', employmentPeriodId: 'emp-102-a',
+      incidentDate: '2026-09-12', section: 'A', category: 'Safety', entryType: 'Occurrence',
+      shortDescription: 'Unsafe Behavior', quantitativeDetail: null, status: 'active', scored: true,
+      originalExpirationDate: '2027-03-11', effectiveExpirationDate: '2027-03-11',
+    },
+    {
+      eventId: 'evt-demo-009', employeeId: 'S17-DEMO-102', employmentPeriodId: 'emp-102-a',
+      incidentDate: '2026-10-02', section: 'A', category: 'Safety', entryType: 'Occurrence',
+      shortDescription: 'Unsafe Behavior', quantitativeDetail: null, status: 'active', scored: true,
+      originalExpirationDate: '2027-03-31', effectiveExpirationDate: '2027-03-31',
+    },
+    // Taylor — four Behavior + late-issued STEP I (clock = incident date of 4th occ; chain freeze +365)
+    {
+      eventId: 'evt-demo-010', employeeId: 'S17-DEMO-103', employmentPeriodId: 'emp-103-a',
+      incidentDate: '2026-03-01', section: 'A', category: 'Behavior', entryType: 'Occurrence',
+      shortDescription: 'Unacceptable Behavior', quantitativeDetail: null, status: 'active', scored: true,
+      chainId: 'chain-103-beh', originalExpirationDate: '2026-08-28', effectiveExpirationDate: '2027-06-15',
+      freezeReason: 'Inherited from STEP_I issued for incident 2026-06-15',
+    },
+    {
+      eventId: 'evt-demo-011', employeeId: 'S17-DEMO-103', employmentPeriodId: 'emp-103-a',
+      incidentDate: '2026-04-12', section: 'A', category: 'Behavior', entryType: 'Occurrence',
+      shortDescription: 'Unacceptable Behavior', quantitativeDetail: null, status: 'active', scored: true,
+      chainId: 'chain-103-beh', originalExpirationDate: '2026-10-09', effectiveExpirationDate: '2027-06-15',
+      freezeReason: 'Inherited from STEP_I issued for incident 2026-06-15',
+    },
+    {
+      eventId: 'evt-demo-012', employeeId: 'S17-DEMO-103', employmentPeriodId: 'emp-103-a',
+      incidentDate: '2026-05-20', section: 'A', category: 'Behavior', entryType: 'Occurrence',
+      shortDescription: 'Unacceptable Behavior', quantitativeDetail: null, status: 'active', scored: true,
+      chainId: 'chain-103-beh', originalExpirationDate: '2026-11-16', effectiveExpirationDate: '2027-06-15',
+      freezeReason: 'Inherited from STEP_I issued for incident 2026-06-15',
+    },
+    {
+      eventId: 'evt-demo-013', employeeId: 'S17-DEMO-103', employmentPeriodId: 'emp-103-a',
+      incidentDate: '2026-06-15', section: 'A', category: 'Behavior', entryType: 'Occurrence',
+      shortDescription: 'Unacceptable Behavior', quantitativeDetail: null, status: 'active', scored: true,
+      chainId: 'chain-103-beh', originalExpirationDate: '2026-12-12', effectiveExpirationDate: '2027-06-15',
+      freezeReason: 'Inherited from STEP_I issued for incident 2026-06-15',
+    },
+    {
+      eventId: 'evt-demo-014', employeeId: 'S17-DEMO-103', employmentPeriodId: 'emp-103-a',
+      incidentDate: '2026-06-15', entryAt: '2026-07-01', section: 'A', category: 'Behavior', entryType: 'STEP_I',
+      shortDescription: 'STEP I — Behavior', quantitativeDetail: null, status: 'active', scored: true,
+      chainId: 'chain-103-beh', originalExpirationDate: '2027-06-15', effectiveExpirationDate: '2027-06-15',
+      officialAtIssuance: true, createdByDeclared: 'Pat Nguyen (GM)',
+    },
   ];
 }
 
@@ -110,7 +266,7 @@ function optlCategoryView_(events, section, category, asOfDate) {
   var active = [];
   var expired = [];
   usable.forEach(function (event) {
-    var expirationDate = optlOccurrenceExpiration_(event.incidentDate);
+    var expirationDate = event.effectiveExpirationDate || optlOccurrenceExpiration_(event.incidentDate);
     if (optlUnlinkedActive_(event.incidentDate, asOfDate, expirationDate)) {
       if (active.length < OPTL_OCC_SLOTS_.length) {
         active.push({
@@ -151,6 +307,7 @@ function optlMatrixRow_(view) {
         shortDescription: hit ? hit.shortDescription : null,
         stepTone: OPTL_STEP_TONES_[slotKey] || null,
         pipState: 'none',
+        reviewRequired: false,
       };
     }),
   };
@@ -202,23 +359,48 @@ function optlEmployeeView_(events, employeeId, asOfDate) {
   return { matrixRows: rows, history: history };
 }
 
+function optlCloneDemoState_() {
+  var state = optlEmptyState_();
+  state.employees = JSON.parse(JSON.stringify(optlDemoEmployees_()));
+  state.events = JSON.parse(JSON.stringify(optlDemoEvents_()));
+  state.alertConfig = {
+    commandCenter: true,
+    emailEnabled: false,
+    emailRecipients: [],
+    testSendingDisabled: true,
+    note: 'Command Center alerts planned; manager email waits for configured/approved recipients. Test sending is disabled.',
+  };
+  return state;
+}
+
 /**
- * Manager/Admin OPTL page payload. Phase 1 uses synthetic demo records only.
- * No personnel Sheet writes. Sales metrics are not read.
+ * Manager/Admin OPTL page payload. Stage 2 uses synthetic demo records only.
+ * No personnel Sheet writes. Sales metrics are not read. Email is not sent.
  */
 function optl_(payload) {
   var asOf = String((payload && payload.asOfDate) || optlToday_()).slice(0, 10);
-  var employees = optlDemoEmployees_();
-  var events = optlDemoEvents_();
-  var selectedId = String((payload && payload.employeeId) || '') || (employees.filter(function (row) { return row.status === 'active'; })[0] || employees[0]).employeeId;
+  var state = optlCloneDemoState_();
+  var employees = state.employees;
+  var selectedId = String((payload && payload.employeeId) || '') ||
+    (employees.filter(function (row) { return row.status === 'active'; })[0] || employees[0]).employeeId;
   var selected = null;
   employees.forEach(function (row) { if (row.employeeId === selectedId) selected = row; });
   if (!selected) selected = employees[0];
-  var view = optlEmployeeView_(events, selected.employeeId, asOf);
+
+  // Refresh pending from thresholds (Jordan Safety ×4 → ACTION_REQUIRED)
+  employees.forEach(function (row) {
+    if (row.status === 'active') optlRefreshPending_(state, row.employeeId, asOf);
+  });
+
+  var view = optlEngineEmployeeView_(state, selected.employeeId, asOf);
+  var actingDeclared = String((payload && payload.actingManagerDeclared) || '').trim();
+  var actingConfirmed = !!(payload && payload.actingManagerConfirmed === true);
+
   return {
-    phase: 1,
+    phase: 2,
+    stage: 'stage-2-development',
     prototype: true,
-    notice: 'Phase 1 prototype · demo records only · separate from sales reporting',
+    notice: 'Stage 2 in development · synthetic demo only · no live HR Sheet · email send disabled',
     asOfDate: asOf,
     timezone: OPTL_STORE_TZ_,
     employees: employees,
@@ -226,6 +408,30 @@ function optl_(payload) {
     employee: selected,
     matrixRows: view.matrixRows,
     history: view.history,
+    pendingActions: view.pendingActions,
+    exceptions: view.exceptions,
+    lock: view.lock,
     slotLabels: OPTL_SLOT_LABELS_,
+    actingManagers: OPTL_DEMO_ACTING_MANAGERS_,
+    actingManagerDeclared: actingDeclared || null,
+    actingManagerConfirmed: actingConfirmed,
+    actingManagerAttribution: 'manager-declared',
+    acknowledgment: optlAcknowledgmentSpec_(),
+    alertConfig: state.alertConfig,
+    auditCount: state.audit.length,
+    security: {
+      storage: 'Not created — STORE 17 OPTL DATA Sheet blocked until GM approval',
+      email: 'Disabled until recipients configured and approved; test sending off',
+      identity: 'Shared manager login · actions require explicit acting-manager declaration',
+      pipPrint: 'Kane\'s Personal Improvement Plan template retained for later print; HR approval note still applies',
+    },
+    stillDemo: [
+      'Employee records (synthetic IDs only)',
+      'In-memory engine — no Sheet persistence',
+      'Entry / new-hire / TERM forms (UI stubs)',
+      'Email delivery (planned, not sent)',
+      'PIP print from Kane\'s template (later)',
+      'Live deployment / merge',
+    ],
   };
 }

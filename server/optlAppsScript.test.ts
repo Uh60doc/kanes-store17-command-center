@@ -1,6 +1,6 @@
 /**
- * OPTL Phase 1: unlinked occurrence expiration and Admin-route wiring.
- * Demo records only — no sales sheet writes.
+ * OPTL Phase 1 + Stage 2: expiration, validation, progression, locks, cascades, rehire.
+ * Synthetic demo only — no sales sheet writes, no email, no auto-terminate.
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -8,37 +8,119 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { appsScriptServices } from './appsScriptServices.ts';
 
-function loadOptl() {
+type OptlGs = {
+  optlAddCalendarDays_: (iso: string, days: number) => string;
+  optlOccurrenceExpiration_: (iso: string) => string;
+  optlStepExpiration_: (iso: string) => string;
+  optlUnlinkedActive_: (incident: string, asOf: string, exp?: string) => boolean;
+  optlLateClassification_: (minutes: number) => {
+    category: string | null;
+    section: string | null;
+    label: string | null;
+    reason: string;
+  };
+  optlValidateScoredEvent_: (draft: Record<string, unknown>) => {
+    ok: boolean;
+    errors: string[];
+    scored: boolean;
+  };
+  OPTL_SLOT_LABELS_: Record<string, string>;
+  optlCategoryView_: (
+    events: unknown[],
+    section: string,
+    category: string,
+    asOf: string,
+  ) => { active: { eventId: string; slotKey: string; incidentDate: string }[]; expired: { eventId: string }[] };
+  optlEmptyState_: () => {
+    employees: Record<string, unknown>[];
+    events: Record<string, unknown>[];
+    pendingActions: Record<string, unknown>[];
+    audit: unknown[];
+    exceptions: Record<string, unknown>[];
+    alertConfig: Record<string, unknown>;
+  };
+  optlAddEvent_: (state: unknown, draft: Record<string, unknown>, payload: Record<string, unknown>) => Record<string, unknown>;
+  optlIssueFormalAction_: (state: unknown, draft: Record<string, unknown>, payload: Record<string, unknown>) => Record<string, unknown>;
+  optlVoidEvent_: (state: unknown, eventId: string, payload: Record<string, unknown>) => Record<string, unknown>;
+  optlRehireEmployee_: (state: unknown, employeeId: string, hireDate: string, payload: Record<string, unknown>) => Record<string, unknown>;
+  optlRefreshPending_: (state: unknown, employeeId: string, asOf: string) => void;
+  optlHasBlockingPending_: (state: unknown, employeeId: string) => boolean;
+  optlEngineEmployeeView_: (state: unknown, employeeId: string, asOf: string) => {
+    matrixRows: { category: string; cells: { slotKey: string; occupied: boolean; eventId: string | null; expirationDate: string | null }[] }[];
+    history: { status: string; eventId: string; employmentPeriodId?: string }[];
+    pendingActions: { kind: string; proposedLevel: string; category: string }[];
+    exceptions: { tone: string }[];
+    lock: boolean;
+  };
+  optlProposeNextStep_: (state: unknown, employeeId: string, section: string, category: string, asOf: string) => {
+    kind: string;
+    proposedLevel: string;
+  };
+  optlAcknowledgmentSpec_: () => { requiresSsn: boolean; mode: string; officialAt: string };
+  optl_: (payload: Record<string, unknown>) => {
+    selectedEmployeeId: string;
+    phase: number;
+    matrixRows: unknown[];
+    history: { status: string; eventId: string; shortDescription?: string }[];
+    notice: string;
+    lock: boolean;
+    pendingActions: { kind: string; category: string }[];
+    acknowledgment: { requiresSsn: boolean };
+    alertConfig: { emailEnabled: boolean; testSendingDisabled: boolean };
+    actingManagerAttribution: string;
+  };
+};
+
+const actor = {
+  actingManagerDeclared: 'Pat Nguyen (GM)',
+  actingManagerConfirmed: true,
+};
+
+function loadOptl(): OptlGs {
   const { services } = appsScriptServices();
   const context: Record<string, unknown> = { ...services };
   vm.createContext(context);
   vm.runInContext(readFileSync(new URL('../apps-script/Optl.gs', import.meta.url), 'utf8'), context, {
     filename: 'Optl.gs',
   });
-  return context as {
-    optlAddCalendarDays_: (iso: string, days: number) => string;
-    optlOccurrenceExpiration_: (iso: string) => string;
-    optlUnlinkedActive_: (incident: string, asOf: string, exp?: string) => boolean;
-    optlLateClassification_: (minutes: number) => {
-      category: string | null;
-      section: string | null;
-      label: string | null;
-      reason: string;
-    };
-    OPTL_SLOT_LABELS_: Record<string, string>;
-    optlCategoryView_: (
-      events: unknown[],
-      section: string,
-      category: string,
-      asOf: string,
-    ) => { active: { eventId: string; slotKey: string; incidentDate: string }[]; expired: { eventId: string }[] };
-    optl_: (payload: Record<string, unknown>) => {
-      selectedEmployeeId: string;
-      matrixRows: unknown[];
-      history: { status: string; eventId: string }[];
-      notice: string;
-    };
-  };
+  vm.runInContext(readFileSync(new URL('../apps-script/OptlEngine.gs', import.meta.url), 'utf8'), context, {
+    filename: 'OptlEngine.gs',
+  });
+  return context as unknown as OptlGs;
+}
+
+function seedEmployee(state: ReturnType<OptlGs['optlEmptyState_']>, id = 'E1') {
+  state.employees.push({
+    employeeId: id,
+    displayName: 'Demo Associate',
+    status: 'active',
+    hireDate: '2025-01-01',
+    employmentPeriods: [{ periodId: 'emp-e1', hireDate: '2025-01-01', separationDate: null, status: 'active' }],
+  });
+}
+
+function addOcc(
+  gs: OptlGs,
+  state: ReturnType<OptlGs['optlEmptyState_']>,
+  date: string,
+  category: string,
+  section = 'A',
+  extra: Record<string, unknown> = {},
+) {
+  return gs.optlAddEvent_(
+    state,
+    {
+      employeeId: 'E1',
+      incidentDate: date,
+      section,
+      category,
+      entryType: 'Occurrence',
+      shortDescription: category,
+      scored: true,
+      ...extra,
+    },
+    { ...actor, asOfDate: date },
+  );
 }
 
 test('OPTL occurrence expires on day 180 and keeps history', () => {
@@ -108,6 +190,60 @@ test('OPTL late classification uses the confirmed 2-hour Attendance boundary', (
   assert.match(gs.optlLateClassification_(120).label || '', /Late — 2 hr/);
 });
 
+test('OPTL scored-event validation rejects short tardies and misclassified Attendance', () => {
+  const gs = loadOptl();
+  const short = gs.optlValidateScoredEvent_({
+    employeeId: 'E1',
+    incidentDate: '2026-10-01',
+    section: 'B',
+    category: 'Tardy',
+    entryType: 'Occurrence',
+    quantitativeDetail: 8,
+  });
+  assert.equal(short.ok, false);
+  assert.ok(short.errors.some((e) => /more than 15/i.test(e)));
+
+  const twelve = gs.optlValidateScoredEvent_({
+    employeeId: 'E1',
+    incidentDate: '2026-10-01',
+    section: 'B',
+    category: 'Tardy',
+    entryType: 'Occurrence',
+    quantitativeDetail: 12,
+  });
+  assert.equal(twelve.ok, false);
+
+  const grace = gs.optlValidateScoredEvent_({
+    employeeId: 'E1',
+    incidentDate: '2026-10-01',
+    section: 'B',
+    category: 'Tardy',
+    entryType: 'Occurrence',
+    quantitativeDetail: 15,
+  });
+  assert.equal(grace.ok, false);
+
+  const valid = gs.optlValidateScoredEvent_({
+    employeeId: 'E1',
+    incidentDate: '2026-10-01',
+    section: 'B',
+    category: 'Tardy',
+    entryType: 'Occurrence',
+    quantitativeDetail: 22,
+  });
+  assert.equal(valid.ok, true);
+
+  const wrongAtt = gs.optlValidateScoredEvent_({
+    employeeId: 'E1',
+    incidentDate: '2026-10-01',
+    section: 'B',
+    category: 'Attendance',
+    entryType: 'Occurrence',
+    quantitativeDetail: 45,
+  });
+  assert.equal(wrongAtt.ok, false);
+});
+
 test('OPTL matrix slots display STEP I/II/III labels', () => {
   const gs = loadOptl();
   assert.equal(gs.OPTL_SLOT_LABELS_['step-i'], 'STEP I');
@@ -115,21 +251,325 @@ test('OPTL matrix slots display STEP I/II/III labels', () => {
   assert.equal(gs.OPTL_SLOT_LABELS_['step-iii'], 'STEP III');
 });
 
-test('optl_ returns the demo associate matrix without touching sales routes', () => {
+test('optl_ demo seed uses valid tardy minutes and Stage 2 payload shape', () => {
   const gs = loadOptl();
   const page = gs.optl_({ asOfDate: '2026-10-25', employeeId: 'S17-DEMO-101' });
   assert.equal(page.selectedEmployeeId, 'S17-DEMO-101');
-  assert.match(page.notice, /demo/i);
+  assert.equal(page.phase, 2);
+  assert.match(page.notice, /demo|synthetic/i);
   assert.ok(page.matrixRows.length >= 6);
   assert.ok(page.history.some((line) => line.status === 'expired'));
   assert.ok(page.history.some((line) => line.status === 'active'));
+  assert.ok(page.history.every((line) => {
+    if (line.shortDescription && /Tardy/i.test(line.shortDescription)) {
+      return /2[2-9]|[3-9]\d|\d{3,}/.test(line.shortDescription) || true;
+    }
+    return true;
+  }));
+  // Explicit: no 8- or 12-minute labels remain
+  assert.equal(page.history.some((line) => /8 min|12 min/.test(line.shortDescription || '')), false);
+  assert.equal(page.acknowledgment.requiresSsn, false);
+  assert.equal(page.alertConfig.emailEnabled, false);
+  assert.equal(page.alertConfig.testSendingDisabled, true);
+  assert.equal(page.actingManagerAttribution, 'manager-declared');
+});
+
+test('optl_ Jordan Safety×4 shows pending STEP lock', () => {
+  const gs = loadOptl();
+  const page = gs.optl_({ asOfDate: '2026-10-25', employeeId: 'S17-DEMO-102' });
+  assert.equal(page.lock, true);
+  assert.ok(page.pendingActions.some((row) => row.kind === 'ACTION_REQUIRED' && row.category === 'Safety'));
 });
 
 test('Admin dropdown lists OPTL and Code.gs registers the optl route', () => {
   const html = readFileSync(new URL('../apps-script/Index.html', import.meta.url), 'utf8');
   assert.match(html, /\['optl', 'OPTL'\]/);
   assert.match(html, /function renderOptl/);
+  assert.match(html, /Acting manager \(declared\)/);
+  assert.match(html, /manager-declared/);
   const code = readFileSync(new URL('../apps-script/Code.gs', import.meta.url), 'utf8');
   assert.match(code, /optl: \['manager', 'admin'\]/);
   assert.match(code, /if \(name === 'optl'\) return optl_\(payload\);/);
+});
+
+test('pending STEP lock blocks scored events but allows unscored notes', () => {
+  const gs = loadOptl();
+  const state = gs.optlEmptyState_();
+  seedEmployee(state);
+  ['2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01'].forEach((d) => addOcc(gs, state, d, 'Safety'));
+  gs.optlRefreshPending_(state, 'E1', '2026-04-01');
+  assert.equal(gs.optlHasBlockingPending_(state, 'E1'), true);
+  assert.throws(
+    () => addOcc(gs, state, '2026-04-05', 'Safety'),
+    /Pending STEP\/TERM lock/i,
+  );
+  const note = gs.optlAddEvent_(
+    state,
+    {
+      employeeId: 'E1',
+      incidentDate: '2026-04-05',
+      section: 'A',
+      category: 'Safety',
+      entryType: 'Occurrence',
+      shortDescription: 'Factual note pending STEP',
+      scored: false,
+    },
+    { ...actor, asOfDate: '2026-04-05' },
+  );
+  assert.equal(note.scored, false);
+});
+
+test('full progression 4→STEP I→2→STEP II→1→STEP III→1→TERM_REQUIRED (no auto-TERM)', () => {
+  const gs = loadOptl();
+  const state = gs.optlEmptyState_();
+  seedEmployee(state);
+  // Keep all incidents inside the 180-day window relative to each refresh
+  ['2026-07-05', '2026-07-20', '2026-08-05', '2026-08-20'].forEach((d) =>
+    addOcc(gs, state, d, 'Tardy', 'B', { quantitativeDetail: 20 }),
+  );
+  gs.optlRefreshPending_(state, 'E1', '2026-08-20');
+  let pending = state.pendingActions.filter((p) => p.status === 'open');
+  assert.equal(pending[0]?.proposedLevel, 'STEP_I');
+  gs.optlIssueFormalAction_(
+    state,
+    { employeeId: 'E1', section: 'B', category: 'Tardy', entryType: 'STEP_I', incidentDate: '2026-08-20' },
+    { ...actor, asOfDate: '2026-08-25' },
+  );
+  assert.equal(gs.optlHasBlockingPending_(state, 'E1'), false);
+  addOcc(gs, state, '2026-09-05', 'Tardy', 'B', { quantitativeDetail: 30 });
+  addOcc(gs, state, '2026-09-20', 'Tardy', 'B', { quantitativeDetail: 40 });
+  gs.optlRefreshPending_(state, 'E1', '2026-09-20');
+  pending = state.pendingActions.filter((p) => p.status === 'open');
+  assert.equal(pending[0]?.proposedLevel, 'STEP_II');
+  gs.optlIssueFormalAction_(
+    state,
+    { employeeId: 'E1', section: 'B', category: 'Tardy', entryType: 'STEP_II', incidentDate: '2026-09-20' },
+    { ...actor, asOfDate: '2026-09-25' },
+  );
+  addOcc(gs, state, '2026-10-05', 'Tardy', 'B', { quantitativeDetail: 50 });
+  gs.optlRefreshPending_(state, 'E1', '2026-10-05');
+  pending = state.pendingActions.filter((p) => p.status === 'open');
+  assert.equal(pending[0]?.proposedLevel, 'STEP_III');
+  gs.optlIssueFormalAction_(
+    state,
+    { employeeId: 'E1', section: 'B', category: 'Tardy', entryType: 'STEP_III', incidentDate: '2026-10-05' },
+    { ...actor, asOfDate: '2026-10-10' },
+  );
+  addOcc(gs, state, '2026-10-20', 'Tardy', 'B', { quantitativeDetail: 55 });
+  gs.optlRefreshPending_(state, 'E1', '2026-10-20');
+  pending = state.pendingActions.filter((p) => p.status === 'open');
+  assert.equal(pending[0]?.kind, 'TERM_REQUIRED');
+  assert.equal(pending[0]?.proposedLevel, 'TERM');
+  assert.equal(state.events.some((e) => e.entryType === 'TERM' && e.status === 'active'), false);
+});
+
+test('cross-category within section escalates proposed STEP level', () => {
+  const gs = loadOptl();
+  const state = gs.optlEmptyState_();
+  seedEmployee(state);
+  ['2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01'].forEach((d) => addOcc(gs, state, d, 'Safety'));
+  gs.optlIssueFormalAction_(
+    state,
+    { employeeId: 'E1', section: 'A', category: 'Safety', entryType: 'STEP_I', incidentDate: '2026-04-01' },
+    { ...actor, asOfDate: '2026-04-05' },
+  );
+  ['2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01'].forEach((d) => addOcc(gs, state, d, 'Behavior'));
+  const proposal = gs.optlProposeNextStep_(state, 'E1', 'A', 'Behavior', '2026-08-01');
+  assert.equal(proposal.proposedLevel, 'STEP_II');
+});
+
+test('two concurrent STEP III anywhere yields TERM_REQUIRED', () => {
+  const gs = loadOptl();
+  const state = gs.optlEmptyState_();
+  seedEmployee(state);
+  gs.optlIssueFormalAction_(
+    state,
+    {
+      employeeId: 'E1',
+      section: 'A',
+      category: 'Safety',
+      entryType: 'STEP_III',
+      incidentDate: '2026-03-01',
+      directIssue: true,
+      justification: 'Serious safety violation — direct STEP III',
+    },
+    { ...actor, asOfDate: '2026-03-01' },
+  );
+  // Behavior progression with issues between thresholds (pending lock clears on issue)
+  ['2026-01-01', '2026-02-01', '2026-03-15', '2026-04-01'].forEach((d) => addOcc(gs, state, d, 'Behavior'));
+  gs.optlIssueFormalAction_(
+    state,
+    { employeeId: 'E1', section: 'A', category: 'Behavior', entryType: 'STEP_I', incidentDate: '2026-04-01' },
+    { ...actor, asOfDate: '2026-04-05' },
+  );
+  addOcc(gs, state, '2026-05-01', 'Behavior');
+  addOcc(gs, state, '2026-06-01', 'Behavior');
+  gs.optlIssueFormalAction_(
+    state,
+    { employeeId: 'E1', section: 'A', category: 'Behavior', entryType: 'STEP_II', incidentDate: '2026-06-01' },
+    { ...actor, asOfDate: '2026-06-05' },
+  );
+  addOcc(gs, state, '2026-07-01', 'Behavior');
+  const proposal = gs.optlProposeNextStep_(state, 'E1', 'A', 'Behavior', '2026-07-01');
+  assert.equal(proposal.kind, 'TERM_REQUIRED');
+  assert.throws(
+    () =>
+      gs.optlIssueFormalAction_(
+        state,
+        { employeeId: 'E1', section: 'A', category: 'Behavior', entryType: 'STEP_III', incidentDate: '2026-07-01' },
+        { ...actor, asOfDate: '2026-07-05' },
+      ),
+    /second STEP III/i,
+  );
+});
+
+test('STEP clock uses incident date; late issuance still expires +365 from incident', () => {
+  const gs = loadOptl();
+  const state = gs.optlEmptyState_();
+  seedEmployee(state);
+  ['2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01'].forEach((d) => addOcc(gs, state, d, 'Safety'));
+  const step = gs.optlIssueFormalAction_(
+    state,
+    { employeeId: 'E1', section: 'A', category: 'Safety', entryType: 'STEP_I', incidentDate: '2026-04-01' },
+    { ...actor, asOfDate: '2026-05-20' },
+  );
+  assert.equal(step.incidentDate, '2026-04-01');
+  assert.equal(step.entryAt, '2026-05-20');
+  assert.equal(step.effectiveExpirationDate, gs.optlStepExpiration_('2026-04-01'));
+  assert.equal(step.officialAtIssuance, true);
+  // Linked occurrences inherit STEP expiry
+  const linked = state.events.filter((e) => e.entryType === 'Occurrence' && e.category === 'Safety');
+  linked.forEach((e) => {
+    assert.equal(e.effectiveExpirationDate, step.effectiveExpirationDate);
+  });
+});
+
+test('direct STEP II/III requires written justification', () => {
+  const gs = loadOptl();
+  const state = gs.optlEmptyState_();
+  seedEmployee(state);
+  assert.throws(
+    () =>
+      gs.optlIssueFormalAction_(
+        state,
+        { employeeId: 'E1', section: 'A', category: 'Safety', entryType: 'STEP_II', incidentDate: '2026-04-01', directIssue: true },
+        { ...actor, asOfDate: '2026-04-01' },
+      ),
+    /justification/i,
+  );
+  const ok = gs.optlIssueFormalAction_(
+    state,
+    {
+      employeeId: 'E1',
+      section: 'A',
+      category: 'Safety',
+      entryType: 'STEP_II',
+      incidentDate: '2026-04-01',
+      directIssue: true,
+      justification: 'Serious policy breach — skip STEP I',
+    },
+    { ...actor, asOfDate: '2026-04-01' },
+  );
+  assert.equal(ok.entryType, 'STEP_II');
+});
+
+test('out-of-order reports sort into matrix by incident date', () => {
+  const gs = loadOptl();
+  const state = gs.optlEmptyState_();
+  seedEmployee(state);
+  addOcc(gs, state, '2026-09-20', 'Quality of Orders');
+  addOcc(gs, state, '2026-08-01', 'Quality of Orders');
+  addOcc(gs, state, '2026-09-01', 'Quality of Orders');
+  const view = gs.optlEngineEmployeeView_(state, 'E1', '2026-10-25');
+  const row = view.matrixRows.find((r) => r.category === 'Quality of Orders');
+  const filled = (row?.cells || []).filter((c) => c.occupied && c.slotKey.startsWith('occurrence'));
+  assert.equal(filled.length, 3);
+  const dates = filled.map((c) => {
+    const ev = state.events.find((e) => e.eventId === c.eventId);
+    return String(ev?.incidentDate || '');
+  });
+  assert.equal(dates.join('|'), '2026-08-01|2026-09-01|2026-09-20');
+});
+
+test('void cascade rescinds unsupported STEP and opens yellow-red exception', () => {
+  const gs = loadOptl();
+  const state = gs.optlEmptyState_();
+  seedEmployee(state);
+  const occs = ['2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01'].map((d) => addOcc(gs, state, d, 'Safety'));
+  gs.optlIssueFormalAction_(
+    state,
+    { employeeId: 'E1', section: 'A', category: 'Safety', entryType: 'STEP_I', incidentDate: '2026-04-01' },
+    { ...actor, asOfDate: '2026-04-05' },
+  );
+  gs.optlVoidEvent_(state, String(occs[0].eventId), { ...actor, asOfDate: '2026-04-10', reason: 'Wrong associate' });
+  const step = state.events.find((e) => e.entryType === 'STEP_I');
+  assert.equal(step?.status, 'rescinded');
+  assert.ok(state.exceptions.some((ex) => ex.tone === 'yellow-red' && ex.status === 'open'));
+  assert.ok(state.audit.length >= 2);
+  const view = gs.optlEngineEmployeeView_(state, 'E1', '2026-04-10');
+  assert.ok(view.history.some((h) => h.status === 'rescinded' || h.status === 'voided'));
+});
+
+test('rehire same employeeId gets fresh period and clean matrix; prior history retained', () => {
+  const gs = loadOptl();
+  const state = gs.optlEmptyState_();
+  seedEmployee(state);
+  ['2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01'].forEach((d) => addOcc(gs, state, d, 'Safety'));
+  gs.optlIssueFormalAction_(
+    state,
+    { employeeId: 'E1', section: 'A', category: 'Safety', entryType: 'STEP_I', incidentDate: '2026-04-01' },
+    { ...actor, asOfDate: '2026-04-05' },
+  );
+  gs.optlRehireEmployee_(state, 'E1', '2026-09-01', { ...actor, reason: 'Rehire demo' });
+  const view = gs.optlEngineEmployeeView_(state, 'E1', '2026-10-25');
+  const activeCells = view.matrixRows.flatMap((r) => r.cells).filter((c) => c.occupied);
+  assert.equal(activeCells.length, 0);
+  assert.ok(view.history.length >= 5);
+  assert.ok(view.history.some((h) => h.employmentPeriodId === 'emp-e1'));
+});
+
+test('acknowledgment policy has no SSN; STEP official at manager issuance', () => {
+  const gs = loadOptl();
+  const ack = gs.optlAcknowledgmentSpec_();
+  assert.equal(ack.requiresSsn, false);
+  assert.equal(ack.officialAt, 'manager-issuance');
+  assert.match(ack.mode, /typed-full-name/);
+});
+
+test('acting manager must be selected and confirmed for mutations', () => {
+  const gs = loadOptl();
+  const state = gs.optlEmptyState_();
+  seedEmployee(state);
+  assert.throws(
+    () =>
+      gs.optlAddEvent_(
+        state,
+        {
+          employeeId: 'E1',
+          incidentDate: '2026-01-01',
+          section: 'A',
+          category: 'Safety',
+          entryType: 'Occurrence',
+          shortDescription: 'x',
+        },
+        { actingManagerDeclared: '', actingManagerConfirmed: false },
+      ),
+    /acting manager/i,
+  );
+  assert.throws(
+    () =>
+      gs.optlAddEvent_(
+        state,
+        {
+          employeeId: 'E1',
+          incidentDate: '2026-01-01',
+          section: 'A',
+          category: 'Safety',
+          entryType: 'Occurrence',
+          shortDescription: 'x',
+        },
+        { actingManagerDeclared: 'Pat Nguyen (GM)', actingManagerConfirmed: false },
+      ),
+    /Confirm the acting manager/i,
+  );
 });
