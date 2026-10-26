@@ -758,6 +758,7 @@ function optlEngineEmployeeView_(state, employeeId, asOfDate) {
       category: event.category,
       entryType: event.entryType,
       shortDescription: event.shortDescription,
+      notes: event.notes || '',
       originalExpirationDate: event.originalExpirationDate || exp,
       effectiveExpirationDate: event.effectiveExpirationDate || exp,
       status: status,

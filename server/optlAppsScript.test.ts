@@ -793,6 +793,18 @@ test('optl_ mutation actions: new hire via page API and UI markers present', () 
   assert.match(html, /Personal Improvement Plan \(PIP\)/);
   assert.match(html, /optl-yr/);
   assert.match(html, /Management dashboard/);
+  assert.match(html, /View OPTL/);
+  assert.match(html, /Write New Occurrence/);
+  assert.match(html, /Print Options/);
+  assert.match(html, /Change Associate/);
+  const selectStart = html.indexOf('id="optl-screen-select"');
+  const recordStart = html.indexOf('id="optl-screen-record"');
+  const entryStart = html.indexOf('id="optl-screen-entry"');
+  assert.ok(selectStart > 0 && recordStart > selectStart && entryStart > recordStart);
+  const landing = html.slice(selectStart, recordStart);
+  assert.equal(landing.includes('optl-matrix'), false);
+  assert.equal(landing.includes('optl-history'), false);
+  assert.equal(landing.includes('optl-save-entry'), false);
 });
 
 test('dedicated OPTL book round-trips demo history and refuses the sales spreadsheet', () => {
@@ -991,6 +1003,8 @@ test('save feedback and checkbox sizing stay inside OPTL', () => {
   assert.doesNotMatch(html, /optl-acting-confirm[\s\S]{0,180}optlCall\(\{\}\)/);
   assert.match(html, /Select the acting manager before this action/);
   assert.match(html, /clientRequestId/);
+  assert.match(html, /optl-highlight/);
+  assert.match(html, /Cancel returns to this associate without saving/);
 });
 
 test('flag review required marks yellow-red exception', () => {

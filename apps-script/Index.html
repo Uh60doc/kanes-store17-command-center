@@ -806,6 +806,21 @@
     .optl-form-grid textarea { min-height: 72px; }
     .optl-page input[type="checkbox"] { width: 18px; min-width: 18px; max-width: 18px; height: 18px; min-height: 18px; margin: 0; padding: 0; flex: 0 0 18px; accent-color: #14c4d4; vertical-align: middle; }
     .optl-page label.confirm { display: flex; flex-direction: row; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-weight: 600; }
+    .optl-screen[hidden] { display: none !important; }
+    .optl-pick { max-width: 640px; margin: 8px auto 0; }
+    .optl-pick select, .optl-entry select, .optl-entry input, .optl-entry textarea { width: 100%; }
+    .optl-pick select { min-height: 52px; font-size: 18px; }
+    .optl-go { display: block; width: 100%; min-height: 56px; margin-top: 16px; font-size: 18px; }
+    .optl-go:disabled, .optl-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .optl-who { margin: 0 0 12px; }
+    .optl-who h2, .optl-entry-head h2 { margin: 0; font-size: 28px; letter-spacing: 0; text-transform: none; color: #f3f6f8; }
+    .optl-primary-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+    .optl-primary-actions button { min-height: 48px; }
+    .optl-quiet { background: #10161c; color: #f3f6f8; border: 1px solid #1d5c66; }
+    .optl-detail { margin: 0 0 12px; border: 1px solid #14c4d4; }
+    .optl-matrix td.filled, .optl-history tbody tr { cursor: pointer; }
+    .optl-highlight { outline: 2px solid #14c4d4; background: #143840 !important; }
+    .optl-more[hidden], .optl-print-panel[hidden], .optl-custom-desc[hidden] { display: none !important; }
     .optl-form-grid .span-2 { grid-column: span 2; }
     .optl-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
     .optl-tabs button { background: #143840; }
@@ -816,7 +831,8 @@
     body.print-optl-formal { background: #fff !important; color: #000 !important; }
     body.print-optl-formal header.brand, body.print-optl-formal .nav, body.print-optl-formal .noprint, body.print-optl-formal #data-refresh { display: none !important; }
     body.print-optl-formal #screen > :not(.optl-formal-sheet) { display: none !important; }
-    body.print-optl-formal .optl-formal-sheet { display: block !important; background: #fff; color: #000; border: 1px solid #000; padding: 18px; font-family: "Times New Roman", Times, serif; font-size: 12px; }
+    body.print-optl-formal .optl-formal-sheet { display: none !important; background: #fff; color: #000; border: 1px solid #000; padding: 18px; font-family: "Times New Roman", Times, serif; font-size: 12px; }
+    body.print-optl-formal .optl-formal-sheet.optl-print-target { display: block !important; }
     .optl-formal-sheet h1 { font-size: 18px; margin: 0 0 6px; text-align: center; }
     .optl-formal-sheet .optl-pip-brand { text-align: center; font-weight: 700; letter-spacing: 0.04em; }
     .optl-formal-sheet table { width: 100%; border-collapse: collapse; margin: 8px 0; }
@@ -831,9 +847,11 @@
       body.print-optl-formal { background: #fff !important; }
       body.print-optl-formal .optl-formal-sheet { box-shadow: none; }
     }
-    body.print-optl header.brand, body.print-optl .nav, body.print-optl .noprint, body.print-optl #data-refresh { display: none !important; }
+    body.print-optl header.brand, body.print-optl .nav, body.print-optl .noprint, body.print-optl #data-refresh, body.print-optl #cc-activity { display: none !important; }
+    body.print-optl-formal #cc-activity { display: none !important; }
     body.print-optl #screen > :not(.optl-print-sheet) { display: none !important; }
-    body.print-optl .optl-print-sheet { display: block !important; color: #e8eef2; background: #0d1114; border: 2px solid #14c4d4; padding: 14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body.print-optl .optl-print-sheet { display: none !important; color: #e8eef2; background: #0d1114; border: 2px solid #14c4d4; padding: 14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body.print-optl .optl-print-sheet.optl-print-target { display: block !important; }
     @media print {
       body.print-optl { background: #0d1114 !important; }
     }
@@ -897,6 +915,7 @@
     var displayTimer = null;
     var displayRefreshing = false;
     var displayHold = false;
+    var optlUi = { view: 'select', employeeId: '', highlightId: '', detailId: '', draft: null, showPrint: false, showMore: false, workflow: '' };
     var displayPayload = null;
 
     function esc(value) {
@@ -6067,6 +6086,7 @@
       if (viewer && !viewer.classList.contains('hidden')) return true;
       if (document.getElementById('eval-editor')) return true;
       if (screen === 'brief' || screen === 'admin' || screen === 'documents' || screen === 'upload') return true;
+      if (screen === 'optl' && (ccBusyCount > 0 || optlUi.view === 'entry' || optlUi.view === 'workflow')) return true;
       if (screen === 'coach' && coachDirty) return true;
       if (screen === 'recovery' && recoveryDirty) return true;
       var pillow = document.getElementById('pillow-goal');
@@ -6089,19 +6109,36 @@
       displayHold = false;
       document.body.classList.remove('print-optl');
       document.body.classList.remove('print-optl-formal');
-      document.getElementById('header-note').textContent = 'OPTL · Admin · forms + print demo';
+      if (optlUi.view !== 'select' && data.selectedEmployeeId) optlUi.employeeId = data.selectedEmployeeId;
+      var viewTitle = optlUi.view === 'entry' ? 'Accountability entry' : (optlUi.view === 'record' ? 'Employee OPTL' : 'Select associate');
+      document.getElementById('header-note').textContent = 'OPTL · ' + viewTitle;
       var employees = data.employees || [];
-      var options = employees.map(function (row) {
-        return '<option value="' + esc(row.employeeId) + '"' + (row.employeeId === data.selectedEmployeeId ? ' selected' : '') + '>' +
-          esc(row.displayName) + (row.status === 'former' ? ' (Former)' : '') + '</option>';
+      var employee = data.employee || {};
+      if (optlUi.employeeId) {
+        employees.forEach(function (row) { if (row.employeeId === optlUi.employeeId) employee = row; });
+      }
+      var blankOption = '<option value="">Select an associate…</option>';
+      var options = blankOption + employees.map(function (row) {
+        var selected = optlUi.view === 'select' && row.employeeId === optlUi.employeeId ? ' selected' : '';
+        return '<option value="' + esc(row.employeeId) + '"' + selected + '>' + esc(row.displayName) + (row.status === 'former' ? ' (Former)' : '') + '</option>';
       }).join('');
+      var actorName = data.actingManagerDeclared || optlUi.actorName || '';
+      var actorConfirmed = !!(data.actingManagerConfirmed || optlUi.actorConfirmed);
       var managerOptions = (data.actingManagers || []).map(function (name) {
-        return '<option value="' + esc(name) + '"' + (name === data.actingManagerDeclared ? ' selected' : '') + '>' + esc(name) + '</option>';
+        return '<option value="' + esc(name) + '"' + (name === actorName ? ' selected' : '') + '>' + esc(name) + '</option>';
       }).join('');
-      var catOptions = function (section) {
+      var actorBlock = '<div class="optl-actor noprint"><label>Acting manager (declared)<select id="optl-acting-manager"><option value="">Select…</option>' + managerOptions + '</select></label>' +
+        '<label class="confirm"><input type="checkbox" id="optl-acting-confirm"' + (actorConfirmed ? ' checked' : '') + ' /> I confirm this acting manager for audit</label>' +
+        '<span class="attr">Attribution: manager-declared (not verified identity)</span></div>';
+      var actorFor = function (name) { return optlUi.view === name ? actorBlock : ''; };
+      var catOptions = function (section, selected) {
         var list = section === 'B' ? (data.sectionB || []) : (data.sectionA || []);
-        return list.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+        return list.map(function (c) { return '<option value="' + esc(c) + '"' + (c === selected ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('');
       };
+      var draft = (optlUi.draft && optlUi.draft.employeeId === (employee.employeeId || optlUi.employeeId)) ? optlUi.draft : {};
+      var draftSection = draft.section || 'A';
+      var draftCategory = draft.category || ((draftSection === 'B' ? data.sectionB : data.sectionA) || [])[0] || '';
+      var draftType = draft.entryType || (optlUi.entryMode === 'formal' ? 'STEP_I' : 'Occurrence');
       var headers = ((data.matrixRows || [])[0] || { cells: [] }).cells.map(function (cell) {
         return '<th scope="col"' + (cell.stepTone ? ' class="' + esc(cell.stepTone) + '"' : '') + '>' + esc(cell.slotLabel) + '</th>';
       }).join('');
@@ -6113,6 +6150,7 @@
             if (cell.occupied) tdClass.push('filled');
             if (cell.stepTone && cell.occupied) tdClass.push('step-cell', cell.stepTone);
             if (cell.reviewRequired) tdClass.push('review-required');
+            if (cell.eventId && cell.eventId === optlUi.highlightId) tdClass.push('optl-highlight');
             if (!cell.occupied) return '<td><span class="' + keyClass + '">' + esc(cell.slotLabel) + '</span>—</td>';
             return '<td class="' + esc(tdClass.join(' ')) + '" data-event-id="' + esc(cell.eventId || '') + '"><span class="' + keyClass + '">' + esc(cell.slotLabel) + '</span>' +
               '<span class="slot-date">' + esc(optlDisplayDate(cell.incidentDate)) + '</span>' +
@@ -6123,10 +6161,13 @@
         }).join('');
       }
       var history = (data.history || []).map(function (line) {
-        return '<tr data-event-id="' + esc(line.eventId || '') + '"><td>' + esc(optlDisplayDate(line.incidentDate)) + '</td><td>' + esc(line.section) + '</td><td>' + esc(line.category) +
+        var rowClass = line.eventId === optlUi.highlightId ? ' class="optl-highlight"' : '';
+        return '<tr' + rowClass + ' data-event-id="' + esc(line.eventId || '') + '"><td>' + esc(optlDisplayDate(line.incidentDate)) + '</td><td>' + esc(line.section) + '</td><td>' + esc(line.category) +
           '</td><td>' + esc(line.entryType) + '</td><td>' + esc(line.shortDescription) + '</td><td>' + esc(optlDisplayDate(line.effectiveExpirationDate)) +
           '</td><td><span class="optl-status ' + esc(line.status) + '">' + esc(line.status) + '</span></td></tr>';
       }).join('');
+      var detail = null;
+      (data.history || []).forEach(function (line) { if (line.eventId === optlUi.detailId) detail = line; });
       var dash = data.dashboard || {};
       var pending = (data.pendingActions || []).map(function (row) {
         return '<li><strong>' + esc(row.kind) + '</strong> · ' + esc(row.proposedLevel) + ' · ' + esc(row.section) + '/' + esc(row.category) +
@@ -6145,13 +6186,33 @@
       var histOpts = (data.history || []).map(function (row) {
         return '<option value="' + esc(row.eventId) + '">' + esc(row.incidentDate) + ' · ' + esc(row.entryType) + ' · ' + esc(row.shortDescription || '') + '</option>';
       }).join('');
-      var employee = data.employee || {};
       var ack = data.acknowledgment || {};
       var alerts = data.alertConfig || {};
       var security = data.security || {};
       var pip = data.pipPrint || {};
       var actionMsg = data.actionResult && data.actionResult.message ? data.actionResult.message : '';
       var actionErr = data.actionResult && data.actionResult.ok === false;
+      var statusLine = employee.status === 'former' ? 'Former archive' : 'Active';
+      var whoBlock = '<div class="optl-who"><p class="optl-kicker">Store 17 Online · OPTL</p><h2>' + esc(employee.displayName || 'Associate') + '</h2>' +
+        '<p class="sub">ID ' + esc(employee.employeeId || '') + ' · ' + esc(employee.jobTitle || '') + ' · ' + esc(statusLine) +
+        ' · hired ' + esc(employee.hireDate || '') + ' · as of ' + esc(data.asOfDate || '') + '</p></div>';
+      var lockBanner = data.lock
+        ? '<div class="optl-banner lock noprint"><strong>Pending STEP/TERM lock</strong> — scored/formal accountability blocked until the pending action is issued. Unscored factual notes remain allowed.</div>'
+        : '';
+      var pendingBlock = pending
+        ? '<div class="optl-banner noprint"><strong>Pending manager actions</strong><ul class="optl-pending-list">' + pending + '</ul></div>'
+        : '';
+      var exceptionBlock = exceptions
+        ? '<div class="optl-banner exception noprint"><strong>Integrity exceptions (yellow/red)</strong><ul class="optl-exception-list">' + exceptions + '</ul></div>'
+        : '';
+      var detailBlock = detail
+        ? '<article class="card optl-detail noprint"><h2>Entry detail</h2><p><strong>' + esc(detail.entryType || '') + '</strong> · ' + esc(detail.section || '') + '/' + esc(detail.category || '') +
+          ' · ' + esc(optlDisplayDate(detail.incidentDate)) + ' · ' + esc(detail.status || '') + '</p><p>' + esc(detail.shortDescription || '') + '</p>' +
+          '<p><strong>Expiration</strong> ' + esc(optlDisplayDate(detail.effectiveExpirationDate)) + '</p>' +
+          '<p><strong>Private notes</strong> ' + esc(detail.notes || 'No private notes on this entry.') + '</p>' +
+          '<p class="sub">Private notes stay off the employee matrix and history printouts.</p>' +
+          '<button type="button" class="optl-quiet" id="optl-detail-close">Close detail</button></article>'
+        : '';
       var printCells = function (section) {
         return (data.matrixRows || []).filter(function (row) { return row.section === section; }).map(function (row) {
           return '<tr><th scope="row">' + esc(row.category) + '</th>' + row.cells.map(function (cell) {
@@ -6162,36 +6223,50 @@
         }).join('');
       };
       var storeLogo = document.querySelector('img.logo') ? document.querySelector('img.logo').src : '';
-      var lockBanner = data.lock
-        ? '<div class="optl-banner lock noprint"><strong>Pending STEP/TERM lock</strong> — scored/formal accountability blocked until the pending action is issued. Unscored factual notes remain allowed.</div>'
-        : '';
-      var pendingBlock = pending
-        ? '<div class="optl-banner noprint"><strong>Pending manager actions</strong><ul class="optl-pending-list">' + pending + '</ul></div>'
-        : '';
-      var exceptionBlock = exceptions
-        ? '<div class="optl-banner exception noprint"><strong>Integrity exceptions (yellow/red)</strong><ul class="optl-exception-list">' + exceptions + '</ul></div>'
-        : '';
+      var descLabels = (data.standardLabels && data.standardLabels[draftCategory]) || [];
+      var descKnown = descLabels.indexOf(draft.shortDescription) !== -1 || !draft.shortDescription;
+      var descOptions = descLabels.map(function (label) {
+        return '<option value="' + esc(label) + '"' + (label === draft.shortDescription ? ' selected' : '') + '>' + esc(label) + '</option>';
+      }).join('') + '<option value="__custom"' + (draft.shortDescription && !descKnown ? ' selected' : '') + '>Other description</option>';
+      var shown = function (name) { return optlUi.view === name ? '' : ' hidden'; };
       document.getElementById('screen').innerHTML =
         '<div class="optl-page">' +
-        '<article class="card"><div class="optl-brand">' +
+        '<div id="optl-screen-select" class="optl-screen"' + shown('select') + '>' +
+        '<article class="card optl-pick"><div class="optl-brand">' +
         (storeLogo ? '<img src="' + storeLogo + '" alt="Kane\'s Furniture Store 17" width="72" height="72" />' : '') +
-        '<div><p class="optl-kicker">Kane\'s Furniture · Store 17</p><h2 class="optl-title">Store 17 Online · OPTL</h2>' +
-        '<p class="optl-sub">Online Performance Tracking Log · ' + esc(data.notice || '') + '</p></div></div>' +
-        '<div class="optl-controls noprint"><label>Associate<select id="optl-employee">' + options + '</select></label>' +
-        '<p class="sub">As of <strong>' + esc(data.asOfDate) + '</strong> · ' + esc(data.timezone || 'America/New_York') + '</p></div>' +
-        '<div class="optl-actor noprint"><label>Acting manager (declared)<select id="optl-acting-manager"><option value="">Select…</option>' + managerOptions + '</select></label>' +
-        '<label class="confirm"><input type="checkbox" id="optl-acting-confirm"' + (data.actingManagerConfirmed ? ' checked' : '') + ' /> I confirm this acting manager for audit</label>' +
-        '<span class="attr">Attribution: manager-declared (not verified identity)</span></div>' +
-        '<p class="sub">ID ' + esc(employee.employeeId || '') + ' · ' + esc(employee.jobTitle || '') + ' · hired ' + esc(employee.hireDate || '') +
-        ' · ' + esc(employee.status === 'former' ? 'Former archive' : 'Active') + '</p>' +
-        lockBanner + pendingBlock + exceptionBlock +
-        (actionMsg ? '<p class="optl-msg' + (actionErr ? ' err' : '') + ' noprint">' + esc(actionMsg) + '</p>' : '') +
-        '</article>' +
-        '<h2 class="section-title noprint">Management dashboard</h2>' +
-        '<article class="card noprint"><p><strong>' + esc(String(dash.pendingCount || 0)) + '</strong> open pending · <strong>' +
+        '<div><p class="optl-kicker">Kane\'s Furniture · Store 17</p><h2 class="optl-title">Select associate</h2>' +
+        '<p class="optl-sub">' + esc(data.notice || '') + '</p></div></div>' +
+        '<label>Associate<select id="optl-employee">' + options + '</select></label>' +
+        '<button type="button" class="optl-go" id="optl-view"' + (optlUi.employeeId ? '' : ' disabled') + '>View OPTL</button>' +
+        '<p class="sub">As of <strong>' + esc(data.asOfDate) + '</strong> · ' + esc(data.timezone || 'America/New_York') + '</p></article></div>' +
+        '<div id="optl-screen-record" class="optl-screen"' + shown('record') + '>' +
+        '<article class="card noprint">' + whoBlock +
+        '<div class="optl-primary-actions"><button type="button" id="optl-write">Write New Occurrence</button>' +
+        '<button type="button" class="optl-quiet" id="optl-print-toggle">Print Options</button>' +
+        '<button type="button" class="optl-quiet" id="optl-change">Change Associate</button></div>' +
+        (actionMsg ? '<p class="optl-msg' + (actionErr ? ' err' : '') + '">' + esc(actionMsg) + '</p>' : '') +
+        '<div class="optl-print-panel"' + (optlUi.showPrint ? '' : ' hidden') + '>' +
+        '<p class="sub">Matrix and history prints omit private notes. Incident notes are a separate management document.</p>' +
+        '<div class="optl-actions"><button type="button" id="optl-print-matrix">Print Active Matrix</button>' +
+        '<button type="button" id="optl-print-history">Print History</button>' +
+        '<button type="button" id="optl-print-notes">Print Notes</button>' +
+        '<label class="sub">PIP event<select id="optl-pip-event">' + formalOpts + '</select></label>' +
+        '<button type="button" id="optl-print-pip">Print Kane\'s PIP</button></div></div>' +
+        '<p class="sub"><button type="button" class="optl-quiet" id="optl-more-toggle">More actions</button></p>' +
+        '<div class="optl-more"' + (optlUi.showMore ? '' : ' hidden') + '>' +
+        '<div class="optl-actions"><button type="button" id="optl-open-step">Issue STEP / TERM</button>' +
+        '<button type="button" id="optl-open-ack">Acknowledgment</button>' +
+        '<button type="button" id="optl-open-void">Correct / Void</button>' +
+        '<button type="button" id="optl-open-term">Termination</button>' +
+        '<button type="button" id="optl-open-hire">New Hire</button>' +
+        '<button type="button" id="optl-reset-demo">Reset demo data</button></div>' +
+        actorFor('record') +
+        '<h2 class="section-title">Management dashboard</h2>' +
+        '<p><strong>' + esc(String(dash.pendingCount || 0)) + '</strong> open pending · <strong>' +
         esc(String(dash.exceptionCount || 0)) + '</strong> open exceptions · email send <strong>disabled</strong></p>' +
         (alertItems ? '<ul class="optl-alert-list">' + alertItems + '</ul>' : '<p class="sub">No Command Center alerts yet.</p>') +
-        '<p class="sub">' + esc(alerts.note || '') + '</p></article>' +
+        '<p class="sub">' + esc(alerts.note || '') + ' · ' + esc(security.storage || '') + '</p></div></article>' +
+        detailBlock + lockBanner + pendingBlock + exceptionBlock +
         '<h2 class="section-title">Active matrix</h2>' +
         '<article class="card"><div class="optl-matrix-wrap"><table class="optl-matrix"><thead><tr><th scope="col">Category</th>' + headers + '</tr></thead><tbody>' +
         '<tr class="optl-section"><td colspan="13">Section A</td></tr>' + matrixRowsHtml('A') +
@@ -6200,61 +6275,56 @@
         '<h2 class="section-title">Permanent history</h2>' +
         '<article class="card"><table class="optl-history"><thead><tr><th>Incident</th><th>Section</th><th>Category</th><th>Action</th><th>Description</th><th>Expiration</th><th>Status</th></tr></thead><tbody>' +
         (history || '<tr><td colspan="7">No history for this associate.</td></tr>') + '</tbody></table>' +
-        '<p class="sub">Expired, voided, and rescinded events stay in history. Nothing is deleted.</p></article>' +
-        '<h2 class="section-title noprint">Forms &amp; print</h2>' +
-        '<article class="card noprint"><div class="optl-tabs" id="optl-tabs">' +
-        '<button type="button" data-panel="entry" class="active">Accountability Entry</button>' +
-        '<button type="button" data-panel="hire">New Hire</button>' +
-        '<button type="button" data-panel="term">Termination</button>' +
-        '<button type="button" data-panel="ack">Acknowledgment</button>' +
-        '<button type="button" data-panel="void">Correct / Void</button>' +
-        '</div>' +
-        '<div class="optl-panel" id="optl-panel-entry">' +
+        '<p class="sub">Click an entry to review it. Expired, voided, and rescinded events stay in history. Nothing is deleted.</p></article></div>' +
+        '<div id="optl-screen-entry" class="optl-screen"' + shown('entry') + '>' +
+        '<article class="card optl-entry noprint"><div class="optl-entry-head">' + whoBlock +
+        '<p class="optl-kicker">Accountability Entry</p></div>' +
+        lockBanner +
+        '<p class="optl-msg" id="optl-entry-msg"></p>' +
         '<div class="optl-form-grid">' +
-        '<label>Incident date<input type="date" id="optl-inc-date" /></label>' +
-        '<label>Section<select id="optl-section"><option value="A">A</option><option value="B">B</option></select></label>' +
-        '<label>Category<select id="optl-category">' + catOptions('A') + '</select></label>' +
-        '<label>Entry type<select id="optl-entry-type"><option value="Occurrence">Occurrence</option><option value="STEP_I">STEP I</option><option value="STEP_II">STEP II</option><option value="STEP_III">STEP III</option><option value="TERM">TERM</option></select></label>' +
-        '<label>Short description<input type="text" id="optl-short" placeholder="Unsafe Behavior / Late — 25 min" /></label>' +
-        '<label>Minutes late / detail<input type="number" id="optl-qty" /></label>' +
-        '<label class="span-2">Private notes<textarea id="optl-notes"></textarea></label>' +
-        '<label class="confirm" style="flex-direction:row;text-transform:none;letter-spacing:0"><input type="checkbox" id="optl-unscored" /> Unscored factual note only</label>' +
-        '<label class="confirm" style="flex-direction:row;text-transform:none;letter-spacing:0"><input type="checkbox" id="optl-direct" /> Direct STEP (skip occurrences)</label>' +
-        '<label class="span-2">Direct-issue justification<textarea id="optl-justify"></textarea></label>' +
-        '</div>' +
+        '<label>Incident date<input type="date" id="optl-inc-date" value="' + esc(draft.incidentDate || '') + '" /></label>' +
+        '<label>Section<select id="optl-section"><option value="A"' + (draftSection === 'A' ? ' selected' : '') + '>A</option><option value="B"' + (draftSection === 'B' ? ' selected' : '') + '>B</option></select></label>' +
+        '<label>Category<select id="optl-category">' + catOptions(draftSection, draftCategory) + '</select></label>' +
+        '<label>Entry type<select id="optl-entry-type"><option value="Occurrence"' + (draftType === 'Occurrence' ? ' selected' : '') + '>Occurrence</option><option value="STEP_I"' + (draftType === 'STEP_I' ? ' selected' : '') + '>STEP I</option><option value="STEP_II"' + (draftType === 'STEP_II' ? ' selected' : '') + '>STEP II</option><option value="STEP_III"' + (draftType === 'STEP_III' ? ' selected' : '') + '>STEP III</option><option value="TERM"' + (draftType === 'TERM' ? ' selected' : '') + '>TERM</option></select></label>' +
+        '<label class="span-2">Standardized description<select id="optl-short-select">' + descOptions + '</select></label>' +
+        '<label class="span-2 optl-custom-desc"' + (draft.shortDescription && !descKnown ? '' : ' hidden') + '>Description<input type="text" id="optl-short" value="' + esc(draft.shortDescription && !descKnown ? draft.shortDescription : '') + '" /></label>' +
+        '<label>Supporting details<input type="text" id="optl-qty" value="' + esc(draft.quantitativeDetail || '') + '" placeholder="Minutes late or other detail" /></label>' +
+        '<label class="span-2">Private notes<textarea id="optl-notes">' + esc(draft.notes || '') + '</textarea></label>' +
+        '<label class="confirm"><input type="checkbox" id="optl-unscored"' + (draft.unscored ? ' checked' : '') + ' /> Unscored factual note only</label>' +
+        '<label class="confirm"><input type="checkbox" id="optl-direct"' + (draft.direct ? ' checked' : '') + ' /> Direct STEP (skip occurrences)</label>' +
+        '<label class="span-2">Direct-issue justification<textarea id="optl-justify">' + esc(draft.justification || '') + '</textarea></label>' +
+        '</div>' + actorFor('entry') +
         '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-entry">Save entry</button>' +
-        '<button type="button" id="optl-issue-formal">Issue formal STEP/TERM</button></div></div>' +
-        '<div class="optl-panel" id="optl-panel-hire" hidden><div class="optl-form-grid">' +
+        '<button type="button" class="optl-quiet" id="optl-entry-back">Cancel</button></div>' +
+        '<p class="sub">Cancel returns to this associate without saving. Private notes are not printed on the employee matrix.</p></article></div>' +
+        '<div id="optl-screen-workflow" class="optl-screen"' + shown('workflow') + '>' +
+        '<article class="card noprint">' + whoBlock + actorFor('workflow') +
+        '<p class="optl-msg"></p>' +
+        '<div id="optl-panel-ack"' + (optlUi.workflow === 'ack' ? '' : ' hidden') + '><p class="sub">' + esc(ack.note || '') + ' No SSN.</p><div class="optl-form-grid">' +
+        '<label class="span-2">Event<select id="optl-ack-event">' + histOpts + '</select></label>' +
+        '<label>Typed full name<input id="optl-ack-name" autocomplete="off" /></label>' +
+        '<label class="confirm"><input type="checkbox" id="optl-ack-box" /> I acknowledge this matter was discussed with me. Acknowledgment does not necessarily mean agreement.</label>' +
+        '<label class="confirm"><input type="checkbox" id="optl-ack-refuse" /> Document refusal instead</label></div>' +
+        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-ack">Record acknowledgment</button></div></div>' +
+        '<div id="optl-panel-void"' + (optlUi.workflow === 'void' ? '' : ' hidden') + '><div class="optl-form-grid">' +
+        '<label class="span-2">Event to void/correct<select id="optl-void-event">' + histOpts + '</select></label>' +
+        '<label class="span-2">Reason<textarea id="optl-void-reason"></textarea></label></div>' +
+        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-void">Void / correct (cascade rescind)</button></div></div>' +
+        '<div id="optl-panel-term"' + (optlUi.workflow === 'term' ? '' : ' hidden') + '><div class="optl-form-grid">' +
+        '<label>Separation date<input type="date" id="optl-term-date" /></label>' +
+        '<label>Reason<input id="optl-term-reason" /></label>' +
+        '<label class="span-2">Notes<textarea id="optl-term-notes"></textarea></label>' +
+        '<label class="confirm"><input type="checkbox" id="optl-term-hr" /> HR/executive approval obtained</label></div>' +
+        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-term">Complete termination form</button></div>' +
+        '<p class="sub">Does not auto-terminate from TERM_REQUIRED. History is retained for former associates.</p></div>' +
+        '<div id="optl-panel-hire"' + (optlUi.workflow === 'hire' ? '' : ' hidden') + '><div class="optl-form-grid">' +
         '<label>Employee ID<input id="optl-hire-id" placeholder="S17-DEMO-2xx" /></label>' +
         '<label>Display name<input id="optl-hire-name" /></label>' +
         '<label>Job title<input id="optl-hire-title" value="Sales Associate" /></label>' +
         '<label>Hire date<input type="date" id="optl-hire-date" /></label></div>' +
         '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-hire">Create new hire</button></div></div>' +
-        '<div class="optl-panel" id="optl-panel-term" hidden><div class="optl-form-grid">' +
-        '<label>Separation date<input type="date" id="optl-term-date" /></label>' +
-        '<label>Reason<input id="optl-term-reason" /></label>' +
-        '<label class="span-2">Notes<textarea id="optl-term-notes"></textarea></label>' +
-        '<label class="confirm" style="flex-direction:row;text-transform:none;letter-spacing:0"><input type="checkbox" id="optl-term-hr" /> HR/executive approval obtained</label></div>' +
-        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-term">Complete termination form</button></div>' +
-        '<p class="sub">Does not auto-terminate from TERM_REQUIRED. History is retained for former associates.</p></div>' +
-        '<div class="optl-panel" id="optl-panel-ack" hidden><p class="sub">' + esc(ack.note || '') + ' No SSN.</p><div class="optl-form-grid">' +
-        '<label class="span-2">Event<select id="optl-ack-event">' + histOpts + '</select></label>' +
-        '<label>Typed full name<input id="optl-ack-name" autocomplete="off" /></label>' +
-        '<label class="confirm" style="flex-direction:row;text-transform:none;letter-spacing:0"><input type="checkbox" id="optl-ack-box" /> I acknowledge this matter was discussed with me. Acknowledgment does not necessarily mean agreement.</label>' +
-        '<label class="confirm" style="flex-direction:row;text-transform:none;letter-spacing:0"><input type="checkbox" id="optl-ack-refuse" /> Document refusal instead</label></div>' +
-        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-ack">Record acknowledgment</button></div></div>' +
-        '<div class="optl-panel" id="optl-panel-void" hidden><div class="optl-form-grid">' +
-        '<label class="span-2">Event to void/correct<select id="optl-void-event">' + histOpts + '</select></label>' +
-        '<label class="span-2">Reason<textarea id="optl-void-reason"></textarea></label></div>' +
-        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-void">Void / correct (cascade rescind)</button></div></div>' +
-        '<div class="optl-actions" style="margin-top:14px">' +
-        '<button type="button" id="optl-print-matrix">Print Active Matrix</button>' +
-        '<button type="button" id="optl-print-history">Print History</button>' +
-        '<button type="button" id="optl-print-notes">Print Notes</button>' +
-        '<label class="sub">PIP event<select id="optl-pip-event">' + formalOpts + '</select></label>' +
-        '<button type="button" id="optl-print-pip">Print Kane\'s PIP</button>' +
-        '<button type="button" id="optl-reset-demo">Reset demo data</button>' +
-        '</div><p class="sub">Storage: ' + esc(security.storage || '') + ' · ' + esc(security.pipPrint || '') + '</p></article>' +
+        '<div class="optl-actions" style="margin-top:14px"><button type="button" class="optl-quiet" id="optl-workflow-back">Back to OPTL</button></div></article></div>' +
+        '</div>' +
         '<article class="optl-print-sheet card" style="display:none" id="optl-print-matrix-sheet">' +
         '<div class="optl-brand">' + (storeLogo ? '<img src="' + storeLogo + '" alt="" width="72" height="72" />' : '') +
         '<div><p class="optl-kicker">Store 17 Online</p><h2 class="optl-title">OPTL Active Matrix</h2>' +
@@ -6271,7 +6341,7 @@
         '<article class="optl-formal-sheet" style="display:none" id="optl-print-notes-sheet">' +
         '<div class="optl-pip-brand">Kane\'s Furniture · Store 17</div><h1>OPTL Incident Notes</h1>' +
         '<p class="sub">Management-facing · not for employee matrix print</p>' +
-        '<p id="optl-notes-body">Select an event from history (click a row) then Print Notes.</p></article>' +
+        '<p id="optl-notes-body">Select an entry from the matrix or history, then Print Notes.</p></article>' +
         '<article class="optl-formal-sheet" style="display:none" id="optl-print-pip-sheet">' +
         '<div class="optl-pip-brand">KANE\'S FURNITURE</div><h1>Personal Improvement Plan (PIP)</h1>' +
         (pip.watermark ? '<div class="watermark">' + esc(pip.watermark) + '</div>' : '') +
@@ -6306,26 +6376,27 @@
         '<p><strong>Witness Signature</strong><br>Print Name ____________________________________________<br>Signature ________________________________________ Date ______________</p>' +
         '<p>' + esc(pip.filingNote || '') + '</p>' +
         (pip.terminationChecklistNote ? '<p>' + esc(pip.terminationChecklistNote) + '</p>' : '') +
-        '<p class="sub">Online acting manager (manager-declared, not a signature): ' + esc(pip.managerDeclared || '') + '</p></div></article>' +
-
-        '</div>';
+        '<p class="sub">Online acting manager (manager-declared, not a signature): ' + esc(pip.managerDeclared || '') + '</p></div></article>';
 
       var optlEpoch = 0;
       function optlActorFields() {
         var acting = document.getElementById('optl-acting-manager');
         var confirm = document.getElementById('optl-acting-confirm');
-        return {
-          actingManagerDeclared: acting ? acting.value : '',
-          actingManagerConfirmed: !!(confirm && confirm.checked),
+        var fields = {
+          actingManagerDeclared: acting ? acting.value : (optlUi.actorName || ''),
+          actingManagerConfirmed: confirm ? !!confirm.checked : !!optlUi.actorConfirmed,
         };
+        if (acting) optlUi.actorName = fields.actingManagerDeclared;
+        if (confirm) optlUi.actorConfirmed = fields.actingManagerConfirmed;
+        return fields;
+      }
+      function optlEmployeeId() {
+        var pick = document.getElementById('optl-employee');
+        if (optlUi.view === 'select' && pick) return pick.value || '';
+        return optlUi.employeeId || data.selectedEmployeeId || '';
       }
       function optlShowStatus(message, isError) {
-        var note = document.querySelector('.optl-page .optl-msg');
-        if (!note) {
-          var host = document.querySelector('.optl-page');
-          if (host) host.insertAdjacentHTML('afterbegin', '<p class="optl-msg noprint"></p>');
-          note = document.querySelector('.optl-page .optl-msg');
-        }
+        var note = document.querySelector('.optl-screen:not([hidden]) .optl-msg') || document.querySelector('.optl-msg');
         if (!note) return;
         note.textContent = message;
         note.classList.toggle('err', !!isError);
@@ -6353,100 +6424,220 @@
         if (!button.dataset.requestId) button.dataset.requestId = 'req-' + Date.now() + '-' + Math.random().toString(16).slice(2);
         return button.dataset.requestId;
       }
+      function optlReadDraft() {
+        var chosen = document.getElementById('optl-short-select');
+        var custom = document.getElementById('optl-short');
+        var shortText = '';
+        if (chosen && chosen.value === '__custom') shortText = custom ? custom.value.trim() : '';
+        else if (chosen) shortText = chosen.value;
+        return {
+          employeeId: optlEmployeeId(),
+          incidentDate: (document.getElementById('optl-inc-date') || {}).value || '',
+          section: (document.getElementById('optl-section') || {}).value || '',
+          category: (document.getElementById('optl-category') || {}).value || '',
+          entryType: (document.getElementById('optl-entry-type') || {}).value || 'Occurrence',
+          shortDescription: shortText,
+          quantitativeDetail: (document.getElementById('optl-qty') || {}).value || '',
+          notes: (document.getElementById('optl-notes') || {}).value || '',
+          unscored: !!(document.getElementById('optl-unscored') && document.getElementById('optl-unscored').checked),
+          direct: !!(document.getElementById('optl-direct') && document.getElementById('optl-direct').checked),
+          justification: (document.getElementById('optl-justify') || {}).value || '',
+        };
+      }
+      function optlRefreshDescriptions() {
+        var categoryEl = document.getElementById('optl-category');
+        var select = document.getElementById('optl-short-select');
+        if (!categoryEl || !select) return;
+        var labels = (data.standardLabels && data.standardLabels[categoryEl.value]) || [];
+        select.innerHTML = labels.map(function (label) {
+          return '<option value="' + esc(label) + '">' + esc(label) + '</option>';
+        }).join('') + '<option value="__custom">Other description</option>';
+        var wrap = document.querySelector('.optl-custom-desc');
+        if (wrap) wrap.hidden = true;
+      }
       function optlCall(extra) {
         var gen = ++optlEpoch;
         var base = Object.assign({
-          employeeId: document.getElementById('optl-employee').value,
+          employeeId: optlEmployeeId(),
           asOfDate: data.asOfDate,
         }, optlActorFields(), extra || {});
         return api('optl', base).then(function (page) {
           if (gen !== optlEpoch || screen !== 'optl') return page;
+          var action = base.action;
+          var outcome = page && page.actionResult;
+          if (action && (!outcome || outcome.saved !== true)) {
+            optlShowStatus((outcome && outcome.message) || 'The server did not confirm the save.', true);
+            var saveBtn = document.getElementById('optl-save-entry');
+            if (saveBtn) saveBtn.textContent = 'Save entry';
+            return page;
+          }
+          if (outcome && outcome.saved && (action === 'addEvent' || action === 'issueFormal')) {
+            optlUi.view = 'record';
+            optlUi.highlightId = (outcome.event && outcome.event.eventId) || '';
+            optlUi.detailId = optlUi.highlightId;
+            optlUi.draft = null;
+            optlUi.showMore = false;
+            optlUi.showPrint = false;
+            optlUi.workflow = '';
+          } else if (outcome && outcome.saved) {
+            optlUi.view = 'record';
+            optlUi.workflow = '';
+            optlUi.showMore = false;
+          }
+          if (page.selectedEmployeeId) optlUi.employeeId = page.selectedEmployeeId;
           displayPayload = page;
           renderOptl(page);
           return page;
         }).catch(function (error) {
           if (gen !== optlEpoch) return;
-          optlShowStatus(error.message, true);
+          var saveBtn = document.getElementById('optl-save-entry');
+          if (saveBtn) saveBtn.textContent = 'Save entry';
+          if (optlUi.view === 'entry' || optlUi.view === 'workflow') optlShowStatus(error.message, true);
+          else {
+            optlUi.view = 'select';
+            ccActivitySet(error.message, 'err');
+          }
           throw error;
         });
       }
-      document.getElementById('optl-employee').addEventListener('change', function () { optlCall({}); });
-      document.getElementById('optl-section').addEventListener('change', function () {
-        var sec = document.getElementById('optl-section').value;
-        document.getElementById('optl-category').innerHTML = catOptions(sec);
+      function optlLocal(view) {
+        optlUi.view = view;
+        renderOptl(displayPayload || data);
+      }
+      var pick = document.getElementById('optl-employee');
+      var go = document.getElementById('optl-view');
+      if (pick && go) {
+        var syncGo = function () { go.disabled = !pick.value; };
+        pick.addEventListener('change', syncGo);
+        syncGo();
+        go.addEventListener('click', function () {
+          if (!pick.value) return;
+          optlUi.employeeId = pick.value;
+          optlUi.view = 'record';
+          optlUi.detailId = '';
+          optlUi.highlightId = '';
+          optlUi.showPrint = false;
+          optlUi.showMore = false;
+          optlCall({});
+        });
+      }
+      var writeBtn = document.getElementById('optl-write');
+      if (writeBtn) writeBtn.addEventListener('click', function () {
+        optlUi.entryMode = 'occurrence';
+        optlUi.view = 'entry';
+        renderOptl(data);
       });
-      document.querySelectorAll('#optl-tabs button').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          document.querySelectorAll('#optl-tabs button').forEach(function (b) { b.classList.remove('active'); });
-          btn.classList.add('active');
-          ['entry', 'hire', 'term', 'ack', 'void'].forEach(function (name) {
-            var panel = document.getElementById('optl-panel-' + name);
-            if (panel) panel.hidden = btn.getAttribute('data-panel') !== name;
-          });
+      var changeBtn = document.getElementById('optl-change');
+      if (changeBtn) changeBtn.addEventListener('click', function () { optlLocal('select'); });
+      var printToggle = document.getElementById('optl-print-toggle');
+      if (printToggle) printToggle.addEventListener('click', function () {
+        optlUi.showPrint = !optlUi.showPrint;
+        renderOptl(data);
+      });
+      var moreToggle = document.getElementById('optl-more-toggle');
+      if (moreToggle) moreToggle.addEventListener('click', function () {
+        optlUi.showMore = !optlUi.showMore;
+        renderOptl(data);
+      });
+      function openWorkflow(name) {
+        optlUi.workflow = name;
+        optlUi.view = 'workflow';
+        renderOptl(data);
+      }
+      var stepBtn = document.getElementById('optl-open-step');
+      if (stepBtn) stepBtn.addEventListener('click', function () {
+        optlUi.entryMode = 'formal';
+        optlUi.draft = null;
+        optlUi.view = 'entry';
+        renderOptl(data);
+      });
+      var ackBtn = document.getElementById('optl-open-ack');
+      if (ackBtn) ackBtn.addEventListener('click', function () { openWorkflow('ack'); });
+      var voidBtn = document.getElementById('optl-open-void');
+      if (voidBtn) voidBtn.addEventListener('click', function () { openWorkflow('void'); });
+      var termBtn = document.getElementById('optl-open-term');
+      if (termBtn) termBtn.addEventListener('click', function () { openWorkflow('term'); });
+      var hireBtn = document.getElementById('optl-open-hire');
+      if (hireBtn) hireBtn.addEventListener('click', function () { openWorkflow('hire'); });
+      var backWorkflow = document.getElementById('optl-workflow-back');
+      if (backWorkflow) backWorkflow.addEventListener('click', function () {
+        optlUi.workflow = '';
+        optlLocal('record');
+      });
+      var detailClose = document.getElementById('optl-detail-close');
+      if (detailClose) detailClose.addEventListener('click', function () {
+        optlUi.detailId = '';
+        renderOptl(data);
+      });
+      document.querySelectorAll('#optl-screen-record [data-event-id]').forEach(function (el) {
+        if (!el.getAttribute('data-event-id')) return;
+        el.addEventListener('click', function () {
+          optlUi.detailId = el.getAttribute('data-event-id');
+          renderOptl(data);
         });
       });
-      document.getElementById('optl-save-entry').addEventListener('click', function (event) {
-        var button = event.currentTarget;
-        if (!optlRequireActor()) return;
-        var incidentDate = document.getElementById('optl-inc-date').value;
-        var category = document.getElementById('optl-category').value;
-        var section = document.getElementById('optl-section').value;
-        var shortText = document.getElementById('optl-short').value.trim();
-        var qty = document.getElementById('optl-qty').value;
-        var unscored = document.getElementById('optl-unscored').checked;
-        if (!incidentDate) return optlMissing('Incident date is required.');
-        if (!section || !category) return optlMissing('Section and category are required.');
-        if (unscored && !shortText) return optlMissing('Unscored notes need a short description.');
-        if (!unscored && (category === 'Tardy' || category === 'Attendance')) {
-          if (qty === '') return optlMissing('Enter minutes late for Tardy or Attendance.');
-          if (category === 'Tardy' && !(Number(qty) > 15)) return optlMissing('Tardy requires more than 15 minutes. 15 or fewer is not an occurrence.');
-        }
-        optlCall({
-          action: 'addEvent',
-          clientRequestId: optlRequestId(button),
-          draft: {
-            employeeId: document.getElementById('optl-employee').value,
-            incidentDate: incidentDate,
-            section: section,
-            category: category,
-            entryType: 'Occurrence',
-            shortDescription: shortText,
-            quantitativeDetail: qty,
-            notes: document.getElementById('optl-notes').value,
-            scored: !unscored,
-          },
-        }).catch(function () {});
+      var sectionEl = document.getElementById('optl-section');
+      if (sectionEl) sectionEl.addEventListener('change', function () {
+        var categoryEl = document.getElementById('optl-category');
+        if (categoryEl) categoryEl.innerHTML = catOptions(sectionEl.value, '');
+        optlRefreshDescriptions();
       });
-      document.getElementById('optl-issue-formal').addEventListener('click', function (event) {
+      var categoryEl = document.getElementById('optl-category');
+      if (categoryEl) categoryEl.addEventListener('change', optlRefreshDescriptions);
+      var descSelect = document.getElementById('optl-short-select');
+      if (descSelect) descSelect.addEventListener('change', function () {
+        var wrap = document.querySelector('.optl-custom-desc');
+        if (wrap) wrap.hidden = descSelect.value !== '__custom';
+      });
+      var entryBack = document.getElementById('optl-entry-back');
+      if (entryBack) entryBack.addEventListener('click', function () {
+        optlUi.draft = null;
+        optlUi.view = 'record';
+        renderOptl(data);
+      });
+      var saveEntry = document.getElementById('optl-save-entry');
+      if (saveEntry) saveEntry.addEventListener('click', function (event) {
         var button = event.currentTarget;
+        optlUi.draft = optlReadDraft();
         if (!optlRequireActor()) return;
-        var incidentDate = document.getElementById('optl-inc-date').value;
-        var level = document.getElementById('optl-entry-type').value;
-        var direct = document.getElementById('optl-direct').checked;
-        var justification = document.getElementById('optl-justify').value.trim();
-        if (!incidentDate) return optlMissing('Incident date is required.');
-        if (level === 'Occurrence') return optlMissing('Choose STEP I, STEP II, STEP III, or TERM to issue a formal action.');
-        if (direct && (level === 'STEP_II' || level === 'STEP_III' || level === 'TERM') && !justification) {
+        var form = optlUi.draft;
+        if (!form.incidentDate) return optlMissing('Incident date is required.');
+        if (!form.section || !form.category) return optlMissing('Section and category are required.');
+        if (!form.shortDescription) return optlMissing('Choose a standardized description.');
+        if (form.unscored && !form.shortDescription) return optlMissing('Unscored notes need a short description.');
+        if (!form.unscored && (form.category === 'Tardy' || form.category === 'Attendance')) {
+          if (form.quantitativeDetail === '') return optlMissing('Enter minutes late for Tardy or Attendance.');
+          if (form.category === 'Tardy' && !(Number(form.quantitativeDetail) > 15)) return optlMissing('Tardy requires more than 15 minutes. 15 or fewer is not an occurrence.');
+        }
+        if (form.entryType !== 'Occurrence' && form.direct && (form.entryType === 'STEP_II' || form.entryType === 'STEP_III' || form.entryType === 'TERM') && !String(form.justification || '').trim()) {
           return optlMissing('Direct STEP II, STEP III, or TERM requires written justification.');
         }
-        optlCall({
-          action: 'issueFormal',
-          acceptEffective: true,
+        button.textContent = 'Saving...';
+        var payload = {
           clientRequestId: optlRequestId(button),
           draft: {
-            employeeId: document.getElementById('optl-employee').value,
-            incidentDate: incidentDate,
-            section: document.getElementById('optl-section').value,
-            category: document.getElementById('optl-category').value,
-            entryType: level,
-            shortDescription: document.getElementById('optl-short').value,
-            notes: document.getElementById('optl-notes').value,
-            directIssue: direct,
-            justification: justification,
+            employeeId: optlEmployeeId(),
+            incidentDate: form.incidentDate,
+            section: form.section,
+            category: form.category,
+            entryType: form.entryType === 'Occurrence' ? 'Occurrence' : form.entryType,
+            shortDescription: form.shortDescription,
+            quantitativeDetail: form.quantitativeDetail,
+            notes: form.notes,
+            scored: !form.unscored,
+            directIssue: !!form.direct,
+            justification: form.justification,
           },
-        }).catch(function () {});
+        };
+        if (form.entryType === 'Occurrence') payload.action = 'addEvent';
+        else {
+          payload.action = 'issueFormal';
+          payload.acceptEffective = true;
+        }
+        optlCall(payload).catch(function () {});
       });
-      document.getElementById('optl-save-hire').addEventListener('click', function (event) {
+      var saveHire = document.getElementById('optl-save-hire');
+      if (saveHire) saveHire.addEventListener('click', function (event) {
         var button = event.currentTarget;
         if (!optlRequireActor()) return;
         var employeeId = document.getElementById('optl-hire-id').value.trim();
@@ -6454,6 +6645,7 @@
         var hireDate = document.getElementById('optl-hire-date').value;
         if (!employeeId || !displayName || !hireDate) return optlMissing('Employee ID, display name, and hire date are required.');
         if (employeeId.indexOf('S17-DEMO-') !== 0) return optlMissing('Use a fictional demo employee id that starts with S17-DEMO-.');
+        button.textContent = 'Saving...';
         optlCall({
           action: 'newHire',
           clientRequestId: optlRequestId(button),
@@ -6463,27 +6655,30 @@
             jobTitle: document.getElementById('optl-hire-title').value,
             hireDate: hireDate,
           },
-        }).catch(function () {});
+        }).catch(function () { button.textContent = 'Create new hire'; });
       });
-      document.getElementById('optl-save-term').addEventListener('click', function (event) {
+      var saveTerm = document.getElementById('optl-save-term');
+      if (saveTerm) saveTerm.addEventListener('click', function (event) {
         var button = event.currentTarget;
         if (!optlRequireActor()) return;
         var separationDate = document.getElementById('optl-term-date').value;
         var reason = document.getElementById('optl-term-reason').value.trim();
         if (!separationDate || !reason) return optlMissing('Separation date and reason are required.');
+        button.textContent = 'Saving...';
         optlCall({
           action: 'terminate',
           clientRequestId: optlRequestId(button),
           draft: {
-            employeeId: document.getElementById('optl-employee').value,
+            employeeId: optlEmployeeId(),
             separationDate: separationDate,
             reason: reason,
             notes: document.getElementById('optl-term-notes').value,
             hrApprovalObtained: document.getElementById('optl-term-hr').checked,
           },
-        }).catch(function () {});
+        }).catch(function () { button.textContent = 'Complete termination form'; });
       });
-      document.getElementById('optl-save-ack').addEventListener('click', function (event) {
+      var saveAck = document.getElementById('optl-save-ack');
+      if (saveAck) saveAck.addEventListener('click', function (event) {
         var button = event.currentTarget;
         if (!optlRequireActor()) return;
         var eventId = document.getElementById('optl-ack-event').value;
@@ -6492,6 +6687,7 @@
         var refused = document.getElementById('optl-ack-refuse').checked;
         if (!eventId) return optlMissing('Select the event to acknowledge.');
         if (!refused && (!typed || !checked)) return optlMissing('Type the employee full name and check the acknowledgment box, or document a refusal.');
+        button.textContent = 'Saving...';
         optlCall({
           action: 'acknowledge',
           clientRequestId: optlRequestId(button),
@@ -6501,25 +6697,29 @@
             acknowledgedCheckbox: checked,
             refused: refused,
           },
-        }).catch(function () {});
+        }).catch(function () { button.textContent = 'Record acknowledgment'; });
       });
-      document.getElementById('optl-save-void').addEventListener('click', function (event) {
+      var saveVoid = document.getElementById('optl-save-void');
+      if (saveVoid) saveVoid.addEventListener('click', function (event) {
         var button = event.currentTarget;
         if (!optlRequireActor()) return;
         var eventId = document.getElementById('optl-void-event').value;
         var reason = document.getElementById('optl-void-reason').value.trim();
         if (!eventId || !reason) return optlMissing('Select an event and enter a correction reason.');
+        button.textContent = 'Saving...';
         optlCall({
           action: 'voidEvent',
           clientRequestId: optlRequestId(button),
           draft: { eventId: eventId },
           reason: reason,
-        }).catch(function () {});
+        }).catch(function () { button.textContent = 'Void / correct (cascade rescind)'; });
       });
-      document.getElementById('optl-reset-demo').addEventListener('click', function (event) {
+      var resetBtn = document.getElementById('optl-reset-demo');
+      if (resetBtn) resetBtn.addEventListener('click', function (event) {
         var button = event.currentTarget;
         if (!optlRequireActor()) return;
-        optlCall({ action: 'resetDemo', clientRequestId: optlRequestId(button) }).catch(function () {});
+        button.textContent = 'Saving...';
+        optlCall({ action: 'resetDemo', clientRequestId: optlRequestId(button) }).catch(function () { button.textContent = 'Reset demo data'; });
       });
       function runPrint(mode, sheetId) {
         document.body.classList.remove('print-optl');
@@ -6527,7 +6727,9 @@
         document.body.classList.add(mode);
         ['optl-print-matrix-sheet', 'optl-print-history-sheet', 'optl-print-notes-sheet', 'optl-print-pip-sheet'].forEach(function (id) {
           var el = document.getElementById(id);
-          if (el) el.style.display = id === sheetId ? 'block' : 'none';
+          if (!el) return;
+          el.classList.toggle('optl-print-target', id === sheetId);
+          el.style.display = id === sheetId ? 'block' : 'none';
         });
         window.print();
         window.setTimeout(function () {
@@ -6535,37 +6737,47 @@
           document.body.classList.remove('print-optl-formal');
           ['optl-print-matrix-sheet', 'optl-print-history-sheet', 'optl-print-notes-sheet', 'optl-print-pip-sheet'].forEach(function (id) {
             var el = document.getElementById(id);
-            if (el) el.style.display = 'none';
+            if (!el) return;
+            el.classList.remove('optl-print-target');
+            el.style.display = 'none';
           });
         }, 300);
       }
-      document.getElementById('optl-print-matrix').addEventListener('click', function () { runPrint('print-optl', 'optl-print-matrix-sheet'); });
-      document.getElementById('optl-print-history').addEventListener('click', function () { runPrint('print-optl-formal', 'optl-print-history-sheet'); });
-      document.getElementById('optl-print-notes').addEventListener('click', function () {
-        var id = document.getElementById('optl-void-event').value || document.getElementById('optl-ack-event').value;
-        var line = (data.history || []).filter(function (row) { return row.eventId === id; })[0];
+      var printMatrix = document.getElementById('optl-print-matrix');
+      if (printMatrix) printMatrix.addEventListener('click', function () { runPrint('print-optl', 'optl-print-matrix-sheet'); });
+      var printHistory = document.getElementById('optl-print-history');
+      if (printHistory) printHistory.addEventListener('click', function () { runPrint('print-optl-formal', 'optl-print-history-sheet'); });
+      var printNotes = document.getElementById('optl-print-notes');
+      if (printNotes) printNotes.addEventListener('click', function () {
+        var line = detail;
         var body = document.getElementById('optl-notes-body');
         if (body) {
           body.innerHTML = line
             ? '<p><strong>' + esc(line.entryType) + '</strong> · ' + esc(line.category) + ' · ' + esc(line.incidentDate) +
-              '</p><p>' + esc(line.shortDescription || 'No detailed notes on this history line. Open entry notes in the live record when persisted.') + '</p>'
-            : '<p>No notes selected.</p>';
+              '</p><p>' + esc(line.shortDescription || '') + '</p><p>' + esc(line.notes || 'No private notes on this entry.') + '</p>'
+            : '<p>Select an entry from the matrix or history first.</p>';
         }
         runPrint('print-optl-formal', 'optl-print-notes-sheet');
       });
-      document.getElementById('optl-print-pip').addEventListener('click', function () {
-        var id = document.getElementById('optl-pip-event').value;
+      var printPip = document.getElementById('optl-print-pip');
+      if (printPip) printPip.addEventListener('click', function () {
+        var pipSelect = document.getElementById('optl-pip-event');
+        var id = pipSelect ? pipSelect.value : '';
         api('optl', Object.assign({
-          employeeId: document.getElementById('optl-employee').value,
+          employeeId: optlEmployeeId(),
           asOfDate: data.asOfDate,
           printEventId: id
         }, optlActorFields())).then(function (page) {
           if (screen !== 'optl') return;
           displayPayload = page;
+          optlUi.view = 'record';
+          optlUi.showPrint = true;
           renderOptl(page);
           window.setTimeout(function () { runPrint('print-optl-formal', 'optl-print-pip-sheet'); }, 50);
         });
       });
+      var highlighted = document.querySelector('.optl-highlight');
+      if (highlighted && highlighted.scrollIntoView) highlighted.scrollIntoView({ block: 'center' });
     }
     function renderConsistency(data) {
       var tone = data.status === 'PASS' ? 'good' : (data.status === 'FAIL' ? 'bad' : '');
@@ -6635,7 +6847,7 @@
       var name = screen;
       var request = name === 'written' || name === 'delivered' ? 'home' : (name === 'email' ? 'emailControl' : name);
       if (name === 'admin' || name === 'documents' || name === 'upload') return Promise.resolve({ applied: false, busy: true });
-      return api(request, name === 'reports' ? reportRequest() : undefined).then(function (data) {
+      return api(request, name === 'reports' ? reportRequest() : (name === 'optl' ? { employeeId: optlUi.employeeId || '' } : undefined)).then(function (data) {
         if (screen !== name || displayHold || displayBusy()) return { applied: false, busy: true };
         if (figuresWeakened(displayPayload, data)) return { applied: false, weakened: true };
         displayPayload = data;
@@ -6692,6 +6904,16 @@
       closeDocViewer();
       drawNav();
       var request = name === 'written' || name === 'delivered' ? 'home' : (name === 'email' ? 'emailControl' : name);
+      if (name === 'optl') {
+        optlUi.view = 'select';
+        optlUi.employeeId = '';
+        optlUi.highlightId = '';
+        optlUi.detailId = '';
+        optlUi.draft = null;
+        optlUi.showPrint = false;
+        optlUi.showMore = false;
+        optlUi.workflow = '';
+      }
       if (name === 'admin') { renderAdmin(); return; }
       if (name === 'documents') {
         docNotice = null;
