@@ -71,7 +71,7 @@ test('manager navigation is the nine groups in order and keeps every manager pag
     'reports:daily', 'reports:weekly', 'reports:monthly', 'brief', 'reports:trend', 'email', 'reports:meeting', 'reports:individual', 'evals',
     'readiness', 'delivery', 'orderQuality', 'closeout', 'actions',
     'documents', 'training', 'coaching', 'evalPrep',
-    'health', 'consistency', 'email'].forEach((target) => assert.ok(targets.includes(target), target));
+    'health', 'consistency', 'optl', 'email'].forEach((target) => assert.ok(targets.includes(target), target));
   assert.equal(targets.includes('admin'), false);
   assert.equal(targets.includes('coverage'), false);
   assert.equal(html.includes('Google Setup'), false);
@@ -97,6 +97,7 @@ test('admin adds administration and coverage, and sales cannot open manager page
   const adminTargets = admin.navModel().flatMap((group) => group.items ? group.items.map((item) => item[0]) : []);
   assert.ok(adminTargets.includes('admin'));
   assert.ok(adminTargets.includes('coverage'));
+  assert.ok(adminTargets.includes('optl'));
 
   const sales = client();
   sales.role = 'sales';
@@ -106,6 +107,7 @@ test('admin adds administration and coverage, and sales cannot open manager page
   assert.equal(sales.routeAllowed('upload'), false);
   assert.equal(sales.routeAllowed('bedding'), false);
   assert.equal(sales.routeAllowed('reports'), false);
+  assert.equal(sales.routeAllowed('optl'), false);
   assert.equal(sales.routeAllowed('coach'), true);
   sales.ownReport = true;
   assert.equal(sales.routeAllowed('reports'), true);

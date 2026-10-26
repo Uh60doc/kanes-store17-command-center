@@ -25,6 +25,10 @@
     .data-refresh.connected .data-refresh-state { color: #3dde8a; }
     .data-refresh.updating .data-refresh-state { color: #f3d48a; }
     .data-refresh.issue .data-refresh-state { color: #ff8ea3; }
+    .cc-activity { margin: 8px 0 0; padding: 8px 12px; border-radius: 10px; border: 1px solid #1d5c66; background: #122229; color: #f3d48a; font-weight: 750; }
+    .cc-activity.ok { color: #3dde8a; border-color: #1d6b45; }
+    .cc-activity.err { color: #ff8ea3; border-color: #a83d45; }
+    .cc-activity.busy { color: #f3d48a; }
     .data-refresh button { min-height: 28px; padding: 0 8px; border: 1px solid #1d5c66; border-radius: 8px; background: #070b10; color: #7ee7f0; font-size: 12px; font-weight: 700; }
     .logo { display: block; height: auto; }
     .logo-login { width: 168px; margin: 0 auto 12px; }
@@ -752,6 +756,149 @@
       .morning-five .awaiting { color: #444; font-size: 12px; }
       .morning-finance { break-before: page; }
     }
+    /* OPTL — Admin page only. Does not change Home or Sales Team layouts. */
+    .optl-page .optl-brand { display: flex; gap: 14px; align-items: center; margin-bottom: 10px; }
+    .optl-page .optl-brand img { width: 72px; height: 72px; object-fit: contain; }
+    .optl-page .optl-kicker { margin: 0; color: #14c4d4; font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+    .optl-page .optl-title { margin: 2px 0 0; font-size: 22px; color: #f3f6f8; }
+    .optl-page .optl-sub { margin: 4px 0 0; color: #9eb0bc; font-size: 13px; }
+    .optl-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 8px; }
+    .optl-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0bc; }
+    .optl-controls select { min-width: 220px; padding: 7px 10px; border-radius: 8px; border: 1px solid #1d5c66; background: #10161c; color: #f3f6f8; font: inherit; text-transform: none; letter-spacing: 0; font-weight: 600; }
+    .optl-matrix-wrap { overflow: visible; }
+    .optl-matrix { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 11px; }
+    .optl-matrix col.optl-col-cat { width: 176px; }
+    .optl-matrix th, .optl-matrix td { box-sizing: border-box; border: 1px solid #1d5c66; padding: 3px 3px; vertical-align: middle; background: #0d1419; color: #e8eef2; overflow: hidden; }
+    .optl-matrix thead th { background: #102028; color: #14c4d4; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; text-align: center; line-height: 1.15; white-space: normal; height: auto; }
+    .optl-matrix tbody th { width: 176px; text-align: left; background: #10181e; font-size: 12px; line-height: 1.2; white-space: normal; }
+    .optl-matrix tbody tr:not(.optl-section) { height: 66px; }
+    .optl-matrix tbody tr:not(.optl-section) td,
+    .optl-matrix tbody tr:not(.optl-section) th { height: 66px; }
+    .optl-matrix .optl-section td { height: auto; padding: 2px 8px; background: #143840; color: #f3f6f8; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; font-size: 10px; line-height: 1.3; }
+    .optl-matrix td.filled { background: #122229; }
+    .optl-matrix th.step-yellow, .optl-matrix td.step-yellow { color: #f3d48a; box-shadow: inset 0 -2px 0 #f3d48a; }
+    .optl-matrix th.step-orange, .optl-matrix td.step-orange { color: #f0a46a; box-shadow: inset 0 -2px 0 #f0a46a; }
+    .optl-matrix th.step-red, .optl-matrix td.step-red { color: #f07178; box-shadow: inset 0 -2px 0 #f07178; }
+    .optl-matrix th.step-term, .optl-matrix td.step-term { color: #f3f6f8; box-shadow: inset 0 -2px 0 #f3f6f8; }
+    .optl-matrix td.filled.step-cell.step-yellow { background: #2a2410; color: #f3f6f8; }
+    .optl-matrix td.filled.step-cell.step-orange { background: #2a1c10; color: #f3f6f8; }
+    .optl-matrix td.filled.step-cell.step-red { background: #2a1216; color: #f3f6f8; }
+    .optl-matrix .slot-date, .optl-matrix .slot-exp { display: block; color: #9eb0bc; font-size: 10px; line-height: 1.15; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .optl-matrix .slot-label { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; max-height: 2.3em; margin: 1px 0; line-height: 1.15; font-weight: 700; color: #f3f6f8; word-break: break-word; }
+    .optl-history { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .optl-history th, .optl-history td { border-bottom: 1px solid #1d5c66; padding: 7px 8px; text-align: left; }
+    .optl-history thead th { color: #14c4d4; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .optl-status { display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 700; background: #143840; color: #7eecf6; text-transform: capitalize; }
+    .optl-status.expired { background: #242a30; color: #9eb0bc; }
+    .optl-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .optl-actions button[disabled] { opacity: 0.55; cursor: not-allowed; }
+    .optl-banner { margin: 10px 0; padding: 10px 12px; border-radius: 8px; border: 1px solid #1d5c66; background: #122229; color: #e8eef2; font-size: 13px; }
+    .optl-banner.lock { border-color: #a86b2d; background: #2a1c10; color: #f3d48a; }
+    .optl-banner.exception { border-color: #a83d45; background: #2a1216; color: #f07178; }
+    .optl-pending-list, .optl-exception-list, .optl-alert-list { margin: 0; padding-left: 18px; }
+    .optl-pending-list li, .optl-exception-list li, .optl-alert-list li { margin: 4px 0; }
+    .optl-matrix td.review-required { box-shadow: inset 0 0 0 2px #f0a46a, inset 0 0 0 4px #f07178; background: #2a1a14; animation: optl-yr 1.8s ease-in-out infinite; }
+    @keyframes optl-yr { 0%, 100% { background: #2a2410; box-shadow: inset 0 0 0 2px #f3d48a; } 50% { background: #2a1216; box-shadow: inset 0 0 0 2px #f07178; } }
+    @media (prefers-reduced-motion: reduce) { .optl-matrix td.review-required { animation: none; } }
+    @media print {
+      body.print-optl .optl-matrix-wrap { overflow: visible; }
+      body.print-optl .optl-matrix { width: 100%; min-width: 0; table-layout: fixed; }
+      body.print-optl .optl-matrix col.optl-col-cat { width: 1.7in; }
+    }
+    .optl-actor { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 8px; }
+    .optl-actor label.confirm { flex-direction: row; align-items: center; text-transform: none; letter-spacing: 0; font-weight: 600; gap: 8px; }
+    .optl-actor .attr { color: #f3d48a; font-size: 12px; }
+    .optl-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+    .optl-form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0bc; }
+    .optl-form-grid input, .optl-form-grid select, .optl-form-grid textarea { padding: 7px 10px; border-radius: 8px; border: 1px solid #1d5c66; background: #10161c; color: #f3f6f8; font: inherit; text-transform: none; letter-spacing: 0; font-weight: 600; }
+    .optl-form-grid textarea { min-height: 72px; }
+    .optl-page input[type="checkbox"] { width: 18px; min-width: 18px; max-width: 18px; height: 18px; min-height: 18px; margin: 0; padding: 0; flex: 0 0 18px; accent-color: #14c4d4; vertical-align: middle; background: transparent; border-radius: 4px; }
+    .optl-page label.confirm { display: flex; flex-direction: row; align-items: center; gap: 8px; margin: 10px 0 0; text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 14px; color: #d5e4f5; }
+    .optl-screen[hidden] { display: none !important; }
+    .optl-page { width: 100%; max-width: 880px; margin: 0 auto; }
+    .optl-page-wide { max-width: none; }
+    .optl-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 2px 0 12px; }
+    .optl-head h2 { margin: 0; font-size: 26px; letter-spacing: 0; text-transform: none; color: #f3f6f8; }
+    .optl-demo { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border-radius: 999px; border: 1px solid #1d5c66; color: #7ee7f0; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+    .optl-select-row { display: flex; gap: 12px; align-items: flex-end; }
+    .optl-select-row label { flex: 1 1 auto; min-width: 0; margin: 0; }
+    .optl-select-row select, .optl-entry select, .optl-entry input, .optl-entry textarea { width: 100%; }
+    .optl-select-row select { min-height: 40px; height: 40px; font-size: 15px; }
+    .optl-page .optl-primary { min-height: 40px; height: 40px; padding: 0 18px; white-space: nowrap; }
+    .optl-block { margin-top: 16px; }
+    .optl-page button { min-height: 40px; }
+    .optl-go:disabled, .optl-actions button:disabled, .optl-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+    .optl-who { margin: 0 0 12px; }
+    .optl-who h2, .optl-entry-head h2, .optl-loading h2 { margin: 0; font-size: 28px; letter-spacing: 0; text-transform: none; color: #f3f6f8; }
+    .optl-toolbar, .optl-primary-actions, .optl-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .optl-toolbar { margin-bottom: 12px; }
+    .optl-primary-actions { margin: 8px 0 12px; }
+    .optl-toolbar button, .optl-primary-actions button, .optl-actions button { width: auto; min-height: 40px; }
+    .optl-loading-line { margin: 8px 0 0; color: #7ee7f0; font-weight: 700; }
+    .optl-page input:not([type="checkbox"]), .optl-page select, .optl-page textarea { min-height: 40px; }
+    @media (max-width: 720px) {
+      .optl-select-row { flex-direction: column; align-items: stretch; }
+      .optl-page .optl-primary { width: 100%; }
+    }
+    .optl-quiet { background: #10161c; color: #f3f6f8; border: 1px solid #1d5c66; }
+    .optl-detail { margin: 0 0 12px; border: 1px solid #14c4d4; }
+    .optl-matrix td.filled, .optl-history tbody tr { cursor: pointer; }
+    .optl-highlight { outline: 2px solid #14c4d4; background: #143840 !important; }
+    .optl-more[hidden], .optl-print-panel[hidden], .optl-custom-desc[hidden] { display: none !important; }
+    .optl-form-grid .span-2 { grid-column: span 2; }
+    .optl-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+    .optl-tabs button { background: #143840; }
+    .optl-tabs button.active { background: #14c4d4; color: #0d1114; }
+    .optl-panel[hidden] { display: none !important; }
+    .optl-msg { margin: 8px 0; color: #7eecf6; }
+    .optl-msg.err { color: #f07178; }
+    body.print-optl-formal { background: #fff !important; color: #000 !important; }
+    body.print-optl-formal header.brand, body.print-optl-formal .nav, body.print-optl-formal .noprint, body.print-optl-formal #data-refresh { display: none !important; }
+    body.print-optl-formal #screen > :not(.optl-formal-sheet) { display: none !important; }
+    body.print-optl-formal .optl-formal-sheet { display: none !important; background: #fff; color: #000; border: 1px solid #000; padding: 18px; font-family: "Times New Roman", Times, serif; font-size: 12px; }
+    body.print-optl-formal .optl-formal-sheet.optl-print-target { display: block !important; }
+    .optl-formal-sheet h1 { font-size: 18px; margin: 0 0 6px; text-align: center; }
+    .optl-formal-sheet .optl-pip-brand { text-align: center; font-weight: 700; letter-spacing: 0.04em; }
+    .optl-formal-sheet table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+    .optl-formal-sheet td, .optl-formal-sheet th { border: 1px solid #000; padding: 4px 6px; vertical-align: top; }
+    .optl-formal-sheet .sig { margin-top: 10px; }
+    .optl-formal-sheet .watermark { color: #666; font-weight: 700; text-align: center; border: 1px solid #666; padding: 6px; margin: 8px 0; }
+    @page optl-matrix { size: letter landscape; margin: 0.4in; }
+    @page optl-formal { size: letter portrait; margin: 0.45in; }
+    @page optl-roster { size: letter landscape; margin: 0.45in; }
+    body.print-optl { page: optl-matrix; }
+    body.print-optl-formal { page: optl-formal; }
+    body.print-optl-roster { page: optl-roster; background: #fff !important; color: #000 !important; }
+    body.print-optl-roster header.brand, body.print-optl-roster .nav, body.print-optl-roster .noprint, body.print-optl-roster #data-refresh, body.print-optl-roster #cc-activity { display: none !important; }
+    body.print-optl-roster #screen > :not(.optl-roster-sheet) { display: none !important; }
+    body.print-optl-roster .optl-roster-sheet { display: none !important; background: #fff; color: #000; font-family: "Times New Roman", Times, serif; font-size: 10px; }
+    body.print-optl-roster .optl-roster-sheet.optl-print-target { display: block !important; }
+    body.print-optl-roster .optl-roster-person { break-before: page; page-break-before: always; }
+    body.print-optl-roster .optl-roster-person:first-child { break-before: auto; page-break-before: auto; }
+    body.print-optl-roster .optl-roster-matrix,
+    body.print-optl-roster .optl-roster-matrix tr,
+    body.print-optl-roster .optl-roster-matrix td,
+    body.print-optl-roster .optl-roster-matrix th,
+    body.print-optl-roster .optl-roster-history tr,
+    body.print-optl-roster .optl-roster-history td,
+    body.print-optl-roster .optl-roster-history th { break-inside: avoid; page-break-inside: avoid; }
+    body.print-optl-roster table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    body.print-optl-roster .optl-roster-matrix col.optl-col-cat { width: 1.7in; }
+    body.print-optl-roster td, body.print-optl-roster th { border: 1px solid #000; padding: 2px 3px; vertical-align: top; color: #000; background: #fff; word-wrap: break-word; }
+    body.print-optl-roster .optl-roster-history thead { display: table-header-group; }
+    body.print-optl-roster h1, body.print-optl-roster h2, body.print-optl-roster h3, body.print-optl-roster p { color: #000; }
+    @media print {
+      body.print-optl-formal { background: #fff !important; }
+      body.print-optl-formal .optl-formal-sheet { box-shadow: none; }
+    }
+    body.print-optl header.brand, body.print-optl .nav, body.print-optl .noprint, body.print-optl #data-refresh, body.print-optl #cc-activity { display: none !important; }
+    body.print-optl-formal #cc-activity { display: none !important; }
+    body.print-optl #screen > :not(.optl-print-sheet) { display: none !important; }
+    body.print-optl .optl-print-sheet { display: none !important; color: #e8eef2; background: #0d1114; border: 2px solid #14c4d4; padding: 14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body.print-optl .optl-print-sheet.optl-print-target { display: block !important; }
+    @media print {
+      body.print-optl { background: #0d1114 !important; }
+    }
   </style>
 </head>
 <body>
@@ -794,6 +941,7 @@
         </div>
       </header>
       <nav class="nav topnav noprint" id="nav" aria-label="Primary"></nav>
+      <p id="cc-activity" class="cc-activity noprint" hidden role="status" aria-live="polite"></p>
       <div id="screen"></div>
     </section>
   </main>
@@ -811,6 +959,7 @@
     var displayTimer = null;
     var displayRefreshing = false;
     var displayHold = false;
+    var optlUi = { view: 'select', employeeId: '', highlightId: '', detailId: '', draft: null, showPrint: false, showMore: false, showFormer: false, showRemove: false, workflow: '', returnView: 'select', loading: false };
     var displayPayload = null;
 
     function esc(value) {
@@ -852,11 +1001,86 @@
       if (!block || block.versusGoal === null || block.versusGoal === undefined || block.versusGoal === '') return 'Not Available';
       return block.versusGoal;
     }
+    var ccBusyCount = 0;
+    function ccActivitySet(text, tone) {
+      var el = document.getElementById('cc-activity');
+      if (!el) return;
+      el.hidden = !text;
+      el.textContent = text || '';
+      el.className = 'cc-activity noprint' + (tone ? ' ' + tone : '');
+    }
+    function ccSetScreenBusy(busy) {
+      var host = document.getElementById('screen');
+      if (!host) return;
+      host.querySelectorAll('button').forEach(function (btn) {
+        if (busy) {
+          if (!btn.hasAttribute('data-cc-was-disabled')) btn.setAttribute('data-cc-was-disabled', btn.disabled ? '1' : '0');
+          btn.disabled = true;
+        } else if (btn.getAttribute('data-cc-was-disabled') === '0') {
+          btn.disabled = false;
+          btn.removeAttribute('data-cc-was-disabled');
+        } else {
+          btn.removeAttribute('data-cc-was-disabled');
+        }
+      });
+    }
+    function ccActivityLabel(name, extra) {
+      extra = extra || {};
+      var action = String(extra.action || '');
+      if (name === 'optl') {
+        if (action === 'addEvent') return 'Processing accountability occurrence...';
+        if (action === 'issueFormal' || action === 'voidEvent' || action === 'newHire' || action === 'terminate' || action === 'acknowledge' || action === 'rehire' || action === 'retireAssociate' || action === 'resetDemo' || action === 'flagReview') return 'Saving...';
+        if (extra.printEventId || extra.printRoster) return 'Generating document...';
+        return 'Loading...';
+      }
+      if (name === 'reports' || name === 'summary' || name === 'emailControl') return 'Loading report...';
+      if (name === 'uploadReport' || name === 'confirmRescueImport' || name === 'importEvalWorkbook' || name === 'previewRescue') return 'Importing...';
+      if (name === 'uploads' && extra.refresh) return 'Refreshing...';
+      if (name === 'home' || name === 'people' || name === 'retry' || extra.refresh) return 'Refreshing...';
+      if (name === 'evalWorkbook' || name === 'evalPrepWorkbook' || name === 'uploadDocument' || name === 'docFile') return 'Generating document...';
+      if (/save|setEval|prepareEvals|changePassword|approve|sendBrief|reviewPromotion|import/i.test(name)) return 'Saving...';
+      return 'Processing...';
+    }
+    function ccActivityDone(name, extra, result) {
+      extra = extra || {};
+      if (name === 'optl' && extra.action) {
+        var outcome = result && result.actionResult;
+        if (!outcome || outcome.saved !== true) {
+          return { text: (outcome && outcome.message) || 'The server did not confirm the save.', tone: 'err' };
+        }
+        return { text: outcome.message || 'Saved.', tone: outcome.ok === false ? 'err' : 'ok' };
+      }
+      if (name === 'optl' && extra.printEventId) return { text: 'Document ready.', tone: 'ok' };
+      if (name === 'optl') return { text: '', tone: '' };
+      var label = ccActivityLabel(name, extra);
+      if (label === 'Loading report...') return { text: 'Report loaded.', tone: 'ok' };
+      if (label === 'Importing...') return { text: 'Import finished.', tone: 'ok' };
+      if (label === 'Refreshing...') return { text: 'Updated.', tone: 'ok' };
+      if (label === 'Generating document...') return { text: 'Document ready.', tone: 'ok' };
+      if (label === 'Saving...') return { text: 'Saved.', tone: 'ok' };
+      if (label === 'Loading...') return { text: '', tone: '' };
+      return { text: 'Done.', tone: 'ok' };
+    }
     function api(name, extra) {
       var payload = Object.assign({ token: token }, extra || {});
+      ccBusyCount += 1;
+      ccSetScreenBusy(true);
+      ccActivitySet(ccActivityLabel(name, extra), 'busy');
       return new Promise(function (resolve, reject) {
-        google.script.run.withSuccessHandler(resolve).withFailureHandler(function (error) {
-          reject(new Error(error && error.message ? error.message : 'The request failed.'));
+        google.script.run.withSuccessHandler(function (result) {
+          ccBusyCount = Math.max(0, ccBusyCount - 1);
+          ccSetScreenBusy(ccBusyCount > 0);
+          if (ccBusyCount === 0) {
+            var done = ccActivityDone(name, extra, result);
+            ccActivitySet(done.text, done.tone);
+          }
+          resolve(result);
+        }).withFailureHandler(function (error) {
+          ccBusyCount = Math.max(0, ccBusyCount - 1);
+          ccSetScreenBusy(ccBusyCount > 0);
+          var message = error && error.message ? error.message : 'The request failed.';
+          if (ccBusyCount === 0) ccActivitySet(message, 'err');
+          reject(new Error(message));
         }).dispatch(name, payload);
       });
     }
@@ -908,7 +1132,7 @@
         ]},
         { label: 'Admin', alignEnd: true, items: [
           ['admin', 'Main Administration'], ['health', 'System Health'], ['coverage', 'Data Coverage'],
-          ['consistency', 'Data Consistency'], ['email', 'Email Controls']
+          ['consistency', 'Data Consistency'], ['optl', 'OPTL'], ['email', 'Email Controls']
         ]}
       ];
       return groups.map(function (group) {
@@ -5907,6 +6131,7 @@
       if (viewer && !viewer.classList.contains('hidden')) return true;
       if (document.getElementById('eval-editor')) return true;
       if (screen === 'brief' || screen === 'admin' || screen === 'documents' || screen === 'upload') return true;
+      if (screen === 'optl' && (ccBusyCount > 0 || optlUi.view === 'entry' || optlUi.view === 'workflow')) return true;
       if (screen === 'coach' && coachDirty) return true;
       if (screen === 'recovery' && recoveryDirty) return true;
       var pillow = document.getElementById('pillow-goal');
@@ -5914,12 +6139,915 @@
       var active = document.activeElement;
       if (active && active.id !== 'display-refresh' && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return true;
       var body = document.body;
-      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd') || body.classList.contains('print-evalprep') || body.classList.contains('print-actions') || body.classList.contains('print-report') || body.classList.contains('print-variance') || body.classList.contains('print-order') || body.classList.contains('print-closeout') || body.classList.contains('print-training')) return true;
+      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd') || body.classList.contains('print-evalprep') || body.classList.contains('print-actions') || body.classList.contains('print-report') || body.classList.contains('print-variance') || body.classList.contains('print-order') || body.classList.contains('print-closeout') || body.classList.contains('print-training') || body.classList.contains('print-optl') || body.classList.contains('print-optl-formal') || body.classList.contains('print-optl-roster')) return true;
       return false;
     }
     function syncRefreshButton() {
       var button = document.getElementById('display-refresh');
       if (button) button.classList.remove('hidden');
+    }
+    function optlDisplayDate(iso) {
+      if (!iso || String(iso).length < 10) return '';
+      return dateLabel(iso) || String(iso).slice(0, 10);
+    }
+    function optlMatrixDate(iso) {
+      if (!iso || String(iso).length < 10) return '';
+      var parts = String(iso).slice(0, 10).split('-');
+      if (parts.length < 3 || !parts[0] || !parts[1] || !parts[2]) return '';
+      return String(Number(parts[1])) + '/' + parts[2] + '/' + parts[0].slice(2);
+    }
+    function renderOptl(data) {
+      displayHold = false;
+      document.body.classList.remove('print-optl');
+      document.body.classList.remove('print-optl-formal');
+      document.body.classList.remove('print-optl-roster');
+      if (optlUi.view !== 'select' && data.selectedEmployeeId && (!optlUi.employeeId || optlUi.employeeId === data.selectedEmployeeId)) optlUi.employeeId = data.selectedEmployeeId;
+      var viewTitle = optlUi.view === 'entry' ? 'Accountability entry' : (optlUi.view === 'record' ? 'Employee OPTL' : 'Associate Management');
+      document.getElementById('header-note').textContent = 'OPTL · ' + viewTitle;
+      var employees = data.employees || [];
+      var employee = data.employee || {};
+      if (optlUi.employeeId) {
+        employees.forEach(function (row) { if (row.employeeId === optlUi.employeeId) employee = row; });
+      }
+      var visibleEmployees = employees.filter(function (row) {
+        return optlUi.showFormer || row.status === 'active';
+      });
+      var blankOption = '<option value="">Select an associate…</option>';
+      function statusSuffix(row) {
+        if (row.status === 'former') return ' (Former)';
+        if (row.status === 'inactive') return ' (Inactive)';
+        if (row.status === 'withdrawn') return ' (Withdrawn)';
+        return '';
+      }
+      var options = blankOption + visibleEmployees.map(function (row) {
+        var selected = optlUi.view === 'select' && row.employeeId === optlUi.employeeId ? ' selected' : '';
+        return '<option value="' + esc(row.employeeId) + '"' + selected + '>' + esc(row.displayName) + statusSuffix(row) + '</option>';
+      }).join('');
+      var picked = null;
+      employees.forEach(function (row) { if (row.employeeId === optlUi.employeeId) picked = row; });
+      var actorName = data.actingManagerDeclared || optlUi.actorName || '';
+      var actorConfirmed = !!(data.actingManagerConfirmed || optlUi.actorConfirmed);
+      var managerOptions = (data.actingManagers || []).map(function (name) {
+        return '<option value="' + esc(name) + '"' + (name === actorName ? ' selected' : '') + '>' + esc(name) + '</option>';
+      }).join('');
+      var actorBlock = '<div class="optl-actor noprint"><label>Acting manager (declared)<select id="optl-acting-manager"><option value="">Select…</option>' + managerOptions + '</select></label>' +
+        '<label class="confirm"><input type="checkbox" id="optl-acting-confirm"' + (actorConfirmed ? ' checked' : '') + ' /> I confirm this acting manager for audit</label>' +
+        '<span class="attr">Attribution: manager-declared (not verified identity)</span></div>';
+      var actorFor = function (name) { return optlUi.view === name ? actorBlock : ''; };
+      var catOptions = function (section, selected) {
+        var list = section === 'B' ? (data.sectionB || []) : (data.sectionA || []);
+        return list.map(function (c) { return '<option value="' + esc(c) + '"' + (c === selected ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('');
+      };
+      var draft = (optlUi.draft && optlUi.draft.employeeId === (employee.employeeId || optlUi.employeeId)) ? optlUi.draft : {};
+      var draftSection = draft.section || 'A';
+      var draftCategory = draft.category || ((draftSection === 'B' ? data.sectionB : data.sectionA) || [])[0] || '';
+      var draftType = draft.entryType || (optlUi.entryMode === 'formal' ? 'STEP_I' : 'Occurrence');
+      var matrixCols = '<colgroup><col class="optl-col-cat"><col class="optl-col-slot" span="12"></colgroup>';
+      var headers = ((data.matrixRows || [])[0] || { cells: [] }).cells.map(function (cell) {
+        return '<th scope="col"' + (cell.stepTone ? ' class="' + esc(cell.stepTone) + '"' : '') + '>' + esc(cell.slotLabel) + '</th>';
+      }).join('');
+      function matrixRowsHtml(section) {
+        return (data.matrixRows || []).filter(function (row) { return row.section === section; }).map(function (row) {
+          var cells = row.cells.map(function (cell) {
+            var tdClass = [];
+            if (cell.stepTone) tdClass.push(cell.stepTone);
+            if (!cell.occupied) return '<td class="' + esc(tdClass.join(' ')) + '">—</td>';
+            tdClass.unshift('filled');
+            if (cell.stepTone) tdClass.push('step-cell');
+            if (cell.reviewRequired) tdClass.push('review-required');
+            if (cell.eventId && cell.eventId === optlUi.highlightId) tdClass.push('optl-highlight');
+            return '<td class="' + esc(tdClass.join(' ')) + '" data-event-id="' + esc(cell.eventId || '') + '" title="' + esc(cell.shortDescription || '') + '">' +
+              '<span class="slot-date">' + esc(optlMatrixDate(cell.incidentDate)) + '</span>' +
+              '<span class="slot-label">' + esc(cell.shortDescription || '') + '</span>' +
+              '<span class="slot-exp">Exp ' + esc(optlMatrixDate(cell.expirationDate)) + '</span></td>';
+          }).join('');
+          return '<tr><th scope="row">' + esc(row.category) + '</th>' + cells + '</tr>';
+        }).join('');
+      }
+      var history = (data.history || []).map(function (line) {
+        var rowClass = line.eventId === optlUi.highlightId ? ' class="optl-highlight"' : '';
+        return '<tr' + rowClass + ' data-event-id="' + esc(line.eventId || '') + '"><td>' + esc(optlDisplayDate(line.incidentDate)) + '</td><td>' + esc(line.section) + '</td><td>' + esc(line.category) +
+          '</td><td>' + esc(line.entryType) + '</td><td>' + esc(line.shortDescription) + '</td><td>' + esc(optlDisplayDate(line.effectiveExpirationDate)) +
+          '</td><td><span class="optl-status ' + esc(line.status) + '">' + esc(line.status) + '</span></td></tr>';
+      }).join('');
+      var detail = null;
+      (data.history || []).forEach(function (line) { if (line.eventId === optlUi.detailId) detail = line; });
+      var dash = data.dashboard || {};
+      var pending = (data.pendingActions || []).map(function (row) {
+        return '<li><strong>' + esc(row.kind) + '</strong> · ' + esc(row.proposedLevel) + ' · ' + esc(row.section) + '/' + esc(row.category) +
+          ' — ' + esc(row.reason || '') + '</li>';
+      }).join('');
+      var exceptions = (data.exceptions || []).map(function (row) {
+        return '<li><strong>' + esc(row.tone || 'review') + '</strong> · ' + esc(row.section) + '/' + esc(row.category) + ' — ' + esc(row.reason || '') + '</li>';
+      }).join('');
+      var alertItems = ((dash.alerts || []).slice(0, 12)).map(function (row) {
+        return '<li><strong>' + esc(row.kind) + '</strong> · ' + esc(row.title) + ' — ' + esc(row.detail || '') +
+          '</li>';
+      }).join('');
+      var formalOpts = (data.formalEvents || []).map(function (row) {
+        return '<option value="' + esc(row.eventId) + '">' + esc(row.entryType) + ' · ' + esc(row.category) + ' · ' + esc(row.incidentDate) + '</option>';
+      }).join('');
+      var histOpts = (data.history || []).map(function (row) {
+        return '<option value="' + esc(row.eventId) + '">' + esc(row.incidentDate) + ' · ' + esc(row.entryType) + ' · ' + esc(row.shortDescription || '') + '</option>';
+      }).join('');
+      var ack = data.acknowledgment || {};
+      var alerts = data.alertConfig || {};
+      var security = data.security || {};
+      var pip = data.pipPrint || {};
+      var actionMsg = data.actionResult && data.actionResult.message ? data.actionResult.message : '';
+      var actionErr = data.actionResult && data.actionResult.ok === false;
+      var statusLine = employee.status === 'former' ? 'Former' : (employee.status === 'inactive' ? 'Inactive' : (employee.status === 'withdrawn' ? 'Withdrawn' : 'Active'));
+      var demoBadge = data.prototype ? '<span class="optl-demo">Demo</span>' : '';
+      var whoBlock = '<div class="optl-who"><h2>' + esc(employee.displayName || 'Associate') + '</h2>' +
+        '<p class="sub">ID ' + esc(employee.employeeId || '') + ' · ' + esc(employee.jobTitle || '') + ' · ' + esc(statusLine) +
+        (employee.hireDate ? ' · hired ' + esc(employee.hireDate) : '') + '</p></div>';
+      var lockBanner = data.lock
+        ? '<div class="optl-banner lock noprint"><strong>Pending STEP/TERM lock</strong> — scored/formal accountability blocked until the pending action is issued. Unscored factual notes remain allowed.</div>'
+        : '';
+      var pendingBlock = pending
+        ? '<div class="optl-banner noprint"><strong>Pending manager actions</strong><ul class="optl-pending-list">' + pending + '</ul></div>'
+        : '';
+      var exceptionBlock = exceptions
+        ? '<div class="optl-banner exception noprint"><strong>Integrity exceptions (yellow/red)</strong><ul class="optl-exception-list">' + exceptions + '</ul></div>'
+        : '';
+      var detailBlock = detail
+        ? '<article class="card optl-detail noprint"><h2>Entry detail</h2><p><strong>' + esc(detail.entryType || '') + '</strong> · ' + esc(detail.section || '') + '/' + esc(detail.category || '') +
+          ' · ' + esc(optlDisplayDate(detail.incidentDate)) + ' · ' + esc(detail.status || '') + '</p><p>' + esc(detail.shortDescription || '') + '</p>' +
+          '<p><strong>Expiration</strong> ' + esc(optlDisplayDate(detail.effectiveExpirationDate)) + '</p>' +
+          '<p><strong>Private notes</strong> ' + esc(detail.notes || 'No private notes on this entry.') + '</p>' +
+          '<p class="sub">Private notes stay off the employee matrix and history printouts.</p>' +
+          '<button type="button" class="optl-quiet" id="optl-detail-close">Close detail</button></article>'
+        : '';
+      var printCells = function (section) {
+        return (data.matrixRows || []).filter(function (row) { return row.section === section; }).map(function (row) {
+          return '<tr><th scope="row">' + esc(row.category) + '</th>' + row.cells.map(function (cell) {
+            if (!cell.occupied) return '<td' + (cell.stepTone ? ' class="' + esc(cell.stepTone) + '"' : '') + '>—</td>';
+            return '<td class="' + esc((cell.stepTone ? cell.stepTone + ' ' : '') + 'filled') + '">' + esc(optlMatrixDate(cell.incidentDate)) + '<br><strong>' + esc(cell.shortDescription || '') +
+              '</strong><br>Exp ' + esc(optlMatrixDate(cell.expirationDate)) + '</td>';
+          }).join('') + '</tr>';
+        }).join('');
+      };
+      var storeLogo = document.querySelector('img.logo') ? document.querySelector('img.logo').src : '';
+      var descLabels = (data.standardLabels && data.standardLabels[draftCategory]) || [];
+      var descKnown = descLabels.indexOf(draft.shortDescription) !== -1 || !draft.shortDescription;
+      var descOptions = descLabels.map(function (label) {
+        return '<option value="' + esc(label) + '"' + (label === draft.shortDescription ? ' selected' : '') + '>' + esc(label) + '</option>';
+      }).join('') + '<option value="__custom"' + (draft.shortDescription && !descKnown ? ' selected' : '') + '>Other description</option>';
+      var removePanel = (optlUi.showRemove && picked)
+        ? '<div class="optl-remove" id="optl-remove-panel"><h3>Remove Associate</h3>' +
+          '<p class="sub">Confirm <strong>' + esc(picked.displayName) + '</strong> and enter a reason. Accountability documentation stays in the record and can still be printed.</p>' +
+          '<label class="confirm"><input type="checkbox" id="optl-remove-confirm" /> I confirm this is the associate to remove from the active list</label>' +
+          '<label>Type the associate\'s full name<input id="optl-remove-name" autocomplete="off" /></label>' +
+          '<label>Reason<textarea id="optl-remove-reason"></textarea></label>' +
+          '<label>What happened<select id="optl-remove-kind"><option value="">Select…</option>' +
+          '<option value="transfer">Transfer — leave the active list</option>' +
+          '<option value="inactive">Inactive — leave the active list</option>' +
+          '<option value="mistaken">Mistakenly created — withdraw the profile</option>' +
+          '<option value="termination">Termination — open the formal termination workflow</option></select></label>' +
+          actorFor('select') +
+          '<div class="optl-actions"><button type="button" id="optl-remove-save">Confirm removal</button>' +
+          '<button type="button" class="optl-quiet" id="optl-remove-cancel">Cancel</button></div></div>'
+        : '';
+      var rehireBlock = employee.status && employee.status !== 'active'
+        ? '<div class="optl-rehire noprint"><p><strong>Off the active list.</strong> A rehire reuses this profile and starts a new employment period. Prior history stays on the permanent record. The active matrix starts clean.</p>' +
+          '<label>Rehire date<input type="date" id="optl-rehire-date" value="' + esc(data.asOfDate || '') + '" /></label>' +
+          '<div class="optl-actions"><button type="button" id="optl-save-rehire">Rehire with a clean matrix</button></div></div>'
+        : '';
+      var workflowHead = optlUi.workflow === 'hire'
+        ? '<div class="optl-who"><p class="optl-kicker">Store 17 Online · OPTL</p><h2>New Hire</h2><p class="sub">Add New Associate. The OPTL record starts with a clean matrix. Use a fictional employee id.</p></div>'
+        : whoBlock;
+      function rosterMatrix(person, section) {
+        var rows = (person.matrixRows || []).filter(function (row) { return row.section === section; });
+        if (!rows.length) return '<p>None</p>';
+        var headers = rows[0].cells.map(function (cell) { return '<th>' + esc(cell.slotLabel) + '</th>'; }).join('');
+        var body = rows.map(function (row) {
+          return '<tr><th>' + esc(row.category) + '</th>' + row.cells.map(function (cell) {
+            if (!cell.occupied) return '<td>—</td>';
+            return '<td>' + esc(optlMatrixDate(cell.incidentDate)) + '<br>' + esc(cell.shortDescription || '') + '<br>Exp ' + esc(optlMatrixDate(cell.expirationDate)) + '</td>';
+          }).join('') + '</tr>';
+        }).join('');
+        return '<table class="optl-roster-matrix">' + matrixCols + '<thead><tr><th>Category</th>' + headers + '</tr></thead><tbody>' + body + '</tbody></table>';
+      }
+      var rosterHtml = (data.rosterPrint || []).map(function (person) {
+        var hist = (person.history || []).map(function (line) {
+          return '<tr><td>' + esc(optlDisplayDate(line.incidentDate)) + '</td><td>' + esc(line.section) + '</td><td>' + esc(line.category) +
+            '</td><td>' + esc(line.entryType) + '</td><td>' + esc(line.shortDescription || '') + '</td><td>' +
+            esc(optlDisplayDate(line.effectiveExpirationDate)) + '</td><td>' + esc(line.status) + '</td></tr>';
+        }).join('');
+        return '<section class="optl-roster-person"><h2>' + esc(person.displayName || '') + '</h2>' +
+          '<p><strong>Employee ID</strong> ' + esc(person.employeeId || '') + ' · ' + esc(person.jobTitle || '') +
+          (person.department ? ' · ' + esc(person.department) : '') + '</p>' +
+          '<p>Report generated ' + esc(person.asOfDate || data.asOfDate || '') + ' · Accountability status as of ' +
+          esc(person.asOfDate || data.asOfDate || '') + ' · ' + esc(person.status || 'Active') + '</p>' +
+          '<h3>Section A</h3>' + rosterMatrix(person, 'A') +
+          '<h3>Section B</h3>' + rosterMatrix(person, 'B') +
+          '<h3>Chronological accountability history</h3>' +
+          '<table class="optl-roster-history"><thead><tr><th>Incident</th><th>Section</th><th>Category</th><th>Action</th><th>Description</th><th>Expiration</th><th>Status</th></tr></thead><tbody>' +
+          (hist || '<tr><td colspan="7">No history for this associate.</td></tr>') + '</tbody></table></section>';
+      }).join('');
+      var shown = function (name) { return optlUi.view === name ? '' : ' hidden'; };
+      document.getElementById('screen').innerHTML =
+        '<div class="optl-page' + (optlUi.view === 'record' && !optlUi.loading ? ' optl-page-wide' : '') + '">' +
+        '<div id="optl-screen-select" class="optl-screen"' + shown('select') + '>' +
+        '<header class="optl-head"><h2>OPTL — Associate Management</h2>' + demoBadge + '</header>' +
+        '<article class="card"><div class="optl-select-row">' +
+        '<label>Associate<select id="optl-employee">' + options + '</select></label>' +
+        '<button type="button" class="optl-primary" id="optl-view"' + (optlUi.employeeId ? '' : ' disabled') + '>View OPTL</button></div>' +
+        '<label class="confirm"><input type="checkbox" id="optl-show-former"' + (optlUi.showFormer ? ' checked' : '') + ' /> Show former and inactive associates</label></article>' +
+        '<section class="optl-block"><h2 class="section-title">Management Actions</h2>' +
+        '<article class="card"><div class="optl-actions"><button type="button" class="optl-quiet" id="optl-add-associate">Add New Associate</button>' +
+        '<button type="button" class="optl-quiet" id="optl-delete-associate">Remove Associate</button></div>' +
+        removePanel + '</article></section>' +
+        '<section class="optl-block"><h2 class="section-title">Monthly Accountability Review</h2>' +
+        '<article class="card"><p class="sub">Print the current matrix and permanent history for every active associate. Private notes are not included.</p>' +
+        '<div class="optl-actions"><button type="button" class="optl-quiet" id="optl-print-all">Print All OPTLs with History</button></div></article></section></div>' +
+        '<div id="optl-screen-record" class="optl-screen"' + shown('record') + '>' +
+        (optlUi.loading
+          ? '<article class="card optl-loading"><h2>' + esc(employee.displayName || 'Associate') + '</h2><p class="optl-loading-line">Loading OPTL…</p></article>'
+          : '<article class="card noprint">' +
+        '<div class="optl-toolbar"><button type="button" class="optl-quiet" id="optl-change">Change Associate / Back to Associate Selection</button></div>' +
+        whoBlock + demoBadge +
+        '<div class="optl-primary-actions"><button type="button" id="optl-write">Write New Occurrence</button>' +
+        '<button type="button" id="optl-open-step">Issue STEP / TERM</button>' +
+        '<button type="button" id="optl-open-void">Correct / Void</button>' +
+        '<button type="button" class="optl-quiet" id="optl-print-toggle">Print Options</button></div>' +
+        actorFor('record') + rehireBlock +
+        (actionMsg ? '<p class="optl-msg' + (actionErr ? ' err' : '') + '">' + esc(actionMsg) + '</p>' : '') +
+        '<div class="optl-print-panel"' + (optlUi.showPrint ? '' : ' hidden') + '>' +
+        '<p class="sub">Matrix and history prints omit private notes. Incident notes are a separate management document.</p>' +
+        '<div class="optl-actions"><button type="button" id="optl-print-matrix">Print Active Matrix</button>' +
+        '<button type="button" id="optl-print-history">Print History</button>' +
+        '<button type="button" id="optl-print-notes">Print Notes</button>' +
+        '<label class="sub">PIP event<select id="optl-pip-event">' + formalOpts + '</select></label>' +
+        '<button type="button" id="optl-print-pip">Print Kane\'s PIP</button></div></div>' +
+        '<p class="sub"><button type="button" class="optl-quiet" id="optl-more-toggle">More actions</button></p>' +
+        '<div class="optl-more"' + (optlUi.showMore ? '' : ' hidden') + '>' +
+        '<div class="optl-actions"><button type="button" id="optl-open-ack">Acknowledgment</button>' +
+        '<button type="button" id="optl-open-term">Termination</button>' +
+        '<button type="button" id="optl-open-hire">New Hire</button>' +
+        '<button type="button" id="optl-reset-demo">Reset demo data</button></div>' +
+        '<h2 class="section-title">Management dashboard</h2>' +
+        '<p><strong>' + esc(String(dash.pendingCount || 0)) + '</strong> open pending · <strong>' +
+        esc(String(dash.exceptionCount || 0)) + '</strong> open exceptions</p>' +
+        (alertItems ? '<ul class="optl-alert-list">' + alertItems + '</ul>' : '<p class="sub">No open alerts.</p>') +
+        '</div></article>' +
+        detailBlock + lockBanner + pendingBlock + exceptionBlock +
+        '<h2 class="section-title">Active matrix</h2>' +
+        '<article class="card"><div class="optl-matrix-wrap"><table class="optl-matrix">' + matrixCols + '<thead><tr><th scope="col">Category</th>' + headers + '</tr></thead><tbody>' +
+        '<tr class="optl-section"><td colspan="13">Section A</td></tr>' + matrixRowsHtml('A') +
+        '<tr class="optl-section"><td colspan="13">Section B</td></tr>' + matrixRowsHtml('B') +
+        '</tbody></table></div></article>' +
+        '<h2 class="section-title">Permanent history</h2>' +
+        '<article class="card"><table class="optl-history"><thead><tr><th>Incident</th><th>Section</th><th>Category</th><th>Action</th><th>Description</th><th>Expiration</th><th>Status</th></tr></thead><tbody>' +
+        (history || '<tr><td colspan="7">No history for this associate.</td></tr>') + '</tbody></table>' +
+        '<p class="sub">Click an entry to review it. Expired, voided, and rescinded events stay in history. Nothing is deleted.</p></article>') + '</div>' +
+        '<div id="optl-screen-entry" class="optl-screen"' + shown('entry') + '>' +
+        '<article class="card optl-entry noprint">' +
+        '<div class="optl-toolbar"><button type="button" class="optl-quiet" id="optl-entry-back">Back</button></div>' +
+        '<div class="optl-entry-head">' + whoBlock + demoBadge +
+        '<p class="optl-kicker">Accountability Entry</p></div>' +
+        lockBanner +
+        '<p class="optl-msg" id="optl-entry-msg"></p>' +
+        '<div class="optl-form-grid">' +
+        '<label>Incident date<input type="date" id="optl-inc-date" value="' + esc(draft.incidentDate || '') + '" /></label>' +
+        '<label>Section<select id="optl-section"><option value="A"' + (draftSection === 'A' ? ' selected' : '') + '>A</option><option value="B"' + (draftSection === 'B' ? ' selected' : '') + '>B</option></select></label>' +
+        '<label>Category<select id="optl-category">' + catOptions(draftSection, draftCategory) + '</select></label>' +
+        '<label>Entry type<select id="optl-entry-type"><option value="Occurrence"' + (draftType === 'Occurrence' ? ' selected' : '') + '>Occurrence</option><option value="STEP_I"' + (draftType === 'STEP_I' ? ' selected' : '') + '>STEP I</option><option value="STEP_II"' + (draftType === 'STEP_II' ? ' selected' : '') + '>STEP II</option><option value="STEP_III"' + (draftType === 'STEP_III' ? ' selected' : '') + '>STEP III</option><option value="TERM"' + (draftType === 'TERM' ? ' selected' : '') + '>TERM</option></select></label>' +
+        '<label class="span-2">Standardized description<select id="optl-short-select">' + descOptions + '</select></label>' +
+        '<label class="span-2 optl-custom-desc"' + (draft.shortDescription && !descKnown ? '' : ' hidden') + '>Description<input type="text" id="optl-short" value="' + esc(draft.shortDescription && !descKnown ? draft.shortDescription : '') + '" /></label>' +
+        '<label>Supporting details<input type="text" id="optl-qty" value="' + esc(draft.quantitativeDetail || '') + '" placeholder="Minutes late or other detail" /></label>' +
+        '<label class="span-2">Private notes<textarea id="optl-notes">' + esc(draft.notes || '') + '</textarea></label>' +
+        '<label class="confirm"><input type="checkbox" id="optl-unscored"' + (draft.unscored ? ' checked' : '') + ' /> Unscored factual note only</label>' +
+        '<label class="confirm"><input type="checkbox" id="optl-direct"' + (draft.direct ? ' checked' : '') + ' /> Direct STEP (skip occurrences)</label>' +
+        '<label class="span-2">Direct-issue justification<textarea id="optl-justify">' + esc(draft.justification || '') + '</textarea></label>' +
+        '</div>' + actorFor('entry') +
+        '<div class="optl-actions" style="margin-top:14px"><button type="button" id="optl-save-entry">Save entry</button>' +
+        '<button type="button" class="optl-quiet" id="optl-entry-cancel">Cancel</button></div>' +
+        '<p class="sub">Back and Cancel return to this associate without saving. Private notes are not printed on the employee matrix.</p></article></div>' +
+        '<div id="optl-screen-workflow" class="optl-screen"' + shown('workflow') + '>' +
+        '<article class="card noprint">' + workflowHead + actorFor('workflow') +
+        '<p class="optl-msg"></p>' +
+        '<div id="optl-panel-ack"' + (optlUi.workflow === 'ack' ? '' : ' hidden') + '><p class="sub">' + esc(ack.note || '') + ' No SSN.</p><div class="optl-form-grid">' +
+        '<label class="span-2">Event<select id="optl-ack-event">' + histOpts + '</select></label>' +
+        '<label>Typed full name<input id="optl-ack-name" autocomplete="off" /></label>' +
+        '<label class="confirm"><input type="checkbox" id="optl-ack-box" /> I acknowledge this matter was discussed with me. Acknowledgment does not necessarily mean agreement.</label>' +
+        '<label class="confirm"><input type="checkbox" id="optl-ack-refuse" /> Document refusal instead</label></div>' +
+        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-ack">Record acknowledgment</button></div></div>' +
+        '<div id="optl-panel-void"' + (optlUi.workflow === 'void' ? '' : ' hidden') + '><div class="optl-form-grid">' +
+        '<label class="span-2">Event to void/correct<select id="optl-void-event">' + histOpts + '</select></label>' +
+        '<label class="span-2">Reason<textarea id="optl-void-reason"></textarea></label></div>' +
+        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-void">Void / correct (cascade rescind)</button></div></div>' +
+        '<div id="optl-panel-term"' + (optlUi.workflow === 'term' ? '' : ' hidden') + '><div class="optl-form-grid">' +
+        '<label>Separation date<input type="date" id="optl-term-date" /></label>' +
+        '<label>Reason<input id="optl-term-reason" /></label>' +
+        '<label class="span-2">Notes<textarea id="optl-term-notes"></textarea></label>' +
+        '<label class="confirm"><input type="checkbox" id="optl-term-hr" /> HR/executive approval obtained</label></div>' +
+        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-term">Complete termination form</button></div>' +
+        '<p class="sub">Does not auto-terminate from TERM_REQUIRED. History is retained for former associates.</p></div>' +
+        '<div id="optl-panel-hire"' + (optlUi.workflow === 'hire' ? '' : ' hidden') + '><div class="optl-form-grid">' +
+        '<label>Employee name<input id="optl-hire-name" /></label>' +
+        '<label>Employee ID<input id="optl-hire-id" placeholder="S17-DEMO-2xx" /></label>' +
+        '<label>Job title<input id="optl-hire-title" value="Sales Associate" /></label>' +
+        '<label>Department<input id="optl-hire-dept" value="Sales" /></label>' +
+        '<label>Hire date<input type="date" id="optl-hire-date" /></label></div>' +
+        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-hire">Create OPTL record</button></div></div>' +
+        '<div class="optl-actions" style="margin-top:14px"><button type="button" class="optl-quiet" id="optl-workflow-back">' + (optlUi.returnView === 'select' ? 'Cancel' : 'Back to OPTL') + '</button></div></article></div>' +
+        '</div>' +
+        '<article class="optl-print-sheet card" style="display:none" id="optl-print-matrix-sheet">' +
+        '<div class="optl-brand">' + (storeLogo ? '<img src="' + storeLogo + '" alt="" width="72" height="72" />' : '') +
+        '<div><p class="optl-kicker">Store 17 Online</p><h2 class="optl-title">OPTL Active Matrix</h2>' +
+        '<p class="optl-sub">' + esc(employee.displayName || '') + ' · ' + esc(employee.employeeId || '') + ' · as of ' + esc(data.asOfDate) + ' · no private notes</p></div></div>' +
+        '<div class="optl-matrix-wrap"><table class="optl-matrix">' + matrixCols + '<thead><tr><th>Category</th>' + headers + '</tr></thead><tbody>' +
+        '<tr class="optl-section"><td colspan="13">Section A</td></tr>' + printCells('A') +
+        '<tr class="optl-section"><td colspan="13">Section B</td></tr>' + printCells('B') +
+        '</tbody></table></div><p class="sub">Store 17 Online · OPTL · Confidential management record</p></article>' +
+        '<article class="optl-formal-sheet" style="display:none" id="optl-print-history-sheet">' +
+        '<div class="optl-pip-brand">Kane\'s Furniture · Store 17</div><h1>OPTL Permanent History</h1>' +
+        '<p>' + esc(employee.displayName || '') + ' · ' + esc(employee.employeeId || '') + ' · generated ' + esc(data.asOfDate) + '</p>' +
+        '<table><thead><tr><th>Incident</th><th>Section</th><th>Category</th><th>Action</th><th>Description</th><th>Expiration</th><th>Status</th></tr></thead><tbody>' +
+        (history || '<tr><td colspan="7">None</td></tr>') + '</tbody></table></article>' +
+        '<article class="optl-formal-sheet" style="display:none" id="optl-print-notes-sheet">' +
+        '<div class="optl-pip-brand">Kane\'s Furniture · Store 17</div><h1>OPTL Incident Notes</h1>' +
+        '<p class="sub">Management-facing · not for employee matrix print</p>' +
+        '<p id="optl-notes-body">Select an entry from the matrix or history, then Print Notes.</p></article>' +
+        '<article class="optl-formal-sheet" style="display:none" id="optl-print-pip-sheet">' +
+        '<div class="optl-pip-brand">KANE\'S FURNITURE</div><h1>Personal Improvement Plan (PIP)</h1>' +
+        (pip.watermark ? '<div class="watermark">' + esc(pip.watermark) + '</div>' : '') +
+        '<p>' + esc(pip.policyIntro || '') + '</p>' +
+        '<table><tr><th>Employee Name</th><td>' + esc(pip.employeeName || employee.displayName || '') + '</td><th>Job Title</th><td>' + esc(pip.jobTitle || employee.jobTitle || '') + '</td></tr>' +
+        '<tr><th>Location/Store #</th><td>' + esc(pip.locationStoreNumber || '17') + '</td><th>Date of Discussion</th><td>' + esc(pip.dateOfDiscussion || '') + '</td></tr></table>' +
+        '<p><strong>Counseling Level</strong><br>' +
+        ((pip.counselingLevels || []).map(function (row) {
+          return (row.checked ? '[X] ' : '[ ] ') + esc(row.label);
+        }).join(' &nbsp; ') || esc(pip.counselingLevel || '')) + '</p>' +
+        '<p><strong>Type of Warning</strong><br>' +
+        ((pip.warningOptions || []).map(function (row) {
+          return (row.checked ? '[X] ' : '[ ] ') + esc(row.label);
+        }).join('<br>') || esc(pip.category || '')) + '</p>' +
+        '<p><strong>Description of Infraction</strong></p>' +
+        '<table><tr><th>When did it occur? (dates)</th><td>' + esc(pip.incidentDate || '') + '</td></tr>' +
+        '<tr><th>Who was involved? (titles/names)</th><td>' + esc(pip.peopleInvolved || '') + '</td></tr>' +
+        '<tr><th>Where did it occur?</th><td>' + esc(pip.locationDetail || '') + '</td></tr>' +
+        '<tr><th>Impact to the Company</th><td>' + esc(pip.companyImpact || '') + '</td></tr>' +
+        '<tr><th>Policy violated</th><td>' + esc(pip.policyViolated || '') + '</td></tr>' +
+        '<tr><th>Prior dates &amp; details of conversations about violations</th><td>' + esc(pip.priorConversations || '') + '</td></tr>' +
+        '<tr><th>Details</th><td>' + esc(pip.description || '') + '</td></tr></table>' +
+        '<p><strong>Plan for Improvement &amp; Consequences of Further Infractions:</strong><br>' +
+        esc(pip.improvementPlan || '') + '<br>' + esc(pip.consequenceText || pip.consequencesNonTerm || '') + '</p>' +
+        '<p><strong>Previous Notices</strong><br>Has Associate Received Previous, Disciplinary Notices in the past 12 months in writing? ' +
+        (pip.previousNoticesYes ? '[X] Yes &nbsp; [ ] No' : '[ ] Yes &nbsp; [X] No') + '</p>' +
+        '<p><em>' + esc(pip.hrApprovalNote || '') + '</em></p>' +
+        '<div class="sig"><p><strong>Manager Signature</strong><br>Print Name ____________________________________________<br>Signature ________________________________________ Date ______________</p>' +
+        '<p><strong>Employee Signature</strong><br>Print Name ____________________________________________<br>Signature ________________________________________ Date ______________</p>' +
+        '<p>' + esc(pip.refusalInstruction || '') + '</p>' +
+        '<p><strong>Employee Comments</strong><br><br><br></p>' +
+        '<p><strong>Witness Signature</strong><br>Print Name ____________________________________________<br>Signature ________________________________________ Date ______________</p>' +
+        '<p>' + esc(pip.filingNote || '') + '</p>' +
+        (pip.terminationChecklistNote ? '<p>' + esc(pip.terminationChecklistNote) + '</p>' : '') +
+        '<p class="sub">Online acting manager (manager-declared, not a signature): ' + esc(pip.managerDeclared || '') + '</p></div></article>' +
+        '<article class="optl-roster-sheet" style="display:none" id="optl-print-roster-sheet">' +
+        '<h1>Store 17 OPTL — Monthly accountability review</h1>' +
+        '<p>Report generated ' + esc(data.asOfDate || '') + ' · Accountability status as of ' + esc(data.asOfDate || '') + ' · ' + esc(data.timezone || 'America/New_York') + '</p>' +
+        (rosterHtml || '<p>No active associates.</p>') + '</article>';
+
+      var optlEpoch = 0;
+      function optlActorFields() {
+        var acting = document.getElementById('optl-acting-manager');
+        var confirm = document.getElementById('optl-acting-confirm');
+        var fields = {
+          actingManagerDeclared: acting ? acting.value : (optlUi.actorName || ''),
+          actingManagerConfirmed: confirm ? !!confirm.checked : !!optlUi.actorConfirmed,
+        };
+        if (acting) optlUi.actorName = fields.actingManagerDeclared;
+        if (confirm) optlUi.actorConfirmed = fields.actingManagerConfirmed;
+        return fields;
+      }
+      function optlEmployeeId() {
+        var pick = document.getElementById('optl-employee');
+        if (optlUi.view === 'select' && pick) return pick.value || '';
+        return optlUi.employeeId || data.selectedEmployeeId || '';
+      }
+      function optlShowStatus(message, isError) {
+        var note = document.querySelector('.optl-screen:not([hidden]) .optl-msg') || document.querySelector('.optl-msg');
+        if (!note) return;
+        note.textContent = message;
+        note.classList.toggle('err', !!isError);
+      }
+      function optlRequireActor() {
+        var fields = optlActorFields();
+        if (!fields.actingManagerDeclared) {
+          optlShowStatus('Select the acting manager before this action.', true);
+          ccActivitySet('Select the acting manager before this action.', 'err');
+          return null;
+        }
+        if (!fields.actingManagerConfirmed) {
+          optlShowStatus('Confirm the acting manager before this action.', true);
+          ccActivitySet('Confirm the acting manager before this action.', 'err');
+          return null;
+        }
+        return fields;
+      }
+      function optlMissing(message) {
+        optlShowStatus(message, true);
+        ccActivitySet(message, 'err');
+        return false;
+      }
+      function optlRequestId(button) {
+        if (!button.dataset.requestId) button.dataset.requestId = 'req-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+        return button.dataset.requestId;
+      }
+      function optlReadDraft() {
+        var chosen = document.getElementById('optl-short-select');
+        var custom = document.getElementById('optl-short');
+        var shortText = '';
+        if (chosen && chosen.value === '__custom') shortText = custom ? custom.value.trim() : '';
+        else if (chosen) shortText = chosen.value;
+        return {
+          employeeId: optlEmployeeId(),
+          incidentDate: (document.getElementById('optl-inc-date') || {}).value || '',
+          section: (document.getElementById('optl-section') || {}).value || '',
+          category: (document.getElementById('optl-category') || {}).value || '',
+          entryType: (document.getElementById('optl-entry-type') || {}).value || 'Occurrence',
+          shortDescription: shortText,
+          quantitativeDetail: (document.getElementById('optl-qty') || {}).value || '',
+          notes: (document.getElementById('optl-notes') || {}).value || '',
+          unscored: !!(document.getElementById('optl-unscored') && document.getElementById('optl-unscored').checked),
+          direct: !!(document.getElementById('optl-direct') && document.getElementById('optl-direct').checked),
+          justification: (document.getElementById('optl-justify') || {}).value || '',
+        };
+      }
+      function optlRefreshDescriptions() {
+        var categoryEl = document.getElementById('optl-category');
+        var select = document.getElementById('optl-short-select');
+        if (!categoryEl || !select) return;
+        var labels = (data.standardLabels && data.standardLabels[categoryEl.value]) || [];
+        select.innerHTML = labels.map(function (label) {
+          return '<option value="' + esc(label) + '">' + esc(label) + '</option>';
+        }).join('') + '<option value="__custom">Other description</option>';
+        var wrap = document.querySelector('.optl-custom-desc');
+        if (wrap) wrap.hidden = true;
+      }
+      function optlCall(extra) {
+        var gen = ++optlEpoch;
+        var base = Object.assign({
+          employeeId: optlEmployeeId(),
+          asOfDate: data.asOfDate,
+        }, optlActorFields(), extra || {});
+        return api('optl', base).then(function (page) {
+          if (gen !== optlEpoch || screen !== 'optl') return page;
+          var action = base.action;
+          var outcome = page && page.actionResult;
+          optlUi.loading = false;
+          if (action && (!outcome || outcome.saved !== true)) {
+            optlShowStatus((outcome && outcome.message) || 'The server did not confirm the save.', true);
+            var saveBtn = document.getElementById('optl-save-entry');
+            if (saveBtn) saveBtn.textContent = 'Save entry';
+            return page;
+          }
+          if (outcome && outcome.saved && (action === 'addEvent' || action === 'issueFormal')) {
+            optlUi.view = 'record';
+            optlUi.highlightId = (outcome.event && outcome.event.eventId) || '';
+            optlUi.detailId = optlUi.highlightId;
+            optlUi.draft = null;
+            optlUi.showMore = false;
+            optlUi.showPrint = false;
+            optlUi.workflow = '';
+          } else if (outcome && outcome.saved && action === 'newHire') {
+            optlUi.view = 'select';
+            optlUi.showRemove = false;
+            optlUi.showFormer = false;
+            optlUi.workflow = '';
+            optlUi.showMore = false;
+            optlUi.returnView = 'select';
+          } else if (outcome && outcome.saved && (action === 'terminate' || action === 'retireAssociate')) {
+            optlUi.view = 'select';
+            optlUi.showFormer = true;
+            optlUi.showRemove = false;
+            optlUi.workflow = '';
+            optlUi.returnView = 'select';
+          } else if (outcome && outcome.saved && action === 'rehire') {
+            optlUi.view = 'record';
+            optlUi.showFormer = false;
+            optlUi.workflow = '';
+            optlUi.showMore = false;
+          } else if (outcome && outcome.saved) {
+            optlUi.view = 'record';
+            optlUi.workflow = '';
+            optlUi.showMore = false;
+          }
+          if (page.selectedEmployeeId) optlUi.employeeId = page.selectedEmployeeId;
+          displayPayload = page;
+          renderOptl(page);
+          return page;
+        }).catch(function (error) {
+          if (gen !== optlEpoch) return;
+          optlUi.loading = false;
+          var saveBtn = document.getElementById('optl-save-entry');
+          if (saveBtn) saveBtn.textContent = 'Save entry';
+          if (optlUi.view === 'entry' || optlUi.view === 'workflow') optlShowStatus(error.message, true);
+          else {
+            optlUi.view = 'select';
+            ccActivitySet(error.message, 'err');
+            renderOptl(displayPayload || data);
+          }
+          throw error;
+        });
+      }
+      function optlLocal(view) {
+        optlUi.loading = false;
+        optlUi.view = view;
+        renderOptl(displayPayload || data);
+      }
+      var pick = document.getElementById('optl-employee');
+      var go = document.getElementById('optl-view');
+      if (pick && go) {
+        var syncGo = function () { go.disabled = !pick.value; };
+        pick.addEventListener('change', function () {
+          optlUi.employeeId = pick.value || '';
+          syncGo();
+          if (optlUi.showRemove) renderOptl(data);
+        });
+        syncGo();
+        go.addEventListener('click', function () {
+          if (!pick.value) return;
+          optlUi.employeeId = pick.value;
+          optlUi.view = 'record';
+          optlUi.detailId = '';
+          optlUi.highlightId = '';
+          optlUi.showPrint = false;
+          optlUi.showMore = false;
+          optlUi.showRemove = false;
+          optlUi.loading = true;
+          ccActivitySet('Loading OPTL…', 'busy');
+          renderOptl(data);
+          optlCall({});
+        });
+      }
+      var formerBox = document.getElementById('optl-show-former');
+      if (formerBox && pick) formerBox.addEventListener('change', function () {
+        optlUi.showFormer = !!formerBox.checked;
+        optlUi.employeeId = pick.value || '';
+        optlUi.showRemove = false;
+        renderOptl(data);
+      });
+      var addAssociate = document.getElementById('optl-add-associate');
+      if (addAssociate) addAssociate.addEventListener('click', function () {
+        optlUi.returnView = 'select';
+        optlUi.workflow = 'hire';
+        optlUi.view = 'workflow';
+        optlUi.showRemove = false;
+        renderOptl(data);
+      });
+      var deleteAssociate = document.getElementById('optl-delete-associate');
+      if (deleteAssociate && pick) deleteAssociate.addEventListener('click', function () {
+        if (!pick.value) {
+          optlMissing('Select an associate before removing them from the active list.');
+          return;
+        }
+        optlUi.employeeId = pick.value;
+        optlUi.showRemove = true;
+        renderOptl(data);
+      });
+      var removeCancel = document.getElementById('optl-remove-cancel');
+      if (removeCancel) removeCancel.addEventListener('click', function () {
+        optlUi.showRemove = false;
+        renderOptl(data);
+      });
+      var removeSave = document.getElementById('optl-remove-save');
+      if (removeSave) removeSave.addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        var confirmed = document.getElementById('optl-remove-confirm');
+        var typed = (document.getElementById('optl-remove-name') || {}).value || '';
+        var reason = ((document.getElementById('optl-remove-reason') || {}).value || '').trim();
+        var kind = (document.getElementById('optl-remove-kind') || {}).value || '';
+        var expected = picked && picked.displayName ? String(picked.displayName) : '';
+        if (!confirmed || !confirmed.checked || typed.trim().toLowerCase() !== expected.trim().toLowerCase()) {
+          return optlMissing('Confirm the associate and type their full name.');
+        }
+        if (!reason) return optlMissing('Enter a reason. Accountability history will be kept.');
+        if (!kind) return optlMissing('Choose transfer, inactive, mistakenly created, or termination.');
+        if (kind === 'termination') {
+          optlUi.returnView = 'select';
+          optlUi.showRemove = false;
+          optlUi.workflow = 'term';
+          optlUi.view = 'workflow';
+          renderOptl(data);
+          return;
+        }
+        button.textContent = 'Saving...';
+        optlCall({
+          action: 'retireAssociate',
+          clientRequestId: optlRequestId(button),
+          employeeId: optlEmployeeId(),
+          draft: {
+            employeeId: optlEmployeeId(),
+            disposition: kind,
+            reason: reason,
+            confirmedIdentity: true,
+            confirmedName: typed.trim(),
+          },
+        }).catch(function () { button.textContent = 'Confirm removal'; });
+      });
+      var writeBtn = document.getElementById('optl-write');
+      if (writeBtn) writeBtn.addEventListener('click', function () {
+        optlUi.entryMode = 'occurrence';
+        optlUi.view = 'entry';
+        renderOptl(data);
+      });
+      var changeBtn = document.getElementById('optl-change');
+      if (changeBtn) changeBtn.addEventListener('click', function () { optlLocal('select'); });
+      var printToggle = document.getElementById('optl-print-toggle');
+      if (printToggle) printToggle.addEventListener('click', function () {
+        optlUi.showPrint = !optlUi.showPrint;
+        renderOptl(data);
+      });
+      var moreToggle = document.getElementById('optl-more-toggle');
+      if (moreToggle) moreToggle.addEventListener('click', function () {
+        optlUi.showMore = !optlUi.showMore;
+        renderOptl(data);
+      });
+      function openWorkflow(name) {
+        if (name !== 'hire') optlUi.returnView = 'record';
+        optlUi.workflow = name;
+        optlUi.view = 'workflow';
+        renderOptl(data);
+      }
+      var stepBtn = document.getElementById('optl-open-step');
+      if (stepBtn) stepBtn.addEventListener('click', function () {
+        optlUi.entryMode = 'formal';
+        optlUi.draft = null;
+        optlUi.view = 'entry';
+        renderOptl(data);
+      });
+      var ackBtn = document.getElementById('optl-open-ack');
+      if (ackBtn) ackBtn.addEventListener('click', function () { openWorkflow('ack'); });
+      var voidBtn = document.getElementById('optl-open-void');
+      if (voidBtn) voidBtn.addEventListener('click', function () { openWorkflow('void'); });
+      var termBtn = document.getElementById('optl-open-term');
+      if (termBtn) termBtn.addEventListener('click', function () { openWorkflow('term'); });
+      var hireBtn = document.getElementById('optl-open-hire');
+      if (hireBtn) hireBtn.addEventListener('click', function () {
+        optlUi.returnView = 'record';
+        openWorkflow('hire');
+      });
+      var backWorkflow = document.getElementById('optl-workflow-back');
+      if (backWorkflow) backWorkflow.addEventListener('click', function () {
+        var back = optlUi.returnView === 'select' ? 'select' : 'record';
+        optlUi.workflow = '';
+        optlUi.returnView = 'record';
+        optlLocal(back);
+      });
+      var detailClose = document.getElementById('optl-detail-close');
+      if (detailClose) detailClose.addEventListener('click', function () {
+        optlUi.detailId = '';
+        renderOptl(data);
+      });
+      document.querySelectorAll('#optl-screen-record [data-event-id]').forEach(function (el) {
+        if (!el.getAttribute('data-event-id')) return;
+        el.addEventListener('click', function () {
+          optlUi.detailId = el.getAttribute('data-event-id');
+          renderOptl(data);
+        });
+      });
+      var sectionEl = document.getElementById('optl-section');
+      if (sectionEl) sectionEl.addEventListener('change', function () {
+        var categoryEl = document.getElementById('optl-category');
+        if (categoryEl) categoryEl.innerHTML = catOptions(sectionEl.value, '');
+        optlRefreshDescriptions();
+      });
+      var categoryEl = document.getElementById('optl-category');
+      if (categoryEl) categoryEl.addEventListener('change', optlRefreshDescriptions);
+      var descSelect = document.getElementById('optl-short-select');
+      if (descSelect) descSelect.addEventListener('change', function () {
+        var wrap = document.querySelector('.optl-custom-desc');
+        if (wrap) wrap.hidden = descSelect.value !== '__custom';
+      });
+      function leaveEntry() {
+        optlUi.draft = null;
+        optlUi.view = 'record';
+        renderOptl(data);
+      }
+      var entryBack = document.getElementById('optl-entry-back');
+      if (entryBack) entryBack.addEventListener('click', leaveEntry);
+      var entryCancel = document.getElementById('optl-entry-cancel');
+      if (entryCancel) entryCancel.addEventListener('click', leaveEntry);
+      var saveEntry = document.getElementById('optl-save-entry');
+      if (saveEntry) saveEntry.addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        optlUi.draft = optlReadDraft();
+        if (!optlRequireActor()) return;
+        var form = optlUi.draft;
+        if (!form.incidentDate) return optlMissing('Incident date is required.');
+        if (!form.section || !form.category) return optlMissing('Section and category are required.');
+        if (!form.shortDescription) return optlMissing('Choose a standardized description.');
+        if (form.unscored && !form.shortDescription) return optlMissing('Unscored notes need a short description.');
+        if (!form.unscored && (form.category === 'Tardy' || form.category === 'Attendance')) {
+          if (form.quantitativeDetail === '') return optlMissing('Enter minutes late for Tardy or Attendance.');
+          if (form.category === 'Tardy' && !(Number(form.quantitativeDetail) > 15)) return optlMissing('Tardy requires more than 15 minutes. 15 or fewer is not an occurrence.');
+        }
+        if (form.entryType !== 'Occurrence' && form.direct && (form.entryType === 'STEP_II' || form.entryType === 'STEP_III' || form.entryType === 'TERM') && !String(form.justification || '').trim()) {
+          return optlMissing('Direct STEP II, STEP III, or TERM requires written justification.');
+        }
+        button.textContent = form.entryType === 'Occurrence' ? 'Processing accountability occurrence...' : 'Saving...';
+        var payload = {
+          clientRequestId: optlRequestId(button),
+          draft: {
+            employeeId: optlEmployeeId(),
+            incidentDate: form.incidentDate,
+            section: form.section,
+            category: form.category,
+            entryType: form.entryType === 'Occurrence' ? 'Occurrence' : form.entryType,
+            shortDescription: form.shortDescription,
+            quantitativeDetail: form.quantitativeDetail,
+            notes: form.notes,
+            scored: !form.unscored,
+            directIssue: !!form.direct,
+            justification: form.justification,
+          },
+        };
+        if (form.entryType === 'Occurrence') payload.action = 'addEvent';
+        else {
+          payload.action = 'issueFormal';
+          payload.acceptEffective = true;
+        }
+        optlCall(payload).catch(function () {});
+      });
+      var saveHire = document.getElementById('optl-save-hire');
+      if (saveHire) saveHire.addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        var employeeId = document.getElementById('optl-hire-id').value.trim();
+        var displayName = document.getElementById('optl-hire-name').value.trim();
+        var jobTitle = document.getElementById('optl-hire-title').value.trim();
+        var department = document.getElementById('optl-hire-dept').value.trim();
+        var hireDate = document.getElementById('optl-hire-date').value;
+        if (!employeeId || !displayName || !jobTitle || !department || !hireDate) return optlMissing('Employee name, ID, job title, department, and hire date are required.');
+        if (employeeId.indexOf('S17-DEMO-') !== 0) return optlMissing('Use a fictional demo employee id that starts with S17-DEMO-.');
+        button.textContent = 'Saving...';
+        optlCall({
+          action: 'newHire',
+          clientRequestId: optlRequestId(button),
+          draft: {
+            employeeId: employeeId,
+            displayName: displayName,
+            jobTitle: jobTitle,
+            department: department,
+            hireDate: hireDate,
+          },
+        }).catch(function () { button.textContent = 'Create OPTL record'; });
+      });
+      var saveTerm = document.getElementById('optl-save-term');
+      if (saveTerm) saveTerm.addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        var separationDate = document.getElementById('optl-term-date').value;
+        var reason = document.getElementById('optl-term-reason').value.trim();
+        if (!separationDate || !reason) return optlMissing('Separation date and reason are required.');
+        button.textContent = 'Saving...';
+        optlCall({
+          action: 'terminate',
+          clientRequestId: optlRequestId(button),
+          draft: {
+            employeeId: optlEmployeeId(),
+            separationDate: separationDate,
+            reason: reason,
+            notes: document.getElementById('optl-term-notes').value,
+            hrApprovalObtained: document.getElementById('optl-term-hr').checked,
+          },
+        }).catch(function () { button.textContent = 'Complete termination form'; });
+      });
+      var saveAck = document.getElementById('optl-save-ack');
+      if (saveAck) saveAck.addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        var eventId = document.getElementById('optl-ack-event').value;
+        var typed = document.getElementById('optl-ack-name').value.trim();
+        var checked = document.getElementById('optl-ack-box').checked;
+        var refused = document.getElementById('optl-ack-refuse').checked;
+        if (!eventId) return optlMissing('Select the event to acknowledge.');
+        if (!refused && (!typed || !checked)) return optlMissing('Type the employee full name and check the acknowledgment box, or document a refusal.');
+        button.textContent = 'Saving...';
+        optlCall({
+          action: 'acknowledge',
+          clientRequestId: optlRequestId(button),
+          draft: {
+            eventId: eventId,
+            typedFullName: typed,
+            acknowledgedCheckbox: checked,
+            refused: refused,
+          },
+        }).catch(function () { button.textContent = 'Record acknowledgment'; });
+      });
+      var saveVoid = document.getElementById('optl-save-void');
+      if (saveVoid) saveVoid.addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        var eventId = document.getElementById('optl-void-event').value;
+        var reason = document.getElementById('optl-void-reason').value.trim();
+        if (!eventId || !reason) return optlMissing('Select an event and enter a correction reason.');
+        button.textContent = 'Saving...';
+        optlCall({
+          action: 'voidEvent',
+          clientRequestId: optlRequestId(button),
+          draft: { eventId: eventId },
+          reason: reason,
+        }).catch(function () { button.textContent = 'Void / correct (cascade rescind)'; });
+      });
+      var saveRehire = document.getElementById('optl-save-rehire');
+      if (saveRehire) saveRehire.addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        var hireDate = (document.getElementById('optl-rehire-date') || {}).value || '';
+        if (!hireDate) return optlMissing('Rehire date is required.');
+        button.textContent = 'Saving...';
+        optlCall({
+          action: 'rehire',
+          clientRequestId: optlRequestId(button),
+          employeeId: optlEmployeeId(),
+          draft: { employeeId: optlEmployeeId(), hireDate: hireDate, reason: 'Rehire — new clean employment period' },
+        }).catch(function () { button.textContent = 'Rehire with a clean matrix'; });
+      });
+      var resetBtn = document.getElementById('optl-reset-demo');
+      if (resetBtn) resetBtn.addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        button.textContent = 'Saving...';
+        optlCall({ action: 'resetDemo', clientRequestId: optlRequestId(button) }).catch(function () { button.textContent = 'Reset demo data'; });
+      });
+      function runPrint(mode, sheetId) {
+        document.body.classList.remove('print-optl');
+        document.body.classList.remove('print-optl-formal');
+        document.body.classList.remove('print-optl-roster');
+        document.body.classList.add(mode);
+        ['optl-print-matrix-sheet', 'optl-print-history-sheet', 'optl-print-notes-sheet', 'optl-print-pip-sheet', 'optl-print-roster-sheet'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.classList.toggle('optl-print-target', id === sheetId);
+          el.style.display = id === sheetId ? 'block' : 'none';
+        });
+        window.print();
+        window.setTimeout(function () {
+          document.body.classList.remove('print-optl');
+          document.body.classList.remove('print-optl-formal');
+          document.body.classList.remove('print-optl-roster');
+          ['optl-print-matrix-sheet', 'optl-print-history-sheet', 'optl-print-notes-sheet', 'optl-print-pip-sheet', 'optl-print-roster-sheet'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.classList.remove('optl-print-target');
+            el.style.display = 'none';
+          });
+        }, 300);
+      }
+      var printAll = document.getElementById('optl-print-all');
+      if (printAll) printAll.addEventListener('click', function () {
+        api('optl', Object.assign({
+          asOfDate: data.asOfDate,
+          employeeId: optlUi.employeeId || '',
+          printRoster: true,
+        }, optlActorFields())).then(function (page) {
+          if (screen !== 'optl') return;
+          optlUi.view = 'select';
+          displayPayload = page;
+          renderOptl(page);
+          window.setTimeout(function () { runPrint('print-optl-roster', 'optl-print-roster-sheet'); }, 50);
+        });
+      });
+      var printMatrix = document.getElementById('optl-print-matrix');
+      if (printMatrix) printMatrix.addEventListener('click', function () { runPrint('print-optl', 'optl-print-matrix-sheet'); });
+      var printHistory = document.getElementById('optl-print-history');
+      if (printHistory) printHistory.addEventListener('click', function () { runPrint('print-optl-formal', 'optl-print-history-sheet'); });
+      var printNotes = document.getElementById('optl-print-notes');
+      if (printNotes) printNotes.addEventListener('click', function () {
+        var line = detail;
+        var body = document.getElementById('optl-notes-body');
+        if (body) {
+          body.innerHTML = line
+            ? '<p><strong>' + esc(line.entryType) + '</strong> · ' + esc(line.category) + ' · ' + esc(line.incidentDate) +
+              '</p><p>' + esc(line.shortDescription || '') + '</p><p>' + esc(line.notes || 'No private notes on this entry.') + '</p>'
+            : '<p>Select an entry from the matrix or history first.</p>';
+        }
+        runPrint('print-optl-formal', 'optl-print-notes-sheet');
+      });
+      var printPip = document.getElementById('optl-print-pip');
+      if (printPip) printPip.addEventListener('click', function () {
+        var pipSelect = document.getElementById('optl-pip-event');
+        var id = pipSelect ? pipSelect.value : '';
+        api('optl', Object.assign({
+          employeeId: optlEmployeeId(),
+          asOfDate: data.asOfDate,
+          printEventId: id
+        }, optlActorFields())).then(function (page) {
+          if (screen !== 'optl') return;
+          displayPayload = page;
+          optlUi.view = 'record';
+          optlUi.showPrint = true;
+          renderOptl(page);
+          window.setTimeout(function () { runPrint('print-optl-formal', 'optl-print-pip-sheet'); }, 50);
+        });
+      });
+      var highlighted = document.querySelector('.optl-highlight');
+      if (highlighted && highlighted.scrollIntoView) highlighted.scrollIntoView({ block: 'center' });
     }
     function renderConsistency(data) {
       var tone = data.status === 'PASS' ? 'good' : (data.status === 'FAIL' ? 'bad' : '');
@@ -5981,6 +7109,7 @@
       else if (name === 'closeout') renderCloseout(data);
       else if (name === 'training') renderTraining(data);
       else if (name === 'consistency') renderConsistency(data);
+      else if (name === 'optl') renderOptl(data);
       else if (name === 'email') renderEmail(data);
       else if (name === 'coverage') renderCoverage(data);
     }
@@ -5988,7 +7117,7 @@
       var name = screen;
       var request = name === 'written' || name === 'delivered' ? 'home' : (name === 'email' ? 'emailControl' : name);
       if (name === 'admin' || name === 'documents' || name === 'upload') return Promise.resolve({ applied: false, busy: true });
-      return api(request, name === 'reports' ? reportRequest() : undefined).then(function (data) {
+      return api(request, name === 'reports' ? reportRequest() : (name === 'optl' ? { employeeId: optlUi.employeeId || '' } : undefined)).then(function (data) {
         if (screen !== name || displayHold || displayBusy()) return { applied: false, busy: true };
         if (figuresWeakened(displayPayload, data)) return { applied: false, weakened: true };
         displayPayload = data;
@@ -6045,6 +7174,20 @@
       closeDocViewer();
       drawNav();
       var request = name === 'written' || name === 'delivered' ? 'home' : (name === 'email' ? 'emailControl' : name);
+      if (name === 'optl') {
+        optlUi.view = 'select';
+        optlUi.employeeId = '';
+        optlUi.highlightId = '';
+        optlUi.detailId = '';
+        optlUi.draft = null;
+        optlUi.showPrint = false;
+        optlUi.showMore = false;
+        optlUi.showFormer = false;
+        optlUi.showRemove = false;
+        optlUi.workflow = '';
+        optlUi.returnView = 'select';
+        optlUi.loading = false;
+      }
       if (name === 'admin') { renderAdmin(); return; }
       if (name === 'documents') {
         docNotice = null;
