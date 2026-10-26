@@ -29,11 +29,11 @@ var OPTL_OCC_SLOTS_ = [
   'occurrence-5', 'occurrence-6', 'occurrence-7', 'occurrence-8',
 ];
 
-/** Declared managers for shared-login audit (manager-declared, not verified identity). */
+/** Store 17 acting managers (manager-declared, not verified identity). */
 var OPTL_DEMO_ACTING_MANAGERS_ = [
-  'Pat Nguyen (GM)',
-  'Sam Ortiz (ASM)',
-  'Riley Chen (Floor Manager)',
+  'Kelly Meyers — General Manager',
+  'Cordell Primous — Sales Manager',
+  'Elizabeth Perez — Operations Manager',
 ];
 
 function optlAddCalendarDays_(isoDate, days) {
@@ -249,7 +249,7 @@ function optlDemoEvents_() {
       incidentDate: '2026-06-15', entryAt: '2026-07-01', section: 'A', category: 'Behavior', entryType: 'STEP_I',
       shortDescription: 'STEP I — Behavior', quantitativeDetail: null, status: 'active', scored: true,
       chainId: 'chain-103-beh', originalExpirationDate: '2027-06-15', effectiveExpirationDate: '2027-06-15',
-      officialAtIssuance: true, createdByDeclared: 'Pat Nguyen (GM)',
+      officialAtIssuance: true, createdByDeclared: 'Kelly Meyers — General Manager',
     },
   ];
 }
@@ -617,6 +617,37 @@ function optlDashboard_(state, asOf) {
   };
 }
 
+/** Monthly review packet: every active associate, matrix plus history, no private notes. */
+function optlBuildRosterPrint_(state, asOf) {
+  var packet = [];
+  (state.employees || []).forEach(function (employee) {
+    if (employee.status !== 'active') return;
+    var view = optlEngineEmployeeView_(state, employee.employeeId, asOf);
+    packet.push({
+      employeeId: employee.employeeId,
+      displayName: employee.displayName,
+      jobTitle: employee.jobTitle || '',
+      department: employee.department || '',
+      hireDate: employee.hireDate || '',
+      status: 'Active',
+      asOfDate: asOf,
+      matrixRows: view.matrixRows,
+      history: (view.history || []).map(function (line) {
+        return {
+          incidentDate: line.incidentDate,
+          section: line.section,
+          category: line.category,
+          entryType: line.entryType,
+          shortDescription: line.shortDescription,
+          effectiveExpirationDate: line.effectiveExpirationDate,
+          status: line.status,
+        };
+      }),
+    });
+  });
+  return packet;
+}
+
 function optlBuildPage_(state, payload, actionResult) {
   var asOf = String((payload && payload.asOfDate) || optlToday_()).slice(0, 10);
   var employees = state.employees || [];
@@ -688,6 +719,7 @@ function optlBuildPage_(state, payload, actionResult) {
     auditCount: (state.audit || []).length,
     formalEvents: formalEvents,
     pipPrint: pipPrint,
+    rosterPrint: payload && payload.printRoster ? optlBuildRosterPrint_(state, asOf) : null,
     eventNotes: eventNotes,
     actionResult: actionResult || null,
     storageMode: optlStorageMode_(),

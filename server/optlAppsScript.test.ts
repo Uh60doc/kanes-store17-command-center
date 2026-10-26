@@ -108,7 +108,7 @@ type OptlGs = {
 };
 
 const actor = {
-  actingManagerDeclared: 'Pat Nguyen (GM)',
+  actingManagerDeclared: 'Kelly Meyers — General Manager',
   actingManagerConfirmed: true,
 };
 
@@ -610,7 +610,7 @@ test('acting manager must be selected and confirmed for mutations', () => {
           entryType: 'Occurrence',
           shortDescription: 'x',
         },
-        { actingManagerDeclared: 'Pat Nguyen (GM)', actingManagerConfirmed: false },
+        { actingManagerDeclared: 'Kelly Meyers — General Manager', actingManagerConfirmed: false },
       ),
     /Confirm the acting manager/i,
   );
@@ -782,7 +782,7 @@ test('optl_ mutation actions: new hire via page API and UI markers present', () 
   const page = gs.optl_({
     action: 'resetDemo',
     asOfDate: '2026-10-25',
-    actingManagerDeclared: 'Pat Nguyen (GM)',
+    actingManagerDeclared: 'Kelly Meyers — General Manager',
     actingManagerConfirmed: true,
   });
   assert.ok(page.dashboard);
@@ -798,7 +798,15 @@ test('optl_ mutation actions: new hire via page API and UI markers present', () 
   assert.match(html, /Delete Associate/);
   assert.match(html, /Write New Occurrence/);
   assert.match(html, /Print Options/);
-  assert.match(html, /Return to Associate Selection/);
+  assert.match(html, /Change Associate \/ Back to Associate Selection/);
+  assert.match(html, /Print All OPTLs with History/);
+  assert.match(html, /id="optl-entry-back">Back/);
+  assert.match(html, /id="optl-entry-cancel">Cancel/);
+  const optlSource = readFileSync(new URL('../apps-script/Optl.gs', import.meta.url), 'utf8');
+  assert.match(optlSource, /Kelly Meyers — General Manager/);
+  assert.match(optlSource, /Cordell Primous — Sales Manager/);
+  assert.match(optlSource, /Elizabeth Perez — Operations Manager/);
+  assert.doesNotMatch(html + optlSource, /Pat Nguyen|Sam Ortiz|Riley Chen/);
   assert.match(html, /Processing accountability occurrence\.\.\./);
   const selectStart = html.indexOf('id="optl-screen-select"');
   const recordStart = html.indexOf('id="optl-screen-record"');
@@ -884,7 +892,7 @@ test('OPTL saves survive a later read and stay off the sales cache', () => {
     action: 'addEvent',
     asOfDate: '2026-10-25',
     employeeId: 'S17-DEMO-101',
-    actingManagerDeclared: 'Pat Nguyen (GM)',
+    actingManagerDeclared: 'Kelly Meyers — General Manager',
     actingManagerConfirmed: true,
     draft: {
       employeeId: 'S17-DEMO-101',
@@ -915,7 +923,7 @@ test('a repeated save click does not create a second occurrence', () => {
     clientRequestId: 'click-once',
     asOfDate: '2026-10-25',
     employeeId: 'S17-DEMO-101',
-    actingManagerDeclared: 'Pat Nguyen (GM)',
+    actingManagerDeclared: 'Kelly Meyers — General Manager',
     actingManagerConfirmed: true,
     draft: {
       employeeId: 'S17-DEMO-101',
@@ -969,7 +977,7 @@ test('dedicated sheet save writes the snapshot and skips untouched tabs and prop
     action: 'addEvent',
     asOfDate: '2026-10-25',
     employeeId: 'S17-DEMO-101',
-    actingManagerDeclared: 'Pat Nguyen (GM)',
+    actingManagerDeclared: 'Kelly Meyers — General Manager',
     actingManagerConfirmed: true,
     draft: {
       employeeId: 'S17-DEMO-101',
@@ -1007,7 +1015,7 @@ test('save feedback and checkbox sizing stay inside OPTL', () => {
   assert.match(html, /Select the acting manager before this action/);
   assert.match(html, /clientRequestId/);
   assert.match(html, /optl-highlight/);
-  assert.match(html, /Cancel returns to this associate without saving/);
+  assert.match(html, /Back and Cancel return to this associate without saving/);
 });
 
 test('retire leaves the active list and keeps fictional accountability history', () => {
@@ -1015,7 +1023,7 @@ test('retire leaves the active list and keeps fictional accountability history',
   const hired = gs.optl_({
     action: 'newHire',
     asOfDate: '2026-10-01',
-    actingManagerDeclared: 'Pat Nguyen (GM)',
+    actingManagerDeclared: 'Kelly Meyers — General Manager',
     actingManagerConfirmed: true,
     draft: {
       employeeId: 'S17-DEMO-261',
@@ -1030,7 +1038,7 @@ test('retire leaves the active list and keeps fictional accountability history',
     action: 'addEvent',
     asOfDate: '2026-10-05',
     employeeId: 'S17-DEMO-261',
-    actingManagerDeclared: 'Pat Nguyen (GM)',
+    actingManagerDeclared: 'Kelly Meyers — General Manager',
     actingManagerConfirmed: true,
     draft: {
       employeeId: 'S17-DEMO-261',
@@ -1048,7 +1056,7 @@ test('retire leaves the active list and keeps fictional accountability history',
         action: 'retireAssociate',
         asOfDate: '2026-10-20',
         employeeId: 'S17-DEMO-261',
-        actingManagerDeclared: 'Pat Nguyen (GM)',
+        actingManagerDeclared: 'Kelly Meyers — General Manager',
         actingManagerConfirmed: true,
         draft: {
           employeeId: 'S17-DEMO-261',
@@ -1066,7 +1074,7 @@ test('retire leaves the active list and keeps fictional accountability history',
         action: 'retireAssociate',
         asOfDate: '2026-10-20',
         employeeId: 'S17-DEMO-261',
-        actingManagerDeclared: 'Pat Nguyen (GM)',
+        actingManagerDeclared: 'Kelly Meyers — General Manager',
         actingManagerConfirmed: true,
         draft: {
           employeeId: 'S17-DEMO-261',
@@ -1082,7 +1090,7 @@ test('retire leaves the active list and keeps fictional accountability history',
     action: 'retireAssociate',
     asOfDate: '2026-10-20',
     employeeId: 'S17-DEMO-261',
-    actingManagerDeclared: 'Pat Nguyen (GM)',
+    actingManagerDeclared: 'Kelly Meyers — General Manager',
     actingManagerConfirmed: true,
     draft: {
       employeeId: 'S17-DEMO-261',
@@ -1106,6 +1114,121 @@ test('retire leaves the active list and keeps fictional accountability history',
   };
   assert.equal(again.employee?.status, 'inactive');
   assert.ok(again.history.some((line) => line.shortDescription === 'Keep Me'));
+});
+
+test('monthly roster print keeps active fictional associates and Store 17 managers', () => {
+  const gs = loadOptl();
+  const managers = (gs.optl_({ asOfDate: '2026-10-25' }) as { actingManagers?: string[] }).actingManagers;
+  assert.equal(
+    (managers || []).join('|'),
+    [
+      'Kelly Meyers — General Manager',
+      'Cordell Primous — Sales Manager',
+      'Elizabeth Perez — Operations Manager',
+    ].join('|'),
+  );
+  const state = gs.optlEmptyState_();
+  const kelly = { actingManagerDeclared: 'Kelly Meyers — General Manager', actingManagerConfirmed: true, asOfDate: '2026-10-25' };
+  const cordell = { ...kelly, actingManagerDeclared: 'Cordell Primous — Sales Manager' };
+  const elizabeth = { ...kelly, actingManagerDeclared: 'Elizabeth Perez — Operations Manager' };
+  gs.optlNewHireEmployee_(
+    state,
+    {
+      employeeId: 'S17-DEMO-301',
+      displayName: 'FICTIONAL DEMO 301 — Not a real employee',
+      hireDate: '2026-08-01',
+      jobTitle: 'Sales Associate',
+      department: 'Sales',
+    },
+    kelly,
+  );
+  gs.optlNewHireEmployee_(
+    state,
+    {
+      employeeId: 'S17-DEMO-302',
+      displayName: 'FICTIONAL DEMO 302 — Not a real employee',
+      hireDate: '2026-08-01',
+      jobTitle: 'Sales Associate',
+      department: 'Operations',
+    },
+    cordell,
+  );
+  const kept = gs.optlAddEvent_(
+    state,
+    {
+      employeeId: 'S17-DEMO-301',
+      incidentDate: '2026-10-04',
+      section: 'A',
+      category: 'Safety',
+      entryType: 'Occurrence',
+      shortDescription: 'Unsafe Behavior',
+      notes: 'PRIVATE-NOTE-SHOULD-NOT-PRINT',
+      scored: true,
+    },
+    kelly,
+  );
+  assert.equal(kept.createdByDeclared, 'Kelly Meyers — General Manager');
+  gs.optlTerminateEmployee_(state, 'S17-DEMO-302', { separationDate: '2026-10-01', reason: 'Fictional separation' }, elizabeth);
+  const packet = (
+    gs as unknown as { optlBuildRosterPrint_: (state: unknown, asOf: string) => {
+      employeeId: string;
+      displayName: string;
+      status: string;
+      asOfDate: string;
+      matrixRows: { section: string }[];
+      history: { shortDescription?: string; notes?: string }[];
+    }[] }
+  ).optlBuildRosterPrint_(state, '2026-10-25');
+  assert.equal(packet.length, 1);
+  assert.equal(packet[0]?.employeeId, 'S17-DEMO-301');
+  assert.equal(packet[0]?.displayName, 'FICTIONAL DEMO 301 — Not a real employee');
+  assert.equal(packet[0]?.status, 'Active');
+  assert.equal(packet[0]?.asOfDate, '2026-10-25');
+  assert.ok(packet[0]?.matrixRows.some((row) => row.section === 'A'));
+  assert.ok(packet[0]?.matrixRows.some((row) => row.section === 'B'));
+  assert.ok(packet[0]?.history.some((line) => line.shortDescription === 'Unsafe Behavior'));
+  assert.equal(JSON.stringify(packet).includes('PRIVATE-NOTE-SHOULD-NOT-PRINT'), false);
+  const step = gs.optlIssueFormalAction_(
+    state,
+    {
+      employeeId: 'S17-DEMO-301',
+      section: 'A',
+      category: 'Safety',
+      entryType: 'STEP_I',
+      incidentDate: '2026-10-10',
+      directIssue: true,
+    },
+    kelly,
+  );
+  const pip = gs.optlBuildPipPrint_(state, String(step.eventId)) as { managerDeclared?: string };
+  assert.equal(pip.managerDeclared, 'Kelly Meyers — General Manager');
+  const ack = gs.optlAcknowledgeEvent_(
+    state,
+    String(kept.eventId),
+    { typedFullName: 'FICTIONAL DEMO 301 — Not a real employee', acknowledgedCheckbox: true },
+    cordell,
+  ) as { supervisingManagerDeclared?: string };
+  assert.equal(ack.supervisingManagerDeclared, 'Cordell Primous — Sales Manager');
+  assert.ok(
+    (state.audit as { actorDeclared?: string }[]).some((row) => row.actorDeclared === 'Elizabeth Perez — Operations Manager'),
+  );
+  assert.throws(
+    () =>
+      gs.optlAddEvent_(
+        state,
+        {
+          employeeId: 'S17-DEMO-301',
+          incidentDate: '2026-10-11',
+          section: 'A',
+          category: 'Behavior',
+          entryType: 'Occurrence',
+          shortDescription: 'Unacceptable Behavior',
+          scored: true,
+        },
+        { actingManagerDeclared: 'Pat Nguyen (GM)', actingManagerConfirmed: true },
+      ),
+    /acting manager/i,
+  );
 });
 
 test('flag review required marks yellow-red exception', () => {

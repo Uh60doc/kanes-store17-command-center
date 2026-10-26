@@ -355,7 +355,9 @@ function optlRefreshPending_(state, employeeId, asOfDate) {
 
 function optlAssertActingManager_(payload) {
   var name = String((payload && payload.actingManagerDeclared) || '').trim();
-  if (!name) throw new Error('Select and confirm the acting manager (manager-declared attribution).');
+  if (OPTL_DEMO_ACTING_MANAGERS_.indexOf(name) === -1) {
+    throw new Error('Select an acting manager: Kelly Meyers — General Manager, Cordell Primous — Sales Manager, or Elizabeth Perez — Operations Manager.');
+  }
   if (!(payload && payload.actingManagerConfirmed === true)) {
     throw new Error('Confirm the acting manager before recording an OPTL action.');
   }
