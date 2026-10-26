@@ -320,6 +320,39 @@ test('optl_ Jordan Safety×4 shows pending STEP lock', () => {
   assert.ok(page.pendingActions.some((row) => row.kind === 'ACTION_REQUIRED' && row.category === 'Safety'));
 });
 
+test('version 1.0.68 sign-in stays in place and OPTL uses that management session', () => {
+  const auth = readFileSync(new URL('../apps-script/Auth.gs', import.meta.url), 'utf8');
+  const code = readFileSync(new URL('../apps-script/Code.gs', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../apps-script/Index.html', import.meta.url), 'utf8');
+  const docs = readFileSync(new URL('../apps-script/Documents.gs', import.meta.url), 'utf8');
+  const optl = readFileSync(new URL('../apps-script/Optl.gs', import.meta.url), 'utf8');
+  assert.match(code, /APP_VERSION_ = '1\.0\.68'/);
+  assert.match(auth, /liz: \{ role: 'admin', name: 'Liz' \}/);
+  assert.match(auth, /cordell: \{ role: 'admin', name: 'Cordell' \}/);
+  assert.match(auth, /kelly: \{ role: 'admin', name: 'Kelly' \}/);
+  assert.match(auth, /function choosePassword_/);
+  assert.match(auth, /function resetSignIn_/);
+  assert.match(code, /choosePassword: null/);
+  assert.match(code, /resetSignIn: \['admin'\]/);
+  assert.match(code, /name === 'choosePassword' \? choosePassword_\(payload\)/);
+  assert.match(code, /if \(name === 'resetSignIn'\) return resetSignIn_\(payload\);/);
+  assert.match(code, /optl: \['manager', 'admin'\]/);
+  assert.match(html, /mustSetPassword/);
+  assert.match(html, /Liz, Cordell, and Kelly are the only usernames/);
+  assert.match(html, /Let Liz use ADMIN again/);
+  assert.match(docs, /session\.username/);
+  assert.match(optl, /optlRole !== 'manager' && optlRole !== 'admin'/);
+  assert.doesNotMatch(optl, /share that login/);
+  const gs = loadOptl();
+  assert.throws(
+    () => gs.optl_({ session: { role: 'sales', username: 'sales17' }, asOfDate: '2026-10-25' }),
+    /not available for this login/,
+  );
+  const page = gs.optl_({ session: { role: 'admin', username: 'kelly' }, asOfDate: '2026-10-25', employeeId: 'S17-DEMO-101' });
+  assert.equal(page.prototype, true);
+  assert.equal(page.alertConfig.emailEnabled, false);
+});
+
 test('Admin dropdown lists OPTL and Code.gs registers the optl route', () => {
   const html = readFileSync(new URL('../apps-script/Index.html', import.meta.url), 'utf8');
   assert.match(html, /\['optl', 'OPTL'\]/);

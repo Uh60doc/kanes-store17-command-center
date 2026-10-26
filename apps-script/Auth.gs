@@ -23,35 +23,94 @@ var USER_ROLES_ = {
   kelly: 'admin',
 };
 
-function login_(payload) {
-  var username = String((payload && payload.username) || '').trim().toLowerCase();
-  var password = String((payload && payload.password) || '');
-  if (locked_(username)) throw new Error('Too many attempts. Wait 15 minutes.');
-  var role = USER_ROLES_[username] || '';
+// The only people who can sign in. Each one keeps their own password.
+var SIGN_IN_USERS_ = {
+  liz: { role: 'admin', name: 'Liz' },
+  cordell: { role: 'admin', name: 'Cordell' },
+  kelly: { role: 'admin', name: 'Kelly' },
+};
+var FIRST_PASSWORD_ = 'ADMIN';
+
+function signInUser_(username) {
+  return SIGN_IN_USERS_[String(username || '').trim().toLowerCase()] || null;
+}
+
+function passwordReady_(username) {
+  return PropertiesService.getScriptProperties().getProperty('ready_user_' + username) === 'yes';
+}
+
+function issueSession_(username, role) {
   var props = PropertiesService.getScriptProperties();
-  var hash = role ? props.getProperty('hash_' + role) : '';
-  var salt = role ? props.getProperty('salt_' + role) : '';
-  if (!role || !hash || !salt || !same_(hashPassword_(password, salt), hash)) {
-    recordFailure_(username || 'unknown');
-    throw new Error('That username or password is not valid.');
-  }
-  clearFailures_(username);
   var token = Utilities.getUuid() + Utilities.getUuid();
   saveSession_(token, {
     role: role,
     username: username,
-    epoch: props.getProperty('epoch_' + role) || '0',
+    epoch: props.getProperty('epoch_user_' + username) || '0',
     expires: Date.now() + SESSION_MS_,
   });
   var ownName = '';
   if (role === 'sales' && typeof employeeReportOn_ === 'function' && employeeReportOn_()) ownName = String(config_()['employee_report_' + username] || '').trim();
-  return { token: token, role: role, ownReport: !!ownName, ownName: ownName };
+  return { token: token, role: role, username: username, ownReport: !!ownName, ownName: ownName };
+}
+
+function login_(payload) {
+  var username = String((payload && payload.username) || '').trim().toLowerCase();
+  var password = String((payload && payload.password) || '');
+  if (locked_(username)) throw new Error('Too many attempts. Wait 15 minutes.');
+  var user = signInUser_(username);
+  if (!user) {
+    recordFailure_(username || 'unknown');
+    throw new Error('That username or password is not valid.');
+  }
+  if (!passwordReady_(username)) {
+    if (password !== FIRST_PASSWORD_) {
+      recordFailure_(username);
+      throw new Error('That username or password is not valid.');
+    }
+    clearFailures_(username);
+    return { mustSetPassword: true, username: username, name: user.name };
+  }
+  var props = PropertiesService.getScriptProperties();
+  var hash = props.getProperty('hash_user_' + username) || '';
+  var salt = props.getProperty('salt_user_' + username) || '';
+  if (!hash || !salt || !same_(hashPassword_(password, salt), hash)) {
+    recordFailure_(username);
+    throw new Error('That username or password is not valid.');
+  }
+  clearFailures_(username);
+  return issueSession_(username, user.role);
+}
+
+function choosePassword_(payload) {
+  var username = String((payload && payload.username) || '').trim().toLowerCase();
+  var current = String((payload && payload.password) || '');
+  var next = payload && payload.newPassword !== undefined && payload.newPassword !== null ? String(payload.newPassword) : '';
+  if (locked_(username)) throw new Error('Too many attempts. Wait 15 minutes.');
+  var user = signInUser_(username);
+  if (!user) {
+    recordFailure_(username || 'unknown');
+    throw new Error('That username or password is not valid.');
+  }
+  if (passwordReady_(username)) throw new Error('A password is already saved. Sign in with it.');
+  if (current !== FIRST_PASSWORD_) {
+    recordFailure_(username);
+    throw new Error('That username or password is not valid.');
+  }
+  if (!next) throw new Error('Enter a password.');
+  var props = PropertiesService.getScriptProperties();
+  var salt = Utilities.getUuid();
+  props.setProperty('salt_user_' + username, salt);
+  props.setProperty('hash_user_' + username, hashPassword_(next, salt));
+  props.setProperty('ready_user_' + username, 'yes');
+  props.setProperty('epoch_user_' + username, String(Date.now()));
+  clearFailures_(username);
+  return issueSession_(username, user.role);
 }
 
 function requireSession_(token) {
   var session = readSession_(token);
-  if (!session) throw new Error('Sign in required.');
-  var epoch = PropertiesService.getScriptProperties().getProperty('epoch_' + session.role) || '0';
+  if (!session || !signInUser_(session.username)) throw new Error('Sign in required.');
+  var epoch = PropertiesService.getScriptProperties().getProperty('epoch_user_' + session.username) || '0';
   if (epoch !== session.epoch) throw new Error('Sign in required.');
   return session;
 }
@@ -86,10 +145,10 @@ function readSessionMap_() {
   }
 }
 
-function dropRoleSessions_(role) {
+function dropUserSessions_(username) {
   var all = readSessionMap_();
   Object.keys(all).forEach(function (key) {
-    if (all[key] && all[key].role === role) delete all[key];
+    if (all[key] && all[key].username === username) delete all[key];
   });
   PropertiesService.getScriptProperties().setProperty('sessions', JSON.stringify(all));
 }
@@ -111,23 +170,21 @@ function clearFailures_(username) {
   cache.remove('lock_' + username);
 }
 
-function changePassword_(payload) {
-  var role = String(payload.role || '').toLowerCase();
-  var password = String(payload.password || '');
-  if (role !== 'sales' && role !== 'manager' && role !== 'admin') throw new Error('Choose sales, manager, or admin.');
-  if (password.length < 10) throw new Error('Use at least 10 characters.');
+function changePassword_() {
+  throw new Error('Liz, Cordell, and Kelly each create a password at sign-in.');
+}
+
+/** Clears one person's saved password so the starting password works again. */
+function resetSignIn_(payload) {
+  var username = String((payload && payload.username) || '').trim().toLowerCase();
+  if (!signInUser_(username)) throw new Error('That username is not allowed.');
   var props = PropertiesService.getScriptProperties();
-  var salt = Utilities.getUuid();
-  props.setProperty('salt_' + role, salt);
-  props.setProperty('hash_' + role, hashPassword_(password, salt));
-  props.setProperty('epoch_' + role, String(Date.now()));
-  dropRoleSessions_(role);
-  if (role === 'admin') {
-    var token = Utilities.getUuid() + Utilities.getUuid();
-    saveSession_(token, { role: 'admin', epoch: props.getProperty('epoch_admin'), expires: Date.now() + SESSION_MS_ });
-    return { ok: true, token: token, role: 'admin' };
-  }
-  return { ok: true };
+  props.deleteProperty('hash_user_' + username);
+  props.deleteProperty('salt_user_' + username);
+  props.deleteProperty('ready_user_' + username);
+  props.setProperty('epoch_user_' + username, String(Date.now()));
+  dropUserSessions_(username);
+  return { ok: true, username: username };
 }
 
 function bootstrapPasswords_() {

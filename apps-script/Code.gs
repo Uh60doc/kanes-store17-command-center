@@ -1,8 +1,9 @@
 var SPREADSHEET_ID_ = '1KtsfQPQRdg3IdNXomlM5t47IyE1psouxvgW-D8VSLfw';
-var APP_VERSION_ = '1.0.66';
+var APP_VERSION_ = '1.0.68';
 
 var ROUTES_ = {
   login: null,
+  choosePassword: null,
   home: ['sales', 'manager', 'admin'],
   daily: ['sales', 'manager', 'admin'],
   closing: ['sales', 'manager', 'admin'],
@@ -23,6 +24,7 @@ var ROUTES_ = {
   bedding: ['manager', 'admin'],
   saveBeddingGoals: ['admin'],
   changePassword: ['admin'],
+  resetSignIn: ['admin'],
   retry: ['admin'],
   runChecks: ['admin'],
   runBackup: ['admin'],
@@ -242,7 +244,7 @@ function dispatch(name, payload) {
   var route = ROUTES_[name];
   if (route === undefined) throw new Error('That request is not available.');
   payload = payload || {};
-  if (route === null) return login_(payload);
+  if (route === null) return name === 'choosePassword' ? choosePassword_(payload) : login_(payload);
   var session = requireSession_(payload.token);
   if (route.indexOf(session.role) === -1) throw new Error('That area is not available for this login.');
   payload.session = session;
@@ -279,6 +281,7 @@ function route_(name, payload) {
   if (name === 'bedding') return bedding_(payload);
   if (name === 'saveBeddingGoals') return saveBeddingGoals_(payload);
   if (name === 'changePassword') return changePassword_(payload);
+  if (name === 'resetSignIn') return resetSignIn_(payload);
   if (name === 'retry') return retry_(payload);
   if (name === 'runChecks') return runChecks_(payload);
   if (name === 'runBackup') return runBackupRoute_(payload);

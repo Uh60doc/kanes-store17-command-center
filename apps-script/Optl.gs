@@ -728,7 +728,7 @@ function optlBuildPage_(state, payload, actionResult) {
         ? 'Dedicated STORE 17 OPTL DATA workbook (not the sales spreadsheet)'
         : 'Demo persistence in script properties until the GM runs optlCreateDedicatedStore_ — sales spreadsheet is never used',
       email: 'Command Center alerts on. Live email blocked until recipients are verified and gmEmailAuthorized is set. Subjects omit incident details.',
-      identity: 'Existing manager/admin login only (GM, Sales Manager, Operations Manager share that login). Every mutation records a manager-declared actor. Shared credentials cannot verify which person typed the password. No SSN field exists.',
+      identity: 'Existing per-person management sessions only. Kelly Meyers, Cordell Primous, and Elizabeth Perez sign in with the Command Center accounts already issued to them. OPTL does not add a login. Every mutation still records the declared acting manager. No SSN field exists.',
       pipPrint: 'Kane\'s Personal Improvement Plan matches performance-improvement-plan-pip-blank.doc. Employee matrix print has no private notes.',
     },
     stillDemo: [
@@ -758,6 +758,10 @@ function optlRun_(payload) {
 }
 
 function optl_(payload) {
+  if (payload && payload.session) {
+    var optlRole = String(payload.session.role || '');
+    if (optlRole !== 'manager' && optlRole !== 'admin') throw new Error('That area is not available for this login.');
+  }
   if (payload && payload.action && typeof LockService !== 'undefined') {
     var lock = LockService.getScriptLock();
     lock.waitLock(30000);
