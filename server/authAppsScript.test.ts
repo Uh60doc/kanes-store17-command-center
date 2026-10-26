@@ -48,12 +48,14 @@ test('Liz, Cordell, and Kelly can sign in, and ADMIN asks each of them to create
   const kelly = gs.login_({ username: 'Kelly', password: 'ADMIN' });
   assert.equal(kelly.mustSetPassword, true);
   assert.equal(kelly.name, 'Kelly');
+  assert.equal(gs.requireSession_(kelly.token).mustSetPassword, true);
+  assert.equal(gs.choosePassword_({ username: 'kelly', token: kelly.token, newPassword: 'store' }).username, 'kelly');
   assert.throws(() => gs.login_({ username: 'store17', password: 'ADMIN' }), /not valid/);
   assert.throws(() => gs.login_({ username: 'Liz', password: 'admin' }), /not valid/);
   const liz = gs.login_({ username: ' Liz ', password: 'ADMIN' });
   assert.equal(liz.mustSetPassword, true);
   assert.equal(liz.name, 'Liz');
-  assert.equal(liz.token, undefined);
+  assert.equal(gs.requireSession_(liz.token).mustSetPassword, true);
   const cordell = gs.login_({ username: 'cordell', password: 'ADMIN' });
   assert.equal(cordell.name, 'Cordell');
   assert.throws(() => gs.choosePassword_({ username: 'liz', password: 'ADMIN', newPassword: '' }), /Enter a password/);
@@ -61,6 +63,7 @@ test('Liz, Cordell, and Kelly can sign in, and ADMIN asks each of them to create
   assert.equal(saved.role, 'admin');
   assert.equal(saved.username, 'liz');
   assert.equal(gs.requireSession_(saved.token).username, 'liz');
+  assert.throws(() => gs.requireSession_(liz.token), /Sign in required/);
   assert.equal(props.ready_user_liz, 'yes');
   assert.equal(JSON.stringify(props).includes('"a"'), false);
   assert.throws(() => gs.login_({ username: 'liz', password: 'ADMIN' }), /not valid/);
