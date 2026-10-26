@@ -893,6 +893,56 @@ function optlTerminateEmployee_(state, employeeId, draft, payload) {
 }
 
 /**
+ * Remove an associate from the active selector without deleting accountability records.
+ * Termination stays on the formal termination workflow. Transfer, inactive, and
+ * mistakenly created profiles remain retrievable and printable.
+ */
+function optlRetireEmployee_(state, employeeId, draft, payload) {
+  var manager = optlAssertActingManager_(payload || {});
+  var employee = null;
+  state.employees.forEach(function (row) { if (row.employeeId === employeeId) employee = row; });
+  if (!employee) throw new Error('Unknown employee');
+  if (employee.status !== 'active') throw new Error('This associate is already off the active list.');
+  var disposition = String((draft && draft.disposition) || '').trim();
+  if (disposition === 'termination') throw new Error('Use the formal termination workflow.');
+  if (disposition !== 'transfer' && disposition !== 'inactive' && disposition !== 'mistaken') {
+    throw new Error('Choose transfer, inactive, or mistakenly created.');
+  }
+  var reason = String((draft && draft.reason) || (payload && payload.reason) || '').trim();
+  if (!reason) throw new Error('A reason is required.');
+  var typed = String((draft && draft.confirmedName) || '').trim();
+  var expected = String(employee.displayName || '').trim();
+  if (!(draft && draft.confirmedIdentity === true) || !typed || typed.toLowerCase() !== expected.toLowerCase()) {
+    throw new Error('Confirm the associate identity by typing their full name.');
+  }
+  var asOf = String((payload && payload.asOfDate) || optlToday_()).slice(0, 10);
+  var period = optlActiveEmploymentPeriod_(employee);
+  if (period) {
+    period.status = 'ended';
+    period.separationDate = asOf;
+    period.endReason = disposition;
+  }
+  employee.status = disposition === 'mistaken' ? 'withdrawn' : 'inactive';
+  employee.inactiveDisposition = disposition;
+  employee.inactiveReason = reason;
+  employee.separationDate = asOf;
+  (state.pendingActions || []).forEach(function (row) {
+    if (row.employeeId === employeeId && row.status === 'open') {
+      row.status = 'closed';
+      row.closedAt = asOf;
+      row.closedByDeclared = manager;
+    }
+  });
+  optlAudit_(state, 'retire-associate', {
+    actingManagerDeclared: manager,
+    employeeId: employeeId,
+    after: { status: employee.status, disposition: disposition, reason: reason },
+    reason: reason,
+  });
+  return employee;
+}
+
+/**
  * Supervised acknowledgment — typed full name + checkbox, or manager-documented refusal.
  * No SSN. Does not make STEP official (issuance already did).
  */

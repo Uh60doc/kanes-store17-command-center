@@ -915,7 +915,7 @@
     var displayTimer = null;
     var displayRefreshing = false;
     var displayHold = false;
-    var optlUi = { view: 'select', employeeId: '', highlightId: '', detailId: '', draft: null, showPrint: false, showMore: false, workflow: '' };
+    var optlUi = { view: 'select', employeeId: '', highlightId: '', detailId: '', draft: null, showPrint: false, showMore: false, showFormer: false, showRemove: false, workflow: '', returnView: 'select' };
     var displayPayload = null;
 
     function esc(value) {
@@ -984,7 +984,8 @@
       extra = extra || {};
       var action = String(extra.action || '');
       if (name === 'optl') {
-        if (action === 'addEvent' || action === 'issueFormal' || action === 'voidEvent' || action === 'newHire' || action === 'terminate' || action === 'acknowledge' || action === 'rehire' || action === 'resetDemo' || action === 'flagReview') return 'Saving...';
+        if (action === 'addEvent') return 'Processing accountability occurrence...';
+        if (action === 'issueFormal' || action === 'voidEvent' || action === 'newHire' || action === 'terminate' || action === 'acknowledge' || action === 'rehire' || action === 'retireAssociate' || action === 'resetDemo' || action === 'flagReview') return 'Saving...';
         if (extra.printEventId) return 'Generating document...';
         return 'Loading...';
       }
@@ -6109,7 +6110,7 @@
       displayHold = false;
       document.body.classList.remove('print-optl');
       document.body.classList.remove('print-optl-formal');
-      if (optlUi.view !== 'select' && data.selectedEmployeeId) optlUi.employeeId = data.selectedEmployeeId;
+      if (optlUi.view !== 'select' && data.selectedEmployeeId && (!optlUi.employeeId || optlUi.employeeId === data.selectedEmployeeId)) optlUi.employeeId = data.selectedEmployeeId;
       var viewTitle = optlUi.view === 'entry' ? 'Accountability entry' : (optlUi.view === 'record' ? 'Employee OPTL' : 'Select associate');
       document.getElementById('header-note').textContent = 'OPTL · ' + viewTitle;
       var employees = data.employees || [];
@@ -6117,11 +6118,22 @@
       if (optlUi.employeeId) {
         employees.forEach(function (row) { if (row.employeeId === optlUi.employeeId) employee = row; });
       }
+      var visibleEmployees = employees.filter(function (row) {
+        return optlUi.showFormer || row.status === 'active';
+      });
       var blankOption = '<option value="">Select an associate…</option>';
-      var options = blankOption + employees.map(function (row) {
+      function statusSuffix(row) {
+        if (row.status === 'former') return ' (Former)';
+        if (row.status === 'inactive') return ' (Inactive)';
+        if (row.status === 'withdrawn') return ' (Withdrawn)';
+        return '';
+      }
+      var options = blankOption + visibleEmployees.map(function (row) {
         var selected = optlUi.view === 'select' && row.employeeId === optlUi.employeeId ? ' selected' : '';
-        return '<option value="' + esc(row.employeeId) + '"' + selected + '>' + esc(row.displayName) + (row.status === 'former' ? ' (Former)' : '') + '</option>';
+        return '<option value="' + esc(row.employeeId) + '"' + selected + '>' + esc(row.displayName) + statusSuffix(row) + '</option>';
       }).join('');
+      var picked = null;
+      employees.forEach(function (row) { if (row.employeeId === optlUi.employeeId) picked = row; });
       var actorName = data.actingManagerDeclared || optlUi.actorName || '';
       var actorConfirmed = !!(data.actingManagerConfirmed || optlUi.actorConfirmed);
       var managerOptions = (data.actingManagers || []).map(function (name) {
@@ -6192,7 +6204,7 @@
       var pip = data.pipPrint || {};
       var actionMsg = data.actionResult && data.actionResult.message ? data.actionResult.message : '';
       var actionErr = data.actionResult && data.actionResult.ok === false;
-      var statusLine = employee.status === 'former' ? 'Former archive' : 'Active';
+      var statusLine = employee.status === 'former' ? 'Former' : (employee.status === 'inactive' ? 'Inactive' : (employee.status === 'withdrawn' ? 'Withdrawn' : 'Active'));
       var whoBlock = '<div class="optl-who"><p class="optl-kicker">Store 17 Online · OPTL</p><h2>' + esc(employee.displayName || 'Associate') + '</h2>' +
         '<p class="sub">ID ' + esc(employee.employeeId || '') + ' · ' + esc(employee.jobTitle || '') + ' · ' + esc(statusLine) +
         ' · hired ' + esc(employee.hireDate || '') + ' · as of ' + esc(data.asOfDate || '') + '</p></div>';
@@ -6228,6 +6240,29 @@
       var descOptions = descLabels.map(function (label) {
         return '<option value="' + esc(label) + '"' + (label === draft.shortDescription ? ' selected' : '') + '>' + esc(label) + '</option>';
       }).join('') + '<option value="__custom"' + (draft.shortDescription && !descKnown ? ' selected' : '') + '>Other description</option>';
+      var removePanel = (optlUi.showRemove && picked)
+        ? '<div class="optl-remove" id="optl-remove-panel"><h3>Delete Associate</h3>' +
+          '<p class="sub">Confirm <strong>' + esc(picked.displayName) + '</strong> and enter a reason. Accountability documentation stays in the record and can still be printed.</p>' +
+          '<label class="confirm"><input type="checkbox" id="optl-remove-confirm" /> I confirm this is the associate to remove from the active list</label>' +
+          '<label>Type the associate\'s full name<input id="optl-remove-name" autocomplete="off" /></label>' +
+          '<label>Reason<textarea id="optl-remove-reason"></textarea></label>' +
+          '<label>What happened<select id="optl-remove-kind"><option value="">Select…</option>' +
+          '<option value="transfer">Transfer — leave the active list</option>' +
+          '<option value="inactive">Inactive — leave the active list</option>' +
+          '<option value="mistaken">Mistakenly created — withdraw the profile</option>' +
+          '<option value="termination">Termination — open the formal termination workflow</option></select></label>' +
+          actorFor('select') +
+          '<div class="optl-actions"><button type="button" id="optl-remove-save">Confirm removal</button>' +
+          '<button type="button" class="optl-quiet" id="optl-remove-cancel">Cancel</button></div></div>'
+        : '';
+      var rehireBlock = employee.status && employee.status !== 'active'
+        ? '<div class="optl-rehire noprint"><p><strong>Off the active list.</strong> A rehire reuses this profile and starts a new employment period. Prior history stays on the permanent record. The active matrix starts clean.</p>' +
+          '<label>Rehire date<input type="date" id="optl-rehire-date" value="' + esc(data.asOfDate || '') + '" /></label>' +
+          '<div class="optl-actions"><button type="button" id="optl-save-rehire">Rehire with a clean matrix</button></div></div>'
+        : '';
+      var workflowHead = optlUi.workflow === 'hire'
+        ? '<div class="optl-who"><p class="optl-kicker">Store 17 Online · OPTL</p><h2>New Hire</h2><p class="sub">Add New Associate. The OPTL record starts with a clean matrix. Use a fictional employee id.</p></div>'
+        : whoBlock;
       var shown = function (name) { return optlUi.view === name ? '' : ' hidden'; };
       document.getElementById('screen').innerHTML =
         '<div class="optl-page">' +
@@ -6237,13 +6272,20 @@
         '<div><p class="optl-kicker">Kane\'s Furniture · Store 17</p><h2 class="optl-title">Select associate</h2>' +
         '<p class="optl-sub">' + esc(data.notice || '') + '</p></div></div>' +
         '<label>Associate<select id="optl-employee">' + options + '</select></label>' +
-        '<button type="button" class="optl-go" id="optl-view"' + (optlUi.employeeId ? '' : ' disabled') + '>View OPTL</button>' +
+        '<label class="confirm"><input type="checkbox" id="optl-show-former"' + (optlUi.showFormer ? ' checked' : '') + ' /> Show former and inactive associates</label>' +
+        '<button type="button" class="optl-go" id="optl-view"' + (optlUi.employeeId ? '' : ' disabled') + '>View OPTL &amp; History</button>' +
+        '<div class="optl-actions"><button type="button" id="optl-add-associate">Add New Associate</button>' +
+        '<button type="button" class="optl-quiet" id="optl-delete-associate">Delete Associate</button></div>' +
+        removePanel +
         '<p class="sub">As of <strong>' + esc(data.asOfDate) + '</strong> · ' + esc(data.timezone || 'America/New_York') + '</p></article></div>' +
         '<div id="optl-screen-record" class="optl-screen"' + shown('record') + '>' +
         '<article class="card noprint">' + whoBlock +
         '<div class="optl-primary-actions"><button type="button" id="optl-write">Write New Occurrence</button>' +
+        '<button type="button" id="optl-open-step">Issue STEP / TERM</button>' +
+        '<button type="button" id="optl-open-void">Correct / Void</button>' +
         '<button type="button" class="optl-quiet" id="optl-print-toggle">Print Options</button>' +
-        '<button type="button" class="optl-quiet" id="optl-change">Change Associate</button></div>' +
+        '<button type="button" class="optl-quiet" id="optl-change">Return to Associate Selection</button></div>' +
+        actorFor('record') + rehireBlock +
         (actionMsg ? '<p class="optl-msg' + (actionErr ? ' err' : '') + '">' + esc(actionMsg) + '</p>' : '') +
         '<div class="optl-print-panel"' + (optlUi.showPrint ? '' : ' hidden') + '>' +
         '<p class="sub">Matrix and history prints omit private notes. Incident notes are a separate management document.</p>' +
@@ -6254,13 +6296,10 @@
         '<button type="button" id="optl-print-pip">Print Kane\'s PIP</button></div></div>' +
         '<p class="sub"><button type="button" class="optl-quiet" id="optl-more-toggle">More actions</button></p>' +
         '<div class="optl-more"' + (optlUi.showMore ? '' : ' hidden') + '>' +
-        '<div class="optl-actions"><button type="button" id="optl-open-step">Issue STEP / TERM</button>' +
-        '<button type="button" id="optl-open-ack">Acknowledgment</button>' +
-        '<button type="button" id="optl-open-void">Correct / Void</button>' +
+        '<div class="optl-actions"><button type="button" id="optl-open-ack">Acknowledgment</button>' +
         '<button type="button" id="optl-open-term">Termination</button>' +
         '<button type="button" id="optl-open-hire">New Hire</button>' +
         '<button type="button" id="optl-reset-demo">Reset demo data</button></div>' +
-        actorFor('record') +
         '<h2 class="section-title">Management dashboard</h2>' +
         '<p><strong>' + esc(String(dash.pendingCount || 0)) + '</strong> open pending · <strong>' +
         esc(String(dash.exceptionCount || 0)) + '</strong> open exceptions · email send <strong>disabled</strong></p>' +
@@ -6298,7 +6337,7 @@
         '<button type="button" class="optl-quiet" id="optl-entry-back">Cancel</button></div>' +
         '<p class="sub">Cancel returns to this associate without saving. Private notes are not printed on the employee matrix.</p></article></div>' +
         '<div id="optl-screen-workflow" class="optl-screen"' + shown('workflow') + '>' +
-        '<article class="card noprint">' + whoBlock + actorFor('workflow') +
+        '<article class="card noprint">' + workflowHead + actorFor('workflow') +
         '<p class="optl-msg"></p>' +
         '<div id="optl-panel-ack"' + (optlUi.workflow === 'ack' ? '' : ' hidden') + '><p class="sub">' + esc(ack.note || '') + ' No SSN.</p><div class="optl-form-grid">' +
         '<label class="span-2">Event<select id="optl-ack-event">' + histOpts + '</select></label>' +
@@ -6318,12 +6357,13 @@
         '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-term">Complete termination form</button></div>' +
         '<p class="sub">Does not auto-terminate from TERM_REQUIRED. History is retained for former associates.</p></div>' +
         '<div id="optl-panel-hire"' + (optlUi.workflow === 'hire' ? '' : ' hidden') + '><div class="optl-form-grid">' +
+        '<label>Employee name<input id="optl-hire-name" /></label>' +
         '<label>Employee ID<input id="optl-hire-id" placeholder="S17-DEMO-2xx" /></label>' +
-        '<label>Display name<input id="optl-hire-name" /></label>' +
         '<label>Job title<input id="optl-hire-title" value="Sales Associate" /></label>' +
+        '<label>Department<input id="optl-hire-dept" value="Sales" /></label>' +
         '<label>Hire date<input type="date" id="optl-hire-date" /></label></div>' +
-        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-hire">Create new hire</button></div></div>' +
-        '<div class="optl-actions" style="margin-top:14px"><button type="button" class="optl-quiet" id="optl-workflow-back">Back to OPTL</button></div></article></div>' +
+        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-hire">Create OPTL record</button></div></div>' +
+        '<div class="optl-actions" style="margin-top:14px"><button type="button" class="optl-quiet" id="optl-workflow-back">' + (optlUi.returnView === 'select' ? 'Cancel' : 'Back to OPTL') + '</button></div></article></div>' +
         '</div>' +
         '<article class="optl-print-sheet card" style="display:none" id="optl-print-matrix-sheet">' +
         '<div class="optl-brand">' + (storeLogo ? '<img src="' + storeLogo + '" alt="" width="72" height="72" />' : '') +
@@ -6479,6 +6519,24 @@
             optlUi.showMore = false;
             optlUi.showPrint = false;
             optlUi.workflow = '';
+          } else if (outcome && outcome.saved && action === 'newHire') {
+            optlUi.view = 'select';
+            optlUi.showRemove = false;
+            optlUi.showFormer = false;
+            optlUi.workflow = '';
+            optlUi.showMore = false;
+            optlUi.returnView = 'select';
+          } else if (outcome && outcome.saved && (action === 'terminate' || action === 'retireAssociate')) {
+            optlUi.view = 'select';
+            optlUi.showFormer = true;
+            optlUi.showRemove = false;
+            optlUi.workflow = '';
+            optlUi.returnView = 'select';
+          } else if (outcome && outcome.saved && action === 'rehire') {
+            optlUi.view = 'record';
+            optlUi.showFormer = false;
+            optlUi.workflow = '';
+            optlUi.showMore = false;
           } else if (outcome && outcome.saved) {
             optlUi.view = 'record';
             optlUi.workflow = '';
@@ -6508,7 +6566,11 @@
       var go = document.getElementById('optl-view');
       if (pick && go) {
         var syncGo = function () { go.disabled = !pick.value; };
-        pick.addEventListener('change', syncGo);
+        pick.addEventListener('change', function () {
+          optlUi.employeeId = pick.value || '';
+          syncGo();
+          if (optlUi.showRemove) renderOptl(data);
+        });
         syncGo();
         go.addEventListener('click', function () {
           if (!pick.value) return;
@@ -6518,9 +6580,76 @@
           optlUi.highlightId = '';
           optlUi.showPrint = false;
           optlUi.showMore = false;
+          optlUi.showRemove = false;
           optlCall({});
         });
       }
+      var formerBox = document.getElementById('optl-show-former');
+      if (formerBox && pick) formerBox.addEventListener('change', function () {
+        optlUi.showFormer = !!formerBox.checked;
+        optlUi.employeeId = pick.value || '';
+        optlUi.showRemove = false;
+        renderOptl(data);
+      });
+      var addAssociate = document.getElementById('optl-add-associate');
+      if (addAssociate) addAssociate.addEventListener('click', function () {
+        optlUi.returnView = 'select';
+        optlUi.workflow = 'hire';
+        optlUi.view = 'workflow';
+        optlUi.showRemove = false;
+        renderOptl(data);
+      });
+      var deleteAssociate = document.getElementById('optl-delete-associate');
+      if (deleteAssociate && pick) deleteAssociate.addEventListener('click', function () {
+        if (!pick.value) {
+          optlMissing('Select an associate before removing them from the active list.');
+          return;
+        }
+        optlUi.employeeId = pick.value;
+        optlUi.showRemove = true;
+        renderOptl(data);
+      });
+      var removeCancel = document.getElementById('optl-remove-cancel');
+      if (removeCancel) removeCancel.addEventListener('click', function () {
+        optlUi.showRemove = false;
+        renderOptl(data);
+      });
+      var removeSave = document.getElementById('optl-remove-save');
+      if (removeSave) removeSave.addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        var confirmed = document.getElementById('optl-remove-confirm');
+        var typed = (document.getElementById('optl-remove-name') || {}).value || '';
+        var reason = ((document.getElementById('optl-remove-reason') || {}).value || '').trim();
+        var kind = (document.getElementById('optl-remove-kind') || {}).value || '';
+        var expected = picked && picked.displayName ? String(picked.displayName) : '';
+        if (!confirmed || !confirmed.checked || typed.trim().toLowerCase() !== expected.trim().toLowerCase()) {
+          return optlMissing('Confirm the associate and type their full name.');
+        }
+        if (!reason) return optlMissing('Enter a reason. Accountability history will be kept.');
+        if (!kind) return optlMissing('Choose transfer, inactive, mistakenly created, or termination.');
+        if (kind === 'termination') {
+          optlUi.returnView = 'select';
+          optlUi.showRemove = false;
+          optlUi.workflow = 'term';
+          optlUi.view = 'workflow';
+          renderOptl(data);
+          return;
+        }
+        button.textContent = 'Saving...';
+        optlCall({
+          action: 'retireAssociate',
+          clientRequestId: optlRequestId(button),
+          employeeId: optlEmployeeId(),
+          draft: {
+            employeeId: optlEmployeeId(),
+            disposition: kind,
+            reason: reason,
+            confirmedIdentity: true,
+            confirmedName: typed.trim(),
+          },
+        }).catch(function () { button.textContent = 'Confirm removal'; });
+      });
       var writeBtn = document.getElementById('optl-write');
       if (writeBtn) writeBtn.addEventListener('click', function () {
         optlUi.entryMode = 'occurrence';
@@ -6540,6 +6669,7 @@
         renderOptl(data);
       });
       function openWorkflow(name) {
+        if (name !== 'hire') optlUi.returnView = 'record';
         optlUi.workflow = name;
         optlUi.view = 'workflow';
         renderOptl(data);
@@ -6558,11 +6688,16 @@
       var termBtn = document.getElementById('optl-open-term');
       if (termBtn) termBtn.addEventListener('click', function () { openWorkflow('term'); });
       var hireBtn = document.getElementById('optl-open-hire');
-      if (hireBtn) hireBtn.addEventListener('click', function () { openWorkflow('hire'); });
+      if (hireBtn) hireBtn.addEventListener('click', function () {
+        optlUi.returnView = 'record';
+        openWorkflow('hire');
+      });
       var backWorkflow = document.getElementById('optl-workflow-back');
       if (backWorkflow) backWorkflow.addEventListener('click', function () {
+        var back = optlUi.returnView === 'select' ? 'select' : 'record';
         optlUi.workflow = '';
-        optlLocal('record');
+        optlUi.returnView = 'record';
+        optlLocal(back);
       });
       var detailClose = document.getElementById('optl-detail-close');
       if (detailClose) detailClose.addEventListener('click', function () {
@@ -6612,7 +6747,7 @@
         if (form.entryType !== 'Occurrence' && form.direct && (form.entryType === 'STEP_II' || form.entryType === 'STEP_III' || form.entryType === 'TERM') && !String(form.justification || '').trim()) {
           return optlMissing('Direct STEP II, STEP III, or TERM requires written justification.');
         }
-        button.textContent = 'Saving...';
+        button.textContent = form.entryType === 'Occurrence' ? 'Processing accountability occurrence...' : 'Saving...';
         var payload = {
           clientRequestId: optlRequestId(button),
           draft: {
@@ -6642,8 +6777,10 @@
         if (!optlRequireActor()) return;
         var employeeId = document.getElementById('optl-hire-id').value.trim();
         var displayName = document.getElementById('optl-hire-name').value.trim();
+        var jobTitle = document.getElementById('optl-hire-title').value.trim();
+        var department = document.getElementById('optl-hire-dept').value.trim();
         var hireDate = document.getElementById('optl-hire-date').value;
-        if (!employeeId || !displayName || !hireDate) return optlMissing('Employee ID, display name, and hire date are required.');
+        if (!employeeId || !displayName || !jobTitle || !department || !hireDate) return optlMissing('Employee name, ID, job title, department, and hire date are required.');
         if (employeeId.indexOf('S17-DEMO-') !== 0) return optlMissing('Use a fictional demo employee id that starts with S17-DEMO-.');
         button.textContent = 'Saving...';
         optlCall({
@@ -6652,10 +6789,11 @@
           draft: {
             employeeId: employeeId,
             displayName: displayName,
-            jobTitle: document.getElementById('optl-hire-title').value,
+            jobTitle: jobTitle,
+            department: department,
             hireDate: hireDate,
           },
-        }).catch(function () { button.textContent = 'Create new hire'; });
+        }).catch(function () { button.textContent = 'Create OPTL record'; });
       });
       var saveTerm = document.getElementById('optl-save-term');
       if (saveTerm) saveTerm.addEventListener('click', function (event) {
@@ -6713,6 +6851,20 @@
           draft: { eventId: eventId },
           reason: reason,
         }).catch(function () { button.textContent = 'Void / correct (cascade rescind)'; });
+      });
+      var saveRehire = document.getElementById('optl-save-rehire');
+      if (saveRehire) saveRehire.addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        var hireDate = (document.getElementById('optl-rehire-date') || {}).value || '';
+        if (!hireDate) return optlMissing('Rehire date is required.');
+        button.textContent = 'Saving...';
+        optlCall({
+          action: 'rehire',
+          clientRequestId: optlRequestId(button),
+          employeeId: optlEmployeeId(),
+          draft: { employeeId: optlEmployeeId(), hireDate: hireDate, reason: 'Rehire — new clean employment period' },
+        }).catch(function () { button.textContent = 'Rehire with a clean matrix'; });
       });
       var resetBtn = document.getElementById('optl-reset-demo');
       if (resetBtn) resetBtn.addEventListener('click', function (event) {
@@ -6912,7 +7064,10 @@
         optlUi.draft = null;
         optlUi.showPrint = false;
         optlUi.showMore = false;
+        optlUi.showFormer = false;
+        optlUi.showRemove = false;
         optlUi.workflow = '';
+        optlUi.returnView = 'select';
       }
       if (name === 'admin') { renderAdmin(); return; }
       if (name === 'documents') {

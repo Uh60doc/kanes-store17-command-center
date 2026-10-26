@@ -459,7 +459,9 @@ function optlSaveState_(state, tabs) {
 function optlTabsForAction_(action) {
   if (action === 'addEvent' || action === 'issueFormal') return ['OPTL_Events', 'OPTL_Audit', 'OPTL_Pending', 'OPTL_Alerts'];
   if (action === 'voidEvent') return ['OPTL_Events', 'OPTL_Audit', 'OPTL_Pending', 'OPTL_Exceptions', 'OPTL_Alerts'];
-  if (action === 'newHire' || action === 'terminate' || action === 'rehire') return ['OPTL_Employees', 'OPTL_Periods', 'OPTL_Audit'];
+  if (action === 'newHire' || action === 'terminate' || action === 'rehire' || action === 'retireAssociate') {
+    return ['OPTL_Employees', 'OPTL_Periods', 'OPTL_Audit', 'OPTL_Pending'];
+  }
   if (action === 'acknowledge') return ['OPTL_Acknowledgments', 'OPTL_Audit'];
   if (action === 'flagReview') return ['OPTL_Exceptions', 'OPTL_Audit'];
   return null;
@@ -574,7 +576,7 @@ function optlApplyAction_(state, payload) {
     result.message = 'Saved. The record was voided. History was kept.';
   } else if (action === 'newHire') {
     result.employee = optlNewHireEmployee_(state, draft, actor);
-    result.message = 'Saved. New hire recorded.';
+    result.message = 'Saved. New associate added with a clean matrix.';
   } else if (action === 'terminate') {
     result.employee = optlTerminateEmployee_(state, draft.employeeId || payload.employeeId, draft, actor);
     result.message = 'Saved. Termination recorded. History was kept.';
@@ -586,7 +588,10 @@ function optlApplyAction_(state, payload) {
     result.message = 'Saved. Review flag recorded.';
   } else if (action === 'rehire') {
     result.employee = optlRehireEmployee_(state, draft.employeeId || payload.employeeId, draft.hireDate || optlToday_(), actor);
-    result.message = 'Saved. Rehire recorded. Prior history was kept.';
+    result.message = 'Saved. Rehire recorded. Prior history was kept and the active matrix is clean.';
+  } else if (action === 'retireAssociate') {
+    result.employee = optlRetireEmployee_(state, draft.employeeId || payload.employeeId, draft, actor);
+    result.message = 'Saved. Removed from the active list. Accountability history was kept.';
   } else {
     throw new Error('Unknown OPTL action: ' + action);
   }
