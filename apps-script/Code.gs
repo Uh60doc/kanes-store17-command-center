@@ -1,5 +1,5 @@
 var SPREADSHEET_ID_ = '1KtsfQPQRdg3IdNXomlM5t47IyE1psouxvgW-D8VSLfw';
-var APP_VERSION_ = '1.0.68';
+var APP_VERSION_ = '1.0.69';
 
 var ROUTES_ = {
   login: null,
@@ -115,9 +115,18 @@ function sourceFingerprint_() {
 }
 
 /** Read-only clock for the open website. It does not import mail or write sales. */
-function dataPulse_() {
+function dataPulse_(payload) {
   try {
-    return { ok: true, version: dataVersion_(), imports: false };
+    var session = payload && payload.session;
+    var user = session && typeof signInUser_ === 'function' ? signInUser_(session.username) : null;
+    return {
+      ok: true,
+      version: dataVersion_(),
+      imports: false,
+      mustSetPassword: !!(session && session.mustSetPassword),
+      username: session ? session.username : '',
+      name: user ? user.name : '',
+    };
   } catch (error) {
     return { ok: false, stale: true };
   }

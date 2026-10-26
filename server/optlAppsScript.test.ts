@@ -320,13 +320,20 @@ test('optl_ Jordan Safety×4 shows pending STEP lock', () => {
   assert.ok(page.pendingActions.some((row) => row.kind === 'ACTION_REQUIRED' && row.category === 'Safety'));
 });
 
-test('version 1.0.68 sign-in stays in place and OPTL uses that management session', () => {
+test('version 1.0.69 password setup stays in place and OPTL uses that management session', () => {
   const auth = readFileSync(new URL('../apps-script/Auth.gs', import.meta.url), 'utf8');
   const code = readFileSync(new URL('../apps-script/Code.gs', import.meta.url), 'utf8');
   const html = readFileSync(new URL('../apps-script/Index.html', import.meta.url), 'utf8');
   const docs = readFileSync(new URL('../apps-script/Documents.gs', import.meta.url), 'utf8');
   const optl = readFileSync(new URL('../apps-script/Optl.gs', import.meta.url), 'utf8');
-  assert.match(code, /APP_VERSION_ = '1\.0\.68'/);
+  assert.match(code, /APP_VERSION_ = '1\.0\.69'/);
+  assert.doesNotMatch(code, /APP_VERSION_ = '1\.0\.68'/);
+  assert.match(code, /mustSetPassword: !!\(session && session\.mustSetPassword\)/);
+  assert.match(auth, /return issueSession_\(username, user\.role, \{ mustSetPassword: true, name: user\.name \}\)/);
+  assert.match(auth, /setup\.mustSetPassword && setup\.username === username/);
+  assert.match(html, /function beginPasswordSetup/);
+  assert.match(html, /version 1\.0\.69/);
+  assert.match(html, /pulse && pulse\.mustSetPassword/);
   assert.match(auth, /liz: \{ role: 'admin', name: 'Liz' \}/);
   assert.match(auth, /cordell: \{ role: 'admin', name: 'Cordell' \}/);
   assert.match(auth, /kelly: \{ role: 'admin', name: 'Kelly' \}/);

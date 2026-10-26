@@ -39,18 +39,24 @@ function passwordReady_(username) {
   return PropertiesService.getScriptProperties().getProperty('ready_user_' + username) === 'yes';
 }
 
-function issueSession_(username, role) {
+function issueSession_(username, role, extra) {
+  extra = extra || {};
   var props = PropertiesService.getScriptProperties();
   var token = Utilities.getUuid() + Utilities.getUuid();
-  saveSession_(token, {
+  var session = {
     role: role,
     username: username,
     epoch: props.getProperty('epoch_user_' + username) || '0',
     expires: Date.now() + SESSION_MS_,
-  });
+  };
+  if (extra.mustSetPassword) session.mustSetPassword = true;
+  saveSession_(token, session);
   var ownName = '';
   if (role === 'sales' && typeof employeeReportOn_ === 'function' && employeeReportOn_()) ownName = String(config_()['employee_report_' + username] || '').trim();
-  return { token: token, role: role, username: username, ownReport: !!ownName, ownName: ownName };
+  var result = { token: token, role: role, username: username, ownReport: !!ownName, ownName: ownName };
+  if (extra.mustSetPassword) result.mustSetPassword = true;
+  if (extra.name) result.name = extra.name;
+  return result;
 }
 
 function login_(payload) {
@@ -68,7 +74,7 @@ function login_(payload) {
       throw new Error('That username or password is not valid.');
     }
     clearFailures_(username);
-    return { mustSetPassword: true, username: username, name: user.name };
+    return issueSession_(username, user.role, { mustSetPassword: true, name: user.name });
   }
   var props = PropertiesService.getScriptProperties();
   var hash = props.getProperty('hash_user_' + username) || '';
@@ -92,7 +98,9 @@ function choosePassword_(payload) {
     throw new Error('That username or password is not valid.');
   }
   if (passwordReady_(username)) throw new Error('A password is already saved. Sign in with it.');
-  if (current !== FIRST_PASSWORD_) {
+  var setup = readSession_(payload && payload.token);
+  var setupOk = !!(setup && setup.mustSetPassword && setup.username === username && (PropertiesService.getScriptProperties().getProperty('epoch_user_' + username) || '0') === setup.epoch);
+  if (!setupOk && current !== FIRST_PASSWORD_) {
     recordFailure_(username);
     throw new Error('That username or password is not valid.');
   }
