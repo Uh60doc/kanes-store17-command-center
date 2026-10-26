@@ -25,6 +25,10 @@
     .data-refresh.connected .data-refresh-state { color: #3dde8a; }
     .data-refresh.updating .data-refresh-state { color: #f3d48a; }
     .data-refresh.issue .data-refresh-state { color: #ff8ea3; }
+    .cc-activity { margin: 8px 0 0; padding: 8px 12px; border-radius: 10px; border: 1px solid #1d5c66; background: #122229; color: #f3d48a; font-weight: 750; }
+    .cc-activity.ok { color: #3dde8a; border-color: #1d6b45; }
+    .cc-activity.err { color: #ff8ea3; border-color: #a83d45; }
+    .cc-activity.busy { color: #f3d48a; }
     .data-refresh button { min-height: 28px; padding: 0 8px; border: 1px solid #1d5c66; border-radius: 8px; background: #070b10; color: #7ee7f0; font-size: 12px; font-weight: 700; }
     .logo { display: block; height: auto; }
     .logo-login { width: 168px; margin: 0 auto 12px; }
@@ -800,6 +804,8 @@
     .optl-form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0bc; }
     .optl-form-grid input, .optl-form-grid select, .optl-form-grid textarea { padding: 7px 10px; border-radius: 8px; border: 1px solid #1d5c66; background: #10161c; color: #f3f6f8; font: inherit; text-transform: none; letter-spacing: 0; font-weight: 600; }
     .optl-form-grid textarea { min-height: 72px; }
+    .optl-page input[type="checkbox"] { width: 18px; min-width: 18px; max-width: 18px; height: 18px; min-height: 18px; margin: 0; padding: 0; flex: 0 0 18px; accent-color: #14c4d4; vertical-align: middle; }
+    .optl-page label.confirm { display: flex; flex-direction: row; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-weight: 600; }
     .optl-form-grid .span-2 { grid-column: span 2; }
     .optl-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
     .optl-tabs button { background: #143840; }
@@ -873,6 +879,7 @@
         </div>
       </header>
       <nav class="nav topnav noprint" id="nav" aria-label="Primary"></nav>
+      <p id="cc-activity" class="cc-activity noprint" hidden role="status" aria-live="polite"></p>
       <div id="screen"></div>
     </section>
   </main>
@@ -931,11 +938,85 @@
       if (!block || block.versusGoal === null || block.versusGoal === undefined || block.versusGoal === '') return 'Not Available';
       return block.versusGoal;
     }
+    var ccBusyCount = 0;
+    function ccActivitySet(text, tone) {
+      var el = document.getElementById('cc-activity');
+      if (!el) return;
+      el.hidden = !text;
+      el.textContent = text || '';
+      el.className = 'cc-activity noprint' + (tone ? ' ' + tone : '');
+    }
+    function ccSetScreenBusy(busy) {
+      var host = document.getElementById('screen');
+      if (!host) return;
+      host.querySelectorAll('button').forEach(function (btn) {
+        if (busy) {
+          if (!btn.hasAttribute('data-cc-was-disabled')) btn.setAttribute('data-cc-was-disabled', btn.disabled ? '1' : '0');
+          btn.disabled = true;
+        } else if (btn.getAttribute('data-cc-was-disabled') === '0') {
+          btn.disabled = false;
+          btn.removeAttribute('data-cc-was-disabled');
+        } else {
+          btn.removeAttribute('data-cc-was-disabled');
+        }
+      });
+    }
+    function ccActivityLabel(name, extra) {
+      extra = extra || {};
+      var action = String(extra.action || '');
+      if (name === 'optl') {
+        if (action === 'addEvent' || action === 'issueFormal' || action === 'voidEvent' || action === 'newHire' || action === 'terminate' || action === 'acknowledge' || action === 'rehire' || action === 'resetDemo' || action === 'flagReview') return 'Saving...';
+        if (extra.printEventId) return 'Generating document...';
+        return 'Loading...';
+      }
+      if (name === 'reports' || name === 'summary' || name === 'emailControl') return 'Loading report...';
+      if (name === 'uploadReport' || name === 'confirmRescueImport' || name === 'importEvalWorkbook' || name === 'previewRescue') return 'Importing...';
+      if (name === 'uploads' && extra.refresh) return 'Refreshing...';
+      if (name === 'home' || name === 'people' || name === 'retry' || extra.refresh) return 'Refreshing...';
+      if (name === 'evalWorkbook' || name === 'evalPrepWorkbook' || name === 'uploadDocument' || name === 'docFile') return 'Generating document...';
+      if (/save|setEval|prepareEvals|changePassword|approve|sendBrief|reviewPromotion|import/i.test(name)) return 'Saving...';
+      return 'Processing...';
+    }
+    function ccActivityDone(name, extra, result) {
+      extra = extra || {};
+      if (name === 'optl' && extra.action) {
+        var outcome = result && result.actionResult;
+        if (!outcome || outcome.saved !== true) {
+          return { text: (outcome && outcome.message) || 'The server did not confirm the save.', tone: 'err' };
+        }
+        return { text: outcome.message || 'Saved.', tone: outcome.ok === false ? 'err' : 'ok' };
+      }
+      if (name === 'optl' && extra.printEventId) return { text: 'Document ready.', tone: 'ok' };
+      if (name === 'optl') return { text: '', tone: '' };
+      var label = ccActivityLabel(name, extra);
+      if (label === 'Loading report...') return { text: 'Report loaded.', tone: 'ok' };
+      if (label === 'Importing...') return { text: 'Import finished.', tone: 'ok' };
+      if (label === 'Refreshing...') return { text: 'Updated.', tone: 'ok' };
+      if (label === 'Generating document...') return { text: 'Document ready.', tone: 'ok' };
+      if (label === 'Saving...') return { text: 'Saved.', tone: 'ok' };
+      if (label === 'Loading...') return { text: '', tone: '' };
+      return { text: 'Done.', tone: 'ok' };
+    }
     function api(name, extra) {
       var payload = Object.assign({ token: token }, extra || {});
+      ccBusyCount += 1;
+      ccSetScreenBusy(true);
+      ccActivitySet(ccActivityLabel(name, extra), 'busy');
       return new Promise(function (resolve, reject) {
-        google.script.run.withSuccessHandler(resolve).withFailureHandler(function (error) {
-          reject(new Error(error && error.message ? error.message : 'The request failed.'));
+        google.script.run.withSuccessHandler(function (result) {
+          ccBusyCount = Math.max(0, ccBusyCount - 1);
+          ccSetScreenBusy(ccBusyCount > 0);
+          if (ccBusyCount === 0) {
+            var done = ccActivityDone(name, extra, result);
+            ccActivitySet(done.text, done.tone);
+          }
+          resolve(result);
+        }).withFailureHandler(function (error) {
+          ccBusyCount = Math.max(0, ccBusyCount - 1);
+          ccSetScreenBusy(ccBusyCount > 0);
+          var message = error && error.message ? error.message : 'The request failed.';
+          if (ccBusyCount === 0) ccActivitySet(message, 'err');
+          reject(new Error(message));
         }).dispatch(name, payload);
       });
     }
@@ -6229,6 +6310,7 @@
 
         '</div>';
 
+      var optlEpoch = 0;
       function optlActorFields() {
         var acting = document.getElementById('optl-acting-manager');
         var confirm = document.getElementById('optl-acting-confirm');
@@ -6237,30 +6319,58 @@
           actingManagerConfirmed: !!(confirm && confirm.checked),
         };
       }
+      function optlShowStatus(message, isError) {
+        var note = document.querySelector('.optl-page .optl-msg');
+        if (!note) {
+          var host = document.querySelector('.optl-page');
+          if (host) host.insertAdjacentHTML('afterbegin', '<p class="optl-msg noprint"></p>');
+          note = document.querySelector('.optl-page .optl-msg');
+        }
+        if (!note) return;
+        note.textContent = message;
+        note.classList.toggle('err', !!isError);
+      }
+      function optlRequireActor() {
+        var fields = optlActorFields();
+        if (!fields.actingManagerDeclared) {
+          optlShowStatus('Select the acting manager before this action.', true);
+          ccActivitySet('Select the acting manager before this action.', 'err');
+          return null;
+        }
+        if (!fields.actingManagerConfirmed) {
+          optlShowStatus('Confirm the acting manager before this action.', true);
+          ccActivitySet('Confirm the acting manager before this action.', 'err');
+          return null;
+        }
+        return fields;
+      }
+      function optlMissing(message) {
+        optlShowStatus(message, true);
+        ccActivitySet(message, 'err');
+        return false;
+      }
+      function optlRequestId(button) {
+        if (!button.dataset.requestId) button.dataset.requestId = 'req-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+        return button.dataset.requestId;
+      }
       function optlCall(extra) {
+        var gen = ++optlEpoch;
         var base = Object.assign({
           employeeId: document.getElementById('optl-employee').value,
           asOfDate: data.asOfDate,
         }, optlActorFields(), extra || {});
         return api('optl', base).then(function (page) {
-          if (screen !== 'optl') return;
+          if (gen !== optlEpoch || screen !== 'optl') return page;
           displayPayload = page;
           renderOptl(page);
+          return page;
         }).catch(function (error) {
-          var note = document.querySelector('.optl-msg');
-          if (!note) {
-            document.getElementById('screen').insertAdjacentHTML('afterbegin', '<p class="error">' + esc(error.message) + '</p>');
-          } else {
-            note.textContent = error.message;
-            note.classList.add('err');
-          }
+          if (gen !== optlEpoch) return;
+          optlShowStatus(error.message, true);
+          throw error;
         });
       }
       document.getElementById('optl-employee').addEventListener('change', function () { optlCall({}); });
-      var actingEl = document.getElementById('optl-acting-manager');
-      var confirmEl = document.getElementById('optl-acting-confirm');
-      if (actingEl) actingEl.addEventListener('change', function () { optlCall({}); });
-      if (confirmEl) confirmEl.addEventListener('change', function () { optlCall({}); });
       document.getElementById('optl-section').addEventListener('change', function () {
         var sec = document.getElementById('optl-section').value;
         document.getElementById('optl-category').innerHTML = catOptions(sec);
@@ -6275,82 +6385,141 @@
           });
         });
       });
-      document.getElementById('optl-save-entry').addEventListener('click', function () {
+      document.getElementById('optl-save-entry').addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        var incidentDate = document.getElementById('optl-inc-date').value;
+        var category = document.getElementById('optl-category').value;
+        var section = document.getElementById('optl-section').value;
+        var shortText = document.getElementById('optl-short').value.trim();
+        var qty = document.getElementById('optl-qty').value;
+        var unscored = document.getElementById('optl-unscored').checked;
+        if (!incidentDate) return optlMissing('Incident date is required.');
+        if (!section || !category) return optlMissing('Section and category are required.');
+        if (unscored && !shortText) return optlMissing('Unscored notes need a short description.');
+        if (!unscored && (category === 'Tardy' || category === 'Attendance')) {
+          if (qty === '') return optlMissing('Enter minutes late for Tardy or Attendance.');
+          if (category === 'Tardy' && !(Number(qty) > 15)) return optlMissing('Tardy requires more than 15 minutes. 15 or fewer is not an occurrence.');
+        }
         optlCall({
           action: 'addEvent',
+          clientRequestId: optlRequestId(button),
           draft: {
             employeeId: document.getElementById('optl-employee').value,
-            incidentDate: document.getElementById('optl-inc-date').value,
-            section: document.getElementById('optl-section').value,
-            category: document.getElementById('optl-category').value,
+            incidentDate: incidentDate,
+            section: section,
+            category: category,
             entryType: 'Occurrence',
-            shortDescription: document.getElementById('optl-short').value,
-            quantitativeDetail: document.getElementById('optl-qty').value,
+            shortDescription: shortText,
+            quantitativeDetail: qty,
             notes: document.getElementById('optl-notes').value,
-            scored: !document.getElementById('optl-unscored').checked,
+            scored: !unscored,
           },
-        });
+        }).catch(function () {});
       });
-      document.getElementById('optl-issue-formal').addEventListener('click', function () {
+      document.getElementById('optl-issue-formal').addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        var incidentDate = document.getElementById('optl-inc-date').value;
+        var level = document.getElementById('optl-entry-type').value;
+        var direct = document.getElementById('optl-direct').checked;
+        var justification = document.getElementById('optl-justify').value.trim();
+        if (!incidentDate) return optlMissing('Incident date is required.');
+        if (level === 'Occurrence') return optlMissing('Choose STEP I, STEP II, STEP III, or TERM to issue a formal action.');
+        if (direct && (level === 'STEP_II' || level === 'STEP_III' || level === 'TERM') && !justification) {
+          return optlMissing('Direct STEP II, STEP III, or TERM requires written justification.');
+        }
         optlCall({
           action: 'issueFormal',
           acceptEffective: true,
+          clientRequestId: optlRequestId(button),
           draft: {
             employeeId: document.getElementById('optl-employee').value,
-            incidentDate: document.getElementById('optl-inc-date').value,
+            incidentDate: incidentDate,
             section: document.getElementById('optl-section').value,
             category: document.getElementById('optl-category').value,
-            entryType: document.getElementById('optl-entry-type').value,
+            entryType: level,
             shortDescription: document.getElementById('optl-short').value,
             notes: document.getElementById('optl-notes').value,
-            directIssue: document.getElementById('optl-direct').checked,
-            justification: document.getElementById('optl-justify').value,
+            directIssue: direct,
+            justification: justification,
           },
-        });
+        }).catch(function () {});
       });
-      document.getElementById('optl-save-hire').addEventListener('click', function () {
+      document.getElementById('optl-save-hire').addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        var employeeId = document.getElementById('optl-hire-id').value.trim();
+        var displayName = document.getElementById('optl-hire-name').value.trim();
+        var hireDate = document.getElementById('optl-hire-date').value;
+        if (!employeeId || !displayName || !hireDate) return optlMissing('Employee ID, display name, and hire date are required.');
+        if (employeeId.indexOf('S17-DEMO-') !== 0) return optlMissing('Use a fictional demo employee id that starts with S17-DEMO-.');
         optlCall({
           action: 'newHire',
+          clientRequestId: optlRequestId(button),
           draft: {
-            employeeId: document.getElementById('optl-hire-id').value,
-            displayName: document.getElementById('optl-hire-name').value,
+            employeeId: employeeId,
+            displayName: displayName,
             jobTitle: document.getElementById('optl-hire-title').value,
-            hireDate: document.getElementById('optl-hire-date').value,
+            hireDate: hireDate,
           },
-        });
+        }).catch(function () {});
       });
-      document.getElementById('optl-save-term').addEventListener('click', function () {
+      document.getElementById('optl-save-term').addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        var separationDate = document.getElementById('optl-term-date').value;
+        var reason = document.getElementById('optl-term-reason').value.trim();
+        if (!separationDate || !reason) return optlMissing('Separation date and reason are required.');
         optlCall({
           action: 'terminate',
+          clientRequestId: optlRequestId(button),
           draft: {
             employeeId: document.getElementById('optl-employee').value,
-            separationDate: document.getElementById('optl-term-date').value,
-            reason: document.getElementById('optl-term-reason').value,
+            separationDate: separationDate,
+            reason: reason,
             notes: document.getElementById('optl-term-notes').value,
             hrApprovalObtained: document.getElementById('optl-term-hr').checked,
           },
-        });
+        }).catch(function () {});
       });
-      document.getElementById('optl-save-ack').addEventListener('click', function () {
+      document.getElementById('optl-save-ack').addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        var eventId = document.getElementById('optl-ack-event').value;
+        var typed = document.getElementById('optl-ack-name').value.trim();
+        var checked = document.getElementById('optl-ack-box').checked;
+        var refused = document.getElementById('optl-ack-refuse').checked;
+        if (!eventId) return optlMissing('Select the event to acknowledge.');
+        if (!refused && (!typed || !checked)) return optlMissing('Type the employee full name and check the acknowledgment box, or document a refusal.');
         optlCall({
           action: 'acknowledge',
+          clientRequestId: optlRequestId(button),
           draft: {
-            eventId: document.getElementById('optl-ack-event').value,
-            typedFullName: document.getElementById('optl-ack-name').value,
-            acknowledgedCheckbox: document.getElementById('optl-ack-box').checked,
-            refused: document.getElementById('optl-ack-refuse').checked,
+            eventId: eventId,
+            typedFullName: typed,
+            acknowledgedCheckbox: checked,
+            refused: refused,
           },
-        });
+        }).catch(function () {});
       });
-      document.getElementById('optl-save-void').addEventListener('click', function () {
+      document.getElementById('optl-save-void').addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        var eventId = document.getElementById('optl-void-event').value;
+        var reason = document.getElementById('optl-void-reason').value.trim();
+        if (!eventId || !reason) return optlMissing('Select an event and enter a correction reason.');
         optlCall({
           action: 'voidEvent',
-          draft: { eventId: document.getElementById('optl-void-event').value },
-          reason: document.getElementById('optl-void-reason').value,
-        });
+          clientRequestId: optlRequestId(button),
+          draft: { eventId: eventId },
+          reason: reason,
+        }).catch(function () {});
       });
-      document.getElementById('optl-reset-demo').addEventListener('click', function () {
-        optlCall({ action: 'resetDemo' });
+      document.getElementById('optl-reset-demo').addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        if (!optlRequireActor()) return;
+        optlCall({ action: 'resetDemo', clientRequestId: optlRequestId(button) }).catch(function () {});
       });
       function runPrint(mode, sheetId) {
         document.body.classList.remove('print-optl');

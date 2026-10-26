@@ -893,6 +893,106 @@ test('OPTL saves survive a later read and stay off the sales cache', () => {
   assert.doesNotMatch(html, /@page \{ size: letter landscape/);
 });
 
+test('a repeated save click does not create a second occurrence', () => {
+  const gs = loadOptl();
+  const payload = {
+    action: 'addEvent',
+    clientRequestId: 'click-once',
+    asOfDate: '2026-10-25',
+    employeeId: 'S17-DEMO-101',
+    actingManagerDeclared: 'Pat Nguyen (GM)',
+    actingManagerConfirmed: true,
+    draft: {
+      employeeId: 'S17-DEMO-101',
+      incidentDate: '2026-10-21',
+      section: 'A',
+      category: 'Behavior',
+      entryType: 'Occurrence',
+      shortDescription: 'Idempotency Marker',
+      scored: true,
+    },
+  };
+  const first = gs.optl_(payload) as {
+    actionResult?: { saved?: boolean; duplicate?: boolean; message?: string; elapsedMs?: number; ok?: boolean };
+    history: { shortDescription?: string; incidentDate?: string }[];
+  };
+  assert.equal(first.actionResult?.saved, true);
+  assert.equal(first.actionResult?.duplicate, undefined);
+  assert.match(first.actionResult?.message || '', /Saved/);
+  assert.equal(typeof first.actionResult?.elapsedMs, 'number');
+  const second = gs.optl_(payload) as { actionResult?: { saved?: boolean; duplicate?: boolean; message?: string } };
+  assert.equal(second.actionResult?.duplicate, true);
+  assert.equal(second.actionResult?.saved, true);
+  assert.match(second.actionResult?.message || '', /Duplicate click ignored/);
+  const again = gs.optl_({ asOfDate: '2026-10-25', employeeId: 'S17-DEMO-101' }) as {
+    history: { shortDescription?: string; incidentDate?: string }[];
+  };
+  const matches = again.history.filter((line) => line.shortDescription === 'Idempotency Marker' && line.incidentDate === '2026-10-21');
+  assert.equal(matches.length, 1);
+});
+
+test('dedicated sheet save writes the snapshot and skips untouched tabs and property chunks', () => {
+  const { services, props } = appsScriptServices();
+  const context: Record<string, unknown> = { ...services, SPREADSHEET_ID_: 'sales-book-id', __opens: 0 };
+  vm.createContext(context);
+  vm.runInContext(readFileSync(new URL('../apps-script/Optl.gs', import.meta.url), 'utf8'), context, { filename: 'Optl.gs' });
+  vm.runInContext(readFileSync(new URL('../apps-script/OptlEngine.gs', import.meta.url), 'utf8'), context, { filename: 'OptlEngine.gs' });
+  vm.runInContext(readFileSync(new URL('../apps-script/OptlStore.gs', import.meta.url), 'utf8'), context, { filename: 'OptlStore.gs' });
+  context.SpreadsheetApp = {
+    openById(id: string) {
+      context.__opens = Number(context.__opens) + 1;
+      if (id === 'sales-book-id') throw new Error('sales');
+      if (!context.__book) context.__book = (context.optlMemoryBook_ as () => unknown)();
+      return context.__book;
+    },
+  };
+  props.OPTL_SPREADSHEET_ID = 'optl-book-id';
+  const page = (context.optl_ as (payload: Record<string, unknown>) => {
+    actionResult?: { saved?: boolean; storage?: string; message?: string };
+    history: { shortDescription?: string }[];
+  })({
+    action: 'addEvent',
+    asOfDate: '2026-10-25',
+    employeeId: 'S17-DEMO-101',
+    actingManagerDeclared: 'Pat Nguyen (GM)',
+    actingManagerConfirmed: true,
+    draft: {
+      employeeId: 'S17-DEMO-101',
+      incidentDate: '2026-10-22',
+      section: 'A',
+      category: 'Safety',
+      entryType: 'Occurrence',
+      shortDescription: 'Sheet Save Marker',
+      scored: true,
+    },
+  });
+  assert.equal(page.actionResult?.saved, true);
+  assert.equal(page.actionResult?.storage, 'dedicated-sheet');
+  assert.match(page.actionResult?.message || '', /Saved/);
+  assert.equal(context.__opens, 1);
+  assert.equal(props.optl_demo_state_v13_n, undefined);
+  const book = context.__book as { getSheetByName: (name: string) => unknown };
+  assert.ok(book.getSheetByName('OPTL_Snapshot'));
+  assert.ok(book.getSheetByName('OPTL_Events'));
+  assert.equal(book.getSheetByName('OPTL_Employees'), null);
+  const reloaded = (context.optl_ as (payload: Record<string, unknown>) => { history: { shortDescription?: string }[] })({
+    asOfDate: '2026-10-25',
+    employeeId: 'S17-DEMO-101',
+  });
+  assert.ok(reloaded.history.some((line) => line.shortDescription === 'Sheet Save Marker'));
+});
+
+test('save feedback and checkbox sizing stay inside OPTL', () => {
+  const html = readFileSync(new URL('../apps-script/Index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="cc-activity"/);
+  assert.match(html, /Saving\.\.\./);
+  assert.match(html, /Loading report\.\.\./);
+  assert.match(html, /\.optl-page input\[type="checkbox"\] \{ width: 18px/);
+  assert.doesNotMatch(html, /optl-acting-confirm[\s\S]{0,180}optlCall\(\{\}\)/);
+  assert.match(html, /Select the acting manager before this action/);
+  assert.match(html, /clientRequestId/);
+});
+
 test('flag review required marks yellow-red exception', () => {
   const gs = loadOptl();
   const state = gs.optlEmptyState_();

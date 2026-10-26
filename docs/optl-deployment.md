@@ -17,9 +17,11 @@ npx @google/clasp login
 npx @google/clasp push
 ```
 
-Do **not** run `clasp deploy`. `clasp push` updates the script editor only. The current production web-app deployment stays on its existing version.
+Do **not** run `clasp deploy`. `clasp push` updates the script editor only. The current production web-app deployment stays on its existing version until someone explicitly deploys a new version.
 
-Then open the script and confirm the function list includes `optlCreateDedicatedStore_`. Do not run it until you intend to create the fictional workbook.
+`clasp push` does not publish the web app. Reload the editor, then open the Command Center the same way you already test it (the existing deployment, or the editor's test deployment if that is what you have been using). A production deploy still needs GM authorization.
+
+The fictional demo spreadsheet already exists. Do **not** run `optlCreateDedicatedStore_` again. That function refuses a second create while `OPTL_SPREADSHEET_ID` is set.
 
 ## Create the dedicated book (one time, Apps Script editor)
 

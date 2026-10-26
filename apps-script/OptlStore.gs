@@ -48,12 +48,37 @@ function optlMemoryBook_() {
   };
 }
 
+var OPTL_OPEN_BOOK_ = null;
+var OPTL_OPEN_BOOK_ID_ = '';
+
+function optlOpenDedicatedBook_(bookId) {
+  optlAssertDedicatedBook_(bookId);
+  if (OPTL_OPEN_BOOK_ && OPTL_OPEN_BOOK_ID_ === bookId) return OPTL_OPEN_BOOK_;
+  OPTL_OPEN_BOOK_ = SpreadsheetApp.openById(bookId);
+  OPTL_OPEN_BOOK_ID_ = bookId;
+  return OPTL_OPEN_BOOK_;
+}
+
 function optlPutGrid_(book, name, grid) {
   var sh = book.getSheetByName(name);
   if (!sh) sh = book.insertSheet(name);
+  if (!grid || !grid.length || !grid[0].length) {
+    if (typeof sh.clearContent === 'function') sh.clearContent();
+    else sh.clear();
+    return;
+  }
+  var rows = grid.length;
+  var cols = grid[0].length;
+  if (typeof sh.getLastRow === 'function' && typeof sh.clearContent === 'function') {
+    var lastRow = sh.getLastRow();
+    var lastCol = sh.getLastColumn();
+    sh.getRange(1, 1, rows, cols).setValues(grid);
+    if (lastRow > rows) sh.getRange(rows + 1, 1, lastRow - rows, Math.max(lastCol, cols)).clearContent();
+    if (lastCol > cols) sh.getRange(1, cols + 1, rows, lastCol - cols).clearContent();
+    return;
+  }
   sh.clear();
-  if (!grid || !grid.length || !grid[0].length) return;
-  sh.getRange(1, 1, grid.length, grid[0].length).setValues(grid);
+  sh.getRange(1, 1, rows, cols).setValues(grid);
 }
 
 function optlReadGrid_(book, name) {
@@ -77,46 +102,50 @@ function optlObjectsToGrid_(rows, columns) {
   return grid;
 }
 
-function optlSaveStateToBook_(book, state) {
+function optlSaveStateToBook_(book, state, tabs) {
+  var limit = tabs && tabs.length ? tabs : null;
+  function want(name) { return !limit || limit.indexOf(name) !== -1; }
   var snapshot = JSON.stringify(state);
   optlPutGrid_(book, 'OPTL_Snapshot', [['key', 'json'], ['state', snapshot], ['savedAt', optlToday_()]]);
-  optlPutGrid_(book, 'OPTL_Employees', optlObjectsToGrid_(state.employees || [], [
+  if (want('OPTL_Employees')) optlPutGrid_(book, 'OPTL_Employees', optlObjectsToGrid_(state.employees || [], [
     'employeeId', 'displayName', 'jobTitle', 'department', 'hireDate', 'status', 'separationDate', 'terminationReason',
   ]));
-  var periods = [];
-  (state.employees || []).forEach(function (employee) {
-    (employee.employmentPeriods || []).forEach(function (period) {
-      periods.push({
-        periodId: period.periodId,
-        employeeId: employee.employeeId,
-        hireDate: period.hireDate,
-        separationDate: period.separationDate,
-        status: period.status,
+  if (want('OPTL_Periods')) {
+    var periods = [];
+    (state.employees || []).forEach(function (employee) {
+      (employee.employmentPeriods || []).forEach(function (period) {
+        periods.push({
+          periodId: period.periodId,
+          employeeId: employee.employeeId,
+          hireDate: period.hireDate,
+          separationDate: period.separationDate,
+          status: period.status,
+        });
       });
     });
-  });
-  optlPutGrid_(book, 'OPTL_Periods', optlObjectsToGrid_(periods, ['periodId', 'employeeId', 'hireDate', 'separationDate', 'status']));
-  optlPutGrid_(book, 'OPTL_Events', optlObjectsToGrid_(state.events || [], [
+    optlPutGrid_(book, 'OPTL_Periods', optlObjectsToGrid_(periods, ['periodId', 'employeeId', 'hireDate', 'separationDate', 'status']));
+  }
+  if (want('OPTL_Events')) optlPutGrid_(book, 'OPTL_Events', optlObjectsToGrid_(state.events || [], [
     'eventId', 'employeeId', 'employmentPeriodId', 'incidentDate', 'entryAt', 'section', 'category', 'entryType',
     'shortDescription', 'quantitativeDetail', 'status', 'scored', 'originalExpirationDate', 'effectiveExpirationDate',
     'chainId', 'freezeReason', 'createdByDeclared', 'voidReason', 'notes',
   ]));
-  optlPutGrid_(book, 'OPTL_Acknowledgments', optlObjectsToGrid_(state.acknowledgments || [], [
+  if (want('OPTL_Acknowledgments')) optlPutGrid_(book, 'OPTL_Acknowledgments', optlObjectsToGrid_(state.acknowledgments || [], [
     'acknowledgmentId', 'eventId', 'employeeId', 'typedFullName', 'refused', 'refusalNote', 'acknowledgedAt', 'supervisingManagerDeclared',
   ]));
-  optlPutGrid_(book, 'OPTL_Pending', optlObjectsToGrid_(state.pendingActions || [], [
+  if (want('OPTL_Pending')) optlPutGrid_(book, 'OPTL_Pending', optlObjectsToGrid_(state.pendingActions || [], [
     'pendingId', 'employeeId', 'section', 'category', 'kind', 'proposedLevel', 'status', 'reason',
   ]));
-  optlPutGrid_(book, 'OPTL_Exceptions', optlObjectsToGrid_(state.exceptions || [], [
+  if (want('OPTL_Exceptions')) optlPutGrid_(book, 'OPTL_Exceptions', optlObjectsToGrid_(state.exceptions || [], [
     'exceptionId', 'employeeId', 'section', 'category', 'eventId', 'status', 'tone', 'reason',
   ]));
-  optlPutGrid_(book, 'OPTL_Audit', optlObjectsToGrid_(state.audit || [], [
+  if (want('OPTL_Audit')) optlPutGrid_(book, 'OPTL_Audit', optlObjectsToGrid_(state.audit || [], [
     'auditId', 'action', 'at', 'actorDeclared', 'actorAttribution', 'reason', 'employeeId', 'eventId',
   ]));
-  optlPutGrid_(book, 'OPTL_Alerts', optlObjectsToGrid_(state.alerts || [], [
+  if (want('OPTL_Alerts')) optlPutGrid_(book, 'OPTL_Alerts', optlObjectsToGrid_(state.alerts || [], [
     'alertId', 'kind', 'employeeId', 'title', 'status', 'emailSent', 'emailBlockedReason', 'createdAt',
   ]));
-  optlPutGrid_(book, 'OPTL_Config', [
+  if (want('OPTL_Config')) optlPutGrid_(book, 'OPTL_Config', [
     ['key', 'value'],
     ['schema', 'optl-store-v1'],
     ['alertConfig', JSON.stringify(state.alertConfig || {})],

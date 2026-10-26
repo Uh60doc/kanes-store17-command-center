@@ -384,15 +384,21 @@ function optlSaveStateProperties_(state) {
   var json = JSON.stringify(state);
   var count = Math.max(1, Math.ceil(json.length / OPTL_PROP_CHUNK_CHARS_));
   var previous = Number(props.getProperty(OPTL_STATE_PROP_KEY_ + '_n') || 0);
+  var batch = {};
   var index;
   for (index = 0; index < count; index += 1) {
-    props.setProperty(OPTL_STATE_PROP_KEY_ + '_' + index, json.substring(index * OPTL_PROP_CHUNK_CHARS_, (index + 1) * OPTL_PROP_CHUNK_CHARS_));
+    batch[OPTL_STATE_PROP_KEY_ + '_' + index] = json.substring(index * OPTL_PROP_CHUNK_CHARS_, (index + 1) * OPTL_PROP_CHUNK_CHARS_);
   }
   for (index = count; index < previous; index += 1) {
-    props.setProperty(OPTL_STATE_PROP_KEY_ + '_' + index, '');
+    batch[OPTL_STATE_PROP_KEY_ + '_' + index] = '';
   }
-  props.setProperty(OPTL_STATE_PROP_KEY_ + '_n', String(count));
-  props.setProperty(OPTL_STATE_PROP_KEY_, '');
+  batch[OPTL_STATE_PROP_KEY_ + '_n'] = String(count);
+  batch[OPTL_STATE_PROP_KEY_] = '';
+  if (typeof props.setProperties === 'function') {
+    props.setProperties(batch);
+  } else {
+    Object.keys(batch).forEach(function (key) { props.setProperty(key, batch[key]); });
+  }
   return true;
 }
 
@@ -422,8 +428,7 @@ function optlLoadStateProperties_() {
 function optlLoadState_() {
   var bookId = optlSpreadsheetId_();
   if (bookId && typeof SpreadsheetApp !== 'undefined') {
-    optlAssertDedicatedBook_(bookId);
-    var fromBook = optlLoadStateFromBook_(SpreadsheetApp.openById(bookId));
+    var fromBook = optlLoadStateFromBook_(optlOpenDedicatedBook_(bookId));
     if (fromBook) return fromBook;
   }
   try {
@@ -433,23 +438,82 @@ function optlLoadState_() {
   return optlCloneDemoState_();
 }
 
-function optlSaveState_(state) {
+/**
+ * Dedicated workbook is the source of truth once OPTL_SPREADSHEET_ID is set.
+ * Script properties are the fallback only, so a successful sheet save does not
+ * also rewrite every property chunk.
+ */
+function optlSaveState_(state, tabs) {
+  var started = Date.now();
   var bookId = optlSpreadsheetId_();
-  var savedBook = false;
   if (bookId && typeof SpreadsheetApp !== 'undefined') {
-    optlAssertDedicatedBook_(bookId);
-    optlSaveStateToBook_(SpreadsheetApp.openById(bookId), state);
-    savedBook = true;
+    optlSaveStateToBook_(optlOpenDedicatedBook_(bookId), state, tabs);
+    return { elapsedMs: Date.now() - started, storage: 'dedicated-sheet', savedBook: true };
   }
-  var savedProps = false;
-  try {
-    savedProps = optlSaveStateProperties_(state);
-  } catch (error) {
-    if (!savedBook) throw error;
-  }
-  if (!savedBook && !savedProps) {
+  if (!optlSaveStateProperties_(state)) {
     throw new Error('OPTL could not save. The sales spreadsheet was not used.');
   }
+  return { elapsedMs: Date.now() - started, storage: 'properties', savedBook: false };
+}
+
+function optlTabsForAction_(action) {
+  if (action === 'addEvent' || action === 'issueFormal') return ['OPTL_Events', 'OPTL_Audit', 'OPTL_Pending', 'OPTL_Alerts'];
+  if (action === 'voidEvent') return ['OPTL_Events', 'OPTL_Audit', 'OPTL_Pending', 'OPTL_Exceptions', 'OPTL_Alerts'];
+  if (action === 'newHire' || action === 'terminate' || action === 'rehire') return ['OPTL_Employees', 'OPTL_Periods', 'OPTL_Audit'];
+  if (action === 'acknowledge') return ['OPTL_Acknowledgments', 'OPTL_Audit'];
+  if (action === 'flagReview') return ['OPTL_Exceptions', 'OPTL_Audit'];
+  return null;
+}
+
+function optlReplayRequest_(state, requestId) {
+  if (!requestId) return null;
+  var log = null;
+  (state.requestLog || []).forEach(function (row) {
+    if (row.id === requestId) log = row;
+  });
+  if (!log) return null;
+  var replay = {
+    ok: true,
+    saved: true,
+    duplicate: true,
+    action: log.action,
+    message: 'Already saved. Duplicate click ignored.',
+    state: state,
+  };
+  (state.events || []).forEach(function (event) {
+    if (log.eventId && event.eventId === log.eventId) replay.event = event;
+  });
+  (state.employees || []).forEach(function (row) {
+    if (log.employeeId && row.employeeId === log.employeeId) replay.employee = row;
+  });
+  return replay;
+}
+
+function optlRememberRequest_(state, payload, result) {
+  var requestId = String((payload && payload.clientRequestId) || '').trim();
+  if (!requestId) return;
+  state.requestLog = state.requestLog || [];
+  state.requestLog.push({
+    id: requestId,
+    action: result.action,
+    eventId: result.event ? result.event.eventId : '',
+    employeeId: (result.event && result.event.employeeId) || (result.employee && result.employee.employeeId) || '',
+    message: result.message || 'Saved.',
+  });
+  if (state.requestLog.length > 200) state.requestLog = state.requestLog.slice(-200);
+}
+
+function optlCommitAction_(state, payload, result) {
+  if (!result.message) result.message = 'Saved.';
+  optlRememberRequest_(state, payload, result);
+  var timing = optlSaveState_(state, optlTabsForAction_(result.action));
+  result.saved = true;
+  result.ok = result.ok !== false;
+  result.elapsedMs = timing.elapsedMs;
+  result.storage = timing.storage;
+  result.message = result.message + ' · ' + timing.storage + ' · ' + timing.elapsedMs + ' ms';
+  result.state = state;
+  return result;
 }
 
 function optlStandardLabels_() {
@@ -476,17 +540,20 @@ function optlApplyAction_(state, payload) {
   var action = String((payload && payload.action) || '');
   var actor = optlActorPayload_(payload);
   var draft = (payload && payload.draft) || {};
-  var result = { ok: true, action: action };
+  var result = { ok: true, action: action, saved: false };
   if (!action || action === 'load' || action === 'preview') return result;
+  var requestId = String((payload && payload.clientRequestId) || '').trim();
+  var replay = optlReplayRequest_(state, requestId);
+  if (replay) return replay;
   if (action === 'resetDemo') {
+    optlAssertActingManager_(actor);
     state = optlCloneDemoState_();
-    optlSaveState_(state);
-    result.state = state;
-    result.message = 'Demo state reset to seed data';
-    return result;
+    result.message = 'Saved. Demo data was reset.';
+    return optlCommitAction_(state, payload, result);
   }
   if (action === 'addEvent') {
     result.event = optlAddEvent_(state, draft, actor);
+    result.message = 'Saved. The entry is on the active matrix and in permanent history.';
   } else if (action === 'issueFormal') {
     result.resolved = optlResolveEffectiveLevel_(state, draft, actor.asOfDate);
     if (payload.previewOnly) {
@@ -501,24 +568,29 @@ function optlApplyAction_(state, payload) {
     }
     if (result.resolved.adjusted) draft.entryType = result.resolved.effective;
     result.event = optlIssueFormalAction_(state, draft, actor);
+    result.message = 'Saved. Formal action issued.';
   } else if (action === 'voidEvent') {
     result.event = optlVoidEvent_(state, draft.eventId || payload.eventId, actor);
+    result.message = 'Saved. The record was voided. History was kept.';
   } else if (action === 'newHire') {
     result.employee = optlNewHireEmployee_(state, draft, actor);
+    result.message = 'Saved. New hire recorded.';
   } else if (action === 'terminate') {
     result.employee = optlTerminateEmployee_(state, draft.employeeId || payload.employeeId, draft, actor);
+    result.message = 'Saved. Termination recorded. History was kept.';
   } else if (action === 'acknowledge') {
     result.acknowledgment = optlAcknowledgeEvent_(state, draft.eventId || payload.eventId, draft, actor);
+    result.message = 'Saved. Acknowledgment recorded.';
   } else if (action === 'flagReview') {
     result.exception = optlFlagReviewRequired_(state, draft, actor);
+    result.message = 'Saved. Review flag recorded.';
   } else if (action === 'rehire') {
     result.employee = optlRehireEmployee_(state, draft.employeeId || payload.employeeId, draft.hireDate || optlToday_(), actor);
+    result.message = 'Saved. Rehire recorded. Prior history was kept.';
   } else {
     throw new Error('Unknown OPTL action: ' + action);
   }
-  optlSaveState_(state);
-  result.state = state;
-  return result;
+  return optlCommitAction_(state, payload, result);
 }
 
 function optlDashboard_(state, asOf) {
@@ -635,7 +707,7 @@ function optlBuildPage_(state, payload, actionResult) {
  * Manager/Admin OPTL page + synthetic mutations.
  * No personnel Sheet writes. Sales metrics are not read. Email is not sent.
  */
-function optl_(payload) {
+function optlRun_(payload) {
   var state = optlLoadState_();
   var actionResult = null;
   if (payload && payload.action) {
@@ -643,5 +715,20 @@ function optl_(payload) {
     if (actionResult.state) state = actionResult.state;
     else state = optlLoadState_();
   }
-  return optlBuildPage_(state, payload || {}, actionResult);
+  var page = optlBuildPage_(state, payload || {}, actionResult);
+  if (actionResult && actionResult.elapsedMs != null) page.saveElapsedMs = actionResult.elapsedMs;
+  return page;
+}
+
+function optl_(payload) {
+  if (payload && payload.action && typeof LockService !== 'undefined') {
+    var lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      return optlRun_(payload);
+    } finally {
+      lock.releaseLock();
+    }
+  }
+  return optlRun_(payload);
 }
