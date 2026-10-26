@@ -804,18 +804,34 @@
     .optl-form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0bc; }
     .optl-form-grid input, .optl-form-grid select, .optl-form-grid textarea { padding: 7px 10px; border-radius: 8px; border: 1px solid #1d5c66; background: #10161c; color: #f3f6f8; font: inherit; text-transform: none; letter-spacing: 0; font-weight: 600; }
     .optl-form-grid textarea { min-height: 72px; }
-    .optl-page input[type="checkbox"] { width: 18px; min-width: 18px; max-width: 18px; height: 18px; min-height: 18px; margin: 0; padding: 0; flex: 0 0 18px; accent-color: #14c4d4; vertical-align: middle; }
-    .optl-page label.confirm { display: flex; flex-direction: row; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-weight: 600; }
+    .optl-page input[type="checkbox"] { width: 18px; min-width: 18px; max-width: 18px; height: 18px; min-height: 18px; margin: 0; padding: 0; flex: 0 0 18px; accent-color: #14c4d4; vertical-align: middle; background: transparent; border-radius: 4px; }
+    .optl-page label.confirm { display: flex; flex-direction: row; align-items: center; gap: 8px; margin: 10px 0 0; text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 14px; color: #d5e4f5; }
     .optl-screen[hidden] { display: none !important; }
-    .optl-pick { max-width: 640px; margin: 8px auto 0; }
-    .optl-pick select, .optl-entry select, .optl-entry input, .optl-entry textarea { width: 100%; }
-    .optl-pick select { min-height: 52px; font-size: 18px; }
-    .optl-go { display: block; width: 100%; min-height: 56px; margin-top: 16px; font-size: 18px; }
-    .optl-go:disabled, .optl-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .optl-page { width: 100%; max-width: 880px; margin: 0 auto; }
+    .optl-page-wide { max-width: none; }
+    .optl-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 2px 0 12px; }
+    .optl-head h2 { margin: 0; font-size: 26px; letter-spacing: 0; text-transform: none; color: #f3f6f8; }
+    .optl-demo { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border-radius: 999px; border: 1px solid #1d5c66; color: #7ee7f0; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+    .optl-select-row { display: flex; gap: 12px; align-items: flex-end; }
+    .optl-select-row label { flex: 1 1 auto; min-width: 0; margin: 0; }
+    .optl-select-row select, .optl-entry select, .optl-entry input, .optl-entry textarea { width: 100%; }
+    .optl-select-row select { min-height: 40px; height: 40px; font-size: 15px; }
+    .optl-page .optl-primary { min-height: 40px; height: 40px; padding: 0 18px; white-space: nowrap; }
+    .optl-block { margin-top: 16px; }
+    .optl-page button { min-height: 40px; }
+    .optl-go:disabled, .optl-actions button:disabled, .optl-primary:disabled { opacity: 0.45; cursor: not-allowed; }
     .optl-who { margin: 0 0 12px; }
-    .optl-who h2, .optl-entry-head h2 { margin: 0; font-size: 28px; letter-spacing: 0; text-transform: none; color: #f3f6f8; }
-    .optl-primary-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
-    .optl-primary-actions button { min-height: 48px; }
+    .optl-who h2, .optl-entry-head h2, .optl-loading h2 { margin: 0; font-size: 28px; letter-spacing: 0; text-transform: none; color: #f3f6f8; }
+    .optl-toolbar, .optl-primary-actions, .optl-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .optl-toolbar { margin-bottom: 12px; }
+    .optl-primary-actions { margin: 8px 0 12px; }
+    .optl-toolbar button, .optl-primary-actions button, .optl-actions button { width: auto; min-height: 40px; }
+    .optl-loading-line { margin: 8px 0 0; color: #7ee7f0; font-weight: 700; }
+    .optl-page input:not([type="checkbox"]), .optl-page select, .optl-page textarea { min-height: 40px; }
+    @media (max-width: 720px) {
+      .optl-select-row { flex-direction: column; align-items: stretch; }
+      .optl-page .optl-primary { width: 100%; }
+    }
     .optl-quiet { background: #10161c; color: #f3f6f8; border: 1px solid #1d5c66; }
     .optl-detail { margin: 0 0 12px; border: 1px solid #14c4d4; }
     .optl-matrix td.filled, .optl-history tbody tr { cursor: pointer; }
@@ -934,7 +950,7 @@
     var displayTimer = null;
     var displayRefreshing = false;
     var displayHold = false;
-    var optlUi = { view: 'select', employeeId: '', highlightId: '', detailId: '', draft: null, showPrint: false, showMore: false, showFormer: false, showRemove: false, workflow: '', returnView: 'select' };
+    var optlUi = { view: 'select', employeeId: '', highlightId: '', detailId: '', draft: null, showPrint: false, showMore: false, showFormer: false, showRemove: false, workflow: '', returnView: 'select', loading: false };
     var displayPayload = null;
 
     function esc(value) {
@@ -6131,7 +6147,7 @@
       document.body.classList.remove('print-optl-formal');
       document.body.classList.remove('print-optl-roster');
       if (optlUi.view !== 'select' && data.selectedEmployeeId && (!optlUi.employeeId || optlUi.employeeId === data.selectedEmployeeId)) optlUi.employeeId = data.selectedEmployeeId;
-      var viewTitle = optlUi.view === 'entry' ? 'Accountability entry' : (optlUi.view === 'record' ? 'Employee OPTL' : 'Select associate');
+      var viewTitle = optlUi.view === 'entry' ? 'Accountability entry' : (optlUi.view === 'record' ? 'Employee OPTL' : 'Associate Management');
       document.getElementById('header-note').textContent = 'OPTL · ' + viewTitle;
       var employees = data.employees || [];
       var employee = data.employee || {};
@@ -6210,7 +6226,7 @@
       }).join('');
       var alertItems = ((dash.alerts || []).slice(0, 12)).map(function (row) {
         return '<li><strong>' + esc(row.kind) + '</strong> · ' + esc(row.title) + ' — ' + esc(row.detail || '') +
-          ' <span class="sub">(email not sent)</span></li>';
+          '</li>';
       }).join('');
       var formalOpts = (data.formalEvents || []).map(function (row) {
         return '<option value="' + esc(row.eventId) + '">' + esc(row.entryType) + ' · ' + esc(row.category) + ' · ' + esc(row.incidentDate) + '</option>';
@@ -6225,9 +6241,10 @@
       var actionMsg = data.actionResult && data.actionResult.message ? data.actionResult.message : '';
       var actionErr = data.actionResult && data.actionResult.ok === false;
       var statusLine = employee.status === 'former' ? 'Former' : (employee.status === 'inactive' ? 'Inactive' : (employee.status === 'withdrawn' ? 'Withdrawn' : 'Active'));
-      var whoBlock = '<div class="optl-who"><p class="optl-kicker">Store 17 Online · OPTL</p><h2>' + esc(employee.displayName || 'Associate') + '</h2>' +
+      var demoBadge = data.prototype ? '<span class="optl-demo">Demo</span>' : '';
+      var whoBlock = '<div class="optl-who"><h2>' + esc(employee.displayName || 'Associate') + '</h2>' +
         '<p class="sub">ID ' + esc(employee.employeeId || '') + ' · ' + esc(employee.jobTitle || '') + ' · ' + esc(statusLine) +
-        ' · hired ' + esc(employee.hireDate || '') + ' · as of ' + esc(data.asOfDate || '') + '</p></div>';
+        (employee.hireDate ? ' · hired ' + esc(employee.hireDate) : '') + '</p></div>';
       var lockBanner = data.lock
         ? '<div class="optl-banner lock noprint"><strong>Pending STEP/TERM lock</strong> — scored/formal accountability blocked until the pending action is issued. Unscored factual notes remain allowed.</div>'
         : '';
@@ -6261,7 +6278,7 @@
         return '<option value="' + esc(label) + '"' + (label === draft.shortDescription ? ' selected' : '') + '>' + esc(label) + '</option>';
       }).join('') + '<option value="__custom"' + (draft.shortDescription && !descKnown ? ' selected' : '') + '>Other description</option>';
       var removePanel = (optlUi.showRemove && picked)
-        ? '<div class="optl-remove" id="optl-remove-panel"><h3>Delete Associate</h3>' +
+        ? '<div class="optl-remove" id="optl-remove-panel"><h3>Remove Associate</h3>' +
           '<p class="sub">Confirm <strong>' + esc(picked.displayName) + '</strong> and enter a reason. Accountability documentation stays in the record and can still be printed.</p>' +
           '<label class="confirm"><input type="checkbox" id="optl-remove-confirm" /> I confirm this is the associate to remove from the active list</label>' +
           '<label>Type the associate\'s full name<input id="optl-remove-name" autocomplete="off" /></label>' +
@@ -6314,24 +6331,26 @@
       }).join('');
       var shown = function (name) { return optlUi.view === name ? '' : ' hidden'; };
       document.getElementById('screen').innerHTML =
-        '<div class="optl-page">' +
+        '<div class="optl-page' + (optlUi.view === 'record' && !optlUi.loading ? ' optl-page-wide' : '') + '">' +
         '<div id="optl-screen-select" class="optl-screen"' + shown('select') + '>' +
-        '<article class="card optl-pick"><div class="optl-brand">' +
-        (storeLogo ? '<img src="' + storeLogo + '" alt="Kane\'s Furniture Store 17" width="72" height="72" />' : '') +
-        '<div><p class="optl-kicker">Kane\'s Furniture · Store 17</p><h2 class="optl-title">Select associate</h2>' +
-        '<p class="optl-sub">' + esc(data.notice || '') + '</p></div></div>' +
+        '<header class="optl-head"><h2>OPTL — Associate Management</h2>' + demoBadge + '</header>' +
+        '<article class="card"><div class="optl-select-row">' +
         '<label>Associate<select id="optl-employee">' + options + '</select></label>' +
-        '<label class="confirm"><input type="checkbox" id="optl-show-former"' + (optlUi.showFormer ? ' checked' : '') + ' /> Show former and inactive associates</label>' +
-        '<button type="button" class="optl-go" id="optl-view"' + (optlUi.employeeId ? '' : ' disabled') + '>View OPTL &amp; History</button>' +
-        '<button type="button" class="optl-go" id="optl-print-all">Print All OPTLs with History</button>' +
-        '<div class="optl-actions"><button type="button" id="optl-add-associate">Add New Associate</button>' +
-        '<button type="button" class="optl-quiet" id="optl-delete-associate">Delete Associate</button></div>' +
-        removePanel +
-        '<p class="sub">As of <strong>' + esc(data.asOfDate) + '</strong> · ' + esc(data.timezone || 'America/New_York') + '</p></article></div>' +
+        '<button type="button" class="optl-primary" id="optl-view"' + (optlUi.employeeId ? '' : ' disabled') + '>View OPTL</button></div>' +
+        '<label class="confirm"><input type="checkbox" id="optl-show-former"' + (optlUi.showFormer ? ' checked' : '') + ' /> Show former and inactive associates</label></article>' +
+        '<section class="optl-block"><h2 class="section-title">Management Actions</h2>' +
+        '<article class="card"><div class="optl-actions"><button type="button" class="optl-quiet" id="optl-add-associate">Add New Associate</button>' +
+        '<button type="button" class="optl-quiet" id="optl-delete-associate">Remove Associate</button></div>' +
+        removePanel + '</article></section>' +
+        '<section class="optl-block"><h2 class="section-title">Monthly Accountability Review</h2>' +
+        '<article class="card"><p class="sub">Print the current matrix and permanent history for every active associate. Private notes are not included.</p>' +
+        '<div class="optl-actions"><button type="button" class="optl-quiet" id="optl-print-all">Print All OPTLs with History</button></div></article></section></div>' +
         '<div id="optl-screen-record" class="optl-screen"' + shown('record') + '>' +
-        '<article class="card noprint">' +
-        '<button type="button" class="optl-go" id="optl-change">Change Associate / Back to Associate Selection</button>' +
-        whoBlock +
+        (optlUi.loading
+          ? '<article class="card optl-loading"><h2>' + esc(employee.displayName || 'Associate') + '</h2><p class="optl-loading-line">Loading OPTL…</p></article>'
+          : '<article class="card noprint">' +
+        '<div class="optl-toolbar"><button type="button" class="optl-quiet" id="optl-change">Change Associate / Back to Associate Selection</button></div>' +
+        whoBlock + demoBadge +
         '<div class="optl-primary-actions"><button type="button" id="optl-write">Write New Occurrence</button>' +
         '<button type="button" id="optl-open-step">Issue STEP / TERM</button>' +
         '<button type="button" id="optl-open-void">Correct / Void</button>' +
@@ -6353,9 +6372,9 @@
         '<button type="button" id="optl-reset-demo">Reset demo data</button></div>' +
         '<h2 class="section-title">Management dashboard</h2>' +
         '<p><strong>' + esc(String(dash.pendingCount || 0)) + '</strong> open pending · <strong>' +
-        esc(String(dash.exceptionCount || 0)) + '</strong> open exceptions · email send <strong>disabled</strong></p>' +
-        (alertItems ? '<ul class="optl-alert-list">' + alertItems + '</ul>' : '<p class="sub">No Command Center alerts yet.</p>') +
-        '<p class="sub">' + esc(alerts.note || '') + ' · ' + esc(security.storage || '') + '</p></div></article>' +
+        esc(String(dash.exceptionCount || 0)) + '</strong> open exceptions</p>' +
+        (alertItems ? '<ul class="optl-alert-list">' + alertItems + '</ul>' : '<p class="sub">No open alerts.</p>') +
+        '</div></article>' +
         detailBlock + lockBanner + pendingBlock + exceptionBlock +
         '<h2 class="section-title">Active matrix</h2>' +
         '<article class="card"><div class="optl-matrix-wrap"><table class="optl-matrix"><thead><tr><th scope="col">Category</th>' + headers + '</tr></thead><tbody>' +
@@ -6365,9 +6384,11 @@
         '<h2 class="section-title">Permanent history</h2>' +
         '<article class="card"><table class="optl-history"><thead><tr><th>Incident</th><th>Section</th><th>Category</th><th>Action</th><th>Description</th><th>Expiration</th><th>Status</th></tr></thead><tbody>' +
         (history || '<tr><td colspan="7">No history for this associate.</td></tr>') + '</tbody></table>' +
-        '<p class="sub">Click an entry to review it. Expired, voided, and rescinded events stay in history. Nothing is deleted.</p></article></div>' +
+        '<p class="sub">Click an entry to review it. Expired, voided, and rescinded events stay in history. Nothing is deleted.</p></article>') + '</div>' +
         '<div id="optl-screen-entry" class="optl-screen"' + shown('entry') + '>' +
-        '<article class="card optl-entry noprint"><div class="optl-entry-head">' + whoBlock +
+        '<article class="card optl-entry noprint">' +
+        '<div class="optl-toolbar"><button type="button" class="optl-quiet" id="optl-entry-back">Back</button></div>' +
+        '<div class="optl-entry-head">' + whoBlock + demoBadge +
         '<p class="optl-kicker">Accountability Entry</p></div>' +
         lockBanner +
         '<p class="optl-msg" id="optl-entry-msg"></p>' +
@@ -6384,8 +6405,7 @@
         '<label class="confirm"><input type="checkbox" id="optl-direct"' + (draft.direct ? ' checked' : '') + ' /> Direct STEP (skip occurrences)</label>' +
         '<label class="span-2">Direct-issue justification<textarea id="optl-justify">' + esc(draft.justification || '') + '</textarea></label>' +
         '</div>' + actorFor('entry') +
-        '<div class="optl-actions" style="margin-top:10px"><button type="button" id="optl-save-entry">Save entry</button>' +
-        '<button type="button" class="optl-quiet" id="optl-entry-back">Back</button>' +
+        '<div class="optl-actions" style="margin-top:14px"><button type="button" id="optl-save-entry">Save entry</button>' +
         '<button type="button" class="optl-quiet" id="optl-entry-cancel">Cancel</button></div>' +
         '<p class="sub">Back and Cancel return to this associate without saving. Private notes are not printed on the employee matrix.</p></article></div>' +
         '<div id="optl-screen-workflow" class="optl-screen"' + shown('workflow') + '>' +
@@ -6561,6 +6581,7 @@
           if (gen !== optlEpoch || screen !== 'optl') return page;
           var action = base.action;
           var outcome = page && page.actionResult;
+          optlUi.loading = false;
           if (action && (!outcome || outcome.saved !== true)) {
             optlShowStatus((outcome && outcome.message) || 'The server did not confirm the save.', true);
             var saveBtn = document.getElementById('optl-save-entry');
@@ -6604,17 +6625,20 @@
           return page;
         }).catch(function (error) {
           if (gen !== optlEpoch) return;
+          optlUi.loading = false;
           var saveBtn = document.getElementById('optl-save-entry');
           if (saveBtn) saveBtn.textContent = 'Save entry';
           if (optlUi.view === 'entry' || optlUi.view === 'workflow') optlShowStatus(error.message, true);
           else {
             optlUi.view = 'select';
             ccActivitySet(error.message, 'err');
+            renderOptl(displayPayload || data);
           }
           throw error;
         });
       }
       function optlLocal(view) {
+        optlUi.loading = false;
         optlUi.view = view;
         renderOptl(displayPayload || data);
       }
@@ -6637,6 +6661,9 @@
           optlUi.showPrint = false;
           optlUi.showMore = false;
           optlUi.showRemove = false;
+          optlUi.loading = true;
+          ccActivitySet('Loading OPTL…', 'busy');
+          renderOptl(data);
           optlCall({});
         });
       }
@@ -7143,6 +7170,7 @@
         optlUi.showRemove = false;
         optlUi.workflow = '';
         optlUi.returnView = 'select';
+        optlUi.loading = false;
       }
       if (name === 'admin') { renderAdmin(); return; }
       if (name === 'documents') {

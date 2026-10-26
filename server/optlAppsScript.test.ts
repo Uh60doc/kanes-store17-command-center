@@ -793,9 +793,14 @@ test('optl_ mutation actions: new hire via page API and UI markers present', () 
   assert.match(html, /Personal Improvement Plan \(PIP\)/);
   assert.match(html, /optl-yr/);
   assert.match(html, /Management dashboard/);
-  assert.match(html, /View OPTL &amp; History/);
+  assert.match(html, />View OPTL</);
+  assert.match(html, /OPTL — Associate Management/);
+  assert.match(html, /Management Actions/);
+  assert.match(html, /Monthly Accountability Review/);
+  assert.match(html, /Loading OPTL…/);
+  assert.match(html, /class="optl-demo"/);
   assert.match(html, /Add New Associate/);
-  assert.match(html, /Delete Associate/);
+  assert.match(html, /Remove Associate/);
   assert.match(html, /Write New Occurrence/);
   assert.match(html, /Print Options/);
   assert.match(html, /Change Associate \/ Back to Associate Selection/);
