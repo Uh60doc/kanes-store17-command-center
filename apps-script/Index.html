@@ -817,6 +817,10 @@
     .optl-formal-sheet td, .optl-formal-sheet th { border: 1px solid #000; padding: 4px 6px; vertical-align: top; }
     .optl-formal-sheet .sig { margin-top: 10px; }
     .optl-formal-sheet .watermark { color: #666; font-weight: 700; text-align: center; border: 1px solid #666; padding: 6px; margin: 8px 0; }
+    @page optl-matrix { size: letter landscape; margin: 0.4in; }
+    @page optl-formal { size: letter portrait; margin: 0.45in; }
+    body.print-optl { page: optl-matrix; }
+    body.print-optl-formal { page: optl-formal; }
     @media print {
       body.print-optl-formal { background: #fff !important; }
       body.print-optl-formal .optl-formal-sheet { box-shadow: none; }
@@ -826,7 +830,6 @@
     body.print-optl .optl-print-sheet { display: block !important; color: #e8eef2; background: #0d1114; border: 2px solid #14c4d4; padding: 14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     @media print {
       body.print-optl { background: #0d1114 !important; }
-      @page { size: letter landscape; margin: 0.4in; }
     }
   </style>
 </head>
@@ -5990,7 +5993,7 @@
       var active = document.activeElement;
       if (active && active.id !== 'display-refresh' && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return true;
       var body = document.body;
-      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd') || body.classList.contains('print-evalprep') || body.classList.contains('print-actions') || body.classList.contains('print-report') || body.classList.contains('print-variance') || body.classList.contains('print-order') || body.classList.contains('print-closeout') || body.classList.contains('print-training') || body.classList.contains('print-optl')) return true;
+      if (body.classList.contains('print-brief') || body.classList.contains('print-eval') || body.classList.contains('print-doc') || body.classList.contains('print-summary') || body.classList.contains('print-coach') || body.classList.contains('print-mtd') || body.classList.contains('print-evalprep') || body.classList.contains('print-actions') || body.classList.contains('print-report') || body.classList.contains('print-variance') || body.classList.contains('print-order') || body.classList.contains('print-closeout') || body.classList.contains('print-training') || body.classList.contains('print-optl') || body.classList.contains('print-optl-formal')) return true;
       return false;
     }
     function syncRefreshButton() {

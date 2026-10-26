@@ -360,6 +360,7 @@ function optlEmployeeView_(events, employeeId, asOfDate) {
 }
 
 var OPTL_STATE_PROP_KEY_ = 'optl_demo_state_v13';
+var OPTL_PROP_CHUNK_CHARS_ = 8000;
 
 function optlCloneDemoState_() {
   var state = optlEmptyState_();
@@ -376,6 +377,44 @@ function optlCloneDemoState_() {
   return state;
 }
 
+/** Script properties cap each value at 9KB. Chunk so a saved entry still reloads after refresh. */
+function optlSaveStateProperties_(state) {
+  if (typeof PropertiesService === 'undefined') return false;
+  var props = PropertiesService.getScriptProperties();
+  var json = JSON.stringify(state);
+  var count = Math.max(1, Math.ceil(json.length / OPTL_PROP_CHUNK_CHARS_));
+  var previous = Number(props.getProperty(OPTL_STATE_PROP_KEY_ + '_n') || 0);
+  var index;
+  for (index = 0; index < count; index += 1) {
+    props.setProperty(OPTL_STATE_PROP_KEY_ + '_' + index, json.substring(index * OPTL_PROP_CHUNK_CHARS_, (index + 1) * OPTL_PROP_CHUNK_CHARS_));
+  }
+  for (index = count; index < previous; index += 1) {
+    props.setProperty(OPTL_STATE_PROP_KEY_ + '_' + index, '');
+  }
+  props.setProperty(OPTL_STATE_PROP_KEY_ + '_n', String(count));
+  props.setProperty(OPTL_STATE_PROP_KEY_, '');
+  return true;
+}
+
+function optlLoadStateProperties_() {
+  if (typeof PropertiesService === 'undefined') return null;
+  var props = PropertiesService.getScriptProperties();
+  var count = Number(props.getProperty(OPTL_STATE_PROP_KEY_ + '_n') || 0);
+  var json = '';
+  if (count > 0) {
+    var index;
+    for (index = 0; index < count; index += 1) {
+      json += props.getProperty(OPTL_STATE_PROP_KEY_ + '_' + index) || '';
+    }
+  } else {
+    json = props.getProperty(OPTL_STATE_PROP_KEY_) || '';
+  }
+  if (!json) return null;
+  var parsed = JSON.parse(json);
+  if (!parsed || !parsed.employees || !parsed.events) return null;
+  return parsed;
+}
+
 /**
  * Load OPTL state. Dedicated workbook when OPTL_SPREADSHEET_ID is set; otherwise
  * script properties hold the fictional demo so refreshes survive without a sales-sheet write.
@@ -388,28 +427,29 @@ function optlLoadState_() {
     if (fromBook) return fromBook;
   }
   try {
-    if (typeof PropertiesService !== 'undefined') {
-      var raw = PropertiesService.getScriptProperties().getProperty(OPTL_STATE_PROP_KEY_);
-      if (raw) {
-        var parsed = JSON.parse(raw);
-        if (parsed && parsed.employees && parsed.events) return parsed;
-      }
-    }
+    var fromProps = optlLoadStateProperties_();
+    if (fromProps) return fromProps;
   } catch (ignore) {}
   return optlCloneDemoState_();
 }
 
 function optlSaveState_(state) {
   var bookId = optlSpreadsheetId_();
+  var savedBook = false;
   if (bookId && typeof SpreadsheetApp !== 'undefined') {
     optlAssertDedicatedBook_(bookId);
     optlSaveStateToBook_(SpreadsheetApp.openById(bookId), state);
+    savedBook = true;
   }
+  var savedProps = false;
   try {
-    if (typeof PropertiesService !== 'undefined') {
-      PropertiesService.getScriptProperties().setProperty(OPTL_STATE_PROP_KEY_, JSON.stringify(state));
-    }
-  } catch (ignore) {}
+    savedProps = optlSaveStateProperties_(state);
+  } catch (error) {
+    if (!savedBook) throw error;
+  }
+  if (!savedBook && !savedProps) {
+    throw new Error('OPTL could not save. The sales spreadsheet was not used.');
+  }
 }
 
 function optlStandardLabels_() {

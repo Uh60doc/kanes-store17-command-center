@@ -863,6 +863,36 @@ test('employee matrix print omits private notes and PIP keeps Kane form sections
   assert.equal(matrix.includes('id="optl-notes'), false);
 });
 
+test('OPTL saves survive a later read and stay off the sales cache', () => {
+  const gs = loadOptl();
+  const saved = gs.optl_({
+    action: 'addEvent',
+    asOfDate: '2026-10-25',
+    employeeId: 'S17-DEMO-101',
+    actingManagerDeclared: 'Pat Nguyen (GM)',
+    actingManagerConfirmed: true,
+    draft: {
+      employeeId: 'S17-DEMO-101',
+      incidentDate: '2026-10-20',
+      section: 'A',
+      category: 'Safety',
+      entryType: 'Occurrence',
+      shortDescription: 'Unsafe Behavior',
+      notes: 'Fictional note '.repeat(400),
+      scored: true,
+    },
+  });
+  assert.equal(saved.actionResult?.ok, true);
+  const again = gs.optl_({ asOfDate: '2026-10-25', employeeId: 'S17-DEMO-101' });
+  assert.ok(again.history.some((line) => line.incidentDate === '2026-10-20' && line.category === 'Safety'));
+  const code = readFileSync(new URL('../apps-script/Code.gs', import.meta.url), 'utf8');
+  assert.match(code, /optl: true/);
+  assert.doesNotMatch(code, /CACHED_PAGES_ = \{[^}]*optl:/);
+  const html = readFileSync(new URL('../apps-script/Index.html', import.meta.url), 'utf8');
+  assert.match(html, /@page optl-matrix \{ size: letter landscape/);
+  assert.doesNotMatch(html, /@page \{ size: letter landscape/);
+});
+
 test('flag review required marks yellow-red exception', () => {
   const gs = loadOptl();
   const state = gs.optlEmptyState_();
