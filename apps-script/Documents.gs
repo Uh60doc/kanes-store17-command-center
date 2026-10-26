@@ -119,8 +119,8 @@ function docUpdate_(row, changes) {
 }
 
 function docLogin_(session) {
-  var name = '';
-  Object.keys(USER_ROLES_).forEach(function (user) { if (!name && USER_ROLES_[user] === session.role) name = user; });
+  var name = String((session && session.username) || '');
+  if (!name) Object.keys(USER_ROLES_).forEach(function (user) { if (!name && USER_ROLES_[user] === session.role) name = user; });
   var label = session.role.charAt(0).toUpperCase() + session.role.slice(1);
   return label + (name ? ' (' + name + ')' : '');
 }
