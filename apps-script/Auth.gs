@@ -27,6 +27,7 @@ var USER_ROLES_ = {
 var SIGN_IN_USERS_ = {
   liz: { role: 'admin', name: 'Liz' },
   cordell: { role: 'admin', name: 'Cordell' },
+  kelly: { role: 'admin', name: 'Kelly' },
 };
 var FIRST_PASSWORD_ = 'ADMIN';
 
@@ -170,7 +171,7 @@ function clearFailures_(username) {
 }
 
 function changePassword_() {
-  throw new Error('Liz and Cordell each create a password at sign-in.');
+  throw new Error('Liz, Cordell, and Kelly each create a password at sign-in.');
 }
 
 /** Clears one person's saved password so the starting password works again. */

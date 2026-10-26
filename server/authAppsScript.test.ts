@@ -43,9 +43,11 @@ function loadAuth() {
   return { gs: sandbox as any, props };
 }
 
-test('only Liz and Cordell can sign in, and ADMIN asks each of them to create a password', () => {
+test('Liz, Cordell, and Kelly can sign in, and ADMIN asks each of them to create a password', () => {
   const { gs, props } = loadAuth();
-  assert.throws(() => gs.login_({ username: 'kelly', password: 'ADMIN' }), /not valid/);
+  const kelly = gs.login_({ username: 'Kelly', password: 'ADMIN' });
+  assert.equal(kelly.mustSetPassword, true);
+  assert.equal(kelly.name, 'Kelly');
   assert.throws(() => gs.login_({ username: 'store17', password: 'ADMIN' }), /not valid/);
   assert.throws(() => gs.login_({ username: 'Liz', password: 'admin' }), /not valid/);
   const liz = gs.login_({ username: ' Liz ', password: 'ADMIN' });

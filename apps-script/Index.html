@@ -4482,8 +4482,8 @@
         '<h2 class="section-title">Development status</h2><div id="devlog-area"><p class="sub">Loading development status…</p></div>' +
         '<h2 class="section-title">Manage associates</h2><div id="roster-area"><p class="sub">Loading the roster…</p></div>' +
         '<h2 class="section-title">Passwords and imports</h2>' +
-        '<article class="card"><h2>Sign-in</h2><p class="sub">Liz and Cordell are the only usernames. The first time each person enters ADMIN, they create their own password and it is saved for that username.</p>' +
-        '<p id="pw-error" class="error"></p><p class="noprint"><button id="reset-liz" type="button">Let Liz use ADMIN again</button> <button id="reset-cordell" type="button">Let Cordell use ADMIN again</button> <button id="retry" type="button">Retry imports</button></p></article>';
+        '<article class="card"><h2>Sign-in</h2><p class="sub">Liz, Cordell, and Kelly are the only usernames. The first time each person enters ADMIN, they create their own password and it is saved for that username.</p>' +
+        '<p id="pw-error" class="error"></p><p class="noprint"><button id="reset-liz" type="button">Let Liz use ADMIN again</button> <button id="reset-cordell" type="button">Let Cordell use ADMIN again</button> <button id="reset-kelly" type="button">Let Kelly use ADMIN again</button> <button id="retry" type="button">Retry imports</button></p></article>';
       function resetSignIn(username, label) {
         api('resetSignIn', { username: username }).then(function () {
           document.getElementById('pw-error').textContent = label + ' can sign in with ADMIN and create a password again.';
@@ -4494,6 +4494,7 @@
       }
       document.getElementById('reset-liz').addEventListener('click', function () { resetSignIn('liz', 'Liz'); });
       document.getElementById('reset-cordell').addEventListener('click', function () { resetSignIn('cordell', 'Cordell'); });
+      document.getElementById('reset-kelly').addEventListener('click', function () { resetSignIn('kelly', 'Kelly'); });
       document.getElementById('retry').addEventListener('click', function () {
         api('retry').then(function () { openScreen('health'); }).catch(function (error) { document.getElementById('pw-error').textContent = error.message; });
       });
