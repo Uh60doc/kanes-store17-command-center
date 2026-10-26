@@ -799,6 +799,10 @@ test('optl_ mutation actions: new hire via page API and UI markers present', () 
   assert.match(html, /Monthly Accountability Review/);
   assert.match(html, /Loading OPTL…/);
   assert.match(html, /class="optl-demo"/);
+  assert.match(html, /table-layout:\s*fixed/);
+  assert.match(html, /col class="optl-col-cat"/);
+  assert.match(html, /col class="optl-col-slot" span="12"/);
+  assert.match(html, /function optlMatrixDate/);
   assert.match(html, /Add New Associate/);
   assert.match(html, /Remove Associate/);
   assert.match(html, /Write New Occurrence/);

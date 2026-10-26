@@ -765,20 +765,26 @@
     .optl-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 8px; }
     .optl-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; color: #9eb0bc; }
     .optl-controls select { min-width: 220px; padding: 7px 10px; border-radius: 8px; border: 1px solid #1d5c66; background: #10161c; color: #f3f6f8; font: inherit; text-transform: none; letter-spacing: 0; font-weight: 600; }
-    .optl-matrix-wrap { overflow-x: auto; }
-    .optl-matrix { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 980px; }
-    .optl-matrix th, .optl-matrix td { border: 1px solid #1d5c66; padding: 4px 5px; vertical-align: top; background: #0d1419; color: #e8eef2; }
-    .optl-matrix thead th { background: #102028; color: #14c4d4; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; text-align: center; }
-    .optl-matrix tbody th { text-align: left; min-width: 120px; background: #10181e; }
-    .optl-matrix .optl-section td { background: #143840; color: #f3f6f8; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; font-size: 10px; }
-    .optl-matrix td.filled { background: #122229; box-shadow: inset 0 0 0 1px rgba(20, 196, 212, 0.35); }
-    .optl-matrix th.step-yellow, .optl-matrix .slot-key.step-yellow { color: #f3d48a; }
-    .optl-matrix th.step-orange, .optl-matrix .slot-key.step-orange { color: #f0a46a; }
-    .optl-matrix th.step-red, .optl-matrix .slot-key.step-red { color: #f07178; }
-    .optl-matrix th.step-term, .optl-matrix .slot-key.step-term { color: #f3f6f8; }
-    .optl-matrix .slot-key { display: block; color: #7f93a0; font-size: 9px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
-    .optl-matrix .slot-date, .optl-matrix .slot-exp { display: block; color: #9eb0bc; font-variant-numeric: tabular-nums; }
-    .optl-matrix .slot-label { display: block; margin: 2px 0; font-weight: 700; color: #f3f6f8; }
+    .optl-matrix-wrap { overflow: visible; }
+    .optl-matrix { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 11px; }
+    .optl-matrix col.optl-col-cat { width: 176px; }
+    .optl-matrix th, .optl-matrix td { box-sizing: border-box; border: 1px solid #1d5c66; padding: 3px 3px; vertical-align: middle; background: #0d1419; color: #e8eef2; overflow: hidden; }
+    .optl-matrix thead th { background: #102028; color: #14c4d4; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; text-align: center; line-height: 1.15; white-space: normal; height: auto; }
+    .optl-matrix tbody th { width: 176px; text-align: left; background: #10181e; font-size: 12px; line-height: 1.2; white-space: normal; }
+    .optl-matrix tbody tr:not(.optl-section) { height: 66px; }
+    .optl-matrix tbody tr:not(.optl-section) td,
+    .optl-matrix tbody tr:not(.optl-section) th { height: 66px; }
+    .optl-matrix .optl-section td { height: auto; padding: 2px 8px; background: #143840; color: #f3f6f8; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; font-size: 10px; line-height: 1.3; }
+    .optl-matrix td.filled { background: #122229; }
+    .optl-matrix th.step-yellow, .optl-matrix td.step-yellow { color: #f3d48a; box-shadow: inset 0 -2px 0 #f3d48a; }
+    .optl-matrix th.step-orange, .optl-matrix td.step-orange { color: #f0a46a; box-shadow: inset 0 -2px 0 #f0a46a; }
+    .optl-matrix th.step-red, .optl-matrix td.step-red { color: #f07178; box-shadow: inset 0 -2px 0 #f07178; }
+    .optl-matrix th.step-term, .optl-matrix td.step-term { color: #f3f6f8; box-shadow: inset 0 -2px 0 #f3f6f8; }
+    .optl-matrix td.filled.step-cell.step-yellow { background: #2a2410; color: #f3f6f8; }
+    .optl-matrix td.filled.step-cell.step-orange { background: #2a1c10; color: #f3f6f8; }
+    .optl-matrix td.filled.step-cell.step-red { background: #2a1216; color: #f3f6f8; }
+    .optl-matrix .slot-date, .optl-matrix .slot-exp { display: block; color: #9eb0bc; font-size: 10px; line-height: 1.15; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .optl-matrix .slot-label { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; max-height: 2.3em; margin: 1px 0; line-height: 1.15; font-weight: 700; color: #f3f6f8; word-break: break-word; }
     .optl-history { width: 100%; border-collapse: collapse; font-size: 13px; }
     .optl-history th, .optl-history td { border-bottom: 1px solid #1d5c66; padding: 7px 8px; text-align: left; }
     .optl-history thead th { color: #14c4d4; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
@@ -794,9 +800,11 @@
     .optl-matrix td.review-required { box-shadow: inset 0 0 0 2px #f0a46a, inset 0 0 0 4px #f07178; background: #2a1a14; animation: optl-yr 1.8s ease-in-out infinite; }
     @keyframes optl-yr { 0%, 100% { background: #2a2410; box-shadow: inset 0 0 0 2px #f3d48a; } 50% { background: #2a1216; box-shadow: inset 0 0 0 2px #f07178; } }
     @media (prefers-reduced-motion: reduce) { .optl-matrix td.review-required { animation: none; } }
-    .optl-matrix td.filled.step-cell.step-yellow { background: #2a2410; }
-    .optl-matrix td.filled.step-cell.step-orange { background: #2a1c10; }
-    .optl-matrix td.filled.step-cell.step-red { background: #2a1216; }
+    @media print {
+      body.print-optl .optl-matrix-wrap { overflow: visible; }
+      body.print-optl .optl-matrix { width: 100%; min-width: 0; table-layout: fixed; }
+      body.print-optl .optl-matrix col.optl-col-cat { width: 1.7in; }
+    }
     .optl-actor { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 8px; }
     .optl-actor label.confirm { flex-direction: row; align-items: center; text-transform: none; letter-spacing: 0; font-weight: 600; gap: 8px; }
     .optl-actor .attr { color: #f3d48a; font-size: 12px; }
@@ -875,6 +883,7 @@
     body.print-optl-roster .optl-roster-history td,
     body.print-optl-roster .optl-roster-history th { break-inside: avoid; page-break-inside: avoid; }
     body.print-optl-roster table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    body.print-optl-roster .optl-roster-matrix col.optl-col-cat { width: 1.7in; }
     body.print-optl-roster td, body.print-optl-roster th { border: 1px solid #000; padding: 2px 3px; vertical-align: top; color: #000; background: #fff; word-wrap: break-word; }
     body.print-optl-roster .optl-roster-history thead { display: table-header-group; }
     body.print-optl-roster h1, body.print-optl-roster h2, body.print-optl-roster h3, body.print-optl-roster p { color: #000; }
@@ -6141,6 +6150,12 @@
       if (!iso || String(iso).length < 10) return '';
       return dateLabel(iso) || String(iso).slice(0, 10);
     }
+    function optlMatrixDate(iso) {
+      if (!iso || String(iso).length < 10) return '';
+      var parts = String(iso).slice(0, 10).split('-');
+      if (parts.length < 3 || !parts[0] || !parts[1] || !parts[2]) return '';
+      return String(Number(parts[1])) + '/' + parts[2] + '/' + parts[0].slice(2);
+    }
     function renderOptl(data) {
       displayHold = false;
       document.body.classList.remove('print-optl');
@@ -6187,23 +6202,24 @@
       var draftSection = draft.section || 'A';
       var draftCategory = draft.category || ((draftSection === 'B' ? data.sectionB : data.sectionA) || [])[0] || '';
       var draftType = draft.entryType || (optlUi.entryMode === 'formal' ? 'STEP_I' : 'Occurrence');
+      var matrixCols = '<colgroup><col class="optl-col-cat"><col class="optl-col-slot" span="12"></colgroup>';
       var headers = ((data.matrixRows || [])[0] || { cells: [] }).cells.map(function (cell) {
         return '<th scope="col"' + (cell.stepTone ? ' class="' + esc(cell.stepTone) + '"' : '') + '>' + esc(cell.slotLabel) + '</th>';
       }).join('');
       function matrixRowsHtml(section) {
         return (data.matrixRows || []).filter(function (row) { return row.section === section; }).map(function (row) {
           var cells = row.cells.map(function (cell) {
-            var keyClass = 'slot-key' + (cell.stepTone ? ' ' + cell.stepTone : '');
             var tdClass = [];
-            if (cell.occupied) tdClass.push('filled');
-            if (cell.stepTone && cell.occupied) tdClass.push('step-cell', cell.stepTone);
+            if (cell.stepTone) tdClass.push(cell.stepTone);
+            if (!cell.occupied) return '<td class="' + esc(tdClass.join(' ')) + '">—</td>';
+            tdClass.unshift('filled');
+            if (cell.stepTone) tdClass.push('step-cell');
             if (cell.reviewRequired) tdClass.push('review-required');
             if (cell.eventId && cell.eventId === optlUi.highlightId) tdClass.push('optl-highlight');
-            if (!cell.occupied) return '<td><span class="' + keyClass + '">' + esc(cell.slotLabel) + '</span>—</td>';
-            return '<td class="' + esc(tdClass.join(' ')) + '" data-event-id="' + esc(cell.eventId || '') + '"><span class="' + keyClass + '">' + esc(cell.slotLabel) + '</span>' +
-              '<span class="slot-date">' + esc(optlDisplayDate(cell.incidentDate)) + '</span>' +
+            return '<td class="' + esc(tdClass.join(' ')) + '" data-event-id="' + esc(cell.eventId || '') + '" title="' + esc(cell.shortDescription || '') + '">' +
+              '<span class="slot-date">' + esc(optlMatrixDate(cell.incidentDate)) + '</span>' +
               '<span class="slot-label">' + esc(cell.shortDescription || '') + '</span>' +
-              '<span class="slot-exp">Exp ' + esc(optlDisplayDate(cell.expirationDate)) + '</span></td>';
+              '<span class="slot-exp">Exp ' + esc(optlMatrixDate(cell.expirationDate)) + '</span></td>';
           }).join('');
           return '<tr><th scope="row">' + esc(row.category) + '</th>' + cells + '</tr>';
         }).join('');
@@ -6265,9 +6281,9 @@
       var printCells = function (section) {
         return (data.matrixRows || []).filter(function (row) { return row.section === section; }).map(function (row) {
           return '<tr><th scope="row">' + esc(row.category) + '</th>' + row.cells.map(function (cell) {
-            if (!cell.occupied) return '<td>—</td>';
-            return '<td>' + esc(optlDisplayDate(cell.incidentDate)) + '<br><strong>' + esc(cell.shortDescription || '') +
-              '</strong><br>Exp ' + esc(optlDisplayDate(cell.expirationDate)) + '</td>';
+            if (!cell.occupied) return '<td' + (cell.stepTone ? ' class="' + esc(cell.stepTone) + '"' : '') + '>—</td>';
+            return '<td class="' + esc((cell.stepTone ? cell.stepTone + ' ' : '') + 'filled') + '">' + esc(optlMatrixDate(cell.incidentDate)) + '<br><strong>' + esc(cell.shortDescription || '') +
+              '</strong><br>Exp ' + esc(optlMatrixDate(cell.expirationDate)) + '</td>';
           }).join('') + '</tr>';
         }).join('');
       };
@@ -6307,10 +6323,10 @@
         var body = rows.map(function (row) {
           return '<tr><th>' + esc(row.category) + '</th>' + row.cells.map(function (cell) {
             if (!cell.occupied) return '<td>—</td>';
-            return '<td>' + esc(optlDisplayDate(cell.incidentDate)) + '<br>' + esc(cell.shortDescription || '') + '<br>Exp ' + esc(optlDisplayDate(cell.expirationDate)) + '</td>';
+            return '<td>' + esc(optlMatrixDate(cell.incidentDate)) + '<br>' + esc(cell.shortDescription || '') + '<br>Exp ' + esc(optlMatrixDate(cell.expirationDate)) + '</td>';
           }).join('') + '</tr>';
         }).join('');
-        return '<table class="optl-roster-matrix"><thead><tr><th>Category</th>' + headers + '</tr></thead><tbody>' + body + '</tbody></table>';
+        return '<table class="optl-roster-matrix">' + matrixCols + '<thead><tr><th>Category</th>' + headers + '</tr></thead><tbody>' + body + '</tbody></table>';
       }
       var rosterHtml = (data.rosterPrint || []).map(function (person) {
         var hist = (person.history || []).map(function (line) {
@@ -6377,7 +6393,7 @@
         '</div></article>' +
         detailBlock + lockBanner + pendingBlock + exceptionBlock +
         '<h2 class="section-title">Active matrix</h2>' +
-        '<article class="card"><div class="optl-matrix-wrap"><table class="optl-matrix"><thead><tr><th scope="col">Category</th>' + headers + '</tr></thead><tbody>' +
+        '<article class="card"><div class="optl-matrix-wrap"><table class="optl-matrix">' + matrixCols + '<thead><tr><th scope="col">Category</th>' + headers + '</tr></thead><tbody>' +
         '<tr class="optl-section"><td colspan="13">Section A</td></tr>' + matrixRowsHtml('A') +
         '<tr class="optl-section"><td colspan="13">Section B</td></tr>' + matrixRowsHtml('B') +
         '</tbody></table></div></article>' +
@@ -6441,7 +6457,7 @@
         '<div class="optl-brand">' + (storeLogo ? '<img src="' + storeLogo + '" alt="" width="72" height="72" />' : '') +
         '<div><p class="optl-kicker">Store 17 Online</p><h2 class="optl-title">OPTL Active Matrix</h2>' +
         '<p class="optl-sub">' + esc(employee.displayName || '') + ' · ' + esc(employee.employeeId || '') + ' · as of ' + esc(data.asOfDate) + ' · no private notes</p></div></div>' +
-        '<div class="optl-matrix-wrap"><table class="optl-matrix"><thead><tr><th>Category</th>' + headers + '</tr></thead><tbody>' +
+        '<div class="optl-matrix-wrap"><table class="optl-matrix">' + matrixCols + '<thead><tr><th>Category</th>' + headers + '</tr></thead><tbody>' +
         '<tr class="optl-section"><td colspan="13">Section A</td></tr>' + printCells('A') +
         '<tr class="optl-section"><td colspan="13">Section B</td></tr>' + printCells('B') +
         '</tbody></table></div><p class="sub">Store 17 Online · OPTL · Confidential management record</p></article>' +
