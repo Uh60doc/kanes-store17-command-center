@@ -96,6 +96,12 @@ test('the historical registers keep every printed day and do not change current-
   const writtenCoverage = (tabs.CC_MetricCoverage || []).find((row) => row[0] === 'Store written sales');
   assert.equal(writtenCoverage && writtenCoverage[5], 'PASS');
 
+  tabs.CC_SellingDays = [['date', 'selling'], ['2025-10-01', 'closed']];
+  plain(gs.writeMetricCoverage_());
+  const closedDelivered = (tabs.CC_MetricCoverage || []).find((row) => row[0] === 'Store delivered sales');
+  assert.match(String(closedDelivered && closedDelivered[3]), /Closed, not a missing report: 2025-10-01/);
+  assert.doesNotMatch(String(closedDelivered && closedDelivered[3]), /Missing 2025-10-01/);
+
   const kept = plain(gs.recordHistoricalDay_({ metric: 'SNAP Written', date: '2025-11-01', dollars: 1, source: 'later.pdf', verification: 'Verified', note: 'disagree' }));
   assert.equal(kept.status, 'kept');
   assert.equal(plain(gs.historicalAmount_('SNAP Written', '2025-11-01')).dollars, 19922);
