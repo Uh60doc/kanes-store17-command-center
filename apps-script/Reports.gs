@@ -563,10 +563,13 @@ function reportMetricSeries_(facts, dates, field, metric) {
  */
 function reportLySeries_(facts, dates, field, metric) {
   var missing = [];
+  var closedSkipped = [];
   var total = 0;
   var seen = false;
   var fromRegister = 0;
   var fromDaily = 0;
+  var closed = {};
+  try { closed = typeof closedDates_ === 'function' ? closedDates_() : {}; } catch (error) { closed = {}; }
   dates.forEach(function (date) {
     var hist = typeof historicalAmount_ === 'function' ? historicalAmount_(metric, date) : null;
     if (hist && hist.dollars !== null && hist.dollars !== undefined) {
@@ -575,6 +578,8 @@ function reportLySeries_(facts, dates, field, metric) {
       total += Number(hist.dollars);
       return;
     }
+    // A closed day with no source report is closed. It is not a missing report and it is not filled in as zero.
+    if (closed[date]) { closedSkipped.push(date); return; }
     var row = reportFact_(facts, date);
     var value = row ? row[field] : null;
     if (value === null || value === undefined) { missing.push(date); return; }
@@ -586,15 +591,18 @@ function reportLySeries_(facts, dates, field, metric) {
   var start = dates.length ? dates[0] : '';
   var end = dates.length ? dates[dates.length - 1] : '';
   var tab = typeof historicalTabName_ === 'function' ? historicalTabName_(metric) : 'historical register';
-  if (dates.length && !missing.length && seen) {
+  var closedNote = closedSkipped.length ? (' Closed, not a missing report: ' + closedSkipped.join(', ') + '.') : '';
+  var openDays = dates.length - closedSkipped.length;
+  var countedLabel = closedSkipped.length ? (openDays + ' open days') : (dates.length + ' days');
+  if (openDays && !missing.length && seen) {
     var origin = fromDaily ? tab + ' and CC_Daily' : tab;
     return {
       pending: false,
       value: Math.round(total * 100) / 100,
       missing: [],
       onFile: fromRegister + fromDaily,
-      expected: dates.length,
-      source: origin + ' ' + metric + ', ' + start + ' through ' + end + '. Not added to current-year sales.',
+      expected: openDays,
+      source: origin + ' ' + metric + ', ' + start + ' through ' + end + '. Not added to current-year sales.' + closedNote,
     };
   }
   var onFile = fromRegister + fromDaily;
@@ -604,8 +612,8 @@ function reportLySeries_(facts, dates, field, metric) {
     missing: missing,
     partial: seen ? Math.round(total * 100) / 100 : null,
     onFile: onFile,
-    expected: dates.length,
-    source: 'Pending. ' + tab + ' has ' + onFile + ' of ' + dates.length + ' days. Missing ' + metric + ' for ' + reportDateList_(missing) + '. The days on file are not the completed comparison.',
+    expected: openDays,
+    source: 'Pending. ' + tab + ' has ' + onFile + ' of ' + countedLabel + '. Missing ' + metric + ' for ' + reportDateList_(missing) + '. The days on file are not the completed comparison.' + closedNote,
   };
 }
 
