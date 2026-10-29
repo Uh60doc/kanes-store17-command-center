@@ -256,10 +256,17 @@ function metricCoverageRows_() {
     if (!ly.confirmed || !ly.start || !ly.end) return { complete: false, text: 'Last-year store period is not confirmed' };
     var dates = eachDate_(ly.start, ly.end);
     var missing = [];
-    dates.forEach(function (date) { if (!historicalAmount_(metric, date)) missing.push(date); });
+    var closedDays = [];
+    dates.forEach(function (date) {
+      if (closed[date]) { closedDays.push(date); return; }
+      if (!historicalAmount_(metric, date)) missing.push(date);
+    });
     var tab = historicalTabName_(metric);
-    if (!missing.length) return { complete: true, text: dates.length + ' of ' + dates.length + ' days on ' + tab + ', ' + ly.start + ' through ' + ly.end };
-    return { complete: false, text: (dates.length - missing.length) + ' of ' + dates.length + ' days on ' + tab + '. Missing ' + missing.join(', ') };
+    var open = dates.length - closedDays.length;
+    var text = (open - missing.length) + ' of ' + open + ' open days on ' + tab + ', ' + ly.start + ' through ' + ly.end;
+    if (closedDays.length) text += '. Closed, not a missing report: ' + closedDays.join(', ');
+    if (!missing.length) return { complete: true, text: text };
+    return { complete: false, text: text + '. Missing ' + missing.join(', ') };
   }
   var sales = {
     store_written: { field: 'nwdsrWritten', metric: 'NWDSR Written', tab: 'NWDSR_WRITTEN_STORE and NWDSR_WRITTEN_LY' },
