@@ -258,6 +258,50 @@ function closedDates_() {
   return closed;
 }
 
+/**
+ * Management confirms one closed date. The row is for that date only.
+ * Another year is not marked closed, including a holiday that fell on a different date.
+ */
+function confirmStoreClosure_(date, by, note) {
+  var iso = isoDate_(date);
+  if (!iso) return { status: 'ignored', reason: 'Not a business date' };
+  var spreadsheet = book_();
+  var tab = spreadsheet.getSheetByName('CC_SellingDays');
+  if (!tab) {
+    tab = spreadsheet.insertSheet('CC_SellingDays');
+    tab.getRange(1, 1, 1, 5).setValues([['date', 'selling', 'confirmed_by', 'confirmed_at', 'note']]);
+  }
+  var values = tab.getDataRange().getValues();
+  var headers = values.length ? values[0].map(function (cell) { return String(cell || '').trim(); }) : ['date', 'selling'];
+  if (!headers[0]) headers[0] = 'date';
+  if (headers.indexOf('selling') === -1) headers.push('selling');
+  ['confirmed_by', 'confirmed_at', 'note'].forEach(function (name) {
+    if (headers.indexOf(name) === -1) headers.push(name);
+  });
+  if (values.length) tab.getRange(1, 1, 1, headers.length).setValues([headers]);
+  else tab.getRange(1, 1, 1, headers.length).setValues([headers]);
+  var now = new Date().toISOString();
+  var who = String(by || 'management');
+  var text = String(note || 'Confirmed closed. This date only. Not copied onto another year.');
+  var target = 0;
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    if (isoDate_(values[r][0]) === iso) target = r + 1;
+  }
+  var previous = target ? values[target - 1].slice() : '';
+  var row = headers.map(function () { return ''; });
+  row[headers.indexOf('date')] = iso;
+  row[headers.indexOf('selling')] = 'closed';
+  row[headers.indexOf('confirmed_by')] = who;
+  row[headers.indexOf('confirmed_at')] = now;
+  row[headers.indexOf('note')] = text;
+  if (!target) tab.appendRow(row);
+  else tab.getRange(target, 1, 1, headers.length).setValues([row]);
+  if (typeof archiveReplaced_ === 'function') archiveReplaced_('CC_SellingDays', iso, previous, who, text);
+  forgetRead_('CC_SellingDays');
+  return { status: 'confirmed', date: iso, confirmedBy: who, confirmedAt: now };
+}
+
 function operatingDaysRemaining_(period, today, closed) {
   var count = 0;
   eachDate_(period.start, period.end).forEach(function (date) {

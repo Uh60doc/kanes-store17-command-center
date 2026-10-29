@@ -7,6 +7,7 @@ import {
   individualPeriodContaining,
   operatingDaysRemaining,
   rangeLabel,
+  periodFor,
   storePeriodContaining,
 } from '../domain/reportingCalendar.ts';
 import { projectedMonthEnd } from '../cloud/facts.ts';
@@ -522,12 +523,13 @@ export function buildStoreDashboard(
   const beddingSnapshot = currentOf(snapshots, 'BSSA Written');
   const perqSnapshot = currentOf(snapshots, 'PERQ');
 
+  const priorStore = periodFor('store', storePeriod.year - 1, storePeriod.month);
   const priorYearSnap = snapshots.find(
     (item) =>
       item.status === 'current' &&
       item.reportType === 'SNAP Written' &&
-      item.periodStart === '2025-10-01' &&
-      item.periodEnd === '2025-10-31',
+      item.periodStart === priorStore.start &&
+      item.periodEnd === priorStore.end,
   );
 
   const storeStart = storePeriod.start;

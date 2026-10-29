@@ -75,10 +75,10 @@ test('the historical registers keep every printed day and do not change current-
   assert.match(meeting.recognition.join(' '), /same week last year/);
   assert.doesNotMatch(meeting.recognition.join(' '), /No prior comparable week/);
   const home = plain(gs.home_({ session }));
-  assert.equal(home.writtenBalance.month.nwdsrLy, '$369,018');
-  assert.equal(home.writtenBalance.month.ly, '$144,537');
-  assert.equal(home.writtenBalance.month.lyDates, 'Oct 1, 2025 - Oct 18, 2025');
-  assert.match(home.writtenBalance.month.deliveredLySource, /2025-10-01/);
+  assert.equal(home.writtenBalance.month.lyDates, 'Oct 2, 2025 - Oct 19, 2025');
+  assert.match(home.writtenBalance.month.deliveredLySource, /2025-10-02/);
+  assert.equal(home.writtenBalance.month.nwdsrLy, '$357,095');
+  assert.equal(home.writtenBalance.month.ly, '$148,217');
   assert.equal(home.month.written, before.month.written);
 
   const dailyAfterSeed = JSON.stringify(tabs.CC_Daily);
@@ -91,16 +91,15 @@ test('the historical registers keep every printed day and do not change current-
   assert.equal(againFiled.added.length, 0);
   const coverage = plain(gs.writeMetricCoverage_());
   const deliveredCoverage = coverage.open.find((row: { metric: string }) => row.metric === 'Store delivered sales');
-  assert.equal(deliveredCoverage.status, 'PARTIAL');
-  assert.match(deliveredCoverage.issue, /2025-10-01/);
   const writtenCoverage = (tabs.CC_MetricCoverage || []).find((row) => row[0] === 'Store written sales');
   assert.equal(writtenCoverage && writtenCoverage[5], 'PASS');
+  assert.equal(deliveredCoverage, undefined, 'the October store last-year window no longer starts on the old October 1 gap');
 
-  tabs.CC_SellingDays = [['date', 'selling'], ['2025-10-01', 'closed']];
+  tabs.CC_SellingDays = [['date', 'selling'], ['2025-11-01', 'closed']];
   plain(gs.writeMetricCoverage_());
   const closedDelivered = (tabs.CC_MetricCoverage || []).find((row) => row[0] === 'Store delivered sales');
-  assert.match(String(closedDelivered && closedDelivered[3]), /Closed, not a missing report: 2025-10-01/);
-  assert.doesNotMatch(String(closedDelivered && closedDelivered[3]), /Missing 2025-10-01/);
+  assert.match(String(closedDelivered && closedDelivered[3]), /Closed, not a missing report: 2025-11-01/);
+  assert.doesNotMatch(String(closedDelivered && closedDelivered[3]), /Missing 2025-11-01/);
 
   const kept = plain(gs.recordHistoricalDay_({ metric: 'SNAP Written', date: '2025-11-01', dollars: 1, source: 'later.pdf', verification: 'Verified', note: 'disagree' }));
   assert.equal(kept.status, 'kept');

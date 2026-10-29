@@ -7,7 +7,7 @@
  *        [--save out.json]
  *
  * On a day in a new store month the rehearsal moves store_period_start / store_period_end to that month and blanks
- * prior_year_start / prior_year_end, the way the GM rolls the config over before a new last-year period is confirmed.
+ * prior_year_start / prior_year_end. The store last-year window stays the same store month last year.
  * Exit code 1 when any check fails. --save writes the final tabs as a snapshot auditMetrics can read.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -100,7 +100,7 @@ for (const day of days) {
   const calendar = table(tabs, 'CC_PeriodCalendar');
   const confirmedLy = Object.fromEntries(calendar.filter((row) => /^Confirmed/i.test(row.ly_status)).map((row) => [row.period_key, `${row.ly_start}–${row.ly_end}`]));
   const october = calendar.find((row) => row.period_key === 'STORE-2026-10');
-  check(day, 'STORE-2026-10 compares with 2025-10-01–2025-10-31', `${october?.period_start}–${october?.period_end} vs ${october?.ly_start}–${october?.ly_end}` === '2026-10-02–2026-11-01 vs 2025-10-01–2025-10-31', `${october?.ly_start}–${october?.ly_end} (${october?.ly_status})`);
+  check(day, 'STORE-2026-10 compares with 2025-10-02–2025-11-01', `${october?.period_start}–${october?.period_end} vs ${october?.ly_start}–${october?.ly_end}` === '2026-10-02–2026-11-01 vs 2025-10-02–2025-11-01', `${october?.ly_start}–${october?.ly_end} (${october?.ly_status})`);
   const personOctober = calendar.find((row) => row.period_key === 'PERSON-2026-10');
   check(day, 'PERSON-2026-10 is the calendar month 2026-10-01–2026-10-31', `${personOctober?.period_start}–${personOctober?.period_end}` === '2026-10-01–2026-10-31');
 

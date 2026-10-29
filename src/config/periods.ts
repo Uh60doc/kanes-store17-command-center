@@ -28,8 +28,8 @@ export const storeOperatingPeriod = {
     deliveredSales: 564_373,
   },
   priorYearSnap: {
-    rangeDisplay: 'October 1–31, 2025',
-    map: 'operating-day number',
+    rangeDisplay: 'October 2, 2025–November 1, 2025',
+    map: 'same store month last year',
   },
 } as const;
 

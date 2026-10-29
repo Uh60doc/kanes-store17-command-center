@@ -521,7 +521,7 @@ if (monthlyHistory.length) {
 const calendar = rowsOf(book, 'CC_PeriodCalendar');
 const octoberStore = calendar.find((row) => row.period_key === 'STORE-2026-10');
 if (octoberStore) {
-  const expected = '2026-10-02–2026-11-01 vs 2025-10-01–2025-10-31';
+  const expected = '2026-10-02–2026-11-01 vs 2025-10-02–2025-11-01';
   const actual = `${octoberStore.period_start}–${octoberStore.period_end} vs ${octoberStore.ly_start}–${octoberStore.ly_end}`;
   note('History', 'October 2026 store month and its last-year period', 'CC_PeriodCalendar vs CC_Config prior_year_start / prior_year_end', 'STORE-2026-10', expected, actual, expected === actual ? 'Match' : 'MISMATCH');
 }

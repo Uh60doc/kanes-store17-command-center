@@ -49,7 +49,7 @@ test('last-year comparisons stay store-level; person track does not invent indiv
   const { gs } = harness();
   const ly = plain(gs.lastYearFor_({ ly: { start: '2025-10-01', end: '2025-10-31', confirmed: true, status: 'ok' }, track: 'Person' }, [], { track: 'Person', metric: 'SNAP Written', side: '', employeeId: 'PGANDH', person: 'Prakash Gandhi' }));
   assert.equal(ly.value, 'Pending');
-  assert.match(ly.basis, /store-level/i);
+  assert.match(ly.basis, /not filled in|not treated as verified/i);
   const storeLy = plain(gs.briefLastYearStore_(plain(gs.config_()), { start: '2026-10-02', end: '2026-11-01', year: 2026, month: 10 }));
   assert.ok(storeLy.written);
   assert.ok(storeLy.delivered);
