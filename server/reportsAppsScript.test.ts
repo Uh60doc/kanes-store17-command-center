@@ -464,7 +464,7 @@ test('SNAP Written LY stays separate from NWDSR on the weekly, monthly, and meet
   setToday('2026-10-16');
   const monthFacts = plain(gs.dailyFacts_());
   const monthCurrent = plain(gs.reportRangeField_(monthFacts, 'snapWritten', '2026-10-02', '2026-10-15', plain(gs.closedDates_())));
-  for (let day = 1; day <= 14; day += 1) tabs.CC_Daily.push([`2025-10-${String(day).padStart(2, '0')}`, 100, '', '']);
+  for (let day = 2; day <= 15; day += 1) tabs.CC_Daily.push([`2025-10-${String(day).padStart(2, '0')}`, 100, '', '']);
   const scored = plain(gs.reportCenter_({ session, kind: 'monthly', date: '2026-10-15' }));
   const still = scored.rows.find((item: { key: string }) => item.key === 'written');
   assert.equal(still.budget, '$400,000');
@@ -472,7 +472,7 @@ test('SNAP Written LY stays separate from NWDSR on the weekly, monthly, and meet
   assert.match(still.source, /NWDSR Written/);
   assert.equal(scored.snapLy.current, plain(gs.moneyText_(monthCurrent.value)));
   assert.equal(scored.snapLy.ly, '$1,400');
-  assert.equal(scored.snapLy.lyDates, 'Oct 1, 2025 - Oct 14, 2025');
+  assert.equal(scored.snapLy.lyDates, 'Oct 2, 2025 - Oct 15, 2025');
   assert.equal(scored.snapLy.dollars, plain(gs.reportSnapSignMoney_(monthCurrent.value - 1400)));
   assert.equal(scored.snapLy.percent, plain(gs.reportSnapSignPercent_(monthCurrent.value, 1400)));
   assert.notEqual(still.actual, scored.snapLy.current);

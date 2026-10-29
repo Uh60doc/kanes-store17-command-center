@@ -7,8 +7,8 @@
  * CC_SourceArchive   Each original report file kept once (by SHA-256) in the private Drive folder
  *                    "Store 17 Command Center Report Archive", filed by year, month and business date.
  * CC_PeriodCalendar  Each store month (the 2nd through the 1st) and salesperson month (the 1st through the last day)
- *                    with the last-year period it is compared with. A store month's last-year period is Pending until
- *                    the GM confirms it in CC_Config; a confirmed mapping is kept.
+ *                    with the same reporting month last year. The calendars are the confirmation. A month-specific
+ *                    CC_Config pair prior_year_start_YYYY-MM / prior_year_end_YYYY-MM is the only exception.
  * CC_GoalHistory     Each month's goals, captured while the month is open and locked when it ends.
  * CC_MonthlyHistory  Each completed month's verified month to date beside its official final, goal and last year. A row
  *                    is locked (Final) once it matches a complete official final or the month has been over for
@@ -122,12 +122,10 @@ function storeLastYear_(config, period) {
   var month = period.year + '-' + pad2_(period.month);
   var start = isoDate_(config['prior_year_start_' + month]);
   var end = isoDate_(config['prior_year_end_' + month]);
-  if (start && end) return { start: start, end: end, confirmed: true, status: 'Confirmed: CC_Config prior_year_start_' + month + ' / prior_year_end_' + month };
-  if (isoDate_(config.store_period_start) === period.start && isoDate_(config.prior_year_start) && isoDate_(config.prior_year_end)) {
-    return { start: isoDate_(config.prior_year_start), end: isoDate_(config.prior_year_end), confirmed: true, status: 'Confirmed: CC_Config prior_year_start / prior_year_end for the store month starting ' + period.start };
-  }
-  var proposed = periodFor_('individual', period.year - 1, period.month);
-  return { start: proposed.start, end: proposed.end, confirmed: false, status: 'Pending GM confirmation (proposed: the same calendar month last year, ' + proposed.start + ' to ' + proposed.end + ')' };
+  if (start && end) return { start: start, end: end, confirmed: true, status: 'Confirmed exception: CC_Config prior_year_start_' + month + ' / prior_year_end_' + month };
+  // The store calendar is the comparison. Generic prior_year_start / prior_year_end do not override it.
+  var last = periodFor_('store', period.year - 1, period.month);
+  return { start: last.start, end: last.end, confirmed: true, status: 'Confirmed: store month last year, the 2nd through the 1st (' + last.start + ' through ' + last.end + ')' };
 }
 
 function calendarEntry_(ctx, track, period) {
@@ -137,8 +135,7 @@ function calendarEntry_(ctx, track, period) {
   if (track === 'Store') ly = storeLastYear_(ctx.config, period);
   else {
     var last = periodFor_('individual', period.year - 1, period.month);
-    // GM confirmation: last-year performance comparisons are store-level for now. Do not require individual prior-year salesperson figures.
-    ly = { start: last.start, end: last.end, confirmed: false, status: 'Pending: last-year comparisons are store-level for now (not individual salesperson). Proposed calendar month ' + last.start + ' to ' + last.end + ' is reserved only if individual last-year rows are later verified.' };
+    ly = { start: last.start, end: last.end, confirmed: true, status: 'Confirmed: salesperson month last year, the 1st through the last day (' + last.start + ' through ' + last.end + '). A missing individual or KPI figure stays pending and is not treated as verified.' };
   }
   var lyDays = historyDayGap_(ly.start, ly.end) + 1;
   var mapping = track === 'Store'
@@ -148,7 +145,7 @@ function calendarEntry_(ctx, track, period) {
     key: periodKey_(track, period), track: track, period: period, ly: ly,
     row: [periodKey_(track, period), track, period.year, period.month, period.start, period.end, days.length, days.length - closed, closed,
       (track === 'Store' ? 'STORE-' : 'PERSON-') + ly.start.slice(0, 7), ly.start, ly.end, mapping,
-      track === 'Store' ? (period.start < FIRST_CONFIRMED_STORE_MONTH_ ? 'Pending GM confirmation: store months before October 2026 are not confirmed' : 'Store month: the 2nd through the 1st') : 'Salesperson month: the 1st through the last day',
+      track === 'Store' ? 'Store month: the 2nd through the 1st' : 'Salesperson month: the 1st through the last day',
       ly.status],
   };
 }
@@ -623,9 +620,6 @@ function lastYearSameReport_(metric, source) {
 
 function lastYearFor_(entry, lyRows, line) {
   if (!entry) return { value: 'Pending', basis: 'No period calendar entry' };
-  if (String(line.track || '') === 'Person') {
-    return { value: 'Pending', basis: 'Last-year comparisons are store-level for now. Individual prior-year salesperson figures are not required (most last-year associates are no longer at Store 17).' };
-  }
   if (!entry.ly.confirmed) return { value: 'Pending', basis: 'Last-year period ' + entry.ly.status };
   var rejected = false;
   var match = null;
@@ -641,6 +635,7 @@ function lastYearFor_(entry, lyRows, line) {
     match = row;
   });
   if (match) return { value: match.value, basis: 'CC_LastYear ' + match.source + ' ' + entry.ly.start + ' to ' + entry.ly.end + ', verified by ' + match.verifiedBy };
+  if (String(line.track || '') === 'Person') return { value: 'Pending', basis: 'No verified individual last-year row for ' + entry.ly.start + ' to ' + entry.ly.end + ' is on file. The salesperson calendar is confirmed. A missing person or KPI figure is not filled in and is not treated as verified.' };
   return { value: 'Pending', basis: 'No verified last-year report for ' + entry.ly.start + ' to ' + entry.ly.end + ' is on file' + (rejected ? '; a figure from a different report was not used' : '') };
 }
 

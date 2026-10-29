@@ -32,6 +32,7 @@ var QUALITY_AREAS_ = {
   'store-reconcile': 'Store totals',
   'history-retained': 'Verified history',
   'report-package': 'Required reports',
+  'reporting-calendar': 'Reporting calendar',
 };
 
 // The approved sources from Tasks 1 and 2. A code change that moves a metric to another report fails this check.
@@ -264,6 +265,7 @@ function qualityChecks_(ctx, packages) {
   checkStoreTotals_(ctx, add);
   checkHistoryRetained_(ctx, add);
   checkReportPackages_(ctx, packages, add);
+  checkReportingCalendar_(ctx, add);
   return out;
 }
 
@@ -809,6 +811,109 @@ function checkReportPackages_(ctx, packages, add) {
   });
   if (missing.length) add('report-package', 'NOTE', 'Missing reports', missing.length + ' required report(s) have not arrived: ' + missing.slice(0, 12).join(', ') + (missing.length > 12 ? ', …' : '') + '. Each is an active alert until it arrives and passes validation.');
   if (!problems) add('report-package', 'PASS', 'Reports on file', complete + ' of ' + packages.length + ' business days from ' + ctx.windowStart + ' have every required report on file and verified; no report on file needs review.');
+}
+
+/** Expected store and salesperson months, including December-January and leap-year February. Literals, not a second call to the same helper. */
+function reportingCalendarProbes_() {
+  return [
+    { date: '2026-10-31', store: ['2026-10-02', '2026-11-01'], person: ['2026-10-01', '2026-10-31'] },
+    { date: '2026-11-01', store: ['2026-10-02', '2026-11-01'], person: ['2026-11-01', '2026-11-30'] },
+    { date: '2026-11-02', store: ['2026-11-02', '2026-12-01'], person: ['2026-11-01', '2026-11-30'] },
+    { date: '2026-11-30', store: ['2026-11-02', '2026-12-01'], person: ['2026-11-01', '2026-11-30'] },
+    { date: '2026-12-01', store: ['2026-11-02', '2026-12-01'], person: ['2026-12-01', '2026-12-31'] },
+    { date: '2026-12-02', store: ['2026-12-02', '2027-01-01'], person: ['2026-12-01', '2026-12-31'] },
+    { date: '2026-12-31', store: ['2026-12-02', '2027-01-01'], person: ['2026-12-01', '2026-12-31'] },
+    { date: '2027-01-01', store: ['2026-12-02', '2027-01-01'], person: ['2027-01-01', '2027-01-31'] },
+    { date: '2027-01-02', store: ['2027-01-02', '2027-02-01'], person: ['2027-01-01', '2027-01-31'] },
+    { date: '2024-02-28', store: ['2024-02-02', '2024-03-01'], person: ['2024-02-01', '2024-02-29'] },
+    { date: '2024-02-29', store: ['2024-02-02', '2024-03-01'], person: ['2024-02-01', '2024-02-29'] },
+    { date: '2024-03-01', store: ['2024-02-02', '2024-03-01'], person: ['2024-03-01', '2024-03-31'] },
+    { date: '2024-03-02', store: ['2024-03-02', '2024-04-01'], person: ['2024-03-01', '2024-03-31'] },
+    { date: '2025-02-28', store: ['2025-02-02', '2025-03-01'], person: ['2025-02-01', '2025-02-28'] },
+    { date: '2025-03-01', store: ['2025-02-02', '2025-03-01'], person: ['2025-03-01', '2025-03-31'] },
+    { date: '2025-03-02', store: ['2025-03-02', '2025-04-01'], person: ['2025-03-01', '2025-03-31'] },
+  ];
+}
+
+function checkReportingCalendar_(ctx, add) {
+  var problems = [];
+  reportingCalendarProbes_().forEach(function (probe) {
+    var store = storePeriodContaining_(probe.date);
+    var person = individualPeriodContaining_(probe.date);
+    if (store.start !== probe.store[0] || store.end !== probe.store[1]) problems.push(probe.date + ' store month calculated ' + store.start + ' through ' + store.end + ', expected ' + probe.store[0] + ' through ' + probe.store[1]);
+    if (person.start !== probe.person[0] || person.end !== probe.person[1]) problems.push(probe.date + ' salesperson month calculated ' + person.start + ' through ' + person.end + ', expected ' + probe.person[0] + ' through ' + probe.person[1]);
+    if (store.year !== Number(probe.store[0].slice(0, 4)) || person.year !== Number(probe.person[0].slice(0, 4))) problems.push(probe.date + ' reporting year does not match its period');
+  });
+  var october = periodFor_('store', 2026, 10);
+  var november = periodFor_('store', 2026, 11);
+  var octoberLy = storeLastYear_({}, october);
+  var novemberLy = storeLastYear_({}, november);
+  if (octoberLy.start !== '2025-10-02' || octoberLy.end !== '2025-11-01' || !octoberLy.confirmed) problems.push('October 2026 store last year calculated ' + octoberLy.start + ' through ' + octoberLy.end + ', expected 2025-10-02 through 2025-11-01');
+  if (novemberLy.start !== '2025-11-02' || novemberLy.end !== '2025-12-01' || !novemberLy.confirmed) problems.push('November 2026 store last year calculated ' + novemberLy.start + ' through ' + novemberLy.end + ', expected 2025-11-02 through 2025-12-01');
+  var personNovember = periodFor_('individual', 2025, 11);
+  if (personNovember.start !== '2025-11-01' || personNovember.end !== '2025-11-30') problems.push('November salesperson month calculated ' + personNovember.start + ' through ' + personNovember.end);
+  var leapStore = periodFor_('store', 2024, 2);
+  var commonStore = periodFor_('store', 2025, 2);
+  var leapEntry = { track: 'Store', period: leapStore, ly: storeLastYear_({}, leapStore) };
+  if (typeof lastYearDate_ === 'function' && lastYearDate_(leapEntry, '2024-03-01') !== NO_LY_DAY_) problems.push('Leap-year March 1 must stay unpaired when last February is shorter, not filled with a made-up day');
+  if (typeof lastYearDate_ === 'function' && lastYearDate_({ track: 'Person' }, '2024-02-29') !== NO_LY_DAY_) problems.push('February 29 has no salesperson last-year date');
+  if (eachDate_(leapStore.start, leapStore.end).length !== 29 || eachDate_(commonStore.start, commonStore.end).length !== 28) problems.push('February store length calculated ' + eachDate_(leapStore.start, leapStore.end).length + ' in 2024 and ' + eachDate_(commonStore.start, commonStore.end).length + ' in 2025');
+  ctx.dailyRows.forEach(function (row) {
+    var date = isoDate_(row.date);
+    if (!date) return;
+    var store = storePeriodContaining_(date);
+    var person = individualPeriodContaining_(date);
+    if (store.year < 2000 || person.year < 2000) problems.push(date + ' is not in a reporting year');
+  });
+  var duplicates = [];
+  ['SNAP Written', 'NWDSR Written', 'NWDSR Delivered'].forEach(function (metric) {
+    if (typeof historicalRows_ !== 'function') return;
+    var seen = {};
+    var rows = [];
+    try { rows = historicalRows_(metric); } catch (error) { rows = []; }
+    rows.forEach(function (row) {
+      if (String(row.store) !== '17' || !row.date) return;
+      if (seen[row.date]) duplicates.push(metric + ' ' + row.date + (seen[row.date] !== row.dollars ? ' conflicts (' + seen[row.date] + ' and ' + row.dollars + ')' : ' is duplicated'));
+      else seen[row.date] = row.dollars;
+    });
+    if (ctx.historyCounts) ctx.historyCounts[historicalTabName_(metric)] = rows.length;
+  });
+  problems = problems.concat(duplicates);
+  var calendar = [];
+  var stale = [];
+  try { calendar = sheet_('CC_PeriodCalendar'); } catch (error) { calendar = []; }
+  calendar.forEach(function (row) {
+    if (String(row.track) !== 'Store') return;
+    var period = periodFor_('store', Number(row.year), Number(row.month));
+    var ly = storeLastYear_(ctx.config, period);
+    if (isoDate_(row.ly_start) === ly.start && isoDate_(row.ly_end) === ly.end) return;
+    if (!isoDate_(row.ly_start)) return;
+    stale.push(String(row.period_key) + ' is ' + isoDate_(row.ly_start) + ' through ' + isoDate_(row.ly_end) + ', expected ' + ly.start + ' through ' + ly.end);
+  });
+  var closedList = Object.keys(ctx.closed).sort();
+  var closureNote = closedList.length ? (' Confirmed closures, this date only: ' + closedList.join(', ') + '.') : ' No date is marked closed.';
+  var day = isoParts_(ctx.today).day;
+  var boundary = day === 1 || day === 2 ? (' Month boundary ' + ctx.today + ': store ' + ctx.store.start + ' through ' + ctx.store.end + ', salesperson ' + ctx.person.start + ' through ' + ctx.person.end + '.') : '';
+  if (problems.length) {
+    problems.slice(0, 8).forEach(function (text) { add('reporting-calendar', 'FLAG', 'Reporting calendar', text + ' Nothing was reset to zero.', []); });
+    return;
+  }
+  var missing = [];
+  var currentLy = storeLastYear_(ctx.config, ctx.store);
+  if (typeof historicalAmount_ === 'function' && currentLy.confirmed) {
+    var through = ctx.yesterday < ctx.store.end ? ctx.yesterday : ctx.store.end;
+    if (through >= ctx.store.start) {
+      eachDate_(ctx.store.start, through).forEach(function (date) {
+        if (ctx.closed[date]) return;
+        var mapped = shiftDate_(currentLy.start, historyDayGap_(ctx.store.start, date));
+        if (!mapped || mapped > currentLy.end || ctx.closed[mapped]) return;
+        if (!historicalAmount_('NWDSR Written', mapped)) missing.push(mapped);
+      });
+    }
+  }
+  if (missing.length) add('reporting-calendar', 'NOTE', 'Last-year days not on file', missing.length + ' open last-year day(s) have no NWDSR Written row (' + missing.slice(0, 8).join(', ') + (missing.length > 8 ? ', …' : '') + '). Missing is not zero and was not filled in.' + closureNote);
+  if (stale.length) add('reporting-calendar', 'NOTE', 'Period calendar refresh', stale.length + ' store month(s) on CC_PeriodCalendar still use an older last-year window (' + stale[0] + '). The next history refresh applies the store calendar. No sales figure was changed.');
+  add('reporting-calendar', 'PASS', 'Store and salesperson calendars', 'Business dates match the store month (2nd through the 1st) and the salesperson month (1st through the last day), including December-January and leap-year February. October 2026 compares with 2025-10-02 through 2025-11-01. November 2026 store compares with 2025-11-02 through 2025-12-01. SNAP and NWDSR stay separate. A closure comes only from CC_SellingDays and is not copied from last year.' + closureNote + boundary);
 }
 
 /* ---------- data status ---------- */

@@ -8,7 +8,7 @@ export const STORE_PERIOD_START = octoberStore.start;
 export const STORE_PERIOD_END = octoberStore.end;
 export const PAYROLL_PERIOD_START = octoberIndividual.start;
 export const PAYROLL_PERIOD_END = octoberIndividual.end;
-export const PRIOR_YEAR_START = '2025-10-01';
+export const PRIOR_YEAR_START = '2025-10-02';
 export const OPERATING_DAY_COUNT = 31;
 
 export function parseIsoDate(iso: string): Date {
@@ -35,7 +35,7 @@ export function inRange(iso: string, start: string, end: string): boolean {
   return iso >= start && iso <= end;
 }
 
-/** October 2, 2026 is operating day 1 and matches October 1, 2025. */
+/** October 2, 2026 is operating day 1 and matches October 2, 2025. */
 export function sequentialLastYearDate(storeDate: string): string | null {
   if (!inRange(storeDate, STORE_PERIOD_START, STORE_PERIOD_END)) return null;
   const index = inclusiveDayCount(STORE_PERIOD_START, storeDate) - 1;

@@ -25,7 +25,7 @@ test('every check runs on the verified October records; Maria stays unmatched as
   assert.equal(Number(plain(gs.home_({ session })).month.delivered), delivered);
   const checks = table(tabs, 'CC_QualityChecks');
   const areas = new Set(checks.map((row) => row.check_id));
-  for (const id of ['business-date', 'reporting-period', 'approved-source', 'duplicate-import', 'cumulative-daily', 'employee-match', 'written-delivered', 'kpi-math', 'closing-math', 'store-reconcile', 'history-retained', 'report-package']) assert.ok(areas.has(id), id);
+  for (const id of ['business-date', 'reporting-period', 'approved-source', 'duplicate-import', 'cumulative-daily', 'employee-match', 'written-delivered', 'kpi-math', 'closing-math', 'store-reconcile', 'history-retained', 'report-package', 'reporting-calendar']) assert.ok(areas.has(id), id);
   assert.deepEqual(checks.filter((row) => row.check_id === 'employee-match' && row.status === 'FLAG').map((row) => row.subject), []);
   const maria = checks.find((row) => row.check_id === 'employee-match' && /maria rafalik/i.test(row.subject))!;
   assert.equal(maria.status, 'NOTE');

@@ -56,9 +56,9 @@ test('the daily register keeps each day as first imported; a later cancellation 
   assert.deepEqual([renzo.source_file, renzo.source_sha256], ['SNAP_WRITTEN__1.pdf', 'sha-snap-1002']);
   const written = register(tabs, 'NWDSR_WRITTEN_STORE|2026-10-02|written|STORE');
   assert.deepEqual([written.sales_dollars, written.source_tab, written.source_file, written.ly_date, written.verification_status],
-    [nwdsrWritten('2026-10-02'), 'CC_Daily', 'NWDSR_WRITTEN__0.pdf', '2025-10-01', 'Verified: single-day report'], 'store day 1 (October 2) is compared with October 1, 2025');
-  assert.equal(register(tabs, 'NWDSR_WRITTEN_STORE|2026-10-15|written|STORE').ly_date, '2025-10-14');
-  assert.equal(register(tabs, 'SNAP_STORE|2026-10-01|written|STORE').ly_date, 'Pending GM confirmation (proposed 2025-09-30)', 'October 1 belongs to the September store month, whose last year is not confirmed');
+    [nwdsrWritten('2026-10-02'), 'CC_Daily', 'NWDSR_WRITTEN__0.pdf', '2025-10-02', 'Verified: single-day report'], 'store day 1 (October 2) is compared with October 2, 2025');
+  assert.equal(register(tabs, 'NWDSR_WRITTEN_STORE|2026-10-15|written|STORE').ly_date, '2025-10-15');
+  assert.equal(register(tabs, 'SNAP_STORE|2026-10-01|written|STORE').ly_date, '2025-10-01', 'October 1 closes the September store month and compares with October 1, 2025');
   const g17 = register(tabs, 'DA_SALES_STORE|2026-10-14|written|STORE');
   assert.deepEqual([g17.source_file, g17.source_sha256, g17.unit_count], [G17_DAY('2026-10-14'), 'sha-g17-14', 1]);
   assert.equal(register(tabs, 'PERQ_STORE|2026-10-15||STORE').eligible, 7);
@@ -91,12 +91,13 @@ test('store and salesperson months, their last-year periods and goals are kept t
   refresh(tabs, '2026-10-20');
   const calendar = table(tabs, 'CC_PeriodCalendar');
   const october = calendar.find((row) => row.period_key === 'STORE-2026-10')!;
-  assert.deepEqual([october.period_start, october.period_end, october.days, october.ly_start, october.ly_end], ['2026-10-02', '2026-11-01', 31, '2025-10-01', '2025-10-31']);
-  assert.match(october.ly_status, /^Confirmed/);
-  assert.match(calendar.find((row) => row.period_key === 'STORE-2026-11')!.ly_status, /^Pending GM confirmation \(proposed: the same calendar month last year, 2025-11-01 to 2025-11-30\)/);
-  assert.match(calendar.find((row) => row.period_key === 'STORE-2026-03')!.calendar_status, /^Pending GM confirmation: store months before October 2026/);
+  assert.deepEqual([october.period_start, october.period_end, october.days, october.ly_start, october.ly_end], ['2026-10-02', '2026-11-01', 31, '2025-10-02', '2025-11-01']);
+  assert.match(october.ly_status, /^Confirmed: store month last year/);
+  assert.match(calendar.find((row) => row.period_key === 'STORE-2026-11')!.ly_status, /2025-11-02 through 2025-12-01/);
+  assert.equal(calendar.find((row) => row.period_key === 'STORE-2026-03')!.calendar_status, 'Store month: the 2nd through the 1st');
   const person = calendar.find((row) => row.period_key === 'PERSON-2026-10')!;
   assert.deepEqual([person.period_start, person.period_end, person.ly_start, person.ly_end], ['2026-10-01', '2026-10-31', '2025-10-01', '2025-10-31']);
+  assert.match(person.ly_status, /^Confirmed: salesperson month last year/);
 
   const goal = (periodKey: string, metric: string) => table(tabs, 'CC_GoalHistory').find((row) => row.goal_record_key === `${periodKey}|${metric}`)!;
   assert.deepEqual([goal('STORE-2026-10', 'NWDSR Written').goal, goal('STORE-2026-10', 'NWDSR Delivered').goal, goal('STORE-2026-10', 'Bedding %').goal, goal('PERSON-2026-10', 'SNAP Written').goal], [400000, 320000, 0.2, 65000]);
@@ -113,7 +114,7 @@ test('store and salesperson months, their last-year periods and goals are kept t
   assert.deepEqual([goal('STORE-2026-10', 'Bedding %').goal, goal('STORE-2026-10', 'Bedding %').status, goal('STORE-2026-10', 'NWDSR Written').goal], [0.25, 'Locked', 400000]);
   assert.equal(goal('STORE-2026-11', 'Bedding %').goal, 0.3);
   const kept = table(tabs, 'CC_PeriodCalendar').find((row) => row.period_key === 'STORE-2026-10')!;
-  assert.deepEqual([kept.ly_start, kept.ly_end], ['2025-10-01', '2025-10-31'], 'the confirmed last-year mapping is kept after CC_Config moves on');
+  assert.deepEqual([kept.ly_start, kept.ly_end], ['2025-10-02', '2025-11-01'], 'October keeps the store calendar after CC_Config moves on');
   assert.match(kept.ly_status, /^Confirmed/);
 });
 
@@ -127,7 +128,7 @@ test('each completed month is kept permanently: open, then final, and never rewr
   let written = monthly(tabs, 'STORE-2026-10', 'NWDSR Written', 'written');
   assert.deepEqual([written.verified_total, written.verified_through, written.official_final, written.goal, written.last_year], [tracked, '2026-11-01', 'Pending', 400000, 'Pending']);
   assert.match(written.history_status, /^Open/);
-  assert.equal(written.last_year_basis, 'No verified last-year report for 2025-10-01 to 2025-10-31 is on file');
+  assert.equal(written.last_year_basis, 'No verified last-year report for 2025-10-02 to 2025-11-01 is on file');
   const perq = monthly(tabs, 'STORE-2026-10', 'PERQ opportunities');
   assert.match(perq.coverage, /^Daily records: 2026-10-12 to 2026-10-15 \(4 dates\)\. Cumulative snapshot: 2026-10-02 to 2026-10-11 \(87\)/);
   assert.deepEqual([perq.verified_total, perq.verified_through, perq.daily_records_total, perq.missing_or_unverified], [111, '2026-10-15', 24, 'Missing: 2026-10-16 to 2026-11-01'], 'PERQ is verified only through October 15, and the dates after it are listed as missing');
@@ -139,14 +140,14 @@ test('each completed month is kept permanently: open, then final, and never rewr
   // The official final arrives; the month locks with the variance. A mismatched last-year report is not used.
   tabs.CC_Ledger!.push(ledgerRow('NWDSR_WRITTEN_STORE', 'cumulative', '2026-10-02', '2026-11-01', '2026-11-01', 'written', { sales: tracked - 120 }, 'NWDSR_WRITTEN_final.pdf'));
   tabs.CC_LastYear = [['ly_start', 'ly_end', 'track', 'metric', 'side', 'employee_id', 'person', 'value', 'unit', 'source_report', 'source_sha256', 'verified_by', 'entered_at', 'note'],
-    ['2025-10-01', '2025-10-31', 'Store', 'NWDSR Written', 'written', '', '', 380000, 'dollars', 'SNAP Written October 2025', '', 'GM', '2026-11-05', '']];
+    ['2025-10-02', '2025-11-01', 'Store', 'NWDSR Written', 'written', '', '', 380000, 'dollars', 'SNAP Written October 2025', '', 'GM', '2026-11-05', '']];
   refresh(tabs, '2026-11-05');
   written = monthly(tabs, 'STORE-2026-10', 'NWDSR Written', 'written');
   assert.deepEqual([written.history_status, written.official_final, written.variance, written.last_year], ['Final', tracked - 120, -120, 'Pending']);
   assert.match(written.last_year_basis, /a figure from a different report was not used/);
   assert.ok(tabs.CC_History!.some((row) => row[1] === 'CC_MonthlyHistory' && row[2] === 'STORE-2026-10|NWDSR Written|written|'), 'the open figures it replaced are archived');
 
-  tabs.CC_LastYear!.push(['2025-10-01', '2025-10-31', 'Store', 'NWDSR Written', 'written', '', '', 390000, 'dollars', 'NWDSR Written October 2025', '', 'GM', '2026-11-06', '']);
+  tabs.CC_LastYear!.push(['2025-10-02', '2025-11-01', 'Store', 'NWDSR Written', 'written', '', '', 390000, 'dollars', 'NWDSR Written October 2025', '', 'GM', '2026-11-06', '']);
   const lockedAt = written.locked_at;
   let september = monthly(tabs, 'STORE-2026-09', 'NWDSR Written', 'written');
   assert.deepEqual([september.history_status, september.verified_total], ['Final', 'Pending'], 'September locked with nothing verified');
