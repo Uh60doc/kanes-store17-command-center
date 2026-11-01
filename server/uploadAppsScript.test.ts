@@ -374,13 +374,18 @@ test('a file is saved on its printed date the first time, and a file the mailbox
   assert.deepEqual(tabs.CC_Closing!.filter((row) => row[1] === 'store' && row[8] === 'PERQ Ups + Be Backs').map((row) => [row[0], row[5]]), [['2026-10-14', 7], ['2026-10-13', 9]]);
 });
 
-test('Group 17 must agree with NWDSR for the day; PERQ salespeople may not exceed the store count', () => {
+test('Group 17 Written can differ from NWDSR Written; PERQ salespeople may not exceed the store count', () => {
   const { send, tabs } = boot();
   send('2026-10-14', 'nw.pdf', nwdsrPdf('written', '2026-10-14', '2026-10-14', 1500));
   const mismatch = send('2026-10-14', 'g17.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]]), true);
-  assert.equal(mismatch.status, 'Needs Review');
-  assert.match(mismatch.message, /TOTAL sales \$1,000 do not match NWDSR Written \$1,500/);
-  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-14').length, 0);
+  assert.equal(mismatch.status, 'Imported');
+  assert.match(mismatch.message, /NWDSR Written stays the written standard/);
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-14')![2], 1500, 'NWDSR Written is not replaced by the Group 17 total');
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-14').length > 0, true);
+  send('2026-10-14', 'nwd.pdf', nwdsrPdf('delivered', '2026-10-14', '2026-10-14', 800));
+  const deliveredOff = send('2026-10-14', 'g17d.xlsx', group17('DELIVERED', [['TARIK NASSIF', 100]]), true);
+  assert.equal(deliveredOff.status, 'Needs Review');
+  assert.match(deliveredOff.message, /do not match NWDSR Delivered/);
 
   send('2026-10-14', 'loc.xlsx', perqLocation(5), true);
   const tooMany = send('2026-10-14', 'people.xlsx', perqSalesperson([['TNASSI', 'Tarik', 'Nassif', 4], ['EMON0904', 'Eric', 'Montes', 3]], '10/14/26 08:00pm'), true);
@@ -438,10 +443,11 @@ test('the checklist shows Imported, Missing, Failed and Needs Review for the cho
   const view = plain(gs.uploads_({ date: '2026-10-14', session: manager }));
   const status = Object.fromEntries(view.checklist.map((item: any) => [item.label, item.status]));
   assert.deepEqual(status, {
-    'SNAP Written': 'Missing', 'NWDSR Written': 'Imported', 'NWDSR Delivered': 'Missing', 'Group 17 Written': 'Needs Review', 'Group 17 Delivered': 'Missing',
+    'SNAP Written': 'Missing', 'NWDSR Written': 'Imported', 'NWDSR Delivered': 'Missing', 'Group 17 Written': 'Imported', 'Group 17 Delivered': 'Missing',
     'ASL Written': 'Imported', 'ASL Delivered': 'Missing', 'PERQ Performance Stats by Location': 'Missing', 'PERQ Performance Stats by Salesperson': 'Missing',
   });
-  assert.equal(view.imported, 2);
+  assert.equal(view.imported, 3);
+  assert.match(view.checklist.find((item: any) => item.label === 'Group 17 Written').message, /stays the written standard/);
   assert.equal(view.total, 9);
   assert.match(view.checklist.find((item: any) => item.label === 'NWDSR Delivered').message, /Missing for October 14, 2026/);
   assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-15')![3], 10, 'the delivered PDF is stored on the date it prints');
