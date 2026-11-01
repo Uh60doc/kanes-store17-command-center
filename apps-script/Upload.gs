@@ -369,7 +369,11 @@ function uploadKpiWorkbook_(context, info) {
   var totalRecord = records.filter(function (record) { return record[0] === 'DA_SALES_STORE'; })[0];
   var total = totalRecord && totalRecord[10] !== '' ? Number(totalRecord[10]) : null;
   if (info.family === 'group17' && total !== null && nwdsr !== null && nwdsr !== undefined && Math.abs(total - nwdsr) > 1) {
-    return finishImport_(context, uploadOutcome_(base, 'Needs Review', label + ' TOTAL sales ' + moneyPlain_(total) + ' do not match NWDSR ' + (info.side === 'written' ? 'Written' : 'Delivered') + ' ' + moneyPlain_(nwdsr) + ' for ' + date + ', so this file may be for another day. Nothing was changed.'), 'needs-review');
+    if (info.side === 'written') {
+      notes.push('Group 17 TOTAL sales ' + moneyPlain_(total) + ' and NWDSR Written ' + moneyPlain_(nwdsr) + ' differ. Tax, delivery, and other report differences are expected. NWDSR Written stays the written standard. This file is saved for the KPIs and is not a review.');
+    } else {
+      return finishImport_(context, uploadOutcome_(base, 'Needs Review', label + ' TOTAL sales ' + moneyPlain_(total) + ' do not match NWDSR Delivered ' + moneyPlain_(nwdsr) + ' for ' + date + ', so this file may be for another day. Nothing was changed.'), 'needs-review');
+    }
   }
   if (info.family === 'group17' && (nwdsr === null || nwdsr === undefined)) {
     notes.push('NWDSR ' + (info.side === 'written' ? 'Written' : 'Delivered') + ' for ' + date + ' is not on file yet, so the store month KPIs wait for it before this day is added.');
@@ -633,8 +637,9 @@ function kpiRateOrNull_(top, bottom) {
  * A rebuilt total (its source joins the files with " + ") is not a new snapshot and is not added on top of the days.
  * A column the snapshot does not have, such as pet protection, is taken from a cumulative row that ends on the
  * same through-date. Its daily pieces are not added again.
- * A Group 17 day is added only when NWDSR for the same side and day is on file and matches its TOTAL. A verified $0
- * NWDSR day has no Group 17 file and is not a hole. A missing open day still stops the count.
+ * A Group 17 day is added only when NWDSR for the same side and day is on file. Written dollars do not have to
+ * match: tax, delivery, and other report differences are expected, and NWDSR Written stays the written standard.
+ * Delivered still has to match. A verified $0 NWDSR day has no Group 17 file and is not a hole. A missing open day still stops the count.
  */
 function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
   var spec = STORE_KPI_FAMILIES_[family];
@@ -683,7 +688,7 @@ function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
         var nwdsr = fact ? (side === 'written' ? fact.nwdsrWritten : fact.nwdsrDelivered) : null;
         var sales = day.DA_SALES.sales === null ? 0 : day.DA_SALES.sales;
         if (nwdsr === null) { issue = 'NWDSR ' + side + ' for ' + cursor + ' is not on file yet.'; break; }
-        if (Math.abs(sales - nwdsr) > 1) { issue = 'Group 17 ' + side + ' TOTAL ' + moneyPlain_(sales) + ' does not match NWDSR ' + side + ' ' + moneyPlain_(nwdsr) + ' for ' + cursor + '.'; break; }
+        if (side !== 'written' && Math.abs(sales - nwdsr) > 1) { issue = 'Group 17 ' + side + ' TOTAL ' + moneyPlain_(sales) + ' does not match NWDSR ' + side + ' ' + moneyPlain_(nwdsr) + ' for ' + cursor + '.'; break; }
       }
       days.push(cursor);
     } else if (!closed[cursor]) {
@@ -1068,7 +1073,8 @@ function uploadChecklist_(evidence, date) {
         onFile = true;
         detail = 'TOTAL sales ' + moneyPlain_(row.sales);
         var nwdsr = side === 'written' ? fact.nwdsrWritten : fact.nwdsrDelivered;
-        if (nwdsr !== null && nwdsr !== undefined && Math.abs((row.sales || 0) - nwdsr) > 1) check = 'TOTAL ' + moneyPlain_(row.sales) + ' does not match NWDSR ' + side + ' ' + moneyPlain_(nwdsr) + '. The store month KPIs stop before this day until it is resolved.';
+        if (side !== 'written' && nwdsr !== null && nwdsr !== undefined && Math.abs((row.sales || 0) - nwdsr) > 1) check = 'TOTAL ' + moneyPlain_(row.sales) + ' does not match NWDSR ' + side + ' ' + moneyPlain_(nwdsr) + '. The store month KPIs stop before this day until it is resolved.';
+        if (side === 'written' && nwdsr !== null && nwdsr !== undefined && Math.abs((row.sales || 0) - nwdsr) > 1) detail += '. NWDSR Written ' + moneyPlain_(nwdsr) + ' stays the written standard.';
       }
     }
     if (item.key === 'aslWritten' || item.key === 'aslDelivered') {
@@ -1091,7 +1097,7 @@ function uploadChecklist_(evidence, date) {
     var message = detail;
     var dayText = uploadDayText_(date);
     if (check) { status = 'Needs Review'; message = check; }
-    else if (!onFile && last && last.status === 'Needs Review') { status = 'Needs Review'; message = last.message; }
+    else if (!onFile && last && last.status === 'Needs Review' && !(item.key === 'g17Written' && /do not match NWDSR Written/i.test(last.message || ''))) { status = 'Needs Review'; message = last.message; }
     else if (!onFile && last && last.status === 'Failed' && /must be confirmed|Tick "These Excel files are for|not the business date|before the business date|prints .* which is after today/i.test(last.message)) status = 'Missing';
     else if (!onFile && last && last.status === 'Failed') { status = 'Failed'; message = last.message; }
     if ((item.key === 'g17Delivered' || item.key === 'aslDelivered') && fact.nwdsrDelivered === 0 && !onFile && !check) {
@@ -1104,6 +1110,9 @@ function uploadChecklist_(evidence, date) {
         status = 'Covered';
         message = 'Already provided. The month-to-date report is verified through ' + uploadDayText_(cover) + '.';
       } else message = 'Missing for ' + dayText + '.';
+      if (item.key === 'g17Written' && last && /do not match NWDSR Written/i.test(last.message || '')) {
+        message = 'Missing for ' + dayText + '. Upload Group 17 Written again. A difference from NWDSR Written is not a review. NWDSR Written stays the written total.';
+      }
     }
     return { key: item.key, label: item.label, format: item.format, use: item.use, status: status, message: message, date: date, dateText: dayText, lastFile: last ? last.file : '', lastAt: last ? last.at : '' };
   });
