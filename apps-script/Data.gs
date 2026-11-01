@@ -2260,6 +2260,7 @@ function people_(payload) {
   var individual = individualPeriodContaining_(today);
   var snapThrough = refreshPeopleWritten_(individual.start, individual.end);
   var people = peopleRows_(individual.start, individual.end);
+  var formerSales = formerSalesLocated_(individual.start, individual.end);
   return {
     role: payload.session.role,
     period: individual.start + ' through ' + individual.end,
@@ -2268,11 +2269,89 @@ function people_(payload) {
     snapLabel: 'SNAP written',
     analysisThrough: { written: (people[0] && people[0].analysisWrittenThrough) || null, delivered: (people[0] && people[0].deliveredThrough) || null },
     people: people,
+    formerSales: formerSales,
+    managerReductions: formerManagerReductions_(formerSales),
     deliveredVariance: salesTeamDeliveredVariance_(people, individual, today),
     today: today,
     evaluation: evaluationCycle_(today),
     updated: healthValue_('last_calculation') || 'Not Available',
   };
+}
+
+/** Kelly Meyers and Liz Perez take former-employee sales. The dollars stay on the printed name. */
+function formerSalesLocatedTo_() {
+  return 'Kelly Meyers and Liz Perez';
+}
+
+/**
+ * Daily Group 17 sales and SNAP lines for people who no longer work here.
+ * A month-to-date row is used only when that person has no daily Group 17 line on the same side.
+ * Store totals and every other person's figures are left alone.
+ */
+function formerSalesLocated_(start, end) {
+  var dailySeen = {};
+  var items = [];
+  function push(kind, code, printed, date, side, amount, grain) {
+    if (!date || date < start || date > end) return;
+    var dollars = fineNumber_(amount);
+    if (dollars === null || dollars === 0) return;
+    var match = rosterMatch_(code, printed);
+    if (!match || rosterRole_(match.raw, date) !== 'former') return;
+    var key = match.name + '|' + side;
+    if (grain === 'daily') dailySeen[kind + '|' + key] = true;
+    items.push({ kind: kind, grain: grain, name: match.name, date: date, side: side, sales: Math.round(dollars * 100) / 100, locatedTo: formerSalesLocatedTo_() });
+  }
+  ledgerRows_().forEach(function (row) {
+    if (row.view !== 'DA_SALES_PERSON' || row.scope !== 'PERSON' || !row.fitsTrack) return;
+    var date = row.grain === 'daily' ? (row.reportDate || row.periodStart) : row.verifiedThrough || row.periodEnd;
+    push('group17', row.code, row.name, date, row.side, row.sales, row.grain === 'daily' ? 'daily' : 'cumulative');
+  });
+  sheet_('CC_AssociateDays').forEach(function (row) {
+    push('snap', '', row.source_name || row.display_name, isoDate_(row.date), 'written', row.amount, 'daily');
+  });
+  var kept = items.filter(function (item) {
+    return item.grain === 'daily' || !dailySeen[item.kind + '|' + item.name + '|' + item.side];
+  });
+  kept.sort(function (a, b) {
+    return (a.date + a.name + a.side).localeCompare(b.date + b.name + b.side);
+  });
+  var sales = kept.map(function (item) {
+    return { name: item.name, date: item.date, side: item.side, sales: item.sales, source: item.kind, locatedTo: item.locatedTo, reducedOn: '' };
+  });
+  markFormerReductions_(sales);
+  return sales;
+}
+
+/** A written negative reduces Kelly for that salesperson month. A delivered negative reduces Liz. The amount is applied once. */
+function markFormerReductions_(sales) {
+  var snapWritten = {};
+  sales.forEach(function (item) {
+    if (item.source === 'snap' && item.side === 'written' && item.sales < 0) snapWritten[item.name + '|' + item.date] = true;
+  });
+  sales.forEach(function (item) {
+    if (!(item.sales < 0)) return;
+    if (item.source === 'group17' && item.side === 'written' && snapWritten[item.name + '|' + item.date]) return;
+    if (item.side === 'delivered') item.reducedOn = 'Liz Perez';
+    else if (item.side === 'written') item.reducedOn = 'Kelly Meyers';
+  });
+  return sales;
+}
+
+function formerManagerReductions_(sales) {
+  var totals = {};
+  function bucket(name, title) {
+    if (!totals[name]) totals[name] = { name: name, title: title, written: 0, delivered: 0, lines: [] };
+    return totals[name];
+  }
+  (sales || []).forEach(function (item) {
+    if (!item.reducedOn) return;
+    var row = bucket(item.reducedOn, item.reducedOn === 'Liz Perez' ? 'Operations Manager' : 'General Manager');
+    row[item.side] = Math.round((row[item.side] + item.sales) * 100) / 100;
+    row.lines.push({ from: item.name, date: item.date, side: item.side, sales: item.sales });
+  });
+  return ['Kelly Meyers', 'Liz Perez'].map(function (name) { return totals[name]; }).filter(function (row) {
+    return row && (row.written !== 0 || row.delivered !== 0);
+  });
 }
 
 /**
@@ -2302,7 +2381,7 @@ function salesTeamDeliveredVariance_(people, individual, today) {
     salespersonPeriod: individual.start + ' through ' + individual.end,
     deliveredThrough: through || null,
     differs: differs,
-    note: 'Official Store Delivered is NWDSR Delivered for the store month (' + store.start + ' through ' + store.end + ')' + (storeDeliveredThrough ? ', verified through ' + storeDeliveredThrough : '') + ', and remains the authoritative store measure. Current Sales Team Delivered is the sum of active associates from Group 17 Delivered for the salesperson month (' + individual.start + ' through ' + individual.end + '). It does not include former employees, unmatched names, or management, and those dollars are never reassigned to another associate. The calendars also differ (store 2nd–1st vs salesperson 1st–last day). The two figures are not forced to match.',
+    note: 'Official Store Delivered is NWDSR Delivered for the store month (' + store.start + ' through ' + store.end + ')' + (storeDeliveredThrough ? ', verified through ' + storeDeliveredThrough : '') + ', and remains the authoritative store measure. Current Sales Team Delivered is the sum of active associates from Group 17 Delivered for the salesperson month (' + individual.start + ' through ' + individual.end + '). It does not include former employees, unmatched names, or management. A negative for someone who no longer works here reduces that salesperson month once: written reduces Kelly Meyers, delivered reduces Liz Perez. A positive stays under the former employee and is not added to either manager. The store total is not changed. The calendars also differ (store 2nd–1st vs salesperson 1st–last day). The two figures are not forced to match.',
   };
 }
 
@@ -2569,6 +2648,8 @@ function managementName_(name) {
     'primous cordell': true,
     'elizabeth perez': true,
     'perez elizabeth': true,
+    'liz perez': true,
+    'perez liz': true,
   };
   return !!blocked[key] || !!blocked[flipped];
 }
