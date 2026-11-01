@@ -3352,14 +3352,50 @@
         api('setEvalStatus', send).then(function (result) { renderEvals(result, result.saved); }).catch(function (error) { evalFailed(error); });
       });
     }
+    function evalSourceCard() {
+      if (evalCache.role !== 'admin' && evalCache.role !== 'manager') return '';
+      return '<article class="card roster-card noprint" style="margin-top:12px"><h2>Data for the next review</h2>' +
+        '<p class="sub">Upload the Excel for the review you are about to give. Each associate sheet needs the three months of that review. For November that is August, September, and October. The figures are saved and a draft is opened. It is not marked approved. Daily sales are not changed. Last month\'s completed review does not go here.</p>' +
+        '<input id="ev-source-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />' +
+        '<p id="eval-source-error" class="error"></p><div id="eval-source-preview"></div></article>';
+    }
     function evalImportCard() {
       if (evalCache.role !== 'admin') return '';
-      return '<article class="card roster-card noprint" style="margin-top:12px"><h2>Historical evaluation workbook</h2>' +
-        '<p class="sub">Upload an approved monthly workbook (for example the October evaluations) to keep it as the reference record. The file is archived byte for byte and never rewritten; its associate worksheets are read into the history for ' + esc(evalCache.info.label) + ' (' + esc(evalRange(evalCache.info.months)) + '). Choose the matching cycle above first.</p>' +
+      return '<article class="card roster-card noprint" style="margin-top:12px"><h2>Last month\'s completed review</h2>' +
+        '<p class="sub">This box keeps a review that was already given, such as the October evaluations. It does not build the next review. The file is archived unchanged and read into the history for ' + esc(evalCache.info.label) + ' (' + esc(evalRange(evalCache.info.months)) + '). Choose that month above first.</p>' +
         '<input id="ev-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />' +
         '<p id="eval-import-error" class="error"></p><div id="eval-import-preview"></div></article>';
     }
+    function bindEvalSource() {
+      var input = document.getElementById('ev-source-file');
+      if (!input) return;
+      input.addEventListener('change', function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+          var request = { fileName: file.name, base64: String(reader.result).split(',')[1] || '' };
+          document.getElementById('eval-source-error').textContent = 'Reading ' + file.name + '…';
+          api('importEvalSource', request).then(function (result) {
+            var preview = result.preview;
+            document.getElementById('eval-source-error').textContent = '';
+            document.getElementById('eval-source-preview').innerHTML = '<div class="roster-preview"><p><strong>' + esc(preview.fileName) + ' → ' + esc(preview.label) + ' draft</strong> · ' + esc(preview.covers.join(', ')) + '</p>' +
+              '<table class="score"><tr><th>Worksheet</th><th>Associate</th><th>Months</th><th>Figures</th><th>Blank / not available</th></tr>' + preview.sheets.map(function (sheet) {
+                return '<tr><td>' + esc(sheet.sheet) + '</td><td class="' + (sheet.onRoster ? '' : 'bad') + '">' + esc(sheet.name) + (sheet.onRoster ? '' : ' (not on roster)') + '</td><td>' + esc(sheet.months.join(', ')) + '</td><td>' + sheet.values + '</td><td>' + sheet.missing + '</td></tr>';
+              }).join('') + '</table>' + (preview.warnings.length ? '<ul class="list warn">' + preview.warnings.map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('') + '</ul>' : '') +
+              (preview.canImport ? '<p class="summary-actions"><button type="button" id="ev-source-confirm">Save figures and open the draft</button></p>' : '<p class="warn">This file was not saved.</p>') + '</div>';
+            var go = document.getElementById('ev-source-confirm');
+            if (go) go.addEventListener('click', function () {
+              request.confirm = true;
+              api('importEvalSource', request).then(function (done) { renderEvals(done, done.saved); }).catch(function (error) { evalFailed(error, 'eval-source-error'); });
+            });
+          }).catch(function (error) { evalFailed(error, 'eval-source-error'); });
+        };
+        reader.readAsDataURL(file);
+      });
+    }
     function bindEvalImport() {
+      bindEvalSource();
       var input = document.getElementById('ev-file');
       if (!input) return;
       input.addEventListener('change', function () {
@@ -3421,7 +3457,7 @@
         '<article class="card kpi-wrap" style="margin-top:12px"><h2>' + esc(info.label) + ' status</h2>' + (list.length ? '<table class="kpi roster-table"><tr><th>Associate</th><th>Verification</th><th>Status</th><th>Given</th><th></th></tr>' + rows + '</table>' : '<p class="sub">No associate was on the Sales Team for this cycle.</p>') + '</article>' +
         (editing ? evalEditor(editing) : '') + (single ? evalDetail(single) : '') +
         '<article class="card kpi-wrap" style="margin-top:12px"><h2>Archive · ' + esc(info.label) + '</h2>' + (archive ? '<table class="kpi"><tr><th>Archived</th><th>Kind</th><th>For</th><th>File</th><th></th></tr>' + archive + '</table><p class="sub">Archived files are returned exactly as stored; the fingerprint is checked before download.</p>' : '<p class="sub">Nothing archived for this month yet. Each approved evaluation and the completed monthly workbook are archived automatically.</p>') + '</article>' +
-        evalImportCard() + '</div>' +
+        evalSourceCard() + evalImportCard() + '</div>' +
         '<div id="eval-print" class="eval-print"></div>';
       bindTeamNav();
       document.getElementById('ev-cycle').addEventListener('change', function (event) { evalCycle = event.target.value; evalPick = ''; evalEditing = ''; drawEvals(); });

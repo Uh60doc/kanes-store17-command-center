@@ -234,7 +234,7 @@ test('the Excel workbook has one worksheet per associate, both logos, print area
 });
 
 /** A workbook in the established evaluation layout, built for the test: four associates, a template and a hidden list. */
-function octoberWorkbook(gs: Record<string, (...args: any[]) => any>, blankVolumeGoalFor = '') {
+function octoberWorkbook(gs: Record<string, (...args: any[]) => any>, blankVolumeGoalFor = '', months: [string, string, string] = ['July', 'August', 'September']) {
   const styles = new (gs.XlsxStyles_ as any)();
   const labels = ['Sales Volume ', 'Average Sale', 'Mattress % of Total Sales', 'Adustable Base Attachment (MPPA)', 'Pillows (MPPA)', 'Mattress Protector Attachment (MPPA)', 'Overall Warranty % of Total Sales', 'Fabric Protection Attachment % (FABW)', 'Power Upholstery Attachment % (PWAR)', 'Power Adj Base Attachment % (PWAR)', 'Leather Protection Attachment % (LTHW)', 'Wood Kits (UVWL)', 'Finance % of Total Sales', 'Rugs (RUGSD)'];
   const goals: (number | string)[] = [80000, 2500, 0.2, 0.35, 0.65, 0.8, 0.055, 0.85, 0.85, 0.5, 0.8, 0.5, 0.5, '12 per Month'];
@@ -244,7 +244,7 @@ function octoberWorkbook(gs: Record<string, (...args: any[]) => any>, blankVolum
     sheet.set(1, 3, '3 Month Performance and Coaching Evaluation');
     sheet.set(5, 1, 'Salesperson:'); sheet.set(5, 2, full); sheet.set(5, 3, 'Date:'); sheet.set(5, 5, 'Store #'); sheet.set(5, 6, '17 - OBT');
     sheet.set(6, 1, 'Use WDSRR Based on Delivered (unless specified)');
-    sheet.set(7, 1, 'Sales Metrics'); sheet.set(7, 3, 'GOALS'); sheet.set(7, 4, 'July'); sheet.set(7, 5, 'August'); sheet.set(7, 6, 'September');
+    sheet.set(7, 1, 'Sales Metrics'); sheet.set(7, 3, 'GOALS'); sheet.set(7, 4, months[0]); sheet.set(7, 5, months[1]); sheet.set(7, 6, months[2]);
     labels.forEach((label, i) => {
       sheet.set(8 + i, 1, label);
       sheet.set(8 + i, 3, i === 0 && sheetName === blankVolumeGoalFor ? '$' : goals[i]);
@@ -398,7 +398,69 @@ test('only managers and admins see evaluations; only an admin uploads a historic
     if (role === 'sales') assert.throws(() => gs.dispatch('evals', { token: 't' }), /not available for this login/);
     else assert.equal(plain(gs.dispatch('evals', { token: 't' })).cycle, '2026-11');
     if (role !== 'admin') assert.throws(() => gs.dispatch('importEvalWorkbook', { token: 't', cycle: '2026-10', fileName: 'x.xlsx', base64: '' }), /not available for this login/);
+    if (role === 'sales') assert.throws(() => gs.dispatch('importEvalSource', { token: 't', fileName: 'x.xlsx', base64: '' }), /not available for this login/);
+    else assert.throws(() => gs.dispatch('importEvalSource', { token: 't', fileName: 'x.xlsx', base64: '' }), (error: unknown) => !/not available for this login/.test(String(error)));
   }
+});
+
+test('August, September, and October figures open the November draft and do not approve it', () => {
+  const tabs = store();
+  tabs.CC_Daily = [['date', 'written'], ['2026-10-31', 100]];
+  const { gs, files } = boot(tabs, '2026-11-01');
+  const bytes = octoberWorkbook(gs, '', ['August', 'September', 'October']);
+  const base64 = bytes.toString('base64');
+  const preview = plain(gs.importEvalSourceWorkbook_({ session: manager, fileName: 'November-review-data.xlsx', base64 }));
+  assert.equal(preview.confirmed, false);
+  assert.equal(preview.preview.canImport, true);
+  assert.equal(preview.preview.cycle, '2026-11');
+  assert.equal(preview.preview.purpose, 'next review');
+  assert.deepEqual(preview.preview.covers, ['August 2026 (2026-08-01 to 2026-08-31)', 'September 2026 (2026-09-01 to 2026-09-30)', 'October 2026 (2026-10-01 to 2026-10-31)']);
+  assert.equal(Object.keys(files).length, 0, 'nothing is archived before confirmation');
+  assert.equal(tabs.CC_Daily!.length, 2);
+
+  const done = plain(gs.importEvalSourceWorkbook_({ session: manager, fileName: 'November-review-data.xlsx', base64, confirm: true }));
+  assert.match(done.saved, /Saved the November 2026 figures/);
+  assert.match(done.saved, /not approved/);
+  const ricky = done.evaluations.find((e: any) => e.name === 'Ricky Nassif');
+  assert.equal(ricky.status, 'Draft');
+  assert.equal(ricky.frozen, false);
+  assert.deepEqual(ricky.months.map((m: any) => m.label), ['August 2026', 'September 2026', 'October 2026']);
+  assert.deepEqual(ricky.metrics[0].values.map((v: any) => v.value), [38003, 39003, 40003]);
+  assert.ok(ricky.metrics[0].values.every((v: any) => v.status === 'Verified'));
+  const brenda = done.evaluations.find((e: any) => e.name === 'Brenda Sanchez');
+  assert.equal(brenda.status, 'Draft');
+  assert.ok(brenda.metrics[0].values.every((v: any) => v.value === null), 'an associate left out of the file is not filled with zeros');
+  assert.ok(done.evaluations.every((e: any) => e.status === 'Draft'));
+  assert.ok(done.archive.some((entry: any) => entry.kind === 'review source'));
+  assert.equal(done.archive.some((entry: any) => entry.kind === 'historical original'), false);
+  assert.equal(tabs.CC_Daily!.length, 2);
+  assert.equal(tabs.CC_Daily![1]![1], 100, 'daily sales are not changed');
+  assert.throws(() => gs.importEvalSourceWorkbook_({ session: manager, fileName: 'November-review-data.xlsx', base64, confirm: true }), /already used/);
+});
+
+test('the history box refuses the next review and points it to Data for the next review', () => {
+  const tabs = store();
+  const { gs } = boot(tabs, '2026-11-01');
+  const base64 = octoberWorkbook(gs, '', ['August', 'September', 'October']).toString('base64');
+  const preview = plain(gs.importEvalWorkbook_({ session: admin, cycle: '2026-10', fileName: 'November-review-data.xlsx', base64 }));
+  assert.equal(preview.preview.canImport, false);
+  assert.match(preview.preview.warnings.join(' '), /Data for the next review/);
+  assert.equal(tabs.CC_Evaluations, undefined);
+  assert.equal(tabs.CC_EvalMetrics, undefined);
+});
+
+test('a review that is already approved stays history and is not opened again as a draft', () => {
+  const tabs = store();
+  const { gs } = boot(tabs, '2026-11-01');
+  const base64 = octoberWorkbook(gs).toString('base64');
+  gs.importEvalWorkbook_({ session: admin, cycle: '2026-10', fileName: 'October.xlsx', base64, confirm: true });
+  const preview = plain(gs.importEvalSourceWorkbook_({ session: manager, fileName: 'October-again.xlsx', base64 }));
+  assert.equal(preview.preview.canImport, false);
+  assert.equal(preview.preview.cycle, '2026-10');
+  assert.match(preview.preview.warnings.join(' '), /stays as history/);
+  assert.throws(() => gs.importEvalSourceWorkbook_({ session: manager, fileName: 'October-again.xlsx', base64, confirm: true }), /stays as history/);
+  const still = plain(gs.evals_({ session: manager, cycle: '2026-10' }));
+  assert.ok(still.evaluations.every((e: any) => e.status === 'Approved'));
 });
 
 const REFERENCE = '/tmp/handoff/REFERENCE_ONLY_NOT_FOR_GIT/Sales_Evaluation_Reference.xlsx';
