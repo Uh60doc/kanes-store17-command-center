@@ -89,7 +89,7 @@ export const employees: readonly Employee[] = [
     role: 'management',
     onCard: false,
     startDate: null,
-    note: 'General manager. Report name James Meyers. Sales for someone who no longer works here are located to Kelly Meyers and Liz Perez and are not personal sales.',
+    note: 'General manager. Report name James Meyers. A written negative for someone who no longer works here reduces Kelly for that salesperson month.',
     nameAliases: ['KELLY MEYERS', 'JAMES MEYERS', 'MEYERS, JAMES'],
   },
   {
@@ -99,7 +99,7 @@ export const employees: readonly Employee[] = [
     role: 'management',
     onCard: false,
     startDate: null,
-    note: 'Operations manager. Goes by Liz. Sales for someone who no longer works here are located to Kelly Meyers and Liz Perez and are not personal sales.',
+    note: 'Operations manager. Goes by Liz. A delivered negative for someone who no longer works here reduces Liz for that salesperson month.',
     nameAliases: ['ELIZABETH PEREZ', 'PEREZ, ELIZABETH', 'LIZ PEREZ'],
   },
   {
@@ -119,7 +119,7 @@ export const employees: readonly Employee[] = [
     role: 'former',
     onCard: false,
     startDate: null,
-    note: 'No longer works at Store 17. Sales stay in the store total under his name and are located to Kelly Meyers and Liz Perez.',
+    note: 'No longer works at Store 17. A delivered negative reduces Liz Perez for that salesperson month. A written negative reduces Kelly Meyers. The store total stays under his name.',
     nameAliases: ['BRETT KEHLER', 'KEHLER, BRETT'],
   },
 ];

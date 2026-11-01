@@ -2260,6 +2260,7 @@ function people_(payload) {
   var individual = individualPeriodContaining_(today);
   var snapThrough = refreshPeopleWritten_(individual.start, individual.end);
   var people = peopleRows_(individual.start, individual.end);
+  var formerSales = formerSalesLocated_(individual.start, individual.end);
   return {
     role: payload.session.role,
     period: individual.start + ' through ' + individual.end,
@@ -2268,7 +2269,8 @@ function people_(payload) {
     snapLabel: 'SNAP written',
     analysisThrough: { written: (people[0] && people[0].analysisWrittenThrough) || null, delivered: (people[0] && people[0].deliveredThrough) || null },
     people: people,
-    formerSales: formerSalesLocated_(individual.start, individual.end),
+    formerSales: formerSales,
+    managerReductions: formerManagerReductions_(formerSales),
     deliveredVariance: salesTeamDeliveredVariance_(people, individual, today),
     today: today,
     evaluation: evaluationCycle_(today),
@@ -2313,8 +2315,42 @@ function formerSalesLocated_(start, end) {
   kept.sort(function (a, b) {
     return (a.date + a.name + a.side).localeCompare(b.date + b.name + b.side);
   });
-  return kept.map(function (item) {
-    return { name: item.name, date: item.date, side: item.side, sales: item.sales, locatedTo: item.locatedTo };
+  var sales = kept.map(function (item) {
+    return { name: item.name, date: item.date, side: item.side, sales: item.sales, source: item.kind, locatedTo: item.locatedTo, reducedOn: '' };
+  });
+  markFormerReductions_(sales);
+  return sales;
+}
+
+/** A written negative reduces Kelly for that salesperson month. A delivered negative reduces Liz. The amount is applied once. */
+function markFormerReductions_(sales) {
+  var snapWritten = {};
+  sales.forEach(function (item) {
+    if (item.source === 'snap' && item.side === 'written' && item.sales < 0) snapWritten[item.name + '|' + item.date] = true;
+  });
+  sales.forEach(function (item) {
+    if (!(item.sales < 0)) return;
+    if (item.source === 'group17' && item.side === 'written' && snapWritten[item.name + '|' + item.date]) return;
+    if (item.side === 'delivered') item.reducedOn = 'Liz Perez';
+    else if (item.side === 'written') item.reducedOn = 'Kelly Meyers';
+  });
+  return sales;
+}
+
+function formerManagerReductions_(sales) {
+  var totals = {};
+  function bucket(name, title) {
+    if (!totals[name]) totals[name] = { name: name, title: title, written: 0, delivered: 0, lines: [] };
+    return totals[name];
+  }
+  (sales || []).forEach(function (item) {
+    if (!item.reducedOn) return;
+    var row = bucket(item.reducedOn, item.reducedOn === 'Liz Perez' ? 'Operations Manager' : 'General Manager');
+    row[item.side] = Math.round((row[item.side] + item.sales) * 100) / 100;
+    row.lines.push({ from: item.name, date: item.date, side: item.side, sales: item.sales });
+  });
+  return ['Kelly Meyers', 'Liz Perez'].map(function (name) { return totals[name]; }).filter(function (row) {
+    return row && (row.written !== 0 || row.delivered !== 0);
   });
 }
 
@@ -2345,7 +2381,7 @@ function salesTeamDeliveredVariance_(people, individual, today) {
     salespersonPeriod: individual.start + ' through ' + individual.end,
     deliveredThrough: through || null,
     differs: differs,
-    note: 'Official Store Delivered is NWDSR Delivered for the store month (' + store.start + ' through ' + store.end + ')' + (storeDeliveredThrough ? ', verified through ' + storeDeliveredThrough : '') + ', and remains the authoritative store measure. Current Sales Team Delivered is the sum of active associates from Group 17 Delivered for the salesperson month (' + individual.start + ' through ' + individual.end + '). It does not include former employees, unmatched names, or management. Sales for someone who no longer works here stay under that name, in the store total, and are located to Kelly Meyers and Liz Perez. They are not added to those managers\' personal sales or to another associate. The calendars also differ (store 2nd–1st vs salesperson 1st–last day). The two figures are not forced to match.',
+    note: 'Official Store Delivered is NWDSR Delivered for the store month (' + store.start + ' through ' + store.end + ')' + (storeDeliveredThrough ? ', verified through ' + storeDeliveredThrough : '') + ', and remains the authoritative store measure. Current Sales Team Delivered is the sum of active associates from Group 17 Delivered for the salesperson month (' + individual.start + ' through ' + individual.end + '). It does not include former employees, unmatched names, or management. A negative for someone who no longer works here reduces that salesperson month once: written reduces Kelly Meyers, delivered reduces Liz Perez. A positive stays under the former employee and is not added to either manager. The store total is not changed. The calendars also differ (store 2nd–1st vs salesperson 1st–last day). The two figures are not forced to match.',
   };
 }
 

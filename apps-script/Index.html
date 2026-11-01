@@ -1753,6 +1753,7 @@
     var peopleAnalysisThrough = {};
     var peopleDeliveredVariance = null;
     var peopleFormerSales = [];
+    var peopleManagerReductions = [];
     var recoveryDirty = false;
     var coachDirty = false;
     var rescuePreview = null;
@@ -2244,6 +2245,7 @@
       peopleAnalysisThrough = data.analysisThrough || {};
       peopleDeliveredVariance = data.deliveredVariance || null;
       peopleFormerSales = data.formerSales || [];
+      peopleManagerReductions = data.managerReductions || [];
       peopleEvaluation = data.evaluation || null;
       peopleToday = data.today || '';
       peoplePeriod = data.period || '';
@@ -2272,11 +2274,18 @@
     }
     var PERSON_COMPARE = ['Bedding', 'Mattress Pads', 'Adjustable Bases', 'Pillows', 'Furniture Protection', 'Pet Protections', 'Rugs', 'Fabric', 'Leather', 'Power', 'Financing', 'Average Ticket', 'Orders'];
     function formerSalesHtml() {
-      if (!peopleFormerSales.length) return '';
+      if (!peopleFormerSales.length && !peopleManagerReductions.length) return '';
       var lines = peopleFormerSales.map(function (item) {
-        return esc(item.name) + ' · ' + esc(item.side) + ' ' + money(item.sales) + ' · ' + esc(item.date);
+        var cut = item.reducedOn ? ' · reduces ' + esc(item.reducedOn) + ' ' + money(Math.abs(item.sales)) + ' for the month' : '';
+        return esc(item.name) + ' · ' + esc(item.side) + ' ' + money(item.sales) + ' · ' + esc(item.date) + cut;
       }).join('<br>');
-      return '<p class="sub">Someone who no longer works here. ' + lines + '. Located to Kelly Meyers and Liz Perez. The dollars stay in the store total under that name and are not added to their personal sales.</p>';
+      var months = peopleManagerReductions.map(function (row) {
+        var parts = [];
+        if (row.written) parts.push(money(Math.abs(row.written)) + ' written');
+        if (row.delivered) parts.push(money(Math.abs(row.delivered)) + ' delivered');
+        return esc(row.name) + ' reduced by ' + parts.join(' and ') + ' for this salesperson month';
+      }).join('<br>');
+      return '<p class="sub">Someone who no longer works here. ' + lines + (months ? '<br>' + months + '.' : '') + ' The store total is unchanged.</p>';
     }
     function drawPeopleTable() {
       displayHold = false;

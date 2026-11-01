@@ -18,13 +18,13 @@ var ROSTER_SEED_ = {
 };
 var ROSTER_SEED_EXTRA_ = [
   { name: 'Cordell Primous', role: 'management', employee_id: 'CPRI0909', full_name: 'Cordell Primous', preferred_name: 'Cordell', position: 'Sales Manager', status: 'Management', aliases: 'PRIMOUS, CORDELL', roster_note: 'Sales manager. On leave until his expected return October 17, 2026.' },
-  { name: 'Kelly Meyers', role: 'management', employee_id: 'JMEYERS', full_name: 'James Meyers', preferred_name: 'Kelly', position: 'General Manager', status: 'Management', aliases: 'JAMES MEYERS; MEYERS, JAMES', roster_note: 'General manager. Sales for someone who no longer works at Store 17 are located to Kelly Meyers and Liz Perez. Those dollars stay under the former employee and are not personal sales.' },
-  { name: 'Elizabeth Perez', role: 'management', employee_id: 'EPEREZ', full_name: 'Elizabeth Perez', preferred_name: 'Elizabeth', position: 'Operations Manager', status: 'Management', aliases: 'PEREZ, ELIZABETH; LIZ PEREZ', roster_note: 'Operations manager. Sales for someone who no longer works at Store 17 are located to Kelly Meyers and Liz Perez. Those dollars stay under the former employee and are not personal sales.' },
+  { name: 'Kelly Meyers', role: 'management', employee_id: 'JMEYERS', full_name: 'James Meyers', preferred_name: 'Kelly', position: 'General Manager', status: 'Management', aliases: 'JAMES MEYERS; MEYERS, JAMES', roster_note: 'General manager. A written negative for someone who no longer works at Store 17 reduces Kelly Meyers for that salesperson month. Delivered negatives reduce Liz Perez. The store total is not changed.' },
+  { name: 'Elizabeth Perez', role: 'management', employee_id: 'EPEREZ', full_name: 'Elizabeth Perez', preferred_name: 'Elizabeth', position: 'Operations Manager', status: 'Management', aliases: 'PEREZ, ELIZABETH; LIZ PEREZ', roster_note: 'Operations manager. A delivered negative for someone who no longer works at Store 17 reduces Liz Perez for that salesperson month. Written negatives reduce Kelly Meyers. The store total is not changed.' },
   { name: 'Valentina Lopez', role: 'former', employee_id: '', full_name: 'Valentina Lopez', preferred_name: 'Valentina', position: 'Sales Associate', status: 'Terminated', aliases: 'LOPEZ, VALENTINA', roster_note: 'Former associate. Termination date not on file.' },
   /** GM-confirmed former identities. Maria Rafalik stays unmatched and is intentionally not seeded. */
   { name: 'Mukhtar Junaid', role: 'former', employee_id: '', full_name: 'Mukhtar Junaid', preferred_name: 'Jimmy', position: 'Sales Associate', status: 'Terminated', aliases: 'MUKHTAR JUNAID; MUKHTAR, JUNAID; JUNAID, MUKHTAR; JIMMY', roster_note: 'Former associate. Went by Jimmy. GM confirmed Mukhtar Junaid / Jimmy only — no other alias or employee ID. Termination date not on file.' },
   { name: 'Filepe Chaves', role: 'former', employee_id: '', full_name: 'Filepe Chaves', preferred_name: 'Filepe', position: 'Sales Associate', status: 'Terminated', aliases: 'CHAVES FELIPE; FELIPE CHAVES; CHAVES, FELIPE; FILEPE CHAVES; CHAVES, FILEPE; FILIPE CHAVES; FILIPE', roster_note: 'Former associate. GM confirmed first name Filepe and last name Chaves. The July-September 2026 workbook prints Filipe Chaves. Report aliases CHAVES FELIPE and FELIPE CHAVES. Preserve original report spellings. Termination date not on file.' },
-  { name: 'Brett Kehler', role: 'former', employee_id: '', full_name: 'Brett Kehler', preferred_name: 'Brett', position: 'Sales Associate', status: 'Terminated', aliases: 'BRETT KEHLER; KEHLER, BRETT', roster_note: 'No longer works at Store 17. Termination date not on file. Sales printed under this name stay in the store total and are located to Kelly Meyers and Liz Perez. They are not added to those managers\' personal sales or to any active salesperson.' },
+  { name: 'Brett Kehler', role: 'former', employee_id: '', full_name: 'Brett Kehler', preferred_name: 'Brett', position: 'Sales Associate', status: 'Terminated', aliases: 'BRETT KEHLER; KEHLER, BRETT', roster_note: 'No longer works at Store 17. Termination date not on file. Sales stay under this name and in the store total, located to Kelly Meyers and Liz Perez. A written negative reduces Kelly Meyers for that salesperson month. A delivered negative reduces Liz Perez. A positive is not added to either manager.' },
 ];
 
 var rosterCache_ = null;
@@ -300,10 +300,10 @@ function ensureFormerLocationNotes_(tab, header, stamp, history) {
     var name = String(values[r][0] || '');
     if (!wanted[name]) continue;
     var current = String(values[r][noteCol] || '');
-    if (/located to Kelly Meyers and Liz Perez/i.test(current)) continue;
-    var next = current ? current.replace(/[.\s]+$/, '') + '. ' + wanted[name] : wanted[name];
+    var next = wanted[name];
+    if (current === next) continue;
     tab.getRange(r + 1, noteCol + 1).setValue(next);
-    history.appendRow([stamp, 'roster note', '', name, 'roster_note', current, next, '', 'system', 'Former-employee sales are located to Kelly Meyers and Liz Perez. No sales figure was changed.']);
+    history.appendRow([stamp, 'roster note', '', name, 'roster_note', current, next, '', 'system', 'A negative for someone who no longer works here reduces Kelly Meyers or Liz Perez for that salesperson month. No store figure was changed.']);
     changed = true;
   }
   if (changed) rosterCache_ = null;

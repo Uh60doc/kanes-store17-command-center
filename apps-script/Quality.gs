@@ -506,10 +506,10 @@ function checkEmployeeMatching_(ctx, add) {
     var located = {};
     formerSalesLocated_(ctx.person.start, ctx.person.end).forEach(function (item) {
       var bucket = located[item.name] || (located[item.name] = []);
-      bucket.push(item.side + ' ' + moneyPlain_(item.sales) + ' on ' + item.date);
+      bucket.push(item.side + ' ' + moneyPlain_(item.sales) + ' on ' + item.date + (item.reducedOn ? ', which reduces ' + item.reducedOn + ' by ' + moneyPlain_(Math.abs(item.sales)) + ' for that salesperson month' : ''));
     });
     Object.keys(located).sort().forEach(function (name) {
-      add('employee-match', 'NOTE', name, name + ' no longer works at Store 17. ' + located[name].join('; ') + '. Those sales stay in the store total under ' + name + ' and are located to ' + formerSalesLocatedTo_() + '. They are not added to those managers\' personal sales or to any active salesperson.', ['person_written', 'person_kpis', 'person_delivered']);
+      add('employee-match', 'NOTE', name, name + ' no longer works at Store 17. ' + located[name].join('; ') + '. The original line stays under ' + name + ' and in the store total. A written negative reduces Kelly Meyers for that salesperson month. A delivered negative reduces Liz Perez. A positive is not added to either manager or to any active salesperson.', ['person_written', 'person_kpis', 'person_delivered']);
     });
   }
   if (!ids.repeated.length && !Object.keys(unmatched).length) add('employee-match', 'PASS', 'Salesperson month', 'Every salesperson line from ' + ctx.person.start + ' that should match a roster person does' + (Object.keys(intentional).length ? '; intentionally unmatched names remain NOTES only' : '') + '.');

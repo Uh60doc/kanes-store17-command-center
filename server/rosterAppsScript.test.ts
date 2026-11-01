@@ -156,7 +156,7 @@ test('roster changes are admin only, checked on the server', () => {
       assert.equal(roster.associates.length, 13);
       const brett = roster.associates.find((person: { name: string }) => person.name === 'Brett Kehler');
       assert.equal(brett.onSalesTeam, false);
-      assert.match(brett.note, /located to Kelly Meyers and Liz Perez/);
+      assert.match(brett.note, /delivered negative reduces Liz Perez/);
       assert.equal(plain(gs.dispatch('saveAssociate', { token: 't', action: 'status', name: 'Eric Montes Rodriguez', record: { status: 'Leave' } })).confirmed, false);
     } else {
       assert.throws(() => gs.dispatch('roster', { token: 't' }), /not available for this login/);
