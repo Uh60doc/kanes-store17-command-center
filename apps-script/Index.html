@@ -1752,6 +1752,7 @@
     var peopleSnapPending = [];
     var peopleAnalysisThrough = {};
     var peopleDeliveredVariance = null;
+    var peopleFormerSales = [];
     var recoveryDirty = false;
     var coachDirty = false;
     var rescuePreview = null;
@@ -2242,6 +2243,7 @@
       peopleSnapPending = data.snapPending || [];
       peopleAnalysisThrough = data.analysisThrough || {};
       peopleDeliveredVariance = data.deliveredVariance || null;
+      peopleFormerSales = data.formerSales || [];
       peopleEvaluation = data.evaluation || null;
       peopleToday = data.today || '';
       peoplePeriod = data.period || '';
@@ -2269,6 +2271,13 @@
       return toneFor(value, row.goal);
     }
     var PERSON_COMPARE = ['Bedding', 'Mattress Pads', 'Adjustable Bases', 'Pillows', 'Furniture Protection', 'Pet Protections', 'Rugs', 'Fabric', 'Leather', 'Power', 'Financing', 'Average Ticket', 'Orders'];
+    function formerSalesHtml() {
+      if (!peopleFormerSales.length) return '';
+      var lines = peopleFormerSales.map(function (item) {
+        return esc(item.name) + ' · ' + esc(item.side) + ' ' + money(item.sales) + ' · ' + esc(item.date);
+      }).join('<br>');
+      return '<p class="sub">Someone who no longer works here. ' + lines + '. Located to Kelly Meyers and Liz Perez. The dollars stay in the store total under that name and are not added to their personal sales.</p>';
+    }
     function drawPeopleTable() {
       displayHold = false;
       document.body.classList.remove('print-summary');
@@ -2289,6 +2298,7 @@
         teamNav('board') +
         '<article class="card kpi-wrap"><table class="kpi"><tr><th>Sales Team</th><th>SNAP written</th><th>Monthly goal</th><th>% to goal</th><th>Delivered</th><th>Written orders</th><th>Opportunities</th><th>Closing ratio</th></tr>' + rows + '</table><p class="sub">Last updated. SNAP written ' + esc(dateLabel(peopleSnapThrough) || 'Pending') + '. Delivered ' + esc(dateLabel(peopleAnalysisThrough.delivered) || 'Pending') + '.' + (snapWaiting(peopleSnapPending) ? ' ' + esc(snapWaiting(peopleSnapPending)) : '') + '</p>' +
         (peopleDeliveredVariance ? '<p class="sub">Store delivered ' + money(peopleDeliveredVariance.storeDelivered) + '. ' + updatedOn(peopleDeliveredVariance.storeDeliveredThrough) + ' Sales team delivered ' + (peopleDeliveredVariance.activeAssociateDelivered === null || peopleDeliveredVariance.activeAssociateDelivered === undefined ? 'Pending' : money(peopleDeliveredVariance.activeAssociateDelivered)) + '.</p>' : '') +
+        formerSalesHtml() +
         '</article>' +
         '<h2 class="section-title">KPI comparison</h2>' +
         '<article class="card kpi-wrap"><table class="kpi"><tr><th>KPI</th>' + heads + '</tr>' + compare + '</table><p class="sub">' + updatedOn(peopleAnalysisThrough.written) + '</p></article>' +

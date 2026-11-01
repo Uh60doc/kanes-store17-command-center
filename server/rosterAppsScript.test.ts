@@ -152,7 +152,11 @@ test('roster changes are admin only, checked on the server', () => {
     vm.runInContext(code, gs as vm.Context);
     vm.runInContext(`requireSession_ = function () { return { role: '${role}' }; };`, gs as vm.Context);
     if (role === 'admin') {
-      assert.equal(plain(gs.dispatch('roster', { token: 't' })).associates.length, 12);
+      const roster = plain(gs.dispatch('roster', { token: 't' }));
+      assert.equal(roster.associates.length, 13);
+      const brett = roster.associates.find((person: { name: string }) => person.name === 'Brett Kehler');
+      assert.equal(brett.onSalesTeam, false);
+      assert.match(brett.note, /located to Kelly Meyers and Liz Perez/);
       assert.equal(plain(gs.dispatch('saveAssociate', { token: 't', action: 'status', name: 'Eric Montes Rodriguez', record: { status: 'Leave' } })).confirmed, false);
     } else {
       assert.throws(() => gs.dispatch('roster', { token: 't' }), /not available for this login/);

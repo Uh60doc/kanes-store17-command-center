@@ -89,7 +89,7 @@ export const employees: readonly Employee[] = [
     role: 'management',
     onCard: false,
     startDate: null,
-    note: 'General manager. Report name James Meyers.',
+    note: 'General manager. Report name James Meyers. Sales for someone who no longer works here are located to Kelly Meyers and Liz Perez and are not personal sales.',
     nameAliases: ['KELLY MEYERS', 'JAMES MEYERS', 'MEYERS, JAMES'],
   },
   {
@@ -99,8 +99,8 @@ export const employees: readonly Employee[] = [
     role: 'management',
     onCard: false,
     startDate: null,
-    note: 'Operations manager.',
-    nameAliases: ['ELIZABETH PEREZ', 'PEREZ, ELIZABETH'],
+    note: 'Operations manager. Goes by Liz. Sales for someone who no longer works here are located to Kelly Meyers and Liz Perez and are not personal sales.',
+    nameAliases: ['ELIZABETH PEREZ', 'PEREZ, ELIZABETH', 'LIZ PEREZ'],
   },
   {
     code: null,
@@ -111,6 +111,16 @@ export const employees: readonly Employee[] = [
     startDate: null,
     note: 'Former associate. Hidden from active cards. Past sales stay in the store total.',
     nameAliases: ['VALENTINA LOPEZ'],
+  },
+  {
+    code: null,
+    aliasCodes: [],
+    displayName: 'Brett Kehler',
+    role: 'former',
+    onCard: false,
+    startDate: null,
+    note: 'No longer works at Store 17. Sales stay in the store total under his name and are located to Kelly Meyers and Liz Perez.',
+    nameAliases: ['BRETT KEHLER', 'KEHLER, BRETT'],
   },
 ];
 
