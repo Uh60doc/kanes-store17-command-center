@@ -38,6 +38,7 @@ var ROUTES_ = {
   evalWorkbook: ['manager', 'admin'],
   saveEvalMetric: ['manager', 'admin'],
   importEvalWorkbook: ['admin'],
+  importEvalSource: ['manager', 'admin'],
   resendEvalMail: ['manager', 'admin'],
   uploads: ['manager', 'admin'],
   uploadReport: ['manager', 'admin'],
@@ -304,6 +305,7 @@ function route_(name, payload) {
   if (name === 'resendEvalMail') return resendEvalMail_(payload);
   if (name === 'saveEvalMetric') return saveEvalMetric_(payload);
   if (name === 'importEvalWorkbook') return importEvalWorkbook_(payload);
+  if (name === 'importEvalSource') return importEvalSourceWorkbook_(payload);
   if (name === 'uploads') return uploads_(payload);
   if (name === 'uploadReport') return uploadReport_(payload);
   if (name === 'archiveOriginal') return archiveOriginal_(payload);
