@@ -767,6 +767,76 @@ test('a confirmed store opportunity count replaces 13 with 11 and does not assig
   assert.equal(page.checklist.find((item: { key: string }) => item.key === 'perqLocation').status, 'Imported');
 });
 
+test('October 29 NWDSR and Group 17 stay separate, and a preview writes nothing', () => {
+  const { gs, send, tabs } = boot(store(), '2026-11-03');
+  const original = pdf('DATE: 10/29/2026\nTIME: 08:23 PM\nNET WRITTEN STORE SALES\nFROM 29-OCT-2026 TO 29-OCT-2026\nKANE FURNITURE #17 Totals: 29,799 -79.7 7 -71.4');
+  assert.equal(send('2026-10-29', 'output (70).pdf', original).status, 'Imported');
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![2], 29799);
+
+  const later = pdf('DATE: 11/03/2026\nTIME: 08:19 PM\nNET WRITTEN STORE SALES\nFROM 29-OCT-2026 TO 29-OCT-2026\nKANE FURNITURE #17 Totals: 29,889 -79.7 7 -71.4', '\n%later');
+  const before = JSON.stringify(tabs.CC_Daily);
+  const preview = plain(gs.previewUpload_({ date: '2026-10-29', fileName: 'output (4).pdf', base64: later.toString('base64'), session: manager }));
+  assert.equal(preview.fileName, 'output (4).pdf');
+  assert.equal(preview.extension, 'pdf');
+  assert.equal(preview.reportType, 'NWDSR Written');
+  assert.equal(preview.businessDate, '2026-10-29');
+  assert.equal(preview.periodStart, '2026-10-29');
+  assert.equal(preview.periodEnd, '2026-10-29');
+  assert.match(preview.destination, /nwdsr_written/);
+  assert.match(preview.existing, /\$29,799/);
+  assert.equal(preview.disposition, 'hold');
+  assert.match(preview.reason, /\$29,889/);
+  assert.match(preview.reason, /11\/03\/2026 08:19 PM/);
+  assert.match(preview.action, /DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-29_2026-10-29\.xlsx/);
+  assert.equal(JSON.stringify(tabs.CC_Daily), before, 'previewing a file does not change Store Written');
+
+  const held = send('2026-10-29', 'output (4).pdf', later);
+  assert.equal(held.status, 'Needs Review');
+  assert.match(held.message, /shows \$29,889, but \$29,799 is already on file/);
+  assert.match(held.message, /does not fill Group 17 Written/);
+  assert.match(held.message, /DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-29_2026-10-29\.xlsx/);
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![2], 29799);
+
+  const book = group17('WRITTEN', [['TARIK NASSIF', 29888.92]]);
+  const kpiPreview = plain(gs.previewUpload_({
+    date: '2026-10-29',
+    fileName: 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-29_2026-10-29.xlsx',
+    base64: book.toString('base64'),
+    session: manager,
+  }));
+  assert.equal(kpiPreview.extension, 'xlsx');
+  assert.equal(kpiPreview.reportType, 'Group 17 Written');
+  assert.equal(kpiPreview.businessDate, '2026-10-29');
+  assert.equal(kpiPreview.disposition, 'import');
+  assert.match(kpiPreview.destination, /CC_Ledger and CC_Kpi/);
+  assert.match(kpiPreview.reason, /does not block this import/);
+  const imported = send('2026-10-29', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-29_2026-10-29.xlsx', book, true);
+  assert.equal(imported.status, 'Imported');
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![2], 29799, 'Group 17 does not replace NWDSR Written');
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![1], '', 'Group 17 does not write SNAP');
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-29')[0]![10], 29888.92);
+
+  const snap = send('2026-10-29', 'output.pdf', snapPdf('2026-10-29', 26413, [['MONTES, ERIC', 26413]]));
+  assert.equal(snap.status, 'Imported');
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![1], 26413);
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![2], 29799, 'a SNAP total different from NWDSR does not change Store Written');
+  const snapAgain = send('2026-10-29', 'output again.pdf', snapPdf('2026-10-29', 25000, [['MONTES, ERIC', 25000]], 'again'));
+  assert.equal(snapAgain.status, 'Needs Review');
+  assert.match(snapAgain.message, /same report type/);
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![1], 26413);
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![2], 29799);
+
+  const duplicate = plain(gs.previewUpload_({ date: '2026-10-29', fileName: 'output (70) copy.pdf', base64: original.toString('base64'), session: manager }));
+  assert.equal(duplicate.disposition, 'skip');
+  assert.match(duplicate.reason, /Duplicate file/);
+  tabs.CC_Uploads!.push(['2026-10-30T12:00:00Z', '2026-10-28', 'manager', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-28_2026-10-28.xlsx', 'old', 'Group 17 Written', '2026-10-28', '2026-10-28', 'Noted', 'Group 17 Written TOTAL $1 differs from NWDSR Written $2. The workbook was not saved, so upload it again.']);
+  const page = plain(gs.uploads_({ date: '2026-10-28', session: manager }));
+  const missing = page.checklist.find((item: { key: string }) => item.key === 'g17Written');
+  assert.equal(missing.status, 'Missing');
+  assert.match(missing.message, /DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-28_2026-10-28\.xlsx/);
+  assert.match(missing.message, /A SNAP or NWDSR PDF does not fill this row/);
+});
+
 test('October 16 PERQ stays on file when a later attempt failed', () => {
   const { gs, send, tabs } = boot(store(), '2026-10-19');
   assert.equal(send('2026-10-16', 'loc16.xlsx', perqLocation(9), true).status, 'Imported');
