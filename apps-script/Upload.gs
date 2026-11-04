@@ -272,7 +272,7 @@ function uploadPdf_(context) {
   }
   if (key === 'nwdsrWritten' && parsed.purchasingCustomers !== null) extra = ' Purchasing customers: ' + parsed.purchasingCustomers + '.';
   if (decision === 'conflict') {
-    return finishImport_(context, uploadOutcome_(base, 'Needs Review', parsed.reportType + ' for ' + context.date + ' shows ' + moneyPlain_(parsed.storeTotal) + ', but ' + moneyPlain_(existing) + ' is already on file. The recorded figure was kept and this file was not applied.' + filing), 'needs-review');
+    return finishImport_(context, uploadOutcome_(base, 'Needs Review', parsed.reportType + ' for ' + context.date + ' shows ' + moneyPlain_(parsed.storeTotal) + ', but ' + moneyPlain_(existing) + ' is already on file. The recorded figure was kept and this file was not applied.' + filing + ' ' + uploadConflictAction_(key, context.date, context.fileName)), 'needs-review');
   }
   if (key !== 'snapWritten' && !context.deferRefresh) refreshStoreKpiQuietly_(context.date);
   if (decision === 'same' || (existing !== null && existing === parsed.storeTotal)) {
@@ -283,6 +283,253 @@ function uploadPdf_(context) {
 
 function uploadOutcome_(base, status, message) {
   return { key: base.key, start: base.start || '', end: base.end || '', status: status, message: message };
+}
+
+function uploadFileExtension_(fileName) {
+  var match = /\.([A-Za-z0-9]+)$/.exec(String(fileName || ''));
+  return match ? match[1].toLowerCase() : '';
+}
+
+function uploadDestination_(key) {
+  if (key === 'snapWritten') return 'CC_Daily snap_written and CC_AssociateDays. Individual written only. Official Store Written is not changed.';
+  if (key === 'nwdsrWritten') return 'CC_Daily nwdsr_written. Official Store Written.';
+  if (key === 'nwdsrDelivered') return 'CC_Daily nwdsr_delivered. Official Store Delivered.';
+  if (key === 'g17Written' || key === 'g17Delivered' || key === 'aslWritten' || key === 'aslDelivered') return 'CC_Ledger and CC_Kpi. KPI source only. CC_Daily store totals are not changed.';
+  if (key === 'perqLocation' || key === 'perqSalesperson') return 'CC_Closing opportunities. Store sales are not changed.';
+  return 'None. This file is not one of the nine daily reports.';
+}
+
+function kpiDailyAmount_(view, side, date, field) {
+  var found = null;
+  ledgerRows_().forEach(function (row) {
+    if (row.view !== view || row.grain !== 'daily' || row.side !== side || row.reportDate !== date || row.code || row.name) return;
+    found = row[field];
+  });
+  return found;
+}
+
+function group17GapSentence_(date, side) {
+  var viewSide = side === 'delivered' ? 'delivered' : 'written';
+  if (kpiDailyAmount_('DA_SALES_STORE', viewSide, date, 'sales') !== null) return 'Group 17 ' + (viewSide === 'written' ? 'Written' : 'Delivered') + ' for ' + date + ' is already stored on its own. It is not compared with this file.';
+  var name = canonicalKpiName_('group17', viewSide, date);
+  return 'This file does not fill Group 17 ' + (viewSide === 'written' ? 'Written' : 'Delivered') + '. The workbook that fills it is ' + name + '.';
+}
+
+function uploadConflictAction_(key, date, fileName) {
+  var label = uploadReportLabel_(key) || 'This report';
+  var text = 'File ' + fileName + ' (' + (uploadFileExtension_(fileName) || 'no extension') + ') is ' + label + '. Destination: ' + uploadDestination_(key) + '. A different total for the same report type and business date is held. A difference from another report type is not a reason to hold or reject a file. The recorded figure stays until this same-source difference is reviewed.';
+  if (key === 'snapWritten' || key === 'nwdsrWritten' || key === 'nwdsrDelivered') text += ' ' + group17GapSentence_(date, key === 'nwdsrDelivered' ? 'delivered' : 'written');
+  return text;
+}
+
+/** Classifies one file and says whether import would save, hold, or skip it. Nothing is written. */
+function previewUpload_(payload) {
+  var date = isoDate_(payload.date);
+  if (!date) throw new Error('Choose the business date first.');
+  var fileName = String(payload.fileName || 'report').replace(/[\\\/]/g, '_').slice(0, 160);
+  var base64 = String(payload.base64 || '');
+  if (!base64) throw new Error(fileName + ' is empty.');
+  var bytes = Utilities.base64Decode(base64);
+  if (bytes.length > UPLOAD_MAX_BYTES_) throw new Error(fileName + ' is larger than 15 MB.');
+  var sha = sha256Hex_(bytes);
+  var prior = importRecordFor_(sha);
+  var priorStatus = prior ? String(prior.status || '') : '';
+  var card = function (extra) {
+    return {
+      fileName: fileName,
+      extension: uploadFileExtension_(fileName),
+      reportType: extra.reportType || (prior ? String(prior.report_type || '') : ''),
+      businessDate: extra.businessDate || '',
+      periodStart: extra.periodStart || '',
+      periodEnd: extra.periodEnd || '',
+      destination: extra.destination || '',
+      existing: extra.existing || 'No report of this type is on file for this date.',
+      disposition: extra.disposition,
+      reason: extra.reason || '',
+      action: extra.action || '',
+    };
+  };
+  if (prior && priorStatus !== 'needs-review' && priorStatus !== 'failed' && priorStatus.indexOf('held') !== 0) {
+    return card({
+      businessDate: date,
+      disposition: 'skip',
+      existing: 'This exact file was already imported on ' + String(prior.imported_at || '').slice(0, 10) + ' (' + priorStatus + ').',
+      reason: 'Duplicate file. The contents match a file already imported.',
+      action: 'Nothing will be changed.',
+    });
+  }
+  if (bytesStartWith_(bytes, [37, 80, 68, 70])) return card(previewPdf_(date, fileName, bytes));
+  if (bytesStartWith_(bytes, [80, 75])) return card(previewWorkbook_(date, fileName, bytes));
+  return card({ disposition: 'skip', reason: fileName + ' is not a PDF or an Excel .xlsx file.', action: 'Nothing will be imported.' });
+}
+
+function previewPdf_(chosen, fileName, bytes) {
+  var text;
+  try {
+    text = pdfText_(Utilities.newBlob(bytes, 'application/pdf', fileName));
+  } catch (error) {
+    return { disposition: 'hold', reason: 'The PDF could not be read (' + String(error && error.message ? error.message : error) + ').', action: 'No figure will be changed. The file is not imported.' };
+  }
+  if (/SNAP\s*-\s*DELIVERED/i.test(text)) {
+    return { reportType: 'SNAP Delivered', disposition: 'skip', reason: 'SNAP Delivered is not a daily report. Delivered sales come from NWDSR Delivered.', action: 'This file will be skipped. Nothing will be changed.' };
+  }
+  var parsed = parseCloudReport_(text);
+  if (!parsed) {
+    var recognized = /SNAP\s*-\s*WRITTEN|NET WRITTEN STORE SALES|DELIVERED STORE SALES/i.test(text);
+    return {
+      disposition: recognized ? 'hold' : 'skip',
+      reason: recognized ? fileName + ' looks like SNAP or NWDSR, but the Store 17 total line was not found.' : fileName + ' is not SNAP Written, NWDSR Written, or NWDSR Delivered.',
+      action: recognized ? 'No figure will be changed. Run the report for Store 17 and upload that file.' : 'This file will be skipped. Nothing will be changed.',
+    };
+  }
+  var key = parsed.reportType === 'SNAP Written' ? 'snapWritten' : parsed.reportType === 'NWDSR Written' ? 'nwdsrWritten' : 'nwdsrDelivered';
+  var field = key === 'snapWritten' ? 'snapWritten' : key === 'nwdsrWritten' ? 'nwdsrWritten' : 'nwdsrDelivered';
+  var filed = parsed.singleDay ? parsed.start : '';
+  var facts = filed ? dailyFacts_().filter(function (row) { return row.date === filed; })[0] : null;
+  var existing = facts ? facts[field] : null;
+  var run = parsed.runStamp ? ' Ran ' + parsed.runStamp + '. That is when the report was run, not the business date.' : '';
+  var base = {
+    reportType: parsed.reportType,
+    businessDate: filed || parsed.start,
+    periodStart: parsed.start,
+    periodEnd: parsed.end,
+    destination: uploadDestination_(key),
+  };
+  if (!parsed.singleDay) {
+    return Object.assign(base, {
+      disposition: 'hold',
+      existing: 'A month-to-date ' + parsed.reportType + ' report is not added to a daily total.',
+      reason: parsed.reportType + ' covers ' + parsed.start + ' through ' + parsed.end + '.' + run,
+      action: 'Upload the single-day ' + parsed.reportType + ' report. Nothing will be added to the daily figures.',
+    });
+  }
+  if (parsed.start > todayNy_()) {
+    return Object.assign(base, { disposition: 'hold', reason: parsed.reportType + ' prints ' + parsed.start + ', which is after today.' + run, action: 'The file will not be filed. Nothing will be changed.' });
+  }
+  if (existing === null || existing === undefined) {
+    return Object.assign(base, {
+      disposition: 'import',
+      existing: 'No ' + parsed.reportType + ' figure is on file for ' + parsed.start + '.',
+      reason: 'Store 17 total ' + moneyPlain_(parsed.storeTotal) + '.' + run + (chosen !== parsed.start ? ' The page date was ' + chosen + '. The file will be filed on the printed date.' : ''),
+      action: 'The file will be imported to ' + uploadDestination_(key) + ' ' + group17GapSentence_(parsed.start, key === 'nwdsrDelivered' ? 'delivered' : 'written'),
+    });
+  }
+  if (existing === parsed.storeTotal) {
+    return Object.assign(base, {
+      disposition: 'skip',
+      existing: parsed.reportType + ' for ' + parsed.start + ' is already on file at ' + moneyPlain_(existing) + '.',
+      reason: 'The file prints the same total.' + run,
+      action: 'Nothing will be added. The recorded figure stays.',
+    });
+  }
+  return Object.assign(base, {
+    disposition: 'hold',
+    existing: parsed.reportType + ' for ' + parsed.start + ' is already on file at ' + moneyPlain_(existing) + '.',
+    reason: 'This file prints ' + moneyPlain_(parsed.storeTotal) + '. Same report type, same business date, different total.' + run,
+    action: uploadConflictAction_(key, parsed.start, fileName),
+  });
+}
+
+function previewWorkbook_(chosen, fileName, bytes) {
+  var info = classifyWorkbook_(bytes, fileName);
+  if (!info.key) {
+    var skip = /not one of the nine daily reports/i.test(info.problem || '');
+    return { disposition: skip ? 'skip' : 'hold', reason: info.problem || 'The workbook could not be classified.', action: skip ? 'Nothing will be imported.' : 'Nothing will be changed.' };
+  }
+  if (info.key === 'perqLocation' || info.key === 'perqSalesperson') return previewPerq_(chosen, fileName, info);
+  return previewKpi_(chosen, fileName, info);
+}
+
+function previewPerq_(chosen, fileName, info) {
+  var parsed = parsePerqGrid_(info.key, info.grid);
+  var label = uploadReportLabel_(info.key);
+  if (parsed.problem) return { reportType: label, destination: uploadDestination_(info.key), disposition: 'hold', reason: parsed.problem, action: 'Nothing will be changed.' };
+  var date = chosen;
+  var onFile = perqOnFile_(date);
+  var count = info.key === 'perqLocation' ? parsed.store17 : parsed.people.reduce(function (sum, person) { return sum + person.opportunities; }, 0);
+  var existingCount = info.key === 'perqLocation' ? onFile.store : (onFile.listed ? onFile.people : null);
+  var same = existingCount !== null && existingCount === count;
+  return {
+    reportType: label,
+    businessDate: date,
+    periodStart: date,
+    periodEnd: date,
+    destination: uploadDestination_(info.key),
+    existing: existingCount === null ? 'No ' + label + ' count is on file for ' + date + '.' : label + ' for ' + date + ' is already on file at ' + existingCount + '.',
+    disposition: existingCount === null ? 'import' : (same ? 'skip' : 'hold'),
+    reason: 'Opportunities ' + count + '.' + (parsed.exportedText ? ' Active Deals ' + parsed.exportedText + ' is the run time, not the business date.' : ' PERQ does not print a business date, so it is filed on the date selected on the page.'),
+    action: existingCount === null ? 'The file will be imported. Store sales will not change.' : (same ? 'Nothing will be added.' : 'The recorded opportunity count stays. This difference is inside PERQ, not a difference from NWDSR or SNAP.'),
+  };
+}
+
+function previewKpi_(chosen, fileName, info) {
+  var label = uploadReportLabel_(info.key);
+  var named = /DATA_ANALYSIS_KPI_(17|ASL)_(WRITTEN|DELIVERED)_(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})/i.exec(fileName);
+  var period = /(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})/.exec(fileName);
+  var start = period ? period[1] : chosen;
+  var end = period ? period[2] : chosen;
+  var card = {
+    reportType: label,
+    businessDate: start === end ? start : '',
+    periodStart: start,
+    periodEnd: end,
+    destination: uploadDestination_(info.key),
+  };
+  if (named) {
+    var namedFamily = named[1].toUpperCase() === 'ASL' ? 'asl' : 'group17';
+    var namedSide = named[2].toLowerCase();
+    if (namedFamily !== info.family || namedSide !== info.side) {
+      return Object.assign(card, { disposition: 'hold', reason: 'The file name says ' + (namedFamily === 'asl' ? 'ASL' : 'Group 17') + ' ' + namedSide + ', but the contents are ' + label + '.', action: 'Nothing will be changed. Upload the file whose contents match its name.' });
+    }
+  }
+  if (start > todayNy_()) return Object.assign(card, { disposition: 'hold', reason: label + ' prints ' + start + ', which is after today.', action: 'The file will not be filed.' });
+  if (start !== end) {
+    var finalTrack = typeof officialFinalTrack_ === 'function' ? officialFinalTrack_(start, end, todayNy_()) : '';
+    if (end >= todayNy_()) return Object.assign(card, { disposition: 'hold', existing: 'A month-to-date snapshot has to end on a finished day.', reason: label + ' covers ' + start + ' through ' + end + ', which includes today.', action: 'Upload it through yesterday. Daily figures will not be changed.' });
+    if (finalTrack) return Object.assign(card, { disposition: 'import', existing: 'This period is not added to the daily KPI rows.', reason: label + ' ' + start + ' through ' + end + ' is an official ' + finalTrack.toLowerCase() + ' month final.', action: 'It will be recorded beside the daily record. Daily figures and Store NWDSR totals will not be changed.' });
+    var storePeriod = storePeriodContaining_(start);
+    var personPeriod = individualPeriodContaining_(start);
+    var storeFit = storePeriod.start === start && end <= storePeriod.end;
+    var personFit = personPeriod.start === start && end <= personPeriod.end;
+    if (!storeFit && !personFit) return Object.assign(card, { disposition: 'hold', reason: label + ' covers ' + start + ' through ' + end + '. A store snapshot starts on the 2nd and a salesperson snapshot on the 1st.', action: 'Nothing will be changed.' });
+    return Object.assign(card, { disposition: 'import', existing: 'Days inside this period are not added again.', reason: label + ' ' + start + ' through ' + end + ' is a month-to-date snapshot.', action: 'KPI rows for the period will be saved. CC_Daily store totals will not be changed.' });
+  }
+  var source = canonicalKpiName_(info.family, info.side, start);
+  var records = kpiRecords_(info.grid, info.family, info.side, start, start, source);
+  var storeView = info.family === 'asl' ? 'RUGS_STORE' : 'DA_SALES_STORE';
+  var totalRecord = records.filter(function (record) { return record[0] === storeView; })[0];
+  var total = totalRecord && totalRecord[10] !== '' ? Number(totalRecord[10]) : null;
+  var facts = dailyFacts_().filter(function (row) { return row.date === start; })[0] || {};
+  var nwdsr = info.side === 'written' ? facts.nwdsrWritten : facts.nwdsrDelivered;
+  if (!records.some(function (record) { return record[0] === storeView; })) {
+    if (!(info.family === 'asl' || (nwdsr === 0 && records.length === 0))) {
+      return Object.assign(card, { disposition: 'hold', reason: label + ' for ' + start + ' has no TOTAL line, so Store 17 sales could not be read.', action: 'Nothing will be changed. This is a structural failure, separate from any difference versus NWDSR.' });
+    }
+    total = 0;
+  }
+  var current = info.family === 'asl' ? kpiDailyAmount_('RUGS_STORE', info.side, start, 'units') : kpiDailyAmount_('DA_SALES_STORE', info.side, start, 'sales');
+  var compared = info.family === 'asl' ? (totalRecord && totalRecord[11] !== '' ? Number(totalRecord[11]) : 0) : total;
+  var nwdsrNote = '';
+  if (info.family === 'group17' && total !== null && nwdsr !== null && nwdsr !== undefined && Math.abs(total - nwdsr) > 1) {
+    nwdsrNote = ' Group 17 TOTAL ' + moneyPlain_(total) + ' and NWDSR ' + (info.side === 'written' ? 'Written' : 'Delivered') + ' ' + moneyPlain_(nwdsr) + ' differ. That is a reconciliation note. Both figures are kept, and the difference does not block this import.';
+  }
+  if (current === null) {
+    return Object.assign(card, {
+      existing: 'No ' + label + ' row is on file for ' + start + '.',
+      disposition: 'import',
+      reason: (total !== null ? 'Store 17 sales ' + moneyPlain_(total) + '.' : label + ' for ' + start + '.') + nwdsrNote,
+      action: 'The workbook will be imported to CC_Ledger and CC_Kpi. ' + (nwdsr !== null && nwdsr !== undefined ? 'NWDSR ' + (info.side === 'written' ? 'Written' : 'Delivered') + ' stays ' + moneyPlain_(nwdsr) + '.' : 'No NWDSR figure for this day will be created from this workbook.'),
+    });
+  }
+  if (current === compared) {
+    return Object.assign(card, { existing: label + ' for ' + start + ' is already on file' + (info.family === 'group17' && total !== null ? ' at ' + moneyPlain_(total) : '') + '.', disposition: 'skip', reason: 'The workbook matches the stored KPI figure.' + nwdsrNote, action: 'Nothing will be added. Store totals will not be changed.' });
+  }
+  return Object.assign(card, {
+    existing: label + ' for ' + start + ' is already on file at ' + current + '.',
+    disposition: 'hold',
+    reason: 'This workbook prints ' + compared + '. Same KPI source, same business date, different figure.' + nwdsrNote,
+    action: 'The recorded KPI figure stays. Store NWDSR totals will not be changed.',
+  });
 }
 
 function uploadWorkbook_(context) {
@@ -1112,7 +1359,9 @@ function uploadChecklist_(evidence, date) {
         message = 'Already provided. The month-to-date report is verified through ' + uploadDayText_(cover) + '.';
       } else message = 'Missing for ' + dayText + '.';
       if (last && /differ|do not match NWDSR|was not saved|workbook was not saved/i.test(last.message || '')) {
-        message = 'Missing for ' + dayText + '. ' + (last.file || 'The earlier workbook') + ' was logged' + (last.at ? ' on ' + String(last.at).slice(0, 10) : '') + ' and was not saved. A difference from NWDSR is not a reason to reject it. Upload that original again. NWDSR stays the sales standard and is not overwritten. ' + last.message;
+        var family = item.key.indexOf('asl') === 0 ? 'asl' : 'group17';
+        var side = /Delivered/.test(item.key) ? 'delivered' : 'written';
+        message = 'Missing for ' + dayText + '. The required file is ' + canonicalKpiName_(family, side, date) + '. ' + (last.file || 'An earlier workbook') + ' was read and was not saved. A difference from NWDSR is not a reason to reject that workbook. A SNAP or NWDSR PDF does not fill this row. NWDSR store totals are left as they are. ' + last.message;
       }
     }
     return { key: item.key, label: item.label, format: item.format, use: item.use, status: status, message: message, date: date, dateText: dayText, lastFile: last ? last.file : '', lastAt: last ? last.at : '' };

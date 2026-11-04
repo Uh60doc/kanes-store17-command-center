@@ -5158,7 +5158,18 @@
       var needed = function (item) { return item.status === 'Missing' || item.status === 'Failed' || item.status === 'Needs Review'; };
       var missing = data.checklist.filter(needed);
       var selected = uploadFiles.map(function (file) {
-        return '<li>' + esc(file.name) + ' <span class="pending">' + uploadSize(file.size) + (file.fromZip ? ' · from ' + esc(file.fromZip) : '') + '</span></li>';
+        var preview = file.preview;
+        var body = '<li><strong>' + esc(file.name) + '</strong> <span class="pending">' + uploadSize(file.size) + (file.fromZip ? ' · from ' + esc(file.fromZip) : '') + '</span>';
+        if (!preview) return body + '<p class="sub">Reading this file before import.</p></li>';
+        var disposition = preview.disposition === 'import' ? 'Will be imported' : (preview.disposition === 'hold' ? 'Will be held' : 'Will be skipped');
+        var period = preview.periodStart ? (preview.periodEnd && preview.periodEnd !== preview.periodStart ? preview.periodStart + ' through ' + preview.periodEnd : preview.periodStart) : 'Not printed';
+        body += '<p class="sub">Detected report type: ' + esc(preview.reportType || 'Not a daily report') +
+          '. Business date: ' + esc(preview.businessDate || 'Not printed') +
+          '. Report period: ' + esc(period) +
+          '. Destination: ' + esc(preview.destination || 'None') + '.</p>' +
+          '<p class="sub">Existing coverage: ' + esc(preview.existing || 'None') + '.</p>' +
+          '<p class="sub"><strong>' + disposition + '.</strong> ' + esc(preview.reason || '') + (preview.action ? ' ' + esc(preview.action) : '') + '</p></li>';
+        return body;
       }).join('');
       var results = uploadResults.map(function (result) {
         return '<li>' + uploadPill(result.status) + '<strong>' + esc(result.file) + '</strong>' +
@@ -5194,7 +5205,7 @@
         '<p class="sub">PERQ is filed on <strong>' + esc(data.dateText) + '</strong>. The Active Deals time in that file is ignored.</p>' +
         (uploadProgress ? '<p class="sub" id="upload-progress">' + esc(uploadProgress) + '</p>' : '') +
         '<p id="upload-error" class="error"></p>' +
-        '<p class="summary-actions"><button id="upload-go" type="button"' + (uploadFiles.length && !uploadBusy ? '' : ' disabled') + '>' + (uploadBusy ? 'Importing…' : 'Import reports') + '</button>' +
+        '<p class="summary-actions"><button id="upload-go" type="button"' + (uploadFiles.length && !uploadBusy && uploadFiles.every(function (file) { return file.preview; }) ? '' : ' disabled') + '>' + (uploadBusy ? (/before import/i.test(uploadProgress) ? 'Reading…' : 'Importing…') : 'Import reports') + '</button>' +
         (canRetry ? ' <button id="upload-retry" type="button" class="secondary">Retry files that did not import</button>' : '') +
         (uploadFiles.length && !uploadBusy ? ' <button id="upload-clear" type="button" class="secondary">Clear</button>' : '') + '</p>' +
         summary +
@@ -5210,7 +5221,10 @@
       document.getElementById('upload-date').addEventListener('change', function (event) {
         if (!event.target.value) return;
         uploadResults = [];
-        loadUploads(event.target.value, false).catch(uploadFailed);
+        uploadFiles.forEach(function (file) { file.preview = null; });
+        loadUploads(event.target.value, false).then(function () {
+          if (uploadFiles.length) return previewChosenFiles();
+        }).catch(uploadFailed);
       });
       document.getElementById('upload-files').addEventListener('change', function (event) {
         var chosen = Array.prototype.slice.call(event.target.files || []);
@@ -5231,6 +5245,7 @@
             uploadSummary.audit = 'Not run. No figure was changed.';
           }
           renderUpload(uploadCache);
+          if (uploadFiles.length) return previewChosenFiles();
         }).catch(function (error) {
           uploadBusy = false;
           uploadProgress = '';
@@ -5259,6 +5274,34 @@
       var note = document.getElementById('upload-error');
       if (note) note.textContent = error.message;
       else document.getElementById('screen').innerHTML = '<p class="error">' + esc(error.message) + '</p>';
+    }
+    function previewChosenFiles() {
+      if (!uploadFiles.length || screen !== 'upload') return Promise.resolve();
+      var dateInput = document.getElementById('upload-date');
+      var date = dateInput ? dateInput.value : (uploadCache ? uploadCache.date : '');
+      uploadBusy = true;
+      uploadProgress = 'Reading the files before import…';
+      renderUpload(uploadCache);
+      var files = uploadFiles.slice();
+      var step = function (index) {
+        if (index >= files.length) return Promise.resolve();
+        var file = files[index];
+        uploadProgress = 'Reading ' + (index + 1) + ' of ' + files.length + ' before import… ' + file.name;
+        renderUpload(uploadCache);
+        return readBase64(file.blob || file).then(function (base64) {
+          return api('previewUpload', { date: date, fileName: file.name, base64: base64 });
+        }).then(function (preview) {
+          file.preview = preview;
+        }, function (error) {
+          var extension = (String(file.name).match(/\.([A-Za-z0-9]+)$/) || ['', ''])[1].toLowerCase();
+          file.preview = { fileName: file.name, extension: extension, reportType: '', businessDate: '', periodStart: '', periodEnd: '', destination: '', existing: '', disposition: 'hold', reason: error.message, action: 'This file was not imported. No figure was changed.' };
+        }).then(function () { return step(index + 1); });
+      };
+      return step(0).then(function () {
+        uploadBusy = false;
+        uploadProgress = '';
+        renderUpload(uploadCache);
+      });
     }
     function readBase64(file) {
       return new Promise(function (resolve, reject) {
