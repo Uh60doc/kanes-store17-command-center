@@ -149,7 +149,7 @@ test('only one consolidated email is sent for the outstanding problems', () => {
   gs.qualityAfterUpdate_('scheduled import', true);
   assert.equal(mail.length, 1);
   assert.equal(mail[0]!.subject, 'Command Center: 10 outstanding report problems');
-  assert.match(mail[0]!.body, /2026-10-16: SNAP Written, NWDSR Written, NWDSR Delivered, Group 17 Written/);
+  assert.match(mail[0]!.body, /2026-10-16: SNAP Written, NWDSR Written, NWDSR Delivered, Data KPI Individual — Written/);
   assert.ok(!/Needs review\n- Chaves Felipe/.test(mail[0]!.body), 'Filepe Chaves aliases match; not Needs Review');
   assert.ok(!/Needs review\n- Mukhtar Junaid/.test(mail[0]!.body), 'Mukhtar / Jimmy aliases match; not Needs Review');
   gs.qualityAfterUpdate_('scheduled import', true);

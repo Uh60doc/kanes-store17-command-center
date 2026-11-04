@@ -73,7 +73,7 @@ test('salesperson Data Analysis figures are the October 1 snapshot plus the foll
   assert.equal(ricky.sales, 19280.84, 'October 16 is after the missing October 15 file and is not counted');
   assert.equal(ricky.orders, 10);
   assert.equal(ricky.finance.value, Math.round(((0.25 * 16804.84 + 2476) / 19280.84) * 1000) / 1000);
-  assert.equal(ricky.basis, 'Group 17 salesperson report 2026-10-01 through 2026-10-13 plus the day files 2026-10-14');
+  assert.equal(ricky.basis, 'Data KPI Individual report 2026-10-01 through 2026-10-13 plus the day files 2026-10-14');
 
   assert.equal(gs.personAnalysis_(context, 'Brenda Sanchez').written.sales, 0, 'a covered report without a line is 0');
   assert.equal(gs.personAnalysis_(context, 'Eric Montes Rodriguez').delivered, null, 'no delivered report is Pending, not zero');
@@ -144,6 +144,16 @@ test('the mailbox import keeps Group 17 sales and orders for the store and each 
     .filter((record: unknown[]) => String(record[0]).startsWith('DA_SALES_'));
   assert.deepEqual(plain(sales.map((record: unknown[]) => [record[0], record[8], record[10], record[11], record[17]])), [
     ['DA_SALES_PERSON', 'Ricky Nassif', 909.98, 1, 'DA_SALES_PERSON|daily|2026-10-15|2026-10-15|2026-10-15|written|TNASSI'],
+  ], 'the individual TOTAL is not stored as store KPI sales');
+  const storeGrid = [
+    ['GROUP ASL', 'WRITTEN ORDERS', '', ''],
+    ['Store', 'Sales', 'Avg Sales', 'Fin %'],
+    ['12', 5000, 1000, 0],
+    ['17', 1409.97, 704.99, 0],
+  ];
+  const storeSales = gs.kpiRecords_(storeGrid, 'asl', 'written', '2026-10-15', '2026-10-15', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-15_2026-10-15.xlsx')
+    .filter((record: unknown[]) => String(record[0]).startsWith('DA_SALES_'));
+  assert.deepEqual(plain(storeSales.map((record: unknown[]) => [record[0], record[8], record[10], record[11], record[17]])), [
     ['DA_SALES_STORE', '', 1409.97, 2, 'DA_SALES_STORE|daily|2026-10-15|2026-10-15|2026-10-15|written|STORE'],
   ]);
 });
@@ -228,6 +238,15 @@ test('the mailbox import keeps the Group 17 Total Attachments group for each sal
     .filter((record: unknown[]) => String(record[0]).startsWith('ATTACH_'));
   assert.deepEqual(plain(attach.map((record: unknown[]) => [record[0], record[8], record[10], record[12], record[13]])), [
     ['ATTACH_PERSON', 'Ricky Nassif', 0, 2, 0],
+  ]);
+  const storeGrid = [
+    ['GROUP ASL', 'WRITTEN ORDERS', '', '', 'TOTAL ATTACHMENTS %', '', '', ''],
+    ['Store', 'Sales', 'Avg Sales', 'Fin %', 'Qual Qty', 'Sold Qty', 'Sold $', 'Attach %'],
+    ['17', 1409.97, 704.99, 0, 3, 1, 79.99, 33.3],
+  ];
+  const storeAttach = gs.kpiRecords_(storeGrid, 'asl', 'written', '2026-10-15', '2026-10-15', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-15_2026-10-15.xlsx')
+    .filter((record: unknown[]) => String(record[0]).startsWith('ATTACH_'));
+  assert.deepEqual(plain(storeAttach.map((record: unknown[]) => [record[0], record[8], record[10], record[12], record[13]])), [
     ['ATTACH_STORE', '', 79.99, 3, 1],
   ]);
 });

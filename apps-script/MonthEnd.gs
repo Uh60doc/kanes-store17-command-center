@@ -529,7 +529,7 @@ function monthEndPersonLines_(ctx, period, last) {
     var result = personClosing_(closing, person.name, period.start, period.end, goal, ledger);
     closingLine.verified = result.through ? (result.opportunities ? result.ratio : 'No opportunities') : null;
     closingLine.through = result.through;
-    closingLine.basis = result.through ? result.orders + ' Group 17 Written orders ÷ ' + result.opportunities + ' PERQ opportunities. ' + result.note : result.note;
+    closingLine.basis = result.through ? result.orders + ' Data KPI Individual Written orders ÷ ' + result.opportunities + ' PERQ opportunities. ' + result.note : result.note;
     closingLine.dailyTotal = 'Not applicable: a ratio is not summed';
     closingLine.snapshot = 'See the Orders (written) and PERQ opportunities rows';
     closingLine.missing = result.through ? 'None' : result.ratioStatus;

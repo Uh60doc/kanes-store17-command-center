@@ -8,10 +8,10 @@ var READINESS_LABELS_ = {
   snapWritten: 'SNAP Written',
   nwdsrWritten: 'NWDSR Written',
   nwdsrDelivered: 'NWDSR Delivered',
-  g17Written: 'Data Analysis Group 17 Written',
-  g17Delivered: 'Data Analysis Group 17 Delivered',
-  aslWritten: 'Data Analysis ASL Written',
-  aslDelivered: 'Data Analysis ASL Delivered',
+  g17Written: 'Data KPI Individual — Written',
+  g17Delivered: 'Data KPI Individual — Delivered',
+  aslWritten: 'Data KPI Store — Written',
+  aslDelivered: 'Data KPI Store — Delivered',
   perqLocation: 'PERQ Store opportunities',
   perqSalesperson: 'PERQ Salesperson opportunities',
 };
@@ -40,8 +40,8 @@ function readinessContext_(today) {
 }
 
 function readinessCover_(ctx, key, date) {
-  if (key === 'g17Written' || key === 'g17Delivered') return cumulativeCover_(ctx, ['DA_SALES_STORE'], key === 'g17Written' ? 'written' : 'delivered', 'STORE', date);
-  if (key === 'aslWritten' || key === 'aslDelivered') return cumulativeCover_(ctx, ['RUGS_STORE', 'PILLOWS_STORE', 'BASES_STORE', 'FP_STORE'], key === 'aslWritten' ? 'written' : 'delivered', 'STORE', date);
+  if (key === 'g17Written' || key === 'g17Delivered') return cumulativeCover_(ctx, ['DA_SALES_PERSON'], key === 'g17Written' ? 'written' : 'delivered', 'PERSON', date);
+  if (key === 'aslWritten' || key === 'aslDelivered') return cumulativeCover_(ctx, ['DA_SALES_STORE', 'RUGS_STORE', 'PILLOWS_STORE', 'BASES_STORE', 'FP_STORE'], key === 'aslWritten' ? 'written' : 'delivered', 'STORE', date);
   if (key === 'perqLocation') return perqSnapshotCover_(ctx, 'store', date) || cumulativeCover_(ctx, ['PERQ_STORE'], '', 'STORE', date);
   if (key === 'perqSalesperson') return perqSnapshotCover_(ctx, 'person', date) || cumulativeCover_(ctx, ['PERQ_PERSON'], '', 'PERSON', date);
   var field = key === 'snapWritten' ? 'snapWritten' : (key === 'nwdsrDelivered' ? 'nwdsrDelivered' : 'nwdsrWritten');

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { crc32 } from 'node:zlib';
 import { appsScriptServices } from './appsScriptServices.ts';
@@ -84,12 +84,19 @@ function group17(side: 'WRITTEN' | 'DELIVERED', people: [string, number][], salt
   if (people.length) rows.push(['TOTAL', total, total / (2 * people.length), 50, 2 * people.length, people.length, 49.99 * people.length, 50, total / 5, 20, 4 * people.length, 2 * people.length, 99.98 * people.length, 50]);
   return xlsx(rows, salt);
 }
-const asl = (side: 'WRITTEN' | 'DELIVERED', salt = '') => xlsx([
+const asl = (side: 'WRITTEN' | 'DELIVERED', salt = '', sales = 1000) => xlsx([
   ['GROUP ASL', `${side} ORDERS`, '', '', 'PILLOWS', '', '', '', 'ADJ', '', '', '', 'FURNITURE PROTECTION', '', '', '', 'RUGS', ''],
   ['Store', 'Sales', 'Avg Sales', 'Fin %', 'Qual Qty', 'Sold Qty', 'Sold $', 'Attach %', 'Qual Qty', 'Sold Qty', 'Sold $', 'Attach %', 'Qual Qty', 'Sold Qty', 'Sold $', 'Attach %', 'Sold Qty', 'Sold $'],
   ['12', 5000, 1000, 0, 9, 9, 90, 100, 9, 9, 900, 100, 9, 9, 900, 100, 9, 900],
-  ['17', 1000, 500, 0, 2, 1, 20, 50, 4, 1, 800, 25, 5, 2, 99.98, 40, 1, 150],
+  ['17', sales, 500, 0, 2, 1, 20, 50, 4, 1, 800, 25, 5, 2, 99.98, 40, 1, 150],
 ], salt);
+/** Store KPI workbook: All Stores Listed, with the same printed figures the old individual TOTAL used. */
+function storeKpi(side: 'WRITTEN' | 'DELIVERED', sales: number, salt = '') {
+  const header = ['GROUP ASL', `${side} ORDERS`, '', '', 'FABRIC', '', '', '', `${side} BEDDING`, '', 'TOTAL ATTACHMENTS', '', '', ''];
+  const sub = ['Store', 'Sales', 'Avg Sales', 'Fin %', 'Qual Qty', 'Sold Qty', 'Sold $', 'Attach %', 'Sales', '%', 'Qual Qty', 'Sold Qty', 'Sold $', 'Attach %'];
+  const line = (name: string, amount: number) => [name, amount, amount / 2, 50, 2, 1, 49.99, 50, amount / 5, 20, 4, 2, 99.98, 50];
+  return xlsx([header, sub, line('12', 99999), line('17', sales)], salt);
+}
 const perqLocation = (count: number, salt = '') => xlsx([['Performance Stats by Location'], ['Location', 'Ups + Be Backs'], ['Store 12 - Tampa', 9], ['Store 17 - Orlando', count]], salt);
 const perqSalesperson = (people: [string, string, string, number][], stamp = '10/15/26 08:15pm', salt = '') => xlsx([
   ['Performance Stats by Salesperson'],
@@ -145,7 +152,7 @@ function boot(tabs = store(), today = '2026-10-17') {
 
 const ledger = (tabs: Record<string, Grid>, view: string, reportDate = '') => tabs.CC_Ledger!.filter((row) => row[0] === view && (!reportDate || row[2] === reportDate));
 const kpi = (tabs: Record<string, Grid>, metric: string) => tabs.CC_Kpi!.find((row) => row[0] === metric);
-const snapshotOf = (tabs: Record<string, Grid>) => JSON.stringify(Object.fromEntries(Object.entries(tabs).filter(([name]) => !['CC_Imports'].includes(name))));
+const snapshotOf = (tabs: Record<string, Grid>) => JSON.stringify(Object.fromEntries(Object.entries(tabs).filter(([name]) => !['CC_Imports', 'CC_UploadValidation'].includes(name))));
 
 test('each of the nine reports is identified from its contents, whatever the file is called', () => {
   const { send, tabs } = boot();
@@ -162,12 +169,13 @@ test('each of the nine reports is identified from its contents, whatever the fil
     send('2026-10-14', 'Performance Stats by Salesperson (9).xlsx', perqSalesperson([['TNASSI', 'Tarik', 'Nassif', 4]], '10/14/26 08:00pm'), true),
   ];
   assert.deepEqual(results.map((r: any) => r.report), [
-    'SNAP Written', 'NWDSR Written', 'NWDSR Delivered', 'Group 17 Written', 'Group 17 Delivered', 'ASL Written', 'ASL Delivered',
+    'SNAP Written', 'NWDSR Written', 'NWDSR Delivered', 'Data KPI Individual — Written', 'Data KPI Individual — Delivered', 'Data KPI Store — Written', 'Data KPI Store — Delivered',
     'PERQ Performance Stats by Location', 'PERQ Performance Stats by Salesperson',
   ], 'a file named like a PERQ export but holding ASL Written is read as ASL Written');
   assert.deepEqual(results.map((r: any) => r.status), Array(9).fill('Imported'));
   assert.deepEqual(tabs.CC_Daily!.find((row) => row[0] === '2026-10-14')!.slice(1), [1000, 1000, 3000]);
-  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-14')[0]![15], 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-14_2026-10-14.xlsx', 'a renamed workbook is stored under the report name the KPI code expects');
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-14')[0]![15], 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-14_2026-10-14.xlsx', 'store KPI sales come from the ASL Store 17 row');
+  assert.equal(ledger(tabs, 'DA_SALES_PERSON', '2026-10-14').every((row) => String(row[15]).includes('_17_')), true, 'salesperson KPI rows come from the individual workbook');
   assert.equal(ledger(tabs, 'DA_SALES_PERSON', '2026-10-14')[0]![7], 'TNASSI', 'the salesperson is matched to the employee ID');
   assert.deepEqual(ledger(tabs, 'FP_STORE', '2026-10-14')[0]!.slice(10, 15), [99.98, 2, 5, 2, 0.4], 'only the Store 17 line of ASL is used');
   assert.deepEqual(tabs.CC_Closing!.filter((row) => row[8] === 'PERQ Ups + Be Backs').map((row) => [row[1], row[2], row[5]]), [['store', '', 7], ['person', 'TNASSI', 4]]);
@@ -190,8 +198,8 @@ test('a sales-team workbook headed STORE 17 is the individual written and delive
     ['TARIK NASSIF', 3341.57],
     ['ERIC MONTES', 1173.66],
   ], '', 'STORE 17'), true);
-  assert.equal(written.report, 'Group 17 Written');
-  assert.equal(delivered.report, 'Group 17 Delivered');
+  assert.equal(written.report, 'Data KPI Individual — Written');
+  assert.equal(delivered.report, 'Data KPI Individual — Delivered');
   assert.deepEqual([written.status, delivered.status], ['Imported', 'Imported']);
   const people = (side: string) => ledger(tabs, 'DA_SALES_PERSON', '2026-10-24')
     .filter((row) => row[9] === side)
@@ -209,15 +217,15 @@ test('a sales-team workbook headed STORE 17 is the individual written and delive
     ['Renzo Del Solar', 2714.55],
     ['Ricky Nassif', 3341.57],
   ]);
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-24').length, 0, 'the individual workbook does not write store KPI sales');
+  const aslWritten = send('2026-10-24', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-24_2026-10-24.xlsx', asl('WRITTEN', '', 12158.48), true);
+  assert.equal(aslWritten.report, 'Data KPI Store — Written');
   assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-24').find((row) => row[9] === 'written')![10], 12158.48);
-  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-24').find((row) => row[9] === 'delivered')![10], 8363.14);
-  const aslWritten = send('2026-10-24', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-24_2026-10-24.xlsx', asl('WRITTEN'), true);
-  assert.equal(aslWritten.report, 'ASL Written');
   assert.equal(aslWritten.status, 'Imported');
   assert.equal(ledger(tabs, 'FP_STORE', '2026-10-24').filter((row) => row[15].includes('ASL')).length, 1, 'ASL still contributes only the Store 17 line');
 });
 
-test('the October 24 sales-team workbooks import the printed people and the TOTAL line', () => {
+test('the October 24 sales-team workbooks import the printed people and the TOTAL line', { skip: existsSync('/home/ubuntu/.cursor/projects/workspace/uploads/DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-24_2026-10-24_9c33.xlsx') ? false : 'the October 24 workbook is not in this workspace' }, () => {
   const writtenPath = '/home/ubuntu/.cursor/projects/workspace/uploads/DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-24_2026-10-24_9c33.xlsx';
   const deliveredPath = '/home/ubuntu/.cursor/projects/workspace/uploads/DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-24_2026-10-24_a128.xlsx';
   const { send, tabs } = boot(store(), '2026-10-25');
@@ -226,8 +234,8 @@ test('the October 24 sales-team workbooks import the printed people and the TOTA
   const delivered = send('2026-10-24', 'DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-24_2026-10-24.xlsx', readFileSync(deliveredPath), true);
   assert.equal(written.status, 'Imported', written.message);
   assert.equal(delivered.status, 'Imported', delivered.message);
-  assert.equal(written.report, 'Group 17 Written');
-  assert.equal(delivered.report, 'Group 17 Delivered');
+  assert.equal(written.report, 'Data KPI Individual — Written');
+  assert.equal(delivered.report, 'Data KPI Individual — Delivered');
   const people = (side: string) => ledger(tabs, 'DA_SALES_PERSON', '2026-10-24')
     .filter((row) => row[9] === side)
     .map((row) => [row[8], row[10]])
@@ -244,8 +252,7 @@ test('the October 24 sales-team workbooks import the printed people and the TOTA
     ['Renzo Del Solar', 2714.55],
     ['Ricky Nassif', 3341.57],
   ]);
-  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-24').find((row) => row[9] === 'written')![10], 12158.48);
-  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-24').find((row) => row[9] === 'delivered')![10], 8363.14);
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-24').length, 0, 'the individual workbook total is not stored as store KPI sales');
 });
 
 test('SNAP salesperson lines are read when the PDF conversion joins rows onto one line', () => {
@@ -316,13 +323,13 @@ test('a report is filed on the date it prints, and a run stamp does not change t
   assert.equal(wrongKpiDay.status, 'Imported');
   assert.equal(wrongKpiDay.start, '2026-10-15');
   assert.match(wrongKpiDay.message, /Filed on 2026-10-15, the date printed in the report/);
-  const mtdKpi = send('2026-10-14', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-10-14.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]], 'mtd'));
-  assert.equal(mtdKpi.status, 'Imported');
+  const mtdKpi = send('2026-10-14', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-02_2026-10-14.xlsx', storeKpi('WRITTEN', 1000, 'mtd'));
+  assert.equal(mtdKpi.status, 'Imported', mtdKpi.message);
   assert.match(mtdKpi.message, /store month-to-date snapshot/);
   assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-14')![2], 1000, 'the month-to-date snapshot is not added to the daily figure');
   const mislabeled = send('2026-10-14', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-14_2026-10-14.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]], 'mislabeled'));
   assert.equal(mislabeled.status, 'Needs Review');
-  assert.match(mislabeled.message, /file name says ASL written, but the contents are Group 17 Written/);
+  assert.match(mislabeled.message, /file name says Data KPI Store written, but the contents are Data KPI Individual — Written/);
   const renamed = send('2026-10-14', 'report.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]]));
   assert.equal(renamed.status, 'Imported');
   assert.match(renamed.message, /2026-10-14/);
@@ -377,16 +384,20 @@ test('a file is saved on its printed date the first time, and a file the mailbox
 test('Group 17 Written can differ from NWDSR Written; PERQ salespeople may not exceed the store count', () => {
   const { send, tabs } = boot();
   send('2026-10-14', 'nw.pdf', nwdsrPdf('written', '2026-10-14', '2026-10-14', 1500));
-  const mismatch = send('2026-10-14', 'g17.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]]), true);
+  const individual = send('2026-10-14', 'g17.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]]), true);
+  assert.equal(individual.status, 'Imported');
+  assert.doesNotMatch(individual.message, /NWDSR Written stays the written standard/);
+  const mismatch = send('2026-10-14', 'asl.xlsx', storeKpi('WRITTEN', 1000), true);
   assert.equal(mismatch.status, 'Imported');
   assert.match(mismatch.message, /NWDSR Written stays the written standard/);
-  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-14')![2], 1500, 'NWDSR Written is not replaced by the Group 17 total');
-  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-14').length > 0, true);
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-14')![2], 1500, 'NWDSR Written is not replaced by a KPI total');
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-14').filter((row) => row[15].includes('ASL')).length > 0, true);
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-14').some((row) => String(row[15]).includes('_17_')), false, 'the individual workbook does not write store KPI sales');
   send('2026-10-14', 'nwd.pdf', nwdsrPdf('delivered', '2026-10-14', '2026-10-14', 800));
-  const deliveredOff = send('2026-10-14', 'g17d.xlsx', group17('DELIVERED', [['TARIK NASSIF', 100]]), true);
+  const deliveredOff = send('2026-10-14', 'asld.xlsx', storeKpi('DELIVERED', 100), true);
   assert.equal(deliveredOff.status, 'Imported');
   assert.match(deliveredOff.message, /Both figures are kept/);
-  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-14')![3], 800, 'NWDSR Delivered is not replaced by the Group 17 total');
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-14')![3], 800, 'NWDSR Delivered is not replaced by a KPI total');
   assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-14').some((row) => row[9] === 'delivered'), true);
   assert.equal(kpi(tabs, 'Bedding')![6], '2026-10-14', 'a Group 17 difference does not stop the store-month KPI chain');
 
@@ -404,7 +415,7 @@ test('Group 17 Written can differ from NWDSR Written; PERQ salespeople may not e
 test('store month KPIs: snapshot plus each verified day, recalculated once, never across a gap', () => {
   const { send, tabs, gs } = boot();
   send('2026-10-14', 'nw.pdf', nwdsrPdf('written', '2026-10-14', '2026-10-14', 1000));
-  assert.equal(send('2026-10-14', 'g17.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]]), true).status, 'Imported');
+  assert.equal(send('2026-10-14', 'asl.xlsx', storeKpi('WRITTEN', 1000), true).status, 'Imported');
   const through = '2026-10-02 through 2026-10-13 snapshot plus the 2026-10-14 daily file';
   assert.deepEqual(kpi(tabs, 'Bedding')!.slice(1, 4), [0.2, '', `Bedding dollars ÷ sales, ${through}. Written 2200 of 11000, delivered 0 of 0.`]);
   assert.deepEqual(kpi(tabs, 'Fabric Maintenance')!.slice(1, 3), [0.75, '']);
@@ -419,7 +430,7 @@ test('store month KPIs: snapshot plus each verified day, recalculated once, neve
   assert.deepEqual([again.kpiUpdated, again.kpiAppended, again.ledger.added, again.ledger.replaced], [[], [], 0, 0], 'a second recalculation writes nothing');
 
   tabs.CC_Daily!.push(['2026-10-16', '', 800, '']);
-  assert.equal(send('2026-10-16', 'g17 16.xlsx', group17('WRITTEN', [['TARIK NASSIF', 800]]), true).status, 'Imported');
+  assert.equal(send('2026-10-16', 'asl 16.xlsx', storeKpi('WRITTEN', 800), true).status, 'Imported');
   assert.equal(kpi(tabs, 'Bedding')![6], '2026-10-14', 'October 15 is missing, so October 16 waits');
   assert.equal(kpi(tabs, 'Bedding')![1], 0.2);
 });
@@ -430,7 +441,7 @@ test('a KPI whose snapshot line is missing is left as recorded, not rebuilt from
   tabs.CC_Kpi!.push(['Fabric Maintenance', 0.8, '', 'recorded', '2026-10-02', '2026-11-01', '2026-10-13']);
   const { send } = boot(tabs);
   send('2026-10-14', 'nw.pdf', nwdsrPdf('written', '2026-10-14', '2026-10-14', 1000));
-  send('2026-10-14', 'g17.xlsx', group17('WRITTEN', [['TARIK NASSIF', 1000]]), true);
+  send('2026-10-14', 'asl.xlsx', storeKpi('WRITTEN', 1000), true);
   assert.deepEqual(kpi(tabs, 'Fabric Maintenance'), ['Fabric Maintenance', 0.8, '', 'recorded', '2026-10-02', '2026-11-01', '2026-10-13']);
   assert.equal(kpi(tabs, 'Bedding')![1], 0.2, 'the other KPIs still update');
   assert.equal(ledger(tabs, 'FABW_STORE').filter((row) => row[1] === 'cumulative').length, 0);
@@ -446,18 +457,18 @@ test('the checklist shows Imported, Missing, Failed and Needs Review for the cho
   const view = plain(gs.uploads_({ date: '2026-10-14', session: manager }));
   const status = Object.fromEntries(view.checklist.map((item: any) => [item.label, item.status]));
   assert.deepEqual(status, {
-    'SNAP Written': 'Missing', 'NWDSR Written': 'Imported', 'NWDSR Delivered': 'Missing', 'Group 17 Written': 'Imported', 'Group 17 Delivered': 'Missing',
-    'ASL Written': 'Imported', 'ASL Delivered': 'Missing', 'PERQ Performance Stats by Location': 'Missing', 'PERQ Performance Stats by Salesperson': 'Missing',
+    'SNAP Written': 'Missing', 'NWDSR Written': 'Imported', 'NWDSR Delivered': 'Missing', 'Data KPI Individual — Written': 'Imported', 'Data KPI Individual — Delivered': 'Missing',
+    'Data KPI Store — Written': 'Imported', 'Data KPI Store — Delivered': 'Missing', 'PERQ Performance Stats by Location': 'Missing', 'PERQ Performance Stats by Salesperson': 'Missing',
   });
   assert.equal(view.imported, 3);
-  assert.match(view.checklist.find((item: any) => item.label === 'Group 17 Written').message, /stays the written standard/);
+  assert.match(view.checklist.find((item: any) => item.label === 'Data KPI Store — Written').message, /stays the written standard/);
   assert.equal(view.total, 9);
   assert.match(view.checklist.find((item: any) => item.label === 'NWDSR Delivered').message, /Missing for October 14, 2026/);
   assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-15')![3], 10, 'the delivered PDF is stored on the date it prints');
   assert.match(view.checklist.find((item: any) => item.label === 'PERQ Performance Stats by Location').message, /Missing for October 14, 2026/);
   assert.ok(view.recent.some((day: any) => day.date === '2026-10-14' && day.missing.includes('PERQ Performance Stats by Location')));
   assert.equal(view.history.length, 5);
-  assert.equal(view.lastSuccess.report, 'ASL Written');
+  assert.equal(view.lastSuccess.report, 'Data KPI Store — Written');
   assert.equal(view.lastSuccess.via, 'upload');
   assert.equal(plain(gs.uploads_({ session: manager })).date, '2026-10-16', 'the page opens on yesterday');
 
@@ -467,7 +478,7 @@ test('the checklist shows Imported, Missing, Failed and Needs Review for the cho
     ['m3', 'Performance Stats by Location (10).xlsx', 'PERQ Performance Stats by Location', 'held: date unconfirmed', '2099-01-03T07:00:00Z', ''],
   );
   const mailbox = plain(gs.uploads_({ date: '2026-10-14', session: manager })).lastSuccess;
-  assert.deepEqual([mailbox.report, mailbox.via, mailbox.at], ['Group 17 Delivered', 'mailbox', '2099-01-01T07:00:00Z'], 'a newer mailbox import of one of the nine reports counts; other reports and held files do not');
+  assert.deepEqual([mailbox.report, mailbox.via, mailbox.at], ['Data KPI Individual — Delivered', 'mailbox', '2099-01-01T07:00:00Z'], 'a newer mailbox import of one of the nine reports counts; other reports and held files do not');
 });
 
 test('a salesperson month-to-date file records pillows, bases, rugs and pet, and does not include today', () => {
@@ -551,8 +562,8 @@ test('a $0 delivered day does not expect an individual Data Analysis report', ()
   const asl = zero.checklist.find((row: any) => row.key === 'aslDelivered');
   assert.equal(asl.status, 'Not expected');
   assert.equal(asl.message, 'October 14, 2026. Delivered $0.');
-  assert.equal(zero.recent.find((day: any) => day.date === '2026-10-14').missing.includes('Group 17 Delivered'), false);
-  assert.equal(zero.recent.find((day: any) => day.date === '2026-10-14').missing.includes('ASL Delivered'), false);
+  assert.equal(zero.recent.find((day: any) => day.date === '2026-10-14').missing.includes('Data KPI Individual — Delivered'), false);
+  assert.equal(zero.recent.find((day: any) => day.date === '2026-10-14').missing.includes('Data KPI Store — Delivered'), false);
   assert.equal(send('2026-10-15', 'nwd15.pdf', nwdsrPdf('delivered', '2026-10-15', '2026-10-15', 10)).status, 'Imported');
   const sold = plain(gs.uploads_({ date: '2026-10-15', session: manager }));
   assert.equal(sold.checklist.find((row: any) => row.key === 'g17Delivered').status, 'Missing');
@@ -560,14 +571,16 @@ test('a $0 delivered day does not expect an individual Data Analysis report', ()
 
 test('a day inside an imported month-to-date report is not listed as missing', () => {
   const tabs = store();
-  const row = (side: string) => ['DA_SALES_STORE', 'cumulative', '', '2026-10-02', '2026-10-13', '2026-10-13', '17', '', '', side, 1000, '', '', '', '', 'snapshot', '2026-10-14T00:00:00Z', 'cover-' + side];
-  tabs.CC_Ledger!.push(row('written'), row('delivered'));
+  const row = (side: string) => ['DA_SALES_PERSON', 'cumulative', '', '2026-10-01', '2026-10-13', '2026-10-13', '17', 'TNASSI', 'Ricky Nassif', side, 1000, '', '', '', '', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-01_2026-10-13.xlsx', '2026-10-14T00:00:00Z', 'cover-' + side];
+  const storeRow = (side: string) => ['DA_SALES_STORE', 'cumulative', '', '2026-10-02', '2026-10-13', '2026-10-13', '17', '', '', side, 1000, '', '', '', '', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-02_2026-10-13.xlsx', '2026-10-14T00:00:00Z', 'store-cover-' + side];
+  tabs.CC_Ledger!.push(row('written'), row('delivered'), storeRow('written'), storeRow('delivered'));
   const { gs } = boot(tabs);
   const view = plain(gs.uploads_({ date: '2026-10-12', session: manager }));
   assert.equal(view.checklist.find((item: any) => item.key === 'g17Written').status, 'Covered');
+  assert.equal(view.checklist.find((item: any) => item.key === 'aslWritten').status, 'Covered');
   assert.equal(view.checklist.find((item: any) => item.key === 'g17Delivered').status, 'Covered');
   assert.match(view.checklist.find((item: any) => item.key === 'g17Written').message, /verified through October 13, 2026/);
-  assert.equal(view.recent.find((day: any) => day.date === '2026-10-12').missing.includes('Group 17 Written'), false);
+  assert.equal(view.recent.find((day: any) => day.date === '2026-10-12').missing.includes('Data KPI Individual — Written'), false);
   const later = plain(gs.uploads_({ date: '2026-10-16', session: manager }));
   assert.equal(later.checklist.find((item: any) => item.key === 'g17Written').status, 'Missing');
 });
@@ -588,11 +601,11 @@ const archived = (drive: ReturnType<typeof appsScriptServices>) =>
 test('a report printed for exactly a finished month is its official final, recorded beside the daily record and never added to it', () => {
   const { send, tabs, drive } = boot(store(), '2026-11-03');
   const daily = JSON.stringify(tabs.CC_Daily);
-  const storeMonth = send('2026-11-01', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-11-01.xlsx', group17('WRITTEN', [['TARIK NASSIF', 5000], ['ERIC MONTES', 3000]]));
+  const storeMonth = send('2026-11-01', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-02_2026-11-01.xlsx', storeKpi('WRITTEN', 8000));
   assert.equal(storeMonth.status, 'Imported');
   assert.match(storeMonth.message, /official month-end final for the store month/);
   const finals = tabs.CC_Ledger!.filter((row) => row[1] === 'cumulative' && row[3] === '2026-10-02' && row[4] === '2026-11-01');
-  assert.deepEqual(finals.find((row) => row[0] === 'DA_SALES_STORE')!.slice(10, 12), [8000, 4]);
+  assert.equal(finals.find((row) => row[0] === 'DA_SALES_STORE')![10], 8000);
   assert.equal(finals.some((row) => String(row[0]).endsWith('_PERSON')), false, 'a store-month file keeps only its Store 17 lines');
 
   const nwdsr = send('2026-11-01', 'output (7).pdf', nwdsrPdf('written', '2026-10-02', '2026-11-01', 402500, 160));
@@ -608,16 +621,16 @@ test('a report printed for exactly a finished month is its official final, recor
   assert.equal(JSON.stringify(tabs.CC_Daily), daily, 'no daily figure changed');
   assert.deepEqual(tabs.CC_Imports!.slice(1).map((row) => row[3]), ['official-final', 'official-final', 'official-final']);
 
-  const partial = send('2026-11-01', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-10-31.xlsx', group17('WRITTEN', [['TARIK NASSIF', 4000]]));
+  const partial = send('2026-11-01', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-02_2026-10-31.xlsx', storeKpi('WRITTEN', 4000, 'partial'));
   assert.equal(partial.status, 'Imported', 'October 2-31 is not the official final, and it is the store month-to-date snapshot');
   assert.match(partial.message, /store month-to-date snapshot/);
   assert.match(partial.message, /Days inside 2026-10-02 through 2026-10-31 are not added again/);
   const caughtUp = tabs.CC_Ledger!.filter((row) => row[1] === 'cumulative' && row[3] === '2026-10-02' && row[4] === '2026-10-31' && row[0] === 'DA_SALES_STORE');
   assert.deepEqual(caughtUp.map((row) => [row[10], row[8]]), [[4000, '']]);
-  assert.equal(tabs.CC_Ledger!.some((row) => row[15] === 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-10-31.xlsx' && String(row[0]).endsWith('_PERSON')), false, 'a store-month file does not become salesperson figures');
+  assert.equal(tabs.CC_Ledger!.some((row) => row[15] === 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-02_2026-10-31.xlsx' && String(row[0]).endsWith('_PERSON')), false, 'a store-month file does not become salesperson figures');
   assert.deepEqual(archived(drive).sort(), [
-    'Store 17 Command Center Report Archive/2026/2026-10/Period reports/DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-10-31.xlsx',
-    'Store 17 Command Center Report Archive/2026/2026-10/Period reports/DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-11-01.xlsx',
+    'Store 17 Command Center Report Archive/2026/2026-10/Period reports/DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-02_2026-10-31.xlsx',
+    'Store 17 Command Center Report Archive/2026/2026-10/Period reports/DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-02_2026-11-01.xlsx',
     'Store 17 Command Center Report Archive/2026/2026-10/Period reports/output (7).pdf',
     'Store 17 Command Center Report Archive/2026/2026-10/Period reports/snap-october.pdf',
   ], 'each recorded original is archived once');
@@ -722,10 +735,10 @@ test('a ZIP is not imported as one workbook, and a batch can file an older day w
   assert.equal(conflict.status, 'Needs Review');
   assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-15')![2], 2500);
 
-  const delivered = sendAdopt('2026-10-16', 'DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-16_2026-10-16.xlsx', group17('DELIVERED', [['TARIK NASSIF', 800]]));
+  const delivered = sendAdopt('2026-10-16', 'DATA_ANALYSIS_KPI_ASL_DELIVERED_2026-10-16_2026-10-16.xlsx', storeKpi('DELIVERED', 800));
   assert.equal(delivered.status, 'Imported');
   assert.match(delivered.message, /NWDSR Delivered for 2026-10-16 is not on file/);
-  assert.equal(tabs.CC_Daily!.some((row) => row[0] === '2026-10-16'), false, 'Group 17 does not invent the official store delivered total');
+  assert.equal(tabs.CC_Daily!.some((row) => row[0] === '2026-10-16'), false, 'Data KPI Store does not invent the official store delivered total');
 
   const perq = sendAdopt('2026-10-16', 'Performance Stats by Location 2026-10-15.xlsx', perqLocation(4));
   assert.equal(perq.status, 'Imported');
@@ -793,9 +806,16 @@ test('October 29 NWDSR and Group 17 stay separate, and a preview writes nothing'
   const held = send('2026-10-29', 'output (4).pdf', later);
   assert.equal(held.status, 'Needs Review');
   assert.match(held.message, /shows \$29,889, but \$29,799 is already on file/);
-  assert.match(held.message, /does not fill Group 17 Written/);
+  assert.match(held.message, /does not fill Data KPI Individual — Written/);
   assert.match(held.message, /DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-29_2026-10-29\.xlsx/);
+  assert.match(held.message, /DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-29_2026-10-29\.xlsx/);
   assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![2], 29799);
+  const beforeKpi = plain(gs.uploads_({ date: '2026-10-29', session: manager }));
+  const missingIndividual = beforeKpi.checklist.find((item: { key: string }) => item.key === 'g17Written');
+  assert.equal(missingIndividual.status, 'Missing');
+  assert.equal(missingIndividual.display, 'October 29, 2026 — Data KPI Individual — Written — Excel (.xlsx)');
+  assert.equal(missingIndividual.label, 'Data KPI Individual — Written');
+  assert.doesNotMatch(missingIndividual.display, /NWDSR|SNAP|Data KPI Store/);
 
   const book = group17('WRITTEN', [['TARIK NASSIF', 29888.92]]);
   const kpiPreview = plain(gs.previewUpload_({
@@ -805,16 +825,23 @@ test('October 29 NWDSR and Group 17 stay separate, and a preview writes nothing'
     session: manager,
   }));
   assert.equal(kpiPreview.extension, 'xlsx');
-  assert.equal(kpiPreview.reportType, 'Group 17 Written');
+  assert.equal(kpiPreview.reportType, 'Data KPI Individual — Written');
   assert.equal(kpiPreview.businessDate, '2026-10-29');
   assert.equal(kpiPreview.disposition, 'import');
-  assert.match(kpiPreview.destination, /CC_Ledger and CC_Kpi/);
-  assert.match(kpiPreview.reason, /does not block this import/);
+  assert.match(kpiPreview.destination, /salesperson KPI/);
+  assert.match(kpiPreview.reason, /does not block this file/);
   const imported = send('2026-10-29', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-29_2026-10-29.xlsx', book, true);
   assert.equal(imported.status, 'Imported');
-  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![2], 29799, 'Group 17 does not replace NWDSR Written');
-  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![1], '', 'Group 17 does not write SNAP');
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![2], 29799, 'Data KPI Individual does not replace NWDSR Written');
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![1], '', 'Data KPI Individual does not write SNAP');
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-29').length, 0, 'the individual workbook does not write store KPI sales');
+  assert.equal(ledger(tabs, 'DA_SALES_PERSON', '2026-10-29')[0]![10], 29888.92);
+  const storeBook = asl('WRITTEN', 'store', 29888.92);
+  const storeImported = send('2026-10-29', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-29_2026-10-29.xlsx', storeBook, true);
+  assert.equal(storeImported.status, 'Imported', storeImported.message);
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![2], 29799, 'Data KPI Store does not replace NWDSR Written');
   assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-29')[0]![10], 29888.92);
+  assert.match(String(ledger(tabs, 'DA_SALES_STORE', '2026-10-29')[0]![15]), /DATA_ANALYSIS_KPI_ASL_WRITTEN/);
 
   const snap = send('2026-10-29', 'output.pdf', snapPdf('2026-10-29', 26413, [['MONTES, ERIC', 26413]]));
   assert.equal(snap.status, 'Imported');
@@ -829,12 +856,15 @@ test('October 29 NWDSR and Group 17 stay separate, and a preview writes nothing'
   const duplicate = plain(gs.previewUpload_({ date: '2026-10-29', fileName: 'output (70) copy.pdf', base64: original.toString('base64'), session: manager }));
   assert.equal(duplicate.disposition, 'skip');
   assert.match(duplicate.reason, /Duplicate file/);
-  tabs.CC_Uploads!.push(['2026-10-30T12:00:00Z', '2026-10-28', 'manager', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-28_2026-10-28.xlsx', 'old', 'Group 17 Written', '2026-10-28', '2026-10-28', 'Noted', 'Group 17 Written TOTAL $1 differs from NWDSR Written $2. The workbook was not saved, so upload it again.']);
-  const page = plain(gs.uploads_({ date: '2026-10-28', session: manager }));
+  tabs.CC_Uploads!.push(['2026-10-30T12:00:00Z', '2026-10-28', 'manager', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-28_2026-10-28.xlsx', 'old', 'Data KPI Individual — Written', '2026-10-28', '2026-10-28', 'Noted', 'Data KPI Individual — Written TOTAL $1 differs from NWDSR Written $2. The workbook was not saved, so upload it again.']);
+  const page = plain(gs.uploads_({ date: '2026-10-29', session: manager }));
   const missing = page.checklist.find((item: { key: string }) => item.key === 'g17Written');
-  assert.equal(missing.status, 'Missing');
-  assert.match(missing.message, /DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-28_2026-10-28\.xlsx/);
-  assert.match(missing.message, /A SNAP or NWDSR PDF does not fill this row/);
+  assert.equal(missing.status, 'Imported', 'the October 29 individual workbook in this test was imported above');
+  const absent = plain(gs.uploads_({ date: '2026-10-28', session: manager })).checklist.find((item: { key: string }) => item.key === 'g17Written');
+  assert.equal(absent.status, 'Missing');
+  assert.equal(absent.display, 'October 28, 2026 — Data KPI Individual — Written — Excel (.xlsx)');
+  assert.match(absent.message, /DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-28_2026-10-28\.xlsx/);
+  assert.match(absent.message, /A SNAP PDF, an NWDSR PDF, and the other Data KPI workbook do not fill this row/);
 });
 
 test('October 16 PERQ stays on file when a later attempt failed', () => {

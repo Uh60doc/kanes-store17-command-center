@@ -221,7 +221,10 @@ function kpiRecords_(source, family, side, start, end, filename) {
     var beddingDollars = kpiMoney_(kpiCell_(row, beddingGroup.SALES));
     var sales = kpiMoney_(kpiCell_(row, columns.sales));
     var beddingPercent = sales && beddingDollars !== null ? kpiRate_(beddingDollars, sales) : kpiPrinted_(kpiCell_(row, beddingGroup['%']));
-    if (family === 'group17') {
+    // The 17 workbook is the individual report: salesperson rows only. Its TOTAL line is the same
+    // Store 17 sales the ASL file prints on row 17, and it is not stored again as a store KPI.
+    // The ASL workbook is every store. Only row 17 is Store 17, and that row supplies the store KPIs.
+    if ((family === 'group17' && !storeLine) || (family === 'asl' && storeLine)) {
       if (sales !== null) {
         records.push(kpiRecord_(daily, start, end, 'DA_SALES_' + scope, code, display, side, sales, kpiOrders_(sales, kpiMoney_(kpiCell_(row, columns.average))), null, null, null, filename));
       }
@@ -259,21 +262,6 @@ function kpiRecords_(source, family, side, start, end, filename) {
       if (average !== null) {
         records.push(kpiRecord_(daily, start, end, 'AVERAGE_' + scope, code, display, side, average, null, null, null, null, filename));
       }
-    }
-    if (family === 'asl' && storeLine) {
-      var pillows = kpiQty_(row, columns.groups.PILLOWS);
-      var bases = kpiQty_(row, columns.groups.ADJ);
-      var protection = kpiQty_(row, columns.groups['FURNITURE PROTECTION']);
-      var rugsQty = columns.groups.RUGS ? kpiNumber_(kpiCell_(row, columns.groups.RUGS['SOLD QTY'])) : null;
-      var rugsDollars = columns.groups.RUGS ? kpiMoney_(kpiCell_(row, columns.groups.RUGS['SOLD $'])) : null;
-      var pet = kpiQty_(row, columns.groups['PET PROTECTIONS']);
-      var pwr = kpiPwr_(row, columns.groups.ADJ);
-      if (pillows) records.push(kpiRecord_(daily, start, end, 'PILLOWS_STORE', '', '', side, pillows.dollars, pillows.sold, pillows.qual, pillows.sold, pillows.percent, filename));
-      if (bases) records.push(kpiRecord_(daily, start, end, 'BASES_STORE', '', '', side, bases.dollars, bases.sold, bases.qual, bases.sold, bases.percent, filename));
-      if (protection) records.push(kpiRecord_(daily, start, end, 'FP_STORE', '', '', side, protection.dollars, protection.sold, protection.qual, protection.sold, protection.percent, filename));
-      if (pet) records.push(kpiRecord_(daily, start, end, 'PET_STORE', '', '', side, pet.dollars, pet.sold, pet.qual, pet.sold, pet.percent, filename));
-      if (rugsQty !== null || rugsDollars !== null) records.push(kpiRecord_(daily, start, end, 'RUGS_STORE', '', '', side, rugsDollars, rugsQty, null, rugsQty, null, filename));
-      if (pwr !== null) records.push(kpiRecord_(daily, start, end, 'PWRBASE_STORE', '', '', side, null, null, null, null, pwr, filename));
     }
   }
   return records;
