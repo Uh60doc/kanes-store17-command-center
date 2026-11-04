@@ -210,6 +210,13 @@ function annotateMissingSource_(line, date, key, label) {
   var gap = !line.through || String(line.missing || '').indexOf(date) !== -1;
   if (!gap) return;
   var standing = { source: 'Source genuinely missing', admin: '' };
+  var receipt = '';
+  try {
+    if (typeof uploadEvidence_ === 'function' && typeof uploadChecklist_ === 'function') {
+      var found = uploadChecklist_(uploadEvidence_(), date).filter(function (item) { return item.key === key; })[0];
+      receipt = found ? String(found.receipt || '') : '';
+    }
+  } catch (error) { receipt = ''; }
   if (typeof sourceDisposition_ === 'function' && typeof alertRows_ === 'function' && typeof sheetValues_ === 'function' && typeof ALERTS_TAB_ !== 'undefined' && sheetValues_(ALERTS_TAB_)) {
     try {
       alertRows_().forEach(function (row) {
@@ -217,8 +224,16 @@ function annotateMissingSource_(line, date, key, label) {
       });
     } catch (error) { standing = { source: 'Source genuinely missing', admin: '' }; }
   }
-  if (standing.source === 'Source verified' || standing.source === 'Approved exception') return;
+  if (receipt === 'Previously received but not retained') standing = { source: 'Previously received — original not retained', admin: standing.admin };
+  else if (receipt === 'Received and archived but not imported') standing = { source: 'Received and archived but not imported', admin: standing.admin };
+  else if (receipt === 'Imported but incomplete') standing = { source: 'Imported but incomplete', admin: standing.admin };
+  else if (receipt === 'Never received' && standing.source !== 'Source unavailable or inaccessible') standing = { source: 'Source genuinely missing', admin: standing.admin };
+  if (standing.source === 'Source verified' || standing.source === 'Approved exception' || receipt === 'Fully imported and verified') return;
   var phrase = standing.source + (standing.admin ? '. ' + standing.admin + '.' : '.') + ' ' + label + ' for ' + date + ' was not received. Closing an alert does not verify the source.';
+  if (standing.source === 'Previously received — original not retained') phrase = 'PREVIOUSLY RECEIVED — ORIGINAL NOT RETAINED. ' + label + ' for ' + date + ' was received and the original was not retained. KPI values are not reconstructed from a logged total. Closing an alert does not supply the workbook.';
+  else if (standing.source === 'Received and archived but not imported') phrase = 'RECEIVED AND ARCHIVED — NOT IMPORTED. ' + label + ' for ' + date + ' is archived and was not imported.';
+  else if (standing.source === 'Imported but incomplete') phrase = 'IMPORTED BUT INCOMPLETE. ' + label + ' for ' + date + ' was imported and is not fully verified.';
+  else if (standing.source === 'Source unavailable or inaccessible') phrase = 'SOURCE UNAVAILABLE. ' + label + ' for ' + date + ' could not be stored or read. The file is not safely on file.';
   if (String(line.basis || '').indexOf(standing.source) === -1) line.basis = phrase + ' ' + (line.basis || '');
   if (String(line.missing || '').indexOf(standing.source) === -1) line.missing = (line.missing ? String(line.missing) + ' ' : '') + phrase;
 }

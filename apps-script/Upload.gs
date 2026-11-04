@@ -140,6 +140,32 @@ function classifyWorkbook_(bytes, fileName) {
   return { problem: 'This workbook is not one of the nine daily reports. Its first cell reads "' + (first || 'blank') + '".' };
 }
 
+/** Report type and printed dates only. This does not compare totals and does not write. */
+function describeUpload_(context) {
+  var described = { report: (typeof canonicalReportType_ === 'function' ? canonicalReportType_(context.fileName) : '') || 'Received upload', start: context.date, end: context.date, key: '' };
+  var period = /(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})/.exec(context.fileName || '');
+  if (period) { described.start = period[1]; described.end = period[2]; }
+  try {
+    if (bytesStartWith_(context.bytes, [37, 80, 68, 70])) {
+      var text = pdfText_(Utilities.newBlob(context.bytes, 'application/pdf', context.fileName));
+      var parsed = typeof parseCloudReport_ === 'function' ? parseCloudReport_(text) : null;
+      if (parsed) {
+        described.key = parsed.reportType === 'SNAP Written' ? 'snapWritten' : parsed.reportType === 'NWDSR Written' ? 'nwdsrWritten' : 'nwdsrDelivered';
+        described.report = uploadReportLabel_(described.key) || described.report;
+        if (parsed.start) described.start = parsed.start;
+        if (parsed.end) described.end = parsed.end;
+      }
+    } else if (bytesStartWith_(context.bytes, [80, 75])) {
+      var info = classifyWorkbook_(context.bytes, context.fileName);
+      if (info && info.key) {
+        described.key = info.key;
+        described.report = uploadReportLabel_(info.key) || described.report;
+      }
+    }
+  } catch (error) { /* identification can fail; the bytes are still archived before any comparison */ }
+  return described;
+}
+
 /** The upload entry point: one file per call, so a large batch never runs into the Apps Script time limit. */
 function uploadReport_(payload) {
   var date = isoDate_(payload.date);
@@ -162,25 +188,51 @@ function uploadReport_(payload) {
   try {
     UPLOAD_QUIET_ = true;
     rosterCache_ = null;
+    var described = describeUpload_(context);
+    var mime = bytesStartWith_(context.bytes, [37, 80, 68, 70]) ? 'application/pdf' : (bytesStartWith_(context.bytes, [80, 75]) ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/octet-stream');
+    var archive = null;
+    var archiveError = '';
     try {
-      result = processUpload_(context);
+      archive = archiveReceivedOriginal_(Utilities.newBlob(context.bytes, mime, fileName), sha, fileName, described);
     } catch (error) {
-      result = { status: 'Failed', key: '', message: 'The import stopped: ' + String(error && error.message ? error.message : error) + ' Figures already on file were left in place.' };
-      appendException_('Update Failed', fileName + ' (upload for ' + date + '): ' + result.message);
+      archiveError = String(error && error.message ? error.message : error);
     }
-    // A PDF or workbook is kept once, including when validation fails. An ignored file is not a report and is not kept.
-    try {
-      retainUploadOriginal_(Utilities.newBlob(context.bytes, bytesStartWith_(context.bytes, [37, 80, 68, 70]) ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fileName), sha, fileName, result, context.date);
-    } catch (error) {
-      appendException_('Update Failed', fileName + ' (upload for ' + date + '): the original could not be archived. ' + String(error && error.message ? error.message : error));
+    if (archiveError || !archive || !archive.archived) {
+      result = {
+        status: 'Storage Failure',
+        key: described.key || '',
+        start: described.start || date,
+        end: described.end || date,
+        message: 'Storage failure. ' + fileName + ' was received for ' + (described.start || date) + ' (source hash ' + sha + ') but the original could not be archived' + (archiveError ? ': ' + archiveError : '') + '. The file is not safely on file. Nothing was imported and no business-rule comparison was run.',
+      };
+      appendException_('Update Failed', fileName + ' (upload for ' + date + '): ' + result.message);
+    } else {
+      try {
+        result = processUpload_(context);
+      } catch (error) {
+        result = { status: 'Failed', key: described.key || '', start: described.start || '', end: described.end || '', message: 'The import stopped: ' + String(error && error.message ? error.message : error) + ' Figures already on file were left in place. The original was archived before the comparison.' };
+        appendException_('Update Failed', fileName + ' (upload for ' + date + '): ' + result.message);
+      }
+      result.archivePath = archive.path || '';
+      result.archiveId = archive.id || '';
+      try { annotateArchivedUpload_(sha, result); } catch (error) {
+        appendException_('Update Failed', fileName + ' (upload for ' + date + '): the archive note could not be updated. The original file was kept. ' + String(error && error.message ? error.message : error));
+      }
+      if (result.archivePath && String(result.message || '').indexOf('Archive location') === -1) {
+        result.message += ' Original archived at ' + result.archivePath + ' before validation.';
+      }
     }
   } finally {
     UPLOAD_QUIET_ = false;
     lock.releaseLock();
   }
   var validation = recordUploadValidation_(context, result);
-  uploadTab_().appendRow([new Date().toISOString(), context.date, context.role, fileName, sha, result.key ? uploadReportLabel_(result.key) : '', result.start || '', result.end || '', result.status, result.message]);
-  return { file: fileName, sha256: sha, status: result.status, statusLabel: validation.statusLabel, report: result.key ? uploadReportLabel_(result.key) : '', reportKey: result.key || '', start: result.start || '', end: result.end || '', message: result.message, validation: validation };
+  uploadTab_().appendRow([new Date().toISOString(), context.date, context.role, fileName, sha, result.key ? uploadReportLabel_(result.key) : (describedReport_(result) || ''), result.start || '', result.end || '', result.status, result.message]);
+  return { file: fileName, sha256: sha, status: result.status, statusLabel: validation.statusLabel, report: result.key ? uploadReportLabel_(result.key) : '', reportKey: result.key || '', start: result.start || '', end: result.end || '', message: result.message, validation: validation, archivePath: result.archivePath || '', states: validation.states || '' };
+}
+
+function describedReport_(result) {
+  return result && result.key ? uploadReportLabel_(result.key) : '';
 }
 
 /** File this upload on the date printed in the report. A date after today is refused. */
@@ -1309,12 +1361,16 @@ function uploadValidationRows_() {
 /** The words shown on screen. Internal statuses stay stable for the checklist. */
 function uploadPublicStatus_(status, message) {
   var text = String(message || '');
+  if (status === 'Storage Failure') return 'SOURCE UNAVAILABLE';
+  if (status === 'Not retained') return 'PREVIOUSLY RECEIVED — ORIGINAL NOT RETAINED';
+  if (status === 'Archived') return 'RECEIVED AND ARCHIVED — NOT IMPORTED';
+  if (status === 'Incomplete') return 'IMPORTED BUT INCOMPLETE';
   if (status === 'Imported') return /Not on the roster|differ from the figures already recorded/i.test(text) ? 'IMPORTED — REVIEW REQUIRED' : 'IMPORTED & VERIFIED';
   if (status === 'Already on file') return 'DUPLICATE — ALREADY IMPORTED';
   if (status === 'Ignored' || status === 'Unsupported') return 'REJECTED — INVALID FILE';
   if (status === 'Failed') return /could not be read|import stopped|could not be opened|not an Excel|empty/i.test(text) ? 'PROCESSING ERROR' : 'HELD — ACTION REQUIRED';
   if (status === 'Needs Review') return /Saved\.|figures saved|salesperson line/i.test(text) && /Not on the roster|differ from the figures already recorded/i.test(text) ? 'IMPORTED — REVIEW REQUIRED' : 'HELD — ACTION REQUIRED';
-  if (status === 'Missing') return 'MISSING';
+  if (status === 'Missing') return 'NEVER RECEIVED';
   if (status === 'Covered' || status === 'Not expected') return status;
   return status ? 'HELD — ACTION REQUIRED' : '';
 }
@@ -1354,8 +1410,11 @@ function uploadValidationParts_(status, message) {
   if (/reconciliation note, not an error/i.test(text)) {
     return { rule: 'Data KPI Store and NWDSR are different report definitions and are not required to match.', expected: 'Each source kept under its own definition.', actual: text, difference: 'Informational. Not a validation failure.', affected: 'Store KPI rows only. Official Store Written and Delivered were not changed.' };
   }
+  if (status === 'Storage Failure') {
+    return { rule: 'The original file is archived before any business-rule comparison.', expected: 'A stored original with its filename, business date, report type, upload time, source hash, and archive location.', actual: text || 'The archive did not keep the file.', difference: 'Not a difference between report totals.', affected: 'Nothing was imported. The file is not safely on file.' };
+  }
   if (status === 'Imported') {
-    return { rule: 'Report type, date, scope, and required figures were read from the contents.', expected: 'A supported report for a finished business date.', actual: 'The required figures were read.', difference: 'None.', affected: 'The destination for this report type.' };
+    return { rule: 'Report type, date, scope, and required figures were read from the contents. A difference from another source does not block this report.', expected: 'A supported report for a finished business date.', actual: 'The required figures were read.', difference: 'None that blocks this source.', affected: 'The destination for this report type.' };
   }
   if (status === 'Already on file') {
     return { rule: 'The same source data is already on file.', expected: 'No second copy.', actual: 'This file matches data already verified.', difference: 'None.', affected: 'No dataset. Nothing was added.' };
@@ -1413,7 +1472,7 @@ function uploadDiagnosticBody_(validation) {
 
 function sendUploadDiagnostic_(validation) {
   var label = validation.statusLabel;
-  var notify = label === 'HELD — ACTION REQUIRED' || label === 'REJECTED — INVALID FILE' || label === 'PROCESSING ERROR' || label === 'IMPORTED — REVIEW REQUIRED';
+  var notify = label === 'HELD — ACTION REQUIRED' || label === 'REJECTED — INVALID FILE' || label === 'PROCESSING ERROR' || label === 'IMPORTED — REVIEW REQUIRED' || label === 'SOURCE UNAVAILABLE';
   if (!notify) return '';
   if (validation.emailedAt) return validation.emailedAt;
   var email = '';
@@ -1433,8 +1492,10 @@ function recordUploadValidation_(context, result) {
   var businessDate = result.start && result.start === result.end ? result.start : (result.start || context.date || '');
   var action = message || 'No further action.';
   var validationId = 'UV-' + String(context.sha || '').slice(0, 12) + '-' + sha256Hex_(label + '|' + action).slice(0, 8);
-  var automatic = 'Identified the report from its contents, checked the business date, and compared it with the figure already on file for that same source. ';
-  automatic += label === 'IMPORTED & VERIFIED' ? 'The report was imported.' : (label === 'DUPLICATE — ALREADY IMPORTED' ? 'The duplicate was skipped.' : (imported ? 'The verified portion was imported and the unresolved portion was marked.' : 'The file was not applied.'));
+  var automatic = (result.status === 'Storage Failure' ? 'SOURCE UNAVAILABLE. ' : 'RECEIVED. ') + (result.archivePath ? 'ARCHIVED at ' + result.archivePath + '. ' : (result.status === 'Storage Failure' ? '' : ''));
+  automatic += 'Identified the report from its contents, checked the business date, and compared it only with the same source. A difference from NWDSR, SNAP, or the other Data KPI workbook is a reconciliation note, not a rejection. ';
+  automatic += label === 'IMPORTED & VERIFIED' ? 'STRUCTURALLY VALIDATED. IMPORTED. METRIC COVERAGE VERIFIED.' : (label === 'DUPLICATE — ALREADY IMPORTED' ? 'The duplicate was skipped. The first original stays archived.' : (imported ? 'IMPORTED. HELD — the unresolved portion was marked.' : (result.status === 'Storage Failure' ? 'No comparison was run.' : 'HELD — the file was not applied. The original was not discarded for a cross-source difference.')));
+  if (/reconciliation note/i.test(message)) automatic += ' RECONCILIATION NOTED.';
   var row = {
     validationId: validationId,
     at: new Date().toISOString(),
@@ -1475,6 +1536,7 @@ function recordUploadValidation_(context, result) {
   if (existing) tab.getRange(existing, 1, 1, line.length).setValues([line]);
   else tab.appendRow(line);
   if (typeof forgetRead_ === 'function') forgetRead_('CC_UploadValidation');
+  row.states = automatic;
   return row;
 }
 
@@ -1526,7 +1588,43 @@ function uploadEvidence_() {
     if (!key) return;
     attempts[key + '|' + row.date] = row;
   });
-  return { facts: facts, ledger: ledger, cumulative: cumulative, attempts: attempts, uploads: uploads };
+  var archiveBySha = {};
+  sheet_('CC_SourceArchive').forEach(function (row) {
+    var sha = String(row.sha256 || '');
+    if (!sha || !String(row.drive_file_id || '')) return;
+    archiveBySha[sha] = { id: String(row.drive_file_id), path: String(row.folder_path || ''), file: String(row.file_name || '') };
+  });
+  return { facts: facts, ledger: ledger, cumulative: cumulative, attempts: attempts, uploads: uploads, archiveBySha: archiveBySha };
+}
+
+/** A logged read whose original is gone. A logged dollar total is not a source of KPI rows. */
+function uploadWasDiscarded_(last) {
+  if (!last) return false;
+  var status = String(last.status || '');
+  var message = String(last.message || '');
+  if (/^(Imported|Already on file|Covered|Not expected)$/i.test(status)) return false;
+  if (/^Storage Failure$/i.test(status) || /^Noted$/i.test(status)) return true;
+  return /was not saved|workbook was not saved|original was not retained|not retained|differs from NWDSR|do not match NWDSR/i.test(message) && !/reconciliation note/i.test(message);
+}
+
+function uploadReceipt_(onFile, status, last, archived) {
+  if (status === 'Covered' || status === 'Not expected') return 'Fully imported and verified';
+  if (status === 'Imported' || status === 'Incomplete' || (onFile && status !== 'Needs Review' && status !== 'Failed')) {
+    if (last && /differ from the figures already recorded|Not on the roster/i.test(String(last.message || ''))) return 'Imported but incomplete';
+    return status === 'Imported' || onFile ? 'Fully imported and verified' : 'Never received';
+  }
+  if (onFile && (status === 'Needs Review' || status === 'Failed')) return 'Imported but incomplete';
+  if (archived) return 'Received and archived but not imported';
+  if (uploadWasDiscarded_(last) || (last && String(last.status) === 'Storage Failure')) return 'Previously received but not retained';
+  return 'Never received';
+}
+
+function uploadReceiptStates_(receipt) {
+  if (receipt === 'Fully imported and verified') return 'RECEIVED. ARCHIVED. STRUCTURALLY VALIDATED. IMPORTED. METRIC COVERAGE VERIFIED.';
+  if (receipt === 'Imported but incomplete') return 'RECEIVED. ARCHIVED. STRUCTURALLY VALIDATED. IMPORTED. HELD — coverage is incomplete.';
+  if (receipt === 'Received and archived but not imported') return 'RECEIVED. ARCHIVED. HELD — not imported.';
+  if (receipt === 'Previously received but not retained') return 'RECEIVED. SOURCE UNAVAILABLE. ORIGINAL NOT RETAINED.';
+  return '';
 }
 
 /** A day inside an imported month-to-date report is already provided. It is not a missing daily file. */
@@ -1599,6 +1697,7 @@ function uploadChecklist_(evidence, date) {
     else if (!onFile && last && last.status === 'Needs Review') { status = 'Needs Review'; message = last.message; }
     else if (!onFile && last && last.status === 'Failed' && /must be confirmed|Tick "These Excel files are for|not the business date|before the business date|prints .* which is after today/i.test(last.message)) status = 'Missing';
     else if (!onFile && last && last.status === 'Failed') { status = 'Failed'; message = last.message; }
+    else if (!onFile && last && last.status === 'Storage Failure') { status = 'Storage Failure'; message = last.message; }
     if ((item.key === 'g17Delivered' || item.key === 'aslDelivered') && fact.nwdsrDelivered === 0 && !onFile && !check) {
       status = 'Not expected';
       message = dayText + '. Delivered $0.';
@@ -1608,14 +1707,28 @@ function uploadChecklist_(evidence, date) {
       if (cover) {
         status = 'Covered';
         message = 'Already provided. The month-to-date report is verified through ' + uploadDayText_(cover) + '.';
-      } else message = 'Missing for ' + dayText + '.';
-      if (last && /differ|do not match NWDSR|was not saved|workbook was not saved/i.test(last.message || '')) {
-        var family = item.key.indexOf('asl') === 0 ? 'asl' : 'group17';
-        var side = /Delivered/.test(item.key) ? 'delivered' : 'written';
-        message = 'Missing for ' + dayText + '. The required file is ' + canonicalKpiName_(family, side, date) + '. ' + (last.file || 'An earlier workbook') + ' was read and was not saved. A difference from NWDSR is not a reason to reject that workbook. A SNAP PDF, an NWDSR PDF, and the other Data KPI workbook do not fill this row. NWDSR store totals are left as they are. ' + last.message;
-      }
+      } else message = 'Never received for ' + dayText + '.';
     }
-    return { key: item.key, label: item.label, format: item.format, use: item.use, display: dayText + ' — ' + item.label + ' — ' + item.format, status: status, statusLabel: uploadPublicStatus_(status, message), message: message, date: date, dateText: dayText, lastFile: last ? last.file : '', lastAt: last ? last.at : '' };
+    var archived = !!(last && last.sha256 && evidence.archiveBySha && evidence.archiveBySha[last.sha256] && evidence.archiveBySha[last.sha256].id);
+    var receipt = uploadReceipt_(onFile, status, last, archived);
+    if (receipt === 'Imported but incomplete' && status === 'Imported') status = 'Incomplete';
+    if (receipt === 'Previously received but not retained') {
+      status = 'Not retained';
+      var family = item.key.indexOf('asl') === 0 ? 'asl' : (item.key.indexOf('g17') === 0 ? 'group17' : '');
+      var side = /Delivered/.test(item.key) ? 'delivered' : 'written';
+      var required = family ? canonicalKpiName_(family, side, date) : item.label;
+      message = 'PREVIOUSLY RECEIVED — ORIGINAL NOT RETAINED. The required file is ' + required + '. ' + (last && last.file ? last.file : 'An earlier file') + ' was received and was not retained. This is not "never received." The upload log proves the file was read. The original is not in the archive. Individual KPI values are not reconstructed from the logged total. A SNAP PDF, an NWDSR PDF, and the other Data KPI workbook do not fill this row. NWDSR store totals are left as they are.' + (last && last.message ? ' ' + last.message : '');
+    } else if (receipt === 'Received and archived but not imported' && (status === 'Missing' || status === 'Archived')) {
+      status = 'Archived';
+      message = 'RECEIVED AND ARCHIVED — NOT IMPORTED. ' + item.label + ' for ' + dayText + ' is in the archive' + (archived && evidence.archiveBySha[last.sha256].path ? ' at ' + evidence.archiveBySha[last.sha256].path : '') + ' and was not imported.' + (last && last.message ? ' ' + last.message : '');
+    } else if (receipt === 'Received and archived but not imported') {
+      message = 'RECEIVED AND ARCHIVED — NOT IMPORTED. ' + (message || '');
+    } else if (receipt === 'Imported but incomplete') {
+      message = 'IMPORTED BUT INCOMPLETE. ' + (message || (last && last.message) || '');
+    } else if (receipt === 'Never received' && status === 'Missing') {
+      message = 'Never received for ' + dayText + '.';
+    }
+    return { key: item.key, label: item.label, format: item.format, use: item.use, display: dayText + ' — ' + item.label + ' — ' + item.format, status: status, statusLabel: uploadPublicStatus_(status, message), receipt: receipt, states: uploadReceiptStates_(receipt), message: message, date: date, dateText: dayText, lastFile: last ? last.file : '', lastAt: last ? last.at : '' };
   });
 }
 
@@ -1676,7 +1789,7 @@ function uploads_(payload) {
       dateText: uploadDayText_(cursor),
       imported: items.filter(function (item) { return item.status === 'Imported'; }).length,
       review: items.filter(function (item) { return item.status === 'Needs Review' || item.status === 'Failed'; }).length,
-      missing: items.filter(function (item) { return item.status === 'Missing' || item.status === 'Failed' || item.status === 'Needs Review'; }).map(function (item) { return item.label; }),
+      missing: items.filter(function (item) { return item.status === 'Missing' || item.status === 'Failed' || item.status === 'Needs Review' || item.status === 'Not retained' || item.status === 'Archived' || item.status === 'Incomplete' || item.status === 'Storage Failure'; }).map(function (item) { return item.label; }),
     });
     cursor = shiftDate_(cursor, -1);
   }

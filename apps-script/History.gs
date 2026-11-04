@@ -312,24 +312,73 @@ function archiveEvidence_(sha, fileName, allowDuplicate) {
 }
 
 /**
+ * Saves the original before any total is compared. A cross-source difference is not allowed to skip this.
+ * The same SHA-256 is never stored twice. A failure here is a storage failure, not a successful filing.
+ */
+function archiveReceivedOriginal_(blob, sha, fileName, described) {
+  var index = archiveIndex_();
+  if (index[sha] && index[sha].id) return { created: false, id: index[sha].id, path: index[sha].path, archived: true };
+  var report = (described && described.report) || 'Received upload';
+  var start = (described && described.start) || '';
+  var end = (described && described.end) || start;
+  var path = archivePath_(start, end);
+  var note = 'RECEIVED. ARCHIVED before business-rule comparison. Original filename ' + fileName + '. Business date ' + start + '. Report type ' + report + '. Upload timestamp ' + historyNow_() + '. Source hash ' + sha + '. Archive location ' + path + '.';
+  var saved = archiveSource_(blob, sha, fileName, report, start, end, 'upload', note);
+  saved.archived = !!(saved && saved.id);
+  if (!saved.archived) throw new Error('The archive did not return a file id for ' + fileName + '.');
+  return saved;
+}
+
+/** Records validation on the archive row after the comparison. It does not move or replace the original. */
+function annotateArchivedUpload_(sha, result) {
+  if (!sha || !result) return;
+  var tab = sourceArchiveTab_();
+  var values = tab.getDataRange().getValues();
+  var states = archiveStateNote_(result);
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    if (String(values[r][1]) !== sha) continue;
+    var prior = String(values[r][9] || '');
+    if (prior.indexOf(states) === -1) tab.getRange(r + 1, 10).setValue((prior ? prior + ' ' : '') + states);
+    if (result.key && typeof uploadReportLabel_ === 'function') tab.getRange(r + 1, 4).setValue(uploadReportLabel_(result.key));
+    if (result.start) {
+      tab.getRange(r + 1, 5).setValue(result.start);
+      tab.getRange(r + 1, 6).setValue(result.end || result.start);
+    }
+    if (typeof forgetRead_ === 'function') forgetRead_(SOURCE_ARCHIVE_TAB_);
+    sourceArchiveIndex_ = null;
+    return;
+  }
+}
+
+function archiveStateNote_(result) {
+  var status = String(result.status || '');
+  var message = String(result.message || '');
+  if (status === 'Storage Failure') return 'SOURCE UNAVAILABLE. Storage failure. The original was not archived and no comparison was run.';
+  var parts = ['STRUCTURALLY VALIDATED'];
+  if (status === 'Imported' || status === 'Already on file' || /Saved\./.test(message)) parts.push('IMPORTED');
+  if ((status === 'Imported' || status === 'Already on file') && !/Not on the roster|differ from the figures already recorded/i.test(message)) parts.push('METRIC COVERAGE VERIFIED');
+  if (/reconciliation note/i.test(message)) parts.push('RECONCILIATION NOTED');
+  if (status === 'Needs Review' || status === 'Failed') parts.push('HELD — ' + status + '. Retained after ' + status + '.');
+  if (status === 'Ignored') parts.push('HELD — not one of the nine daily reports. Retained after Ignored.');
+  return parts.join(' ');
+}
+
+/**
  * Keeps one original of a PDF or workbook that was uploaded, including when validation did not apply it.
- * An ignored file (not one of the reports) is not kept. The same SHA-256 is never stored twice.
+ * Prefer archiveReceivedOriginal_ before comparisons. This remains for a result that still has no archive row.
  */
 function retainUploadOriginal_(blob, sha, fileName, result, businessDate) {
-  if (!result || /^(Ignored|Already on file)$/i.test(String(result.status || ''))) return null;
+  if (!result || /^(Already on file)$/i.test(String(result.status || ''))) return null;
   var index = archiveIndex_();
-  if (index[sha]) return { created: false, id: index[sha].id, path: index[sha].path };
+  if (index[sha]) return { created: false, id: index[sha].id, path: index[sha].path, archived: true };
   var evidence = null;
   try { evidence = archiveEvidence_(sha, fileName, true); } catch (error) { evidence = null; }
   var named = result.key ? uploadReportLabel_(result.key) : '';
   var report = named || (evidence && evidence.report) || (typeof canonicalReportType_ === 'function' ? canonicalReportType_(fileName) : '') || 'Uploaded report';
   var start = result.start || (evidence && evidence.start) || businessDate || '';
   var end = result.end || (evidence && evidence.end) || start;
-  var applied = /^(Imported|Already on file)$/i.test(String(result.status || ''));
-  var note = applied
-    ? ('Recorded: ' + (evidence && evidence.basis ? evidence.basis : result.status))
-    : ('Retained after ' + result.status + '. The original was not applied over verified figures. ' + String(result.message || '').slice(0, 420));
-  return archiveSource_(blob, sha, fileName, report, start, end, 'upload', note);
+  return archiveReceivedOriginal_(blob, sha, fileName, { report: report, start: start, end: end });
 }
 
 /** Archives a file only when a record on file came from it. Returns null when it was not used for any record. */
