@@ -384,8 +384,11 @@ test('Group 17 Written can differ from NWDSR Written; PERQ salespeople may not e
   assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-14').length > 0, true);
   send('2026-10-14', 'nwd.pdf', nwdsrPdf('delivered', '2026-10-14', '2026-10-14', 800));
   const deliveredOff = send('2026-10-14', 'g17d.xlsx', group17('DELIVERED', [['TARIK NASSIF', 100]]), true);
-  assert.equal(deliveredOff.status, 'Needs Review');
-  assert.match(deliveredOff.message, /do not match NWDSR Delivered/);
+  assert.equal(deliveredOff.status, 'Imported');
+  assert.match(deliveredOff.message, /Both figures are kept/);
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-14')![3], 800, 'NWDSR Delivered is not replaced by the Group 17 total');
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-14').some((row) => row[9] === 'delivered'), true);
+  assert.equal(kpi(tabs, 'Bedding')![6], '2026-10-14', 'a Group 17 difference does not stop the store-month KPI chain');
 
   send('2026-10-14', 'loc.xlsx', perqLocation(5), true);
   const tooMany = send('2026-10-14', 'people.xlsx', perqSalesperson([['TNASSI', 'Tarik', 'Nassif', 4], ['EMON0904', 'Eric', 'Montes', 3]], '10/14/26 08:00pm'), true);
@@ -665,6 +668,8 @@ test('the report still running is not a final: the month must have ended before 
   const early = send('2026-11-01', 'mtd.pdf', nwdsrPdf('written', '2026-10-02', '2026-11-01', 400000));
   assert.equal(early.status, 'Needs Review');
   assert.equal(tabs.CC_Ledger!.some((row) => row[0] === 'NWDSR_WRITTEN_STORE' && row[1] === 'cumulative'), false);
+  assert.equal(tabs.CC_SourceArchive!.some((row) => row[2] === 'mtd.pdf'), true, 'a workbook or PDF that fails validation is still kept');
+  assert.match(String(tabs.CC_SourceArchive!.find((row) => row[2] === 'mtd.pdf')![9]), /Retained after Needs Review/);
 });
 
 test('originals are archived once, privately, by business date; a file no record came from is refused', () => {

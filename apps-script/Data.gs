@@ -747,7 +747,8 @@ function attention_(facts, config, role) {
   // Once the quality checks run, missing reports come from the active alerts, which resolve when the report arrives.
   var tracked = typeof alertsTracked_ === 'function' && alertsTracked_();
   if (tracked) {
-    items = alertAttention_(activeAlerts_(), role);
+    var alertRows = typeof alertRows_ === 'function' && sheetValues_(ALERTS_TAB_) ? alertRows_() : activeAlerts_();
+    items = alertAttention_(alertRows, role);
   } else {
     var yesterday = shiftDate_(todayNy_(), -1);
     var written = facts.filter(function (row) { return row.date === yesterday; })[0];
@@ -2017,6 +2018,7 @@ function home_(payload) {
       },
       closing: { through: monthClosing.through || '' },
       pending: pendingReports,
+      sourceGaps: typeof sourceCoverageGaps_ === 'function' ? sourceCoverageGaps_() : [],
     },
     goals: goals,
     board: board,
@@ -3789,7 +3791,8 @@ function health_(payload) {
   var current = row && row.snapWritten !== null && row.nwdsrWritten !== null && row.nwdsrDelivered !== null;
   var tracked = typeof alertsTracked_ === 'function' && alertsTracked_();
   var quality = tracked ? qualityHealth_() : null;
-  var status = tracked ? alertStatus_(activeAlerts_()) : current ? 'Current' : 'Report Missing';
+  var statusRows = tracked && typeof alertRows_ === 'function' && sheetValues_(ALERTS_TAB_) ? alertRows_() : activeAlerts_();
+  var status = tracked ? alertStatus_(statusRows) : current ? 'Current' : 'Report Missing';
   var rows = sheet_('CC_Health').map(function (item) {
     var key = String(item.key);
     var value = key === 'status' ? status : String(item.value);

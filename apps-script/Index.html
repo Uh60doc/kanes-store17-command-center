@@ -1282,6 +1282,12 @@
           return '<li>' + names + '.</li>';
         }).join('') + '</ul></article>';
       }
+      function sourceGapList(items) {
+        if (!items || !items.length) return '';
+        return '<article class="card"><h2>Source coverage (' + items.length + ')</h2><p class="sub">A closed alert is not a received report. These sources are still missing or unavailable.</p><ul class="list">' + items.map(function (gap) {
+          return '<li>' + esc(gap.source || 'Source genuinely missing') + (gap.admin ? ' · ' + esc(gap.admin) : '') + ' · ' + esc(gap.date || '') + ' ' + esc(gap.report || '') + '</li>';
+        }).join('') + '</ul></article>';
+      }
       document.getElementById('header-note').textContent = updatedOn(freshWritten.through || freshDelivered.through || data.latest);
       function kpiTile(row) {
         var hasWritten = !(row.written === null || row.written === undefined || row.written === '');
@@ -1441,6 +1447,7 @@
         '<h2 class="section-title">Year over year</h2><div class="home-compare">' + compare +
         '<article class="card glow-card trend-card"><div class="trend-head"><h2>NWDSR this year and SNAP last year</h2><div class="trend-legend"><span><i class="swatch nw"></i>NWDSR this year</span><span class="' + (homeTrendHasLy(data.chart) ? '' : 'is-pending') + '"><i class="swatch ly"></i>SNAP last year' + (homeTrendHasLy(data.chart) ? '' : ' · Pending') + '</span></div></div>' + homeTrend(data.chart, data.today) + '</article></div>' +
         pendingList(fresh.pending) +
+        sourceGapList(fresh.sourceGaps) +
         '<h2 class="section-title">Sales team performance</h2>' + quick +
         '<div class="team-grid">' + (teamCards || '<article class="card"><p class="pending">Pending. No active salesperson is on the home record.</p></article>') + '</div>' +
         (otherKpis ? '<h2 class="section-title">Store KPIs</h2><div class="kpi-primary">' + otherKpis + '</div>' : '') +
@@ -3973,7 +3980,7 @@
 
     function dataStatusTone(status) {
       if (status === 'COMPLETE' || status === 'CURRENT' || status === 'PASS' || status === 'Verified' || status === 'Passed' || status === 'Resolved') return 'good';
-      if (status === 'PARTIAL' || status === 'NOTE' || status === 'Withdrawn' || status === 'Closed') return 'warn';
+      if (status === 'PARTIAL' || status === 'NOTE' || status === 'Withdrawn' || status === 'Closed' || status === 'Source gap') return 'warn';
       return 'bad';
     }
     function pill(status) {
@@ -3988,6 +3995,7 @@
       var metricRows = metrics.map(function (row) { return '<tr><td>' + esc(row.name) + '<div class="sub">' + esc(row.source) + '</div></td><td>' + pill(row.status) + '</td><td>' + esc(row.through || 'Pending') + '</td><td>' + esc(row.expected || '—') + '</td><td class="sub">' + esc(row.explanation) + '</td></tr>'; }).join('');
       var dayRows = days.map(function (row) { return '<tr><td>' + esc(row.key) + '</td><td>' + pill(row.status) + '</td><td>' + esc(row.through) + '</td><td class="sub">' + esc(row.explanation) + '</td></tr>'; }).join('');
       var active = quality.active.map(function (row) { return '<li>' + pill(row.severity) + (row.date ? esc(row.date) + ' · ' : '') + esc(row.message) + ' <span class="sub">since ' + esc(String(row.since).slice(0, 16).replace('T', ' ')) + '</span></li>'; }).join('');
+      var gaps = (quality.sourceGaps || []).map(function (row) { return '<li>' + esc(row.source) + (row.admin ? ' · ' + esc(row.admin) : '') + ' · ' + esc(row.date || '') + ' ' + esc(row.report || '') + '<div class="sub">' + esc(row.resolution || row.message || '') + '</div></li>'; }).join('');
       var resolved = quality.resolved.map(function (row) { return '<li>' + pill(row.status) + (row.date ? esc(row.date) + ' · ' : '') + esc(row.report) + ': ' + esc(row.resolution) + ' <span class="sub">' + esc(String(row.resolvedAt).slice(0, 16).replace('T', ' ')) + '</span></li>'; }).join('');
       var checks = quality.checks.map(function (row) { return '<tr><td>' + esc(row.area) + '</td><td>' + pill(row.status) + '</td><td>' + esc(row.subject) + '<div class="sub">' + esc(row.explanation) + '</div></td></tr>'; }).join('');
       var last = quality.lastRun;
@@ -3995,9 +4003,10 @@
         '<table><tr><th>Period</th><th>Status</th><th>Detail</th></tr>' + periodRows + '</table>' +
         '<h2>Metrics: latest verified business date</h2><table><tr><th>Metric</th><th>Status</th><th>Verified through</th><th>Expected through</th><th>Detail</th></tr>' + metricRows + '</table>' +
         '<h2>Daily report packages</h2><table><tr><th>Business day</th><th>Status</th><th>Reports</th><th>Detail</th></tr>' + dayRows + '</table></article>' +
-        '<article class="card"><h2>Active alerts (' + quality.active.length + ')</h2>' + (active ? '<ul class="list">' + active + '</ul>' : '<p class="sub good">No active alerts.</p>') +
+        '<article class="card"><h2>Active alerts (' + quality.active.length + ')</h2>' + (active ? '<ul class="list">' + active + '</ul>' : '<p class="sub">No active alerts. A zero here does not mean every source was received.</p>') +
+        '<h2>Source coverage (' + (quality.sourceGaps || []).length + ')</h2>' + (gaps ? '<ul class="list">' + gaps + '</ul>' : '<p class="sub good">No genuine source gap is on file.</p>') +
         '<h2>Resolved alerts (' + quality.resolvedCount + ')</h2>' + (resolved ? '<ul class="list">' + resolved + '</ul>' : '<p class="sub">None yet.</p>') +
-        '<p class="sub">A missing-report alert resolves itself when the report arrives and passes validation. Resolved alerts stay here as a record. One consolidated email a day goes to the admin when a new problem appears.</p></article>' +
+        '<p class="sub">Source verified means the report arrived and passed validation. Source genuinely missing stays listed after an alert is closed. An administratively closed alert is not a received report. An accuracy exception is a figure that still needs review. An approved exception is a gap the GM accepted. One consolidated email a day goes to the admin when a new problem appears.</p></article>' +
         '<article class="card"><h2>Automated quality checks</h2><p class="sub">' + (last ? 'Last run ' + esc(String(last.at).slice(0, 16).replace('T', ' ')) + ' UTC after ' + esc(last.trigger) + ': ' + esc(last.passed) + ' PASS, ' + esc(last.flagged) + ' FLAG, ' + esc(last.noted) + ' NOTE in ' + esc(last.seconds) + ' s.' : 'Not run yet.') + ' NOTE is a legitimate, explained difference (for example SNAP vs NWDSR). Checks never change a reported figure.</p>' +
         '<table><tr><th>Check</th><th>Result</th><th>Finding</th></tr>' + checks + '</table>' +
         (role === 'admin' ? '<p class="noprint"><button id="run-checks" type="button">Run checks now</button></p><p id="checks-error" class="error"></p>' : '') + '</article>';
@@ -4553,6 +4562,7 @@
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Development status</h2><div id="devlog-area"><p class="sub">Loading development status…</p></div>' +
         '<h2 class="section-title">Manage associates</h2><div id="roster-area"><p class="sub">Loading the roster…</p></div>' +
+        '<h2 class="section-title">Monthly history</h2><div id="month-history"><p class="sub">Loading completed months…</p></div>' +
         '<h2 class="section-title">Passwords and imports</h2>' +
         '<article class="card"><h2>Sign-in</h2><p class="sub">Liz, Cordell, and Kelly are the only usernames. The first time each person enters ADMIN, they create their own password and it is saved for that username.</p>' +
         '<p id="pw-error" class="error"></p><p class="noprint"><button id="reset-liz" type="button">Let Liz use ADMIN again</button> <button id="reset-cordell" type="button">Let Cordell use ADMIN again</button> <button id="reset-kelly" type="button">Let Kelly use ADMIN again</button> <button id="retry" type="button">Retry imports</button></p></article>';
@@ -4572,6 +4582,37 @@
       });
       loadDevLog();
       loadRoster();
+      loadMonthHistory();
+    }
+    function loadMonthHistory() {
+      var box = document.getElementById('month-history');
+      if (!box) return;
+      api('monthlyHistory').then(function (data) {
+        var rows = (data.periods || []).map(function (period) {
+          var state = period.open ? 'Open' : 'Final';
+          var blockers = (period.blockers || []).map(function (line) { return esc(line); }).join('<br>');
+          return '<tr><td>' + esc(period.key) + '</td><td>' + esc(period.start) + ' to ' + esc(period.end) + '</td><td>' + pill(state) + '</td><td>' + period.final + ' final · ' + period.open + ' open</td><td class="sub">' + (blockers || 'No coverage gap listed') + '</td><td>' + (period.open ? '<button type="button" data-finalize="' + esc(period.key) + '">Finalize month</button>' : 'Final') + '</td></tr>';
+        }).join('');
+        box.innerHTML = '<article class="card"><p class="sub">' + esc(data.note || '') + '</p><table><tr><th>Month</th><th>Dates</th><th>Status</th><th>Rows</th><th>Remaining gaps</th><th></th></tr>' + (rows || '<tr><td colspan="6">No completed month is on Monthly History yet.</td></tr>') + '</table><p id="month-history-note" class="error"></p></article>';
+        box.querySelectorAll('[data-finalize]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            var key = button.getAttribute('data-finalize');
+            if (!window.confirm('Finalize ' + key + '? The figures now on file stay. This does not run by itself.')) return;
+            api('finalizeMonth', { periodKey: key, confirm: true }).then(function (result) {
+              if (result.finalized) { loadMonthHistory(); return; }
+              var listed = (result.blockers || []).slice(0, 8).join('\n');
+              if (listed && window.confirm(result.message + '\n\n' + listed + '\n\nFinalize anyway and keep these gaps on the record?')) {
+                return api('finalizeMonth', { periodKey: key, confirm: true, acknowledgeGaps: true }).then(function () { loadMonthHistory(); });
+              }
+              document.getElementById('month-history-note').textContent = result.message || '';
+            }).catch(function (error) {
+              document.getElementById('month-history-note').textContent = error.message;
+            });
+          });
+        });
+      }).catch(function (error) {
+        box.innerHTML = '<article class="card"><p class="error">' + esc(error.message) + '</p></article>';
+      });
     }
     function na(value) {
       return value === null || value === undefined || value === '' ? 'Not Available' : value;
