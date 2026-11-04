@@ -1329,6 +1329,7 @@ function storeMonthClosing_(view, period, goal) {
     ? 'Month to date ' + period.start + ' through ' + through + ': ' + month.mtd.customers + ' purchasing customers ÷ ' + month.mtd.opportunities + ' opportunities = ' + percentText_(month.mtd.ratio) + '. ' + verification + '.'
     : 'Month to date is ' + verification + '.';
   return {
+    start: period.start,
     customers: month ? month.mtd.customers : null,
     opportunities: month ? month.mtd.opportunities : null,
     ratio: month ? month.mtd.ratio : null,
@@ -1665,8 +1666,13 @@ function homeKpiStrip_(goals, actuals, closing, analysis) {
     var tier = spec[4];
     if (name === 'Closing Ratio') {
       var dailyDetail = closing.latest && closing.latest.ratio !== null
-        ? closing.latest.date + ' daily: ' + closing.latest.customers + ' ÷ ' + closing.latest.opportunities + ' = ' + percentText_(closing.latest.ratio)
+        ? closing.latest.date + ' daily: ' + closing.latest.customers + ' purchasing customers / ' + closing.latest.opportunities + ' opportunities = ' + percentText_(closing.latest.ratio)
         : '';
+      var fraction = closing.ratio !== null && closing.customers !== null && closing.opportunities !== null
+        ? closing.customers + ' purchasing customers / ' + closing.opportunities + ' opportunities'
+        : '';
+      var range = '';
+      if (closing.through) range = closing.start && closing.start !== closing.through ? closing.start + ' through ' + closing.through : closing.through;
       return {
         name: name,
         tier: tier,
@@ -1674,13 +1680,12 @@ function homeKpiStrip_(goals, actuals, closing, analysis) {
         goal: spec[3],
         written: closing.ratio,
         delivered: null,
+        start: closing.start || '',
         through: closing.ratio !== null ? (closing.through || '') : '',
         writtenThrough: closing.ratio !== null ? (closing.through || '') : '',
         deliveredThrough: '',
-        detail: closing.ratio !== null && closing.customers !== null && closing.opportunities !== null
-          ? closing.customers + ' customers ÷ ' + closing.opportunities + ' opportunities'
-          : dailyDetail,
-        note: closing.ratio !== null ? '' : (closing.gap || closing.note || ''),
+        detail: fraction || dailyDetail,
+        note: fraction ? fraction + (range ? ', ' + range : '') : (closing.gap || closing.note || ''),
         reconcile: !!closing.reconcile,
       };
     }

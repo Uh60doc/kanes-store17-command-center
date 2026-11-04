@@ -1097,6 +1097,13 @@
       var text = longDate(iso);
       return text ? text + ', ' + String(iso).slice(0, 4) : '';
     }
+    function closingRange(row) {
+      if (!row || !row.through) return '';
+      var end = dateLabel(row.through);
+      var start = row.start ? dateLabel(row.start) : '';
+      if (start && row.start !== row.through) return start + ' through ' + end;
+      return end;
+    }
     function updatedOn(iso) {
       var text = dateLabel(iso);
       return text ? 'Last updated ' + text + '.' : 'Last updated Pending.';
@@ -1356,7 +1363,9 @@
           '<p class="kicker">' + esc(title) + '</p><p class="figure">' + figure + '</p><p class="goal-line">' + share + '</p>' +
           meterHtml(actual, goal, bar) +
           (leftText ? '<p class="need">' + leftText + '</p>' : '') +
-          '<p class="need">' + (through ? 'Last updated ' + esc(through) : 'Last updated Pending.') + '</p>' +
+          '<p class="need">' + (title === 'Closing Ratio'
+            ? (through ? 'Reporting dates ' + esc(through) + '.' : 'Reporting dates pending.')
+            : (through ? 'Last updated ' + esc(through) + '.' : 'Last updated Pending.')) + '</p>' +
           (aside ? '<p class="side-note">' + aside + '</p>' : '') + '</article>';
       }
       function deliveredAside(row) {
@@ -1381,7 +1390,7 @@
       var five = heroCard('dollar', 'written', 'NWDSR Written', boardMoney(monthBoard.written), monthBoard.written, monthBoard.writtenGoal, boardMoney(monthBoard.writtenGoal) + ' goal', boardMoney(monthBoard.writtenLeft) + ' still needed', writtenThrough, 'money', 'cyan') +
         heroCard('truck', 'delivered', 'NWDSR Delivered', boardMoney(monthBoard.delivered), monthBoard.delivered, monthBoard.deliveredGoal, boardMoney(monthBoard.deliveredGoal) + ' goal', boardMoney(monthBoard.deliveredLeft) + ' still needed', deliveredThrough, 'money', 'pink') +
         heroCard('bed', 'bedding', 'Bedding', bedding && known(bedding.written) ? kpiValue(bedding.written, bedding.unit) : 'Pending', bedding ? bedding.written : null, bedding ? bedding.goal : null, bedding ? boardGoal(bedding.goal, bedding.unit) : 'Pending', '', bedding && bedding.writtenThrough ? dateLabel(bedding.writtenThrough) : '', 'rate', 'green', deliveredAside(bedding)) +
-        heroCard('target', 'closing', 'Closing Ratio', closingKpi && known(closingKpi.written) ? kpiValue(closingKpi.written, closingKpi.unit) : 'Pending', closingKpi ? closingKpi.written : null, closingKpi ? closingKpi.goal : null, closingKpi ? boardGoal(closingKpi.goal, closingKpi.unit) : 'Pending', '', closingKpi && closingKpi.through ? dateLabel(closingKpi.through) : '', 'rate', 'gold') +
+        heroCard('target', 'closing', 'Closing Ratio', closingKpi && known(closingKpi.written) ? kpiValue(closingKpi.written, closingKpi.unit) : 'Pending', closingKpi ? closingKpi.written : null, closingKpi ? closingKpi.goal : null, closingKpi ? boardGoal(closingKpi.goal, closingKpi.unit) : 'Pending', closingKpi && closingKpi.detail ? esc(closingKpi.detail) : '', closingRange(closingKpi), 'rate', 'gold') +
         heroCard('link', 'attach', 'Store Attachment', attachment && known(attachment.written) ? kpiValue(attachment.written, attachment.unit) : 'Pending', attachment ? attachment.written : null, attachment ? attachment.goal : null, attachment ? boardGoal(attachment.goal, attachment.unit) : 'Pending', '', attachment && attachment.writtenThrough ? dateLabel(attachment.writtenThrough) : '', 'rate', 'gold', deliveredAside(attachment));
       var week = data.week || {};
       var still = '<article class="card glow-card"><div class="card-head">' + glyph('bars') + '<div><h2>Still needed this month</h2><p class="sub">' + esc(data.period || '') + '</p></div></div><div class="need-pair">' +
@@ -1712,10 +1721,14 @@
       document.getElementById('header-note').textContent = updatedOn(store.through);
       var latest = store.latest;
       var tone = store.ratio === null || store.ratio === undefined ? 'pending' : statusTone(store.versusGoal);
+      var fraction = store.customers !== null && store.customers !== undefined && store.opportunities
+        ? count(store.customers) + ' purchasing customers / ' + count(store.opportunities) + ' opportunities'
+        : '';
       var heading = '<article class="card closing-hero"><h2>Store closing ratio</h2>' +
         '<p class="figure ' + tone + '">' + (store.ratio === null || store.ratio === undefined ? 'Data Pending' : percent(store.ratio)) + '</p>' +
+        (fraction ? '<p class="sub">' + esc(fraction) + '</p>' : '') +
         '<p class="sub"><span class="status-pill ' + tone + '">' + esc(store.versusGoal || (store.opportunities === 0 ? 'No opportunities' : 'Pending')) + '</span> Goal ' + percent(data.goal) + ' · ' + pointsText(store.points) + ' from goal</p>' +
-        '<p class="sub">' + updatedOn(store.through) + '</p></article>';
+        '<p class="sub">' + (closingRange(store) ? 'Reporting dates ' + esc(closingRange(store)) + '.' : 'Reporting dates pending.') + '</p></article>';
       var cards = '<div class="score-row">' +
         card('Purchasing customers', count(store.customers), updatedOn(store.through)) +
         card('Customer opportunities', count(store.opportunities), updatedOn(store.through)) +

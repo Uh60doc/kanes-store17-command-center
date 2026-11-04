@@ -41,7 +41,10 @@ test('store closing ratio is purchasing customers over PERQ opportunities for th
   assert.deepEqual({ customers: closing.store.customers, opportunities: closing.store.opportunities, ratio: closing.store.ratio, through: closing.store.through }, { customers: 54, opportunities: 111, ratio: 0.486, through: '2026-10-15' });
   assert.match(closing.store.opportunitySource, /snapshot 2026-10-02 to 2026-10-13 \(100\) \+ daily 2026-10-14 to 2026-10-15 \(11\)/);
   const home = plain(gs.home_({ session }));
-  assert.equal(home.board.kpis.find((kpi: Row) => kpi.name === 'Closing Ratio').written, 0.486);
+  const homeClosing = home.board.kpis.find((kpi: Row) => kpi.name === 'Closing Ratio');
+  assert.equal(homeClosing.written, 0.486);
+  assert.equal(homeClosing.detail, '54 purchasing customers / 111 opportunities');
+  assert.equal(homeClosing.note, '54 purchasing customers / 111 opportunities, 2026-10-02 through 2026-10-15');
 });
 
 test('individual closing ratio is Group 17 written orders over PERQ salesperson opportunities through a common date', () => {
