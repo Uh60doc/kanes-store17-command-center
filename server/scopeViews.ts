@@ -21,7 +21,7 @@ export const SCOPE_VIEWS = [
 /** NWDSR Net Written and Delivered are store-level ranking reports. No report supplies these salesperson views. */
 export const NOT_SUPPLIED: Partial<Record<(typeof SCOPE_VIEWS)[number], string>> = {
   NWDSR_WRITTEN_PERSON: 'No individual NWDSR Written: the NWDSR reports are store-level ranking reports. Individual written sales and the $65,000 goal use SNAP_PERSON.',
-  NWDSR_DELIVERED_PERSON: 'No individual NWDSR Delivered: the NWDSR reports are store-level ranking reports. Individual delivered sales are Data Analysis Group 17 Delivered on DA_SALES_PERSON.',
+  NWDSR_DELIVERED_PERSON: 'No individual NWDSR Delivered: the NWDSR reports are store-level ranking reports. Individual delivered sales are Data KPI Individual — Delivered on DA_SALES_PERSON.',
 };
 
 export const AUDIT_TAB = 'CC_ScopeAudit';

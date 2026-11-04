@@ -256,7 +256,7 @@ test('a zero or a day off does not stop a salesperson, and a day with no PERQ ex
   assert.equal(prakash.opportunities, 31);
   assert.equal(prakash.orders, 9);
   assert.match(prakash.note, /2026-10-16 0/);
-  assert.match(prakash.note, /Group 17 Written through 2026-10-18 waits for PERQ/);
+  assert.match(prakash.note, /Data KPI Individual Written through 2026-10-18 waits for PERQ/);
   const ricky = gs.personClosing_(gs.loadClosing_(), 'Ricky Nassif', '2026-10-01', '2026-10-31', 0.5);
   assert.equal(ricky.through, '2026-10-16');
   assert.equal(ricky.opportunities, 35);
@@ -266,7 +266,7 @@ test('when the October 15 Group 17 report is missing, the ratio moves back to th
   const gs = load(withOrders(afterPerqHistory(), ['2026-10-14']), '2026-10-16');
   assert.deepEqual(individual(gs, 'Eric Montes Rodriguez'), { orders: 11, opportunities: 32, through: '2026-10-14', ratio: 0.344, points: -15.6, versus: 'Below Goal', status: '' });
   const eric = gs.personClosing_(gs.loadClosing_(), 'Eric Montes Rodriguez', '2026-10-01', '2026-10-31', 0.5);
-  assert.match(eric.note, /PERQ through 2026-10-15 waits for the Group 17 Written report/);
+  assert.match(eric.note, /PERQ through 2026-10-15 waits for the Data KPI Individual Written report/);
 });
 
 test('a later salesperson snapshot replaces the earlier snapshot and its day files instead of adding to them', () => {

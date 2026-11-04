@@ -36,13 +36,13 @@ test('month to date is the snapshot plus later days; the daily records alone are
   assert.equal(ratio.verified_mtd, 0.486);
   assert.match(ratio.mtd_basis, /^54 purchasing customers ÷ 111 opportunities, both 2026-10-02 through 2026-10-15$/);
 
-  const sales = find(rows, 'STORE-2026-10', 'Data Analysis Group 17 sales', 'written');
+  const sales = find(rows, 'STORE-2026-10', 'Data KPI Store sales', 'written');
   assert.equal(sales.verified_mtd, 10000 + nwdsrWritten('2026-10-14') + nwdsrWritten('2026-10-15'));
   assert.equal(sales.daily_records_total, nwdsrWritten('2026-10-14') + nwdsrWritten('2026-10-15'), 'the day files alone cover only October 14 and 15');
   assert.match(sales.snapshot_coverage, /^2026-10-02 to 2026-10-13 \(DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-02_2026-10-13\.xlsx\)$/);
   const fabric = find(rows, 'STORE-2026-10', 'Fabric protection', 'written');
   assert.deepEqual([fabric.verified_mtd, fabric.qualified, fabric.sold, fabric.daily_records_total], [0.7143, 14, 10, 0.5]);
-  const delivered = find(rows, 'STORE-2026-10', 'Data Analysis Group 17 sales', 'delivered');
+  const delivered = find(rows, 'STORE-2026-10', 'Data KPI Store sales', 'delivered');
   assert.equal(delivered.verified_mtd, 'Pending', 'no Group 17 delivered report is on file, so nothing is shown as verified');
 
   const written = find(rows, 'STORE-2026-10', 'NWDSR Written');

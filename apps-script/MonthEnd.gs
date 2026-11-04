@@ -27,7 +27,7 @@ var STORE_SALES_METRICS_ = [
 // [metric, unit, figure, ledger views the figure needs]
 var STORE_KPI_METRICS_ = {
   group17: [
-    ['Data Analysis Group 17 sales', 'dollars', 'sales', ['DA_SALES']], ['Orders', 'count', 'orders', ['DA_SALES']],
+    ['Data KPI Store sales', 'dollars', 'sales', ['DA_SALES']], ['Orders', 'count', 'orders', ['DA_SALES']],
     ['Bedding dollars', 'dollars', 'bedding', ['BEDDING']], ['Bedding %', 'percent', 'beddingRate', ['BEDDING', 'DA_SALES']],
     ['Average ticket', 'dollars', 'average', ['DA_SALES']], ['Financing', 'percent', 'finance', ['FINANCE', 'DA_SALES']],
     ['Mattress protectors', 'percent', 'pads', ['MPPA']], ['Fabric protection', 'percent', 'fabric', ['FABW']],
@@ -41,14 +41,14 @@ var STORE_KPI_METRICS_ = {
 };
 
 var PERSON_KPI_METRICS_ = [
-  ['Data Analysis Group 17 sales', 'dollars', 'sales'], ['Orders', 'count', 'orders'], ['Bedding dollars', 'dollars', 'bedding'],
+  ['Data KPI Individual sales', 'dollars', 'sales'], ['Orders', 'count', 'orders'], ['Bedding dollars', 'dollars', 'bedding'],
   ['Bedding %', 'percent', 'beddingRate'], ['Average ticket', 'dollars', 'average'], ['Financing', 'percent', 'finance'],
   ['Mattress protectors', 'percent', 'pads'], ['Fabric protection', 'percent', 'fabric'], ['Leather protection', 'percent', 'leather'],
   ['Power upholstery', 'percent', 'power'], ['Total attachment', 'percent', 'attach'],
 ];
 
 var MONTH_END_ORDER_ = ['NWDSR Written', 'NWDSR Delivered', 'SNAP Written', 'Purchasing customers', 'PERQ opportunities', 'Closing ratio',
-  'Data Analysis Group 17 sales', 'Orders', 'Bedding dollars', 'Bedding %', 'Average ticket', 'Financing', 'Mattress protectors',
+  'Data KPI Store sales', 'Data KPI Individual sales', 'Orders', 'Bedding dollars', 'Bedding %', 'Average ticket', 'Financing', 'Mattress protectors',
   'Fabric protection', 'Leather protection', 'Power upholstery', 'Total attachment', 'Adjustable bases', 'Pillows',
   'Wood / Furniture Protection', 'Rugs'];
 
@@ -185,7 +185,7 @@ function personKpiFigure_(side, pick) {
   if (pick === 'average') return side.orders ? { value: monthEndRound_(side.sales / side.orders, 2), detail: moneyText_(side.sales) + ' ÷ ' + side.orders + ' orders' } : { value: side.orders === 0 ? 'No orders' : null, detail: '' };
   if (pick === 'finance') return side.finance.value === null ? { value: side.sales ? null : 'No sales', detail: side.finance.text || '' } : { value: side.finance.value, detail: 'Financed dollars ÷ sales' };
   var tally = side.tallies[PERSON_TALLY_[pick]];
-  if (!tally) return { value: null, detail: 'Group 17 Total Attachments is not on file for every report' };
+  if (!tally) return { value: null, detail: 'Data KPI Individual total attachments is not on file for every report' };
   return countedFigure_(tally.sold, tally.qualified);
 }
 
@@ -251,12 +251,22 @@ function monthEndStatus_(line, variance, explanation, today) {
   return 'Variance: official final differs from verified month to date' + (explanation ? '' : '; explanation pending');
 }
 
+/** A note saved under the previous metric name still belongs to the renamed row. The dollars are not rewritten. */
+function monthEndExplanation_(notes, line) {
+  var person = line.person || '';
+  var direct = notes[[line.periodKey, line.metric, line.side, person].join('|')];
+  if (direct) return direct;
+  var legacy = line.metric === 'Data KPI Store sales' || line.metric === 'Data KPI Individual sales' ? 'Data Analysis Group 17 sales' : '';
+  if (!legacy) return '';
+  return notes[[line.periodKey, legacy, line.side, person].join('|')] || '';
+}
+
 function monthEndRow_(ctx, line) {
   var complete = line.through === line.period.end;
   var variance = complete && typeof line.verified === 'number' && typeof line.final === 'number'
     ? (line.unit === 'percent' ? monthEndRound_((line.final - line.verified) * 100, 2) : monthEndRound_(line.final - line.verified, line.unit === 'count' ? 4 : 2))
     : null;
-  var explanation = ctx.notes[[line.periodKey, line.metric, line.side, line.person].join('|')] || '';
+  var explanation = monthEndExplanation_(ctx.notes, line);
   var cell = function (value, blank) { return value === null || value === undefined ? blank : value; };
   return [line.track, line.periodKey, line.period.start, line.period.end, line.metric, line.side, line.person, line.employeeId, line.unit,
     cell(line.verified, 'Pending'), line.through, line.qualified, line.sold, line.basis, cell(line.dailyTotal, 'None on file'), line.dailyDates, line.snapshot, line.missing,
@@ -392,7 +402,7 @@ function monthEndStoreLines_(ctx, period, last) {
 
   ['group17', 'asl'].forEach(function (family) {
     var spec = STORE_KPI_FAMILIES_[family];
-    var familyName = family === 'asl' ? 'ASL' : 'Group 17';
+    var familyName = 'Data KPI Store';
     ['written', 'delivered'].forEach(function (side) {
       var coverage = storeKpiCoverage_(ledger, family, side, period, ctx.facts, ctx.closed, ctx.today);
       var verified = coverage.through ? storeKpiTotals_(coverage) : null;
@@ -520,14 +530,14 @@ function monthEndPersonLines_(ctx, period, last) {
       PERSON_KPI_METRICS_.forEach(function (metric) {
         var line = monthEndLine_('Person', period, metric[0], side, person, metric[1]);
         line.through = verified ? verified.through : '';
-        line.basis = verified ? verified.basis + '. A covered report without a line for this salesperson is 0' : 'No Group 17 ' + side + ' report covers ' + period.start;
+        line.basis = verified ? verified.basis + '. A covered report without a line for this salesperson is 0' : 'No Data KPI Individual ' + side + ' report covers ' + period.start;
         applyFigure_(line, personKpiFigure_(verified, metric[2]), final ? personKpiFigure_(final, metric[2]) : null);
         var dailyFigure = personKpiFigure_(daily, metric[2]);
         line.dailyTotal = dailyFigure ? dailyFigure.value : null;
         line.dailyDates = 'Day files ' + datesText_(dayFiles[side].slice().sort()) + '; lines for this salesperson on ' + (mineDates.length ? dateRunsText_(mineDates) : 'none') + (dailyFigure && dailyFigure.detail ? '; ' + dailyFigure.detail : '');
-        line.snapshot = sideCoverage.snapshot ? period.start + ' to ' + sideCoverage.snapshot + ' (Group 17 ' + side + ' salesperson report)' : NO_SNAPSHOT_;
+        line.snapshot = sideCoverage.snapshot ? period.start + ' to ' + sideCoverage.snapshot + ' (Data KPI Individual ' + side + ' salesperson report)' : NO_SNAPSHOT_;
         line.missing = missingText_(missing);
-        if (final) line.finalBasis = 'Group 17 ' + side + ' report ' + period.start + ' to ' + period.end;
+        if (final) line.finalBasis = 'Data KPI Individual ' + side + ' report ' + period.start + ' to ' + period.end;
         lines.push(line);
       });
     });

@@ -410,7 +410,7 @@ function peopleRows_(individualStart, individualEnd, options) {
 var PERSON_ANALYSIS_VIEWS_ = ['DA_SALES', 'BEDDING', 'MPPA', 'FABW', 'LTHW', 'PWAR', 'ATTACH', 'FINANCE', 'AVERAGE', 'PILLOWS', 'BASES', 'FP', 'PET', 'RUGS', 'PWRBASE'];
 var PERSON_ANALYSIS_SOURCE_ = /DATA_ANALYSIS_KPI_17_/i;
 
-/** Dates whose official store total for this side is verified $0. Those days have no Group 17 salesperson file. */
+/** Dates whose official store total for this side is verified $0. Those days have no Data KPI Individual salesperson file. */
 function verifiedStoreZeroDates_(side) {
   var field = side === 'delivered' ? 'nwdsrDelivered' : 'nwdsrWritten';
   var dates = {};
@@ -421,8 +421,8 @@ function verifiedStoreZeroDates_(side) {
 }
 
 /**
- * What the Data Analysis Group 17 reports cover for the salesperson month on one side: the latest salesperson
- * snapshot that starts on the 1st, then each following day whose Group 17 day file is on file. Days inside the
+ * What the Data KPI Individual reports cover for the salesperson month on one side: the latest salesperson
+ * snapshot that starts on the 1st, then each following day whose Data KPI Individual day file is on file. Days inside the
  * snapshot are never added to it. A closed day, or a day whose NWDSR total is verified $0, is not a hole.
  * A later day is not counted across a day that is still missing.
  */
@@ -546,7 +546,7 @@ function personAnalysisSide_(ledger, name, coverage) {
     var round4 = function (value) { return Math.round(value * 10000) / 10000; };
     return { value: round4(sold), detail: moneyText_(Math.round(dollars * 100) / 100), text: '' };
   }
-  // Group 17 quantities can be fractional on Delivered, so sums are rounded to 4 places. A covered part with
+  // Data KPI Individual quantities can be fractional on Delivered, so sums are rounded to 4 places. A covered part with
   // category lines but no Total Attachments line was loaded before that group was kept: the total is not on file.
   function tally(prefix) {
     var qualified = 0;
@@ -605,13 +605,13 @@ var ATTACHMENT_CATEGORIES_ = [
 ];
 
 /**
- * One attachment category from Group 17 quantities. Missed = MAX(0, qualified - sold). Actual = sold ÷ qualified.
+ * One attachment category from Data KPI Individual quantities. Missed = MAX(0, qualified - sold). Actual = sold ÷ qualified.
  * To hit goal = MAX(0, CEILING(qualified × goal - sold)): the same as CEILING(qualified × goal) - sold for whole
- * quantities, and still whole attachments when Group 17 Delivered prints halves. The difference is rounded to
+ * quantities, and still whole attachments when Data KPI Individual Delivered prints halves. The difference is rounded to
  * 6 places first so 5 × 0.8 - 4 is 0, not 4.4e-16.
  */
 function attachmentLine_(category, tally, goal) {
-  var line = { key: category.key, name: category.name, source: 'Group 17 ' + category.source, goal: goal, qualified: null, sold: null, missed: null, actual: null, points: null, needed: null, dollars: null, status: 'pending', flag: '' };
+  var line = { key: category.key, name: category.name, source: 'Data KPI Individual ' + category.source, goal: goal, qualified: null, sold: null, missed: null, actual: null, points: null, needed: null, dollars: null, status: 'pending', flag: '' };
   if (!tally) return line;
   var round4 = function (value) { return Math.round(value * 10000) / 10000; };
   line.qualified = tally.qualified;
@@ -645,10 +645,10 @@ function attachmentSide_(side, goals) {
     var qualified = round4(lines.slice(0, 4).reduce(function (sum, line) { return sum + line.qualified; }, 0));
     var sold = round4(lines.slice(0, 4).reduce(function (sum, line) { return sum + line.sold; }, 0));
     if (qualified !== total.qualified || sold !== total.sold) {
-      flags.push('Group 17 Total Attachments (' + total.sold + ' of ' + total.qualified + ') differs from the four categories (' + sold + ' of ' + qualified + '). Flagged for review.');
+      flags.push('Data KPI Individual Total Attachments (' + total.sold + ' of ' + total.qualified + ') differs from the four categories (' + sold + ' of ' + qualified + '). Flagged for review.');
     }
   }
-  if (tallies && !tallies.total) flags.push('Group 17 Total Attachments is not on file for every report in this range, so the total is Pending.');
+  if (tallies && !tallies.total) flags.push('Data KPI Individual Total Attachments is not on file for every report in this range, so the total is Pending.');
   lines.forEach(function (line) { if (line.flag) flags.push(line.name + ': ' + line.flag); });
   return { through: side ? side.through : '', basis: side ? side.basis : '', lines: lines, flags: flags };
 }
@@ -1085,8 +1085,8 @@ function saleOrders_(row) {
 }
 
 /**
- * Data Analysis Group 17 Written order count for one salesperson from the 1st through date: the latest salesperson
- * snapshot that ends on or before date, plus each day after it whose Group 17 Written day file is on file. Days
+ * Data KPI Individual Written order count for one salesperson from the 1st through date: the latest salesperson
+ * snapshot that ends on or before date, plus each day after it whose Data KPI Individual Written day file is on file. Days
  * inside the snapshot are never added again. A covered report without a line for this salesperson is 0. A missing
  * open day or an order count that could not be read leaves the total unknown.
  */
@@ -1140,7 +1140,7 @@ function personOrdersThrough_(ledger, name, period, date, closed) {
 }
 
 /**
- * Individual closing ratio = Data Analysis Group 17 Written order count ÷ the salesperson's PERQ Ups + Be Backs,
+ * Individual closing ratio = Data KPI Individual Written order count ÷ the salesperson's PERQ Ups + Be Backs,
  * both from the 1st through the same verified date: the latest date on which both counts are on file.
  */
 function personClosing_(facts, name, start, end, goal, ledger) {
@@ -1177,14 +1177,14 @@ function personClosing_(facts, name, start, end, goal, ledger) {
     if (!latestOrders) missing.push('Data KPI Individual Written orders');
     status = missing.length
       ? 'Pending: ' + missing.join(' and ')
-      : (latestOpportunities < latestOrders ? 'Pending: PERQ verified only through ' + latestOpportunities : 'Pending: Group 17 Written verified only through ' + latestOrders);
+      : (latestOpportunities < latestOrders ? 'Pending: PERQ verified only through ' + latestOpportunities : 'Pending: Data KPI Individual Written verified only through ' + latestOrders);
     note = missing.length
       ? missing.join(' and ') + ' for this salesperson ' + (missing.length > 1 ? 'are' : 'is') + ' not on file for ' + start + ' through ' + end + '.'
-      : 'PERQ is through ' + latestOpportunities + ' and Group 17 Written through ' + latestOrders + ', with no common verified date.';
+      : 'PERQ is through ' + latestOpportunities + ' and Data KPI Individual Written through ' + latestOrders + ', with no common verified date.';
   } else {
     note = 'Through ' + through + ': Data KPI Individual Written orders ' + orders.source + '; PERQ Ups + Be Backs ' + opportunities.source + '.';
-    if (latestOpportunities > through) note += ' PERQ through ' + latestOpportunities + ' waits for the Group 17 Written report for the same dates.';
-    if (latestOrders > through) note += ' Group 17 Written through ' + latestOrders + ' waits for PERQ for the same dates.';
+    if (latestOpportunities > through) note += ' PERQ through ' + latestOpportunities + ' waits for the Data KPI Individual Written report for the same dates.';
+    if (latestOrders > through) note += ' Data KPI Individual Written through ' + latestOrders + ' waits for PERQ for the same dates.';
     if (opportunities.total === 0) status = 'No opportunities';
   }
   if (computed.reconcile) note += ' Above 100%. Flagged for reconciliation.';
@@ -2129,7 +2129,7 @@ function bedding_(payload) {
   function percentNote(side) {
     var figure = storeSides[side];
     if (figure.beddingPercent === null) return 'No verified ' + side + ' bedding figure covers store month ' + store.start + ' through ' + store.end + '.';
-    return 'Bedding dollars ÷ Group 17 ' + side + ' sales, ' + store.start + ' through ' + (figure.through || 'the latest verified date') + '. Same figure as the Home Bedding tile.';
+    return 'Bedding dollars ÷ Data KPI Store ' + side + ' sales, ' + store.start + ' through ' + (figure.through || 'the latest verified date') + '. Same figure as the Home Bedding tile.';
   }
   var people = peopleRows_(individual.start, individual.end).map(function (person) {
     var written = person.analysis.written;
@@ -2286,8 +2286,8 @@ function formerSalesLocatedTo_() {
 }
 
 /**
- * Daily Group 17 sales and SNAP lines for people who no longer work here.
- * A month-to-date row is used only when that person has no daily Group 17 line on the same side.
+ * Daily Data KPI Individual sales and SNAP lines for people who no longer work here.
+ * A month-to-date row is used only when that person has no daily Data KPI Individual line on the same side.
  * Store totals and every other person's figures are left alone.
  */
 function formerSalesLocated_(start, end) {
@@ -2383,7 +2383,7 @@ function salesTeamDeliveredVariance_(people, individual, today) {
     salespersonPeriod: individual.start + ' through ' + individual.end,
     deliveredThrough: through || null,
     differs: differs,
-    note: 'Official Store Delivered is NWDSR Delivered for the store month (' + store.start + ' through ' + store.end + ')' + (storeDeliveredThrough ? ', verified through ' + storeDeliveredThrough : '') + ', and remains the authoritative store measure. Current Sales Team Delivered is the sum of active associates from Group 17 Delivered for the salesperson month (' + individual.start + ' through ' + individual.end + '). It does not include former employees, unmatched names, or management. A negative for someone who no longer works here reduces that salesperson month once: written reduces Kelly Meyers, delivered reduces Liz Perez. A positive stays under the former employee and is not added to either manager. The store total is not changed. The calendars also differ (store 2nd–1st vs salesperson 1st–last day). The two figures are not forced to match.',
+    note: 'Official Store Delivered is NWDSR Delivered for the store month (' + store.start + ' through ' + store.end + ')' + (storeDeliveredThrough ? ', verified through ' + storeDeliveredThrough : '') + ', and remains the authoritative store measure. Current Sales Team Delivered is the sum of active associates from Data KPI Individual Delivered for the salesperson month (' + individual.start + ' through ' + individual.end + '). It does not include former employees, unmatched names, or management. A negative for someone who no longer works here reduces that salesperson month once: written reduces Kelly Meyers, delivered reduces Liz Perez. A positive stays under the former employee and is not added to either manager. The store total is not changed. The calendars also differ (store 2nd–1st vs salesperson 1st–last day). The two figures are not forced to match.',
   };
 }
 

@@ -85,23 +85,23 @@ function coachCard_(person, hire, period) {
   }
   var lines = [
     coachLine_('average', 'Average ticket', ticket.average, ticketGoal, 'dollars',
-      ticket.status === 'ready' ? ticket.orders + ' Group 17 written orders average ' + moneyText_(ticket.average) + '.' : (ticket.status === 'No orders' ? 'No Group 17 written orders are on file.' : 'Group 17 written orders or written sales are not both on file.'),
+      ticket.status === 'ready' ? ticket.orders + ' Data KPI Individual written orders average ' + moneyText_(ticket.average) + '.' : (ticket.status === 'No orders' ? 'No Data KPI Individual written orders are on file.' : 'Data KPI Individual written orders or written sales are not both on file.'),
       (hire.newHire ? 'New-hire average-ticket goal ' : 'Average-ticket goal ') + moneyText_(ticketGoal) + '.',
-      ticket.status === 'ready' && ticket.opportunity > 0 ? 'The same ' + ticket.orders + ' orders at ' + moneyText_(ticketGoal) + ' are ' + moneyText_(ticket.hypothetical) + ', which is ' + moneyText_(ticket.opportunity) + ' more Group 17 written sales. This is the Goal coach figure and it is not commission.' : 'No additional ticket dollars are calculated.'),
+      ticket.status === 'ready' && ticket.opportunity > 0 ? 'The same ' + ticket.orders + ' orders at ' + moneyText_(ticketGoal) + ' are ' + moneyText_(ticket.hypothetical) + ', which is ' + moneyText_(ticket.opportunity) + ' more Data KPI Individual written sales. This is the Goal coach figure and it is not commission.' : 'No additional ticket dollars are calculated.'),
     coachLine_('closing', 'Closing ratio', person.closingRatio, closingGoal, 'percent',
-      coachBlank_(person.closingRatio) ? 'Individual closing is Pending. ' + (person.closingNote || '') : percentText_(person.closingRatio) + ' from ' + person.closingOrders + ' Group 17 written orders and ' + person.opportunities + ' PERQ opportunities' + (person.closingThrough ? ' through ' + person.closingThrough : '') + '.',
+      coachBlank_(person.closingRatio) ? 'Individual closing is Pending. ' + (person.closingNote || '') : percentText_(person.closingRatio) + ' from ' + person.closingOrders + ' Data KPI Individual written orders and ' + person.opportunities + ' PERQ opportunities' + (person.closingThrough ? ' through ' + person.closingThrough : '') + '.',
       percentText_(closingGoal) + ' individual closing goal. This is not the store closing ratio.',
-      moreOrders === null ? 'The extra orders to reach the goal are Pending until both counts are on file.' : (moreOrders ? moreOrders + ' more Group 17 written orders on the same PERQ opportunities would reach the goal. That count is not a forecast of new customers.' : 'The closing count on file is already at the goal.')),
+      moreOrders === null ? 'The extra orders to reach the goal are Pending until both counts are on file.' : (moreOrders ? moreOrders + ' more Data KPI Individual written orders on the same PERQ opportunities would reach the goal. That count is not a forecast of new customers.' : 'The closing count on file is already at the goal.')),
     coachLine_('bedding', 'Bedding', bedding, beddingGoal, 'percent',
-      coachBlank_(bedding) ? 'Bedding contribution is Pending.' : 'Bedding is ' + percentText_(bedding) + ' of Group 17 written sales' + (written && written.through ? ' through ' + written.through : '') + '.',
+      coachBlank_(bedding) ? 'Bedding contribution is Pending.' : 'Bedding is ' + percentText_(bedding) + ' of Data KPI Individual written sales' + (written && written.through ? ' through ' + written.through : '') + '.',
       coachBlank_(beddingGoal) ? 'Bedding goal is Pending.' : (hire.newHire ? 'New-hire bedding goal ' : 'Bedding goal ') + percentText_(beddingGoal) + '.',
-      'The card does not invent bedding dollars beyond the Group 17 rate on file.'),
+      'The card does not invent bedding dollars beyond the Data KPI Individual rate on file.'),
   ];
   function attachLine(key, label, row, goal, newHireNote) {
     var actual = row && row.status !== 'na' ? row.actual : null;
     var needed = row && row.needed !== null && row.needed !== undefined ? row.needed : null;
     return coachLine_(key, label, actual, goal, 'percent',
-      coachBlank_(actual) ? label + ' is Pending. No qualifying items are on the Group 17 written report for this associate.' : label + ' is ' + percentText_(actual) + (row.sold !== null ? ' (' + row.sold + ' of ' + row.qualified + ').' : '.'),
+      coachBlank_(actual) ? label + ' is Pending. No qualifying items are on the Data KPI Individual written report for this associate.' : label + ' is ' + percentText_(actual) + (row.sold !== null ? ' (' + row.sold + ' of ' + row.qualified + ').' : '.'),
       coachBlank_(goal) ? label + ' goal is Pending.' : (newHireNote || label + ' goal ') + percentText_(goal) + '.',
       needed === null ? 'Additional attachments are Pending.' : (needed ? needed + ' more attachment' + (Number(needed) === 1 ? '' : 's') + ' on the qualified items already on file would reach the goal.' : 'The attachment count on file is already at the goal.'));
   }
@@ -143,9 +143,9 @@ function coachCard_(person, hire, period) {
       var rugGoal = hire.newHire ? 6 : 12;
       var figure = person.analysis && person.analysis.written ? person.analysis.written.rugs : null;
       if (!figure || figure.text === 'Not in report' || figure.value === null || figure.value === undefined) {
-        return { count: null, goal: rugGoal, note: 'No salesperson rug count is on file. ASL rugs are a store total, so this card does not score rugs or estimate rug commission.' };
+        return { count: null, goal: rugGoal, note: 'No salesperson rug count is on file. Data KPI Store rugs are a store total, so this card does not score rugs or estimate rug commission.' };
       }
-      return { count: figure.value, goal: rugGoal, note: figure.value + ' rugs on the Group 17 written report for this salesperson month' + (figure.detail ? ' (' + figure.detail + ')' : '') + '.' };
+      return { count: figure.value, goal: rugGoal, note: figure.value + ' rugs on the Data KPI Individual written report for this salesperson month' + (figure.detail ? ' (' + figure.detail + ')' : '') + '.' };
     })(),
     financial: {
       ticket: ticket.status === 'ready' && ticket.opportunity > 0 ? ticket.opportunity : null,

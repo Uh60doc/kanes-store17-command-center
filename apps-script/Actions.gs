@@ -142,7 +142,7 @@ function actionSuggestTicket_(today) {
     description: 'Coach ' + best.name + ' on average ticket.',
     assignee: best.name,
     due: today,
-    basis: best.orders + ' Group 17 written orders average $' + best.average + ' versus the $' + best.goal + ' goal. This is not commission.',
+    basis: best.orders + ' Data KPI Individual written orders average $' + best.average + ' versus the $' + best.goal + ' goal. This is not commission.',
   };
 }
 

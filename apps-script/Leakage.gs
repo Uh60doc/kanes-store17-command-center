@@ -77,9 +77,9 @@ function leakagePerson_(person, hire) {
   (person.kpis || []).forEach(function (row) { if (beddingGoal === null && row.name === 'Bedding') beddingGoal = row.goal; });
   var beddingDollars = leakageMix_(sales, written ? written.beddingDollars : null, beddingGoal);
   var items = [
-    { key: 'closing', label: 'Closing ratio', kind: 'incremental', dollars: closingDollars, note: 'Extra Group 17 written orders to reach the closing goal, priced at the current average ticket. The ticket is not also raised.' },
+    { key: 'closing', label: 'Closing ratio', kind: 'incremental', dollars: closingDollars, note: 'Extra Data KPI Individual written orders to reach the closing goal, priced at the current average ticket. The ticket is not also raised.' },
     { key: 'ticket', label: 'Average ticket', kind: 'incremental', dollars: ticket.dollars, note: ticket.ticket.basis || ticket.ticket.status },
-    { key: 'bedding', label: 'Bedding mix', kind: 'mix', dollars: beddingDollars, note: 'Bedding dollars short of the mix goal on Group 17 written sales already on file. This is not new written sales and it is not added to closing or ticket.' },
+    { key: 'bedding', label: 'Bedding mix', kind: 'mix', dollars: beddingDollars, note: 'Bedding dollars short of the mix goal on Data KPI Individual written sales already on file. This is not new written sales and it is not added to closing or ticket.' },
   ];
   var ranked = leakageRank_(items);
   var biggest = leakageBiggest_(ranked);
