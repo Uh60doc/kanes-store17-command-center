@@ -775,6 +775,14 @@ function refreshMonthlyHistory_(ctx, calendar, goals) {
       var status = 'Open: month ended. A GM finalizes this month from Admin. It is not finalized automatically.';
       var at = index[line.key];
       if (at === undefined) {
+        var legacyKey = String(line.key).replace('Data KPI Store sales', 'Data Analysis Group 17 sales').replace('Data KPI Individual sales', 'Data Analysis Group 17 sales');
+        if (legacyKey !== line.key && index[legacyKey] !== undefined) {
+          at = index[legacyKey];
+          delete index[legacyKey];
+          index[line.key] = at;
+        }
+      }
+      if (at === undefined) {
         appends.push(line.cells.concat([status, now, now, line.lock ? now : '', '']));
         counts.added += 1;
         if (line.lock) counts.locked += 1;

@@ -48,7 +48,7 @@ function accelScenario_(sold, qualified, goal, onHand, newEligible, onNew) {
 }
 
 /**
- * Bedding percent is bedding dollars ÷ Group 17 sales, and bedding dollars are inside that sales total.
+ * Bedding percent is bedding dollars ÷ Data KPI Store sales, and bedding dollars are inside that sales total.
  * Extra bedding therefore raises both the numerator and the denominator. Other written sales raise only
  * the denominator.
  */
@@ -136,7 +136,7 @@ function accelBeddingCard_(spec) {
     dollarsNeeded: needed,
     ratioToGoal: actual === null || !Number(spec.goal) ? null : accelRound4_(actual / Number(spec.goal)),
     status: status,
-    note: 'Bedding dollars ÷ Group 17 sales. Bedding dollars are part of that sales total, so additional bedding increases both.',
+    note: 'Bedding dollars ÷ Data KPI Store sales. Bedding dollars are part of that sales total, so additional bedding increases both.',
   };
 }
 
@@ -236,11 +236,11 @@ function accelLedgerCard_(view, side, periodStart, spec) {
 function accelStore_(side, goals) {
   var period = storePeriodContaining_(todayNy_());
   var cards = [
-    accelLedgerCard_('FABW_STORE', side, period.start, { key: 'fabric', label: 'Fabric maintenance', customer: 'Fabric Maintenance Plan', source: 'Group 17 FABRIC', goal: goals.fabric }),
-    accelLedgerCard_('LTHW_STORE', side, period.start, { key: 'leather', label: 'Leather maintenance', customer: 'Leather Maintenance Plan', source: 'Group 17 LEATHER', goal: goals.leather }),
-    accelLedgerCard_('PWAR_STORE', side, period.start, { key: 'power', label: 'Power upholstery', customer: 'Power Maintenance Plan', source: 'Group 17 POWER FURNITURE', goal: goals.power }),
-    accelLedgerCard_('MPPA_STORE', side, period.start, { key: 'pads', label: 'Mattress protectors', customer: 'Mattress protector', source: 'Group 17 MATTRESS PADS', goal: goals.mattress }),
-    accelLedgerCard_('ATTACH_STORE', side, period.start, { key: 'total', label: 'Total Attachment', customer: 'attachment', source: 'Group 17 TOTAL ATTACHMENTS', goal: goals.attachment }),
+    accelLedgerCard_('FABW_STORE', side, period.start, { key: 'fabric', label: 'Fabric maintenance', customer: 'Fabric Maintenance Plan', source: 'Data KPI Store FABRIC', goal: goals.fabric }),
+    accelLedgerCard_('LTHW_STORE', side, period.start, { key: 'leather', label: 'Leather maintenance', customer: 'Leather Maintenance Plan', source: 'Data KPI Store LEATHER', goal: goals.leather }),
+    accelLedgerCard_('PWAR_STORE', side, period.start, { key: 'power', label: 'Power upholstery', customer: 'Power Maintenance Plan', source: 'Data KPI Store POWER FURNITURE', goal: goals.power }),
+    accelLedgerCard_('MPPA_STORE', side, period.start, { key: 'pads', label: 'Mattress protectors', customer: 'Mattress protector', source: 'Data KPI Store MATTRESS PADS', goal: goals.mattress }),
+    accelLedgerCard_('ATTACH_STORE', side, period.start, { key: 'total', label: 'Total Attachment', customer: 'attachment', source: 'Data KPI Store total attachments', goal: goals.attachment }),
     accelLedgerCard_('BASES_STORE', side, period.start, { key: 'bases', label: 'Adjustable base attachment', customer: 'adjustable base', source: 'ASL adjustable bases', goal: goals.adjustableBase }),
     accelLedgerCard_('PILLOWS_STORE', side, period.start, { key: 'pillows', label: 'Pillows', customer: 'pillow', source: 'ASL pillows', goal: goals.pillow }),
     accelLedgerCard_('FP_STORE', side, period.start, { key: 'wood', label: 'Wood / Furniture Protection', customer: 'Furniture Maintenance Plan', source: 'ASL Furniture Protection', goal: goals.wood }),
@@ -254,14 +254,14 @@ function accelStore_(side, goals) {
   var beddingThrough = beddingRow && beddingRow.verifiedThrough;
   var salesThrough = salesRow && salesRow.verifiedThrough;
   if (!beddingRow || !salesRow || !beddingThrough || beddingThrough !== salesThrough) {
-    cards.push(accelBeddingCard_({ key: 'bedding', label: 'Bedding contribution', customer: 'bedding', source: 'Group 17 bedding ÷ sales', goal: goals.bedding, bedding: null, sales: null }));
+    cards.push(accelBeddingCard_({ key: 'bedding', label: 'Bedding contribution', customer: 'bedding', source: 'Data KPI Store bedding ÷ sales', goal: goals.bedding, bedding: null, sales: null }));
   } else {
-    cards.push(accelBeddingCard_({ key: 'bedding', label: 'Bedding contribution', customer: 'bedding', source: 'Group 17 bedding ÷ sales', goal: goals.bedding, bedding: beddingRow.sales, sales: salesRow.sales, through: beddingThrough }));
+    cards.push(accelBeddingCard_({ key: 'bedding', label: 'Bedding contribution', customer: 'bedding', source: 'Data KPI Store bedding ÷ sales', goal: goals.bedding, bedding: beddingRow.sales, sales: salesRow.sales, through: beddingThrough }));
   }
   var rugs = null;
   try { rugs = latestStoreLedger_('RUGS_STORE', side, period.start); } catch (error) { rugs = null; }
   cards.push(accelCountCard_({
-    key: 'rugs', label: 'Rugs', customer: 'rug', source: 'ASL rugs', goal: goals.rugs,
+    key: 'rugs', label: 'Rugs', customer: 'rug', source: 'Data KPI Store rugs', goal: goals.rugs,
     count: rugs && !accelBlank_(rugs.units) ? rugs.units : null, through: rugs ? rugs.verifiedThrough : '',
     note: rugs ? 'ASL rug count for this side. Written and Delivered are not added together. Approved monthly goal ' + goals.rugs + '.' : 'No ASL rug count is on file. Nothing is shown as zero.',
   }));
@@ -293,20 +293,20 @@ function accelPersonSide_(analysis, goals, hire) {
     return accelRateCard_({ key: key, label: label, customer: customer, source: source, goal: goal, sold: tally.sold, qualified: tally.qualified, dollars: tally.dollars, through: side.through });
   };
   var cards = [
-    rate('fabric', 'Fabric maintenance', 'Fabric Maintenance Plan', 'Group 17 FABRIC', goals.fabric),
-    rate('leather', 'Leather maintenance', 'Leather Maintenance Plan', 'Group 17 LEATHER', goals.leather),
-    rate('power', 'Power upholstery', 'Power Maintenance Plan', 'Group 17 POWER FURNITURE', goals.power),
-    rate('pads', 'Mattress protectors', 'Mattress protector', 'Group 17 MATTRESS PADS', padGoal),
-    rate('total', 'Total Attachment', 'attachment', 'Group 17 TOTAL ATTACHMENTS', goals.attachment),
+    rate('fabric', 'Fabric maintenance', 'Fabric Maintenance Plan', 'Data KPI Individual FABRIC', goals.fabric),
+    rate('leather', 'Leather maintenance', 'Leather Maintenance Plan', 'Data KPI Individual LEATHER', goals.leather),
+    rate('power', 'Power upholstery', 'Power Maintenance Plan', 'Data KPI Individual POWER FURNITURE', goals.power),
+    rate('pads', 'Mattress protectors', 'Mattress protector', 'Data KPI Individual MATTRESS PADS', padGoal),
+    rate('total', 'Total Attachment', 'attachment', 'Data KPI Individual TOTAL ATTACHMENTS', goals.attachment),
   ];
   if (!side || accelBlank_(side.beddingDollars) || accelBlank_(side.sales)) {
-    cards.push(accelBeddingCard_({ key: 'bedding', label: 'Bedding contribution', customer: 'bedding', source: 'Group 17 bedding ÷ sales', goal: beddingGoal, bedding: null, sales: null }));
+    cards.push(accelBeddingCard_({ key: 'bedding', label: 'Bedding contribution', customer: 'bedding', source: 'Data KPI Store bedding ÷ sales', goal: beddingGoal, bedding: null, sales: null }));
   } else {
-    cards.push(accelBeddingCard_({ key: 'bedding', label: 'Bedding contribution', customer: 'bedding', source: 'Group 17 bedding ÷ sales', goal: beddingGoal, bedding: side.beddingDollars, sales: side.sales, through: side.through }));
+    cards.push(accelBeddingCard_({ key: 'bedding', label: 'Bedding contribution', customer: 'bedding', source: 'Data KPI Store bedding ÷ sales', goal: beddingGoal, bedding: side.beddingDollars, sales: side.sales, through: side.through }));
   }
   cards.push(accelCountCard_({
-    key: 'rugs', label: 'Rugs', customer: 'rug', source: 'ASL rugs', goal: rugGoal, count: null,
-    note: 'No salesperson rug count is on file. ASL rugs are a store total, so this goal stays Pending. The monthly goal is ' + rugGoal + (hire.newHire ? ' for a new hire.' : '.'),
+    key: 'rugs', label: 'Rugs', customer: 'rug', source: 'Data KPI Store rugs', goal: rugGoal, count: null,
+    note: 'No salesperson rug count is on file. Data KPI Store rugs are a store total, so this goal stays Pending. The monthly goal is ' + rugGoal + (hire.newHire ? ' for a new hire.' : '.'),
   }));
   cards.push(accelRateCard_({ key: 'bases', label: 'Adjustable base attachment', customer: 'adjustable base', source: 'ASL', goal: goals.adjustableBase, sold: null, qualified: null, note: 'ASL reports adjustable bases for the store only.' }));
   cards.push(accelRateCard_({ key: 'pillows', label: 'Pillows', customer: 'pillow', source: 'ASL', goal: goals.pillow, sold: null, qualified: null, note: 'ASL reports pillows for the store only.' }));

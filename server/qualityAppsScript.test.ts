@@ -144,6 +144,21 @@ test('obsolete missing-report warnings from before alert tracking are resolved a
   assert.equal(table(tabs, 'CC_Exceptions').filter((row) => row.severity === 'Report Missing').length, 3, 'the original log rows are kept');
 });
 
+test('Monday review and month-end readiness notes use the report names and do not send themselves', () => {
+  const { gs, mail, setToday } = harness();
+  assert.equal(gs.weeklyReportingSubject_('2026-10-26', '2026-11-01'), 'STORE 17 | Weekly Reporting Review | October 26, 2026 through November 1, 2026');
+  assert.equal(gs.monthEndReadinessSubject_('October 2026'), 'STORE 17 | October 2026 | Month-End Readiness');
+  const body = gs.reportingReviewBody_(gs.weeklyReportingSubject_('2026-10-26', '2026-11-01'), [
+    { business_date: '2026-10-29', report: 'Data KPI Individual — Written', message: 'Never received for October 29, 2026.' },
+  ]);
+  assert.match(body, /Data KPI Individual — Written/);
+  assert.match(body, /previously received but not retained/);
+  assert.match(body, /does not finalize a month/);
+  setToday('2026-11-03');
+  assert.equal(gs.sendWeeklyReportingReview_('2026-10-26', '2026-11-01').reason, 'not Monday');
+  assert.equal(mail.length, 0, 'building the note does not send mail');
+});
+
 test('only one consolidated email is sent for the outstanding problems', () => {
   const { gs, tabs, mail, setToday } = harness();
   gs.qualityAfterUpdate_('scheduled import', true);

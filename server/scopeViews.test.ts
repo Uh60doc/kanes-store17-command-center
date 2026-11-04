@@ -23,7 +23,7 @@ test('every STORE and PERSON tab formula filters CC_Ledger by its own view and s
     assert.doesNotMatch(formula, /QUERY\(/);
   }
   assert.match(viewFormula('NWDSR_WRITTEN_PERSON'), /No individual NWDSR Written: the NWDSR reports are store-level ranking reports\. Individual written sales and the \$65,000 goal use SNAP_PERSON\./);
-  assert.match(viewFormula('NWDSR_DELIVERED_PERSON'), /Individual delivered sales are Data Analysis Group 17 Delivered on DA_SALES_PERSON\./);
+  assert.match(viewFormula('NWDSR_DELIVERED_PERSON'), /Individual delivered sales are Data KPI Individual — Delivered on DA_SALES_PERSON\./);
   assert.match(viewFormula('BASES_PERSON'), /No salesperson report on file for BASES_PERSON\. Pending\./);
   assert.throws(() => viewFormula('CC_Kpi'), /no STORE or PERSON scope/);
 });

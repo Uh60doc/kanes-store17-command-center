@@ -144,7 +144,7 @@ test('an individual weekly report uses SNAP for volume and keeps Group 17 and PE
   assert.equal(written.result, snap.pending ? 'Pending' : plain(gs.moneyText_(snap.value)));
   assert.match(written.source, /SNAP Written/);
   const orders = eric.performance.find((item: { key: string }) => item.key === 'orders');
-  assert.match(orders.source, /Group 17/);
+  assert.match(orders.source, /Data KPI Individual/);
   assert.match(orders.source, /Not SNAP dollars/);
   const ticket = eric.performance.find((item: { key: string }) => item.key === 'ticket');
   assert.match(ticket.goal, /\$2,500/);

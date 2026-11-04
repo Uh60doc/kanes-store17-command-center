@@ -985,3 +985,21 @@ test('a cross-source difference is kept, and a discarded original is not called 
   assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-29')[0]![10], 29000);
   assert.equal(ledger(tabs, 'DA_SALES_PERSON', '2026-10-29').some((row) => row[10] === 29888.92), true, 'the verified individual figure is still the first workbook');
 });
+
+test('a store KPI dollar saved from the individual TOTAL keeps its amount and takes the ASL source when the figures match', () => {
+  const { gs, send, tabs } = boot(store(), '2026-11-03');
+  const key = 'DA_SALES_STORE|daily|2026-10-29|2026-10-29|2026-10-29|written|STORE';
+  tabs.CC_Ledger!.push(['DA_SALES_STORE', 'daily', '2026-10-29', '2026-10-29', '2026-10-29', '2026-10-29', '17', '', '', 'written', 29888.92, 2, '', '', '', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-29_2026-10-29.xlsx', '2026-11-04T01:35:09.681Z', key]);
+  tabs.CC_Daily!.push(['2026-10-29', 29799, 29799, 9641]);
+  const beforeDaily = tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')!.slice();
+  const imported = send('2026-10-29', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-29_2026-10-29.xlsx', storeKpi('WRITTEN', 29888.92, 'retitle'), true);
+  assert.equal(imported.status, 'Imported', imported.message);
+  const row = ledger(tabs, 'DA_SALES_STORE', '2026-10-29').find((line) => line[17] === key)!;
+  assert.equal(row[10], 29888.92, 'the stored store KPI dollar is not rewritten');
+  assert.match(String(row[15]), /DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-29_2026-10-29\.xlsx/);
+  assert.doesNotMatch(String(row[15]), /DATA_ANALYSIS_KPI_17_/);
+  assert.deepEqual(tabs.CC_Daily!.find((line) => line[0] === '2026-10-29'), beforeDaily, 'NWDSR and SNAP for October 29 stay as they were');
+  const conflict = send('2026-10-29', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-29_2026-10-29.xlsx', storeKpi('WRITTEN', 31000, 'different'), true);
+  assert.equal(conflict.status, 'Needs Review', conflict.message);
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-29').find((line) => line[17] === key)![10], 29888.92, 'a different ASL dollar does not replace the recorded figure');
+});

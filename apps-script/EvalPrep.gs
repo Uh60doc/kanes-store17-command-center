@@ -123,17 +123,17 @@ function evalPrepCard_(row, packs, info, today) {
   }
   var metrics = [
     evalPrepMetric_('volume', 'Written sales (SNAP)', 'SNAP Written by salesperson', 'dollars', null, volumeCells),
-    evalPrepMetric_('average', 'Average ticket', 'Group 17 written sales ÷ written orders', 'dollars', ticketGoal, rateCells(function (person) { return written(person, 'average'); }, ticketGoal, 'dollars', 'Group 17 written orders are not on file.')),
-    evalPrepMetric_('closing', 'Closing ratio', 'Group 17 written orders ÷ PERQ opportunities', 'percent', 0.5, rateCells(function (person) { return person.closingRatio; }, 0.5, 'percent', 'Individual closing is not on file for this month.')),
-    evalPrepMetric_('bedding', 'Bedding', 'Bedding dollars ÷ Group 17 written sales', 'percent', beddingGoal, rateCells(function (person) { return written(person, 'bedding'); }, beddingGoal, 'percent', 'Bedding is not on file for this month.')),
-    evalPrepMetric_('fabric', 'Fabric maintenance', 'Group 17 fabric protection', 'percent', fabricGoal, rateCells(function (person) { return attach(person, 'fabric'); }, fabricGoal, 'percent', 'No qualifying fabric items are on file.')),
-    evalPrepMetric_('leather', 'Leather maintenance', 'Group 17 leather protection', 'percent', leatherGoal, rateCells(function (person) { return attach(person, 'leather'); }, leatherGoal, 'percent', 'No qualifying leather items are on file.')),
-    evalPrepMetric_('power', 'Power upholstery', 'Group 17 power protection', 'percent', powerGoal, rateCells(function (person) { return attach(person, 'power'); }, powerGoal, 'percent', 'No qualifying power items are on file.')),
-    evalPrepMetric_('protector', 'Mattress protectors', 'Group 17 mattress protectors', 'percent', padGoal, rateCells(function (person) { return attach(person, 'pads'); }, padGoal, 'percent', 'No qualifying mattresses are on file.')),
-    evalPrepMetric_('finance', 'Financing', 'Financed dollars ÷ Group 17 written sales', 'percent', financeGoal, rateCells(function (person) { return written(person, 'finance'); }, financeGoal, 'percent', 'Financing is not on file for this month.')),
+    evalPrepMetric_('average', 'Average ticket', 'Data KPI Individual written sales ÷ written orders', 'dollars', ticketGoal, rateCells(function (person) { return written(person, 'average'); }, ticketGoal, 'dollars', 'Data KPI Individual written orders are not on file.')),
+    evalPrepMetric_('closing', 'Closing ratio', 'Data KPI Individual written orders ÷ PERQ opportunities', 'percent', 0.5, rateCells(function (person) { return person.closingRatio; }, 0.5, 'percent', 'Individual closing is not on file for this month.')),
+    evalPrepMetric_('bedding', 'Bedding', 'Bedding dollars ÷ Data KPI Individual written sales', 'percent', beddingGoal, rateCells(function (person) { return written(person, 'bedding'); }, beddingGoal, 'percent', 'Bedding is not on file for this month.')),
+    evalPrepMetric_('fabric', 'Fabric maintenance', 'Data KPI Individual fabric protection', 'percent', fabricGoal, rateCells(function (person) { return attach(person, 'fabric'); }, fabricGoal, 'percent', 'No qualifying fabric items are on file.')),
+    evalPrepMetric_('leather', 'Leather maintenance', 'Data KPI Individual leather protection', 'percent', leatherGoal, rateCells(function (person) { return attach(person, 'leather'); }, leatherGoal, 'percent', 'No qualifying leather items are on file.')),
+    evalPrepMetric_('power', 'Power upholstery', 'Data KPI Individual power protection', 'percent', powerGoal, rateCells(function (person) { return attach(person, 'power'); }, powerGoal, 'percent', 'No qualifying power items are on file.')),
+    evalPrepMetric_('protector', 'Mattress protectors', 'Data KPI Individual mattress protectors', 'percent', padGoal, rateCells(function (person) { return attach(person, 'pads'); }, padGoal, 'percent', 'No qualifying mattresses are on file.')),
+    evalPrepMetric_('finance', 'Financing', 'Financed dollars ÷ Data KPI Individual written sales', 'percent', financeGoal, rateCells(function (person) { return written(person, 'finance'); }, financeGoal, 'percent', 'Financing is not on file for this month.')),
   ];
   var rugCells = info.months.map(function () {
-    return { status: 'Pending Verification', value: null, text: 'Pending', unit: 'count', scored: false, met: null, note: 'No salesperson rug count is on file. ASL rugs are a store total.', goal: rugGoal };
+    return { status: 'Pending Verification', value: null, text: 'Pending', unit: 'count', scored: false, met: null, note: 'No salesperson rug count is on file. Data KPI Store rugs are a store total.', goal: rugGoal };
   });
   metrics.push(evalPrepMetric_('rugs', 'Rugs', 'Not on a salesperson report', 'count', rugGoal, rugCells));
   metrics[0].goalText = 'Tenure schedule';
@@ -160,7 +160,7 @@ function evalPrepCard_(row, packs, info, today) {
     var advice = EVAL_ADVICE_[item.metric.key] || EVAL_ADVICE_[item.metric.key === 'bedding' ? 'mattress' : item.metric.key] || '';
     if (item.metric.key === 'bedding') advice = EVAL_ADVICE_.mattress;
     if (item.metric.key === 'protector') advice = EVAL_ADVICE_.protector;
-    if (item.metric.key === 'closing') advice = 'Review that month\'s PERQ opportunities and Group 17 written orders with the associate.';
+    if (item.metric.key === 'closing') advice = 'Review that month\'s PERQ opportunities and Data KPI Individual written orders with the associate.';
     var goalText = item.metric.key === 'volume' ? (cell.goalText || item.metric.goalText) : item.metric.goalText;
     return {
       metric: item.metric.label,

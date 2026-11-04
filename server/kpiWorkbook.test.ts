@@ -83,11 +83,11 @@ test('a Group 17 day file keeps each salesperson\'s Data Analysis sales and orde
   const report = parseKpiWorkbook(zipStored({ 'xl/worksheets/sheet1.xml': sheet }), 'DATA_ANALYSIS_KPI_17_DELIVERED_2026-10-15_2026-10-15.xlsx');
   const sales = recordsFromKpi(report, '2026-10-15').filter((record) => record.view.startsWith('DA_SALES_'));
   assert.deepEqual(sales.map((record) => [record.view, record.grain, record.employeeName, record.side, record.salesDollars, record.unitCount, record.reportDate]), [
-    ['DA_SALES_STORE', 'daily', '', 'delivered', 2702.67, 8, '2026-10-15'],
     ['DA_SALES_PERSON', 'daily', 'Ricky Nassif', 'delivered', 3003.97, 3, '2026-10-15'],
     ['DA_SALES_PERSON', 'daily', 'Elizabeth Perez', 'delivered', -301.3, 5, '2026-10-15'],
   ]);
-  assert.equal(sales[1]?.recordKey, 'DA_SALES_PERSON|daily|2026-10-15|2026-10-15|2026-10-15|delivered|TNASSI');
+  assert.equal(sales.some((record) => record.view.endsWith('_STORE')), false, 'the individual TOTAL is not a store KPI');
+  assert.equal(sales[0]?.recordKey, 'DA_SALES_PERSON|daily|2026-10-15|2026-10-15|2026-10-15|delivered|TNASSI');
 });
 
 test('a blank group is zero and 0% in a daily report but stays blank in a snapshot', () => {
@@ -167,13 +167,14 @@ test('October store KPI files reconcile without adding the day snapshot', { skip
   const aslDay = reports.find((report) => report.family === 'asl' && report.side === 'written' && report.start === '2026-10-13' && report.end === '2026-10-13');
   const aslRecords = aslDay ? recordsFromKpi(aslDay, '2026-10-13') : [];
   assert.equal(aslRecords.some((row) => row.employeeName === '09' || row.view.endsWith('_PERSON')), false);
-  assert.equal(aslRecords.some((row) => row.view === 'FABW_STORE'), false);
+  assert.equal(aslRecords.some((row) => row.view === 'FABW_STORE'), true, 'store fabric comes from the ASL Store 17 row');
   const dayRecords = recordsFromKpi(reports.find((report) => report.filename.includes('17_WRITTEN_2026-10-13'))!, '2026-10-13');
   const snapshotRecords = recordsFromKpi(reports.find((report) => report.filename.includes('17_WRITTEN_2026-10-02_2026-11-01'))!, '2026-10-13');
   const counted = attachmentFromDaily([...dayRecords, ...snapshotRecords], 'FABW_STORE', 'written', '2026-10-02', '2026-11-01');
   const dayOnly = attachmentFromDaily(dayRecords, 'FABW_STORE', 'written', '2026-10-02', '2026-11-01');
   assert.equal(counted.attachments, dayOnly.attachments);
-  assert.equal(dayRecords.some((row) => row.view === 'AVERAGE_STORE' && row.salesDollars !== null), true);
+  assert.equal(dayRecords.some((row) => row.view === 'AVERAGE_STORE'), false, 'the individual workbook does not write a store average');
+  assert.equal(aslRecords.some((row) => row.view === 'AVERAGE_STORE' && row.salesDollars !== null), true);
   const day = reports.find((report) => report.family === 'group17' && report.side === 'written' && report.start === '2026-10-13' && report.end === '2026-10-13');
   const deliveredDay = reports.find((report) => report.family === 'group17' && report.side === 'delivered' && report.start === '2026-10-13' && report.end === '2026-10-13');
   assert.equal(day?.store?.sales, 7105.89);
@@ -228,7 +229,6 @@ test('the Group 17 Total Attachments group is kept as printed, with its sold dol
     'sold above qualified is kept as printed');
   const attach = recordsFromKpi(report, '2026-10-13').filter((record) => record.view.startsWith('ATTACH_'));
   assert.deepEqual(attach.map((record) => [record.view, record.employeeName, record.eligible, record.attachments, record.salesDollars]), [
-    ['ATTACH_STORE', '', 43, 44, 1357.57],
     ['ATTACH_PERSON', 'Renzo Del Solar', 43, 44, 1357.57],
   ]);
 });

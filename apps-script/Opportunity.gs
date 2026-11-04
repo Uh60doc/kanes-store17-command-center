@@ -27,12 +27,12 @@ function opportunityTicket_(orders, sales, goal) {
   if (opportunityBlank_(goal)) goal = OPP_TICKET_GOAL_;
   else goal = Number(goal);
   if (opportunityBlank_(orders) || opportunityBlank_(sales)) {
-    return { status: 'Pending', orders: opportunityBlank_(orders) ? null : orders, sales: opportunityBlank_(sales) ? null : sales, average: null, goal: goal, hypothetical: null, opportunity: null, basis: 'Group 17 written orders and written sales are not both on file.' };
+    return { status: 'Pending', orders: opportunityBlank_(orders) ? null : orders, sales: opportunityBlank_(sales) ? null : sales, average: null, goal: goal, hypothetical: null, opportunity: null, basis: 'Data KPI Individual written orders and written sales are not both on file.' };
   }
   orders = Number(orders);
   sales = opportunityRound_(sales);
   if (!orders) {
-    return { status: 'No orders', orders: 0, sales: sales, average: null, goal: goal, hypothetical: 0, opportunity: null, basis: 'Group 17 written orders are 0, so an average ticket is not calculated.' };
+    return { status: 'No orders', orders: 0, sales: sales, average: null, goal: goal, hypothetical: 0, opportunity: null, basis: 'Data KPI Individual written orders are 0, so an average ticket is not calculated.' };
   }
   var hypothetical = opportunityRound_(orders * goal);
   return {
@@ -43,7 +43,7 @@ function opportunityTicket_(orders, sales, goal) {
     goal: goal,
     hypothetical: hypothetical,
     opportunity: opportunityRound_(hypothetical - sales),
-    basis: 'Group 17 written sales ÷ Group 17 written orders. The same order count at $' + goal + '. This is written sales, not delivered commission.',
+    basis: 'Data KPI Individual written sales ÷ Data KPI Individual written orders. The same order count at $' + goal + '. This is written sales, not delivered commission.',
   };
 }
 
@@ -57,7 +57,7 @@ function opportunityGoalImpact_(snap, goal, illustratedWritten) {
     status: 'ready',
     actualPercent: Math.round(actual * 1000) / 1000,
     illustratedPercent: illustrated === null ? null : Math.round(illustrated * 1000) / 1000,
-    note: 'SNAP is the official individual written figure. The illustration is Group 17 written sales at the scenario ticket. It is not added to SNAP and it is not commission.',
+    note: 'SNAP is the official individual written figure. The illustration is Data KPI Individual written sales at the scenario ticket. It is not added to SNAP and it is not commission.',
   };
 }
 
@@ -149,11 +149,11 @@ function opportunityTakeaways_(card) {
   if (ticket.status === 'ready' && ticket.opportunity > 0) {
     lines.push('At your current ' + ticket.orders + ' transactions, reaching a $2,500 average ticket represents ' + moneyText_(ticket.opportunity) + ' in additional written sales. That is not commission.');
   } else if (ticket.status === 'ready' && ticket.opportunity <= 0) {
-    lines.push('The Group 17 average ticket is already at or above $2,500 on the orders on file. That written figure is not commission.');
+    lines.push('The Data KPI Individual average ticket is already at or above $2,500 on the orders on file. That written figure is not commission.');
   } else if (ticket.status === 'Pending') {
-    lines.push('Average-ticket coaching waits on Group 17 written orders and written sales.');
+    lines.push('Average-ticket coaching waits on Data KPI Individual written orders and written sales.');
   } else if (ticket.status === 'No orders') {
-    lines.push('No Group 17 written orders are on file, so there is no average ticket to compare. Nothing is treated as a missed sale.');
+    lines.push('No Data KPI Individual written orders are on file, so there is no average ticket to compare. Nothing is treated as a missed sale.');
   }
   lines.push('Qualifying rug count and rug revenue are not on a salesperson report, so a rug commission stays pending. The agreement pays 6% on quarterly area rugs. A 12% tier at 13 rugs is ' + OPP_PAY_NEEDED_.toLowerCase() + '.');
   lines.push('Protection-plan earnings need the combined qualifying dollars. Until that total is on file, the current tier is ' + OPP_PAY_NEEDED_.toLowerCase() + '. The agreement lists 20% from $3,000 through $4,500 and 25% above $4,500.');
@@ -186,7 +186,7 @@ function opportunityCard_(person) {
       nextRate: null,
       nextStatus: OPP_PAY_NEEDED_,
       nextReason: 'A 12% tier at 13 qualifying rugs per quarter is not in the Store Sales Associate Commission Agreement on file. It is not estimated.',
-      reason: 'ASL rugs are a store total. No salesperson rug count or rug revenue is on file, so nothing is shown as zero.',
+      reason: 'Data KPI Store rugs are a store total. No salesperson rug count or rug revenue is on file, so nothing is shown as zero.',
     },
     protection: {
       actual: null,

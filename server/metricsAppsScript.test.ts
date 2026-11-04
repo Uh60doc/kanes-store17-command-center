@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { type Grid, loadAppsScript, plain } from './fakeSpreadsheet.ts';
 
-const FILES = ['Data.gs', 'Metrics.gs', 'Roster.gs', 'Ledger.gs', 'Import.gs', 'KpiImport.gs'];
+const FILES = ['Data.gs', 'Metrics.gs', 'Roster.gs', 'Ledger.gs', 'Import.gs', 'KpiImport.gs', 'Reports.gs', 'Quality.gs', 'Upload.gs'];
 const TODAY = '2026-11-06';
 const STORE = { start: '2026-11-02', end: '2026-12-01' };
 const LEDGER_HEADER = ['view', 'grain', 'report_date', 'period_start', 'period_end', 'verified_through', 'store', 'employee_code', 'employee_name', 'side', 'sales_dollars', 'unit_count', 'eligible', 'attachments', 'kpi_percent', 'source_report', 'imported_at', 'record_key'];
@@ -63,7 +63,9 @@ test('the registry keeps one approved source per metric and the preserved Fabric
   assert.equal(gs.metricSource_('store_delivered'), 'NWDSR Delivered');
   assert.equal(gs.metricSource_('store_snap_written'), 'SNAP Written');
   assert.equal(gs.metricSource_('person_written'), 'SNAP Written by salesperson');
-  assert.equal(gs.metricSource_('person_delivered'), 'Group 17 Data Analysis Delivered');
+  assert.equal(gs.metricSource_('person_delivered'), 'Data KPI Individual — Delivered');
+  assert.equal(gs.metricSource_('kpi_bedding'), 'Data KPI Store');
+  assert.equal(gs.metricSource_('person_written'), 'SNAP Written by salesperson');
   assert.equal(gs.metricSource_('person_opportunities'), 'PERQ Salesperson Ups + Be Backs');
   const registry = plain(gs.metricRegistry_(TODAY)) as any[];
   const byKey = Object.fromEntries(registry.map((row) => [row.key, row]));

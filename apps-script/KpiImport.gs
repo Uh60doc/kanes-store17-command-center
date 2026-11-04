@@ -340,9 +340,22 @@ function upsertDailyBedding_(date, side, percent, filename) {
     } else if (recorded !== fineNumber_(percent)) holdBackDay_('CC_Kpi', 'Daily Bedding|' + date + '|' + side, values[r], String(percent), filename);
     return;
   }
-  var row = ['Daily Bedding', '', '', 'Group 17 TOTAL bedding dollars ÷ sales. ' + filename, date, date, date];
+  var row = ['Daily Bedding', '', '', 'Data KPI Store bedding dollars ÷ sales. ' + filename, date, date, date];
   row[column - 1] = percent;
   tab.appendRow(row);
+}
+
+/**
+ * A daily store KPI row saved from the individual workbook TOTAL keeps its dollars. When the Data KPI Store
+ * workbook is imported later with those same dollars, the source name becomes the ASL file. Person rows,
+ * NWDSR, and SNAP are not touched. A different dollar amount is still held for review.
+ */
+function storeSourceRetitle_(previous, record) {
+  if (!/_STORE$/.test(String(record[0] || ''))) return false;
+  var oldSource = String(previous[15] || '');
+  var newSource = String(record[15] || '');
+  if (oldSource === newSource) return false;
+  return /DATA_ANALYSIS_KPI_17_/i.test(oldSource) && /DATA_ANALYSIS_KPI_ASL_/i.test(newSource);
 }
 
 /** Returns how many rows were added, already on file with the same figures, held back, or replaced. */
@@ -359,8 +372,15 @@ function upsertKpiRecords_(records) {
     if (index[key]) {
       var previous = values[index[key] - 1];
       if (previous && record[1] === 'daily') {
-        if (sameLedgerFigures_(previous, record)) outcome.same += 1;
-        else {
+        if (sameLedgerFigures_(previous, record)) {
+          if (storeSourceRetitle_(previous, record)) {
+            tab.getRange(index[key], 16).setValue(record[15]);
+            tab.getRange(index[key], 17).setValue(record[16]);
+            previous[15] = record[15];
+            previous[16] = record[16];
+            outcome.sourceCorrected = (outcome.sourceCorrected || 0) + 1;
+          } else outcome.same += 1;
+        } else {
           holdBackDay_('CC_Ledger', key, previous, ledgerFigureText_(record), record[15]);
           outcome.heldBack.push(key);
         }

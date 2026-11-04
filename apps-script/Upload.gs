@@ -967,7 +967,7 @@ function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
   ledger.forEach(function (row) {
     if (!storeRow(row) || row.grain !== 'cumulative' || !row.fitsTrack || row.periodStart !== period.start) return;
     if (row.source.indexOf(' + ') !== -1 || row.verifiedThrough > period.end) return;
-    // A Group 17 snapshot cannot run past the last official NWDSR day for that side.
+    // A Data KPI Store snapshot cannot run past the last official NWDSR day for that side.
     if (nwdsrLimit && row.verifiedThrough > nwdsrLimit) return;
     if (prefixOf(row) === spec.anchor && row.verifiedThrough > snapshot) snapshot = row.verifiedThrough;
   });

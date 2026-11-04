@@ -166,12 +166,14 @@ function pushLine(records: LedgerRecord[], report: KpiReport, through: string, l
   }
 }
 
-/** Group 17 total is the store bedding line. ASL store 17 supplies pillows, bases, and rugs. */
+/**
+ * The 17 workbook is Data KPI Individual: salesperson rows only. Its TOTAL is not a store KPI.
+ * The ASL workbook is Data KPI Store: only row 17, and that row supplies the store KPI lines.
+ */
 export function recordsFromKpi(report: KpiReport, pulledThrough: string): LedgerRecord[] {
   const through = verifiedThrough(report.start, report.end, pulledThrough);
   const records: LedgerRecord[] = [];
   if (report.family === 'group17') {
-    if (report.store) pushLine(records, report, through, report.store, true);
     report.lines.forEach((line) => {
       if (line.name.toUpperCase() === 'TOTAL') return;
       pushLine(records, report, through, line, false);
@@ -179,45 +181,7 @@ export function recordsFromKpi(report: KpiReport, pulledThrough: string): Ledger
     return records;
   }
   const store = report.lines.find((line) => line.name === '17');
-  if (store) {
-    const pillows = qtyRow('PILLOWS_STORE', report, through, { code: '', display: '' }, store.pillows);
-    const bases = qtyRow('BASES_STORE', report, through, { code: '', display: '' }, store.adjustable);
-    const rugs = store.rugsQty === null && store.rugsDollars === null ? null : makeRecord({
-      ...base(report, through),
-      view: 'RUGS_STORE',
-      employeeCode: '',
-      employeeName: '',
-      side: report.side,
-      salesDollars: store.rugsDollars,
-      unitCount: store.rugsQty,
-      eligible: null,
-      attachments: store.rugsQty,
-      kpiPercent: null,
-    });
-    [pillows, bases, rugs].forEach((row) => { if (row) records.push(row); });
-  }
-  report.lines.forEach((line) => {
-    const identity = canonicalPerson(line.name);
-    if (!identity) return;
-    const pillows = qtyRow('PILLOWS_PERSON', report, through, identity, line.pillows);
-    const bases = qtyRow('BASES_PERSON', report, through, identity, line.adjustable);
-    if (pillows) records.push(pillows);
-    if (bases) records.push(bases);
-    if (line.rugsQty !== null || line.rugsDollars !== null) {
-      records.push(makeRecord({
-        ...base(report, through),
-        view: 'RUGS_PERSON',
-        employeeCode: identity.code,
-        employeeName: identity.display,
-        side: report.side,
-        salesDollars: line.rugsDollars,
-        unitCount: line.rugsQty,
-        eligible: null,
-        attachments: line.rugsQty,
-        kpiPercent: null,
-      }));
-    }
-  });
+  if (store) pushLine(records, report, through, store, true);
   return records;
 }
 

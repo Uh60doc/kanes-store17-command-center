@@ -299,8 +299,8 @@ same('Daily', 'Purchasing customers column total', 'CC_ClosingDaily ← CC_Closi
 documented('Reconciliation', 'SNAP Written vs NWDSR Net Written (store MTD)', 'SNAP Written − NWDSR Net Written', storeDates, nwdsrWritten, snapWritten, 'dollars', 'different reports; SNAP is reconciliation only');
 const das = storeCumulative('DA_SALES_STORE', 'written');
 const dad = storeCumulative('DA_SALES_STORE', 'delivered');
-documented('Reconciliation', 'Data Analysis Group 17 written sales vs NWDSR Net Written', `DA_SALES_STORE cumulative ${das?.period_start}–${das?.verified_through} vs CC_Daily`, storeDates, nwdsrWritten, num(das?.sales_dollars), 'dollars', 'different reports; NWDSR is whole dollars');
-documented('Reconciliation', 'Data Analysis Group 17 delivered sales vs NWDSR Delivered', `DA_SALES_STORE cumulative ${dad?.period_start}–${dad?.verified_through} vs CC_Daily`, storeDates, nwdsrDelivered, num(dad?.sales_dollars), 'dollars', 'different reports; NWDSR is whole dollars');
+documented('Reconciliation', 'Data KPI Store written sales vs NWDSR Net Written', `DA_SALES_STORE cumulative ${das?.period_start}–${das?.verified_through} vs CC_Daily`, storeDates, nwdsrWritten, num(das?.sales_dollars), 'dollars', 'different reports; NWDSR is whole dollars');
+documented('Reconciliation', 'Data KPI Store delivered sales vs NWDSR Delivered', `DA_SALES_STORE cumulative ${dad?.period_start}–${dad?.verified_through} vs CC_Daily`, storeDates, nwdsrDelivered, num(dad?.sales_dollars), 'dollars', 'different reports; NWDSR is whole dollars');
 const associateDays = rowsOf(book, 'CC_AssociateDays');
 const snapLines = associateDays.filter((row) => between(row.date!, store.start, store.end));
 same('Reconciliation', 'SNAP Written store total vs salesperson lines', 'CC_Daily snap_written vs every CC_AssociateDays line (incl. managers, unknown)', storeDates, snapWritten, snapLines.length ? cents(snapLines.reduce((t, row) => t + Number(row.amount), 0)) : null, 'dollars');
@@ -427,7 +427,7 @@ for (const name of active) {
   const closingRow = (closingPage.people ?? []).find((row: any) => row.name === name);
   const teamClosing = pageRow?.closing ?? {};
   const sumClosing = summary?.person?.closing ?? {};
-  same('Closing page', `${name} written orders`, 'Group 17 Data Analysis Written (same as Sales Team)', `${person.start} to ${teamClosing.through || '?'}`, teamClosing.orders ?? null, closingRow?.orders ?? null, 'count');
+  same('Closing page', `${name} written orders`, 'Data KPI Individual — Written (same as Sales Team)', `${person.start} to ${teamClosing.through || '?'}`, teamClosing.orders ?? null, closingRow?.orders ?? null, 'count');
   same('Closing page', `${name} PERQ opportunities`, 'PERQ Salesperson (same as Sales Team)', `${person.start} to ${teamClosing.through || '?'}`, teamClosing.opportunities ?? null, closingRow?.opportunities ?? null, 'count');
   same('Associate summary', `${name} closing ratio`, 'Written orders ÷ PERQ opportunities (same as Sales Team)', `${person.start} to ${teamClosing.through || '?'}`, teamClosing.ratio ?? null, sumClosing.ratio ?? null, 'percent');
   if (teamClosing.orders !== null && teamClosing.orders !== undefined && teamClosing.opportunities) {
@@ -456,14 +456,14 @@ for (const name of active) {
     const fromLedger = personLedger('written', teamClosing.through);
     same('Sales Team', `${name} written orders from the ledger`, fromLedger?.source ?? 'DA_SALES_PERSON', `${person.start} to ${teamClosing.through}`, fromLedger?.units ?? null, teamClosing.orders, 'count');
   }
-  same('Associate summary', `${name} delivered sales`, 'Group 17 Data Analysis Delivered (same as Sales Team)', `${person.start} to ${pageRow?.deliveredThrough || '?'}`, delivered?.sales ?? null, deliveredSummary?.sales ?? null, 'dollars');
+  same('Associate summary', `${name} delivered sales`, 'Data KPI Individual — Delivered (same as Sales Team)', `${person.start} to ${pageRow?.deliveredThrough || '?'}`, delivered?.sales ?? null, deliveredSummary?.sales ?? null, 'dollars');
   const goal = pageRow?.monthlyGoal;
   same('Goals', `${name} monthly written goal`, 'CC_Config individual_volume_goal', 'Current', num(config.individual_volume_goal), goal ?? null, 'dollars');
 }
 const reportThrough = (peoplePage.people ?? []).map((row: any) => row.analysisWrittenThrough || '').sort().pop() || null;
 const reportDeliveredThrough = (peoplePage.people ?? []).map((row: any) => row.deliveredThrough || '').sort().pop() || null;
-note('Reports', 'Group 17 Written verified through (Reports page)', 'Latest across salespeople vs the date the page prints', person.start + ' onward', String(reportThrough), String(peoplePage.analysisThrough?.written ?? null), reportThrough === (peoplePage.analysisThrough?.written ?? null) ? 'Match' : 'MISMATCH');
-note('Reports', 'Group 17 Delivered verified through (Reports page)', 'Latest across salespeople vs the date the page prints', person.start + ' onward', String(reportDeliveredThrough), String(peoplePage.analysisThrough?.delivered ?? null), reportDeliveredThrough === (peoplePage.analysisThrough?.delivered ?? null) ? 'Match' : 'MISMATCH');
+note('Reports', 'Data KPI Individual Written verified through (Reports page)', 'Latest across salespeople vs the date the page prints', person.start + ' onward', String(reportThrough), String(peoplePage.analysisThrough?.written ?? null), reportThrough === (peoplePage.analysisThrough?.written ?? null) ? 'Match' : 'MISMATCH');
+note('Reports', 'Data KPI Individual Delivered verified through (Reports page)', 'Latest across salespeople vs the date the page prints', person.start + ' onward', String(reportDeliveredThrough), String(peoplePage.analysisThrough?.delivered ?? null), reportDeliveredThrough === (peoplePage.analysisThrough?.delivered ?? null) ? 'Match' : 'MISMATCH');
 
 // ===== Duplicates and stale records =====
 const keys = ledger.map((row) => row.record_key);
@@ -487,7 +487,7 @@ note('Stale', 'CC_DailyGoals delivered goals on the NWDSR Delivered basis', 'CC_
 
 if (registry) {
   const byKey = Object.fromEntries(registry.map((row) => [row.key, row]));
-  for (const [key, expected] of [['store_written', 'NWDSR Net Written'], ['store_delivered', 'NWDSR Delivered'], ['store_snap_written', 'SNAP Written'], ['store_closing', 'NWDSR Net Written # OF CUST ÷ PERQ Location Ups + Be Backs'], ['person_written', 'SNAP Written by salesperson'], ['person_delivered', 'Group 17 Data Analysis Delivered'], ['person_opportunities', 'PERQ Salesperson Ups + Be Backs']] as const) {
+  for (const [key, expected] of [['store_written', 'NWDSR Net Written'], ['store_delivered', 'NWDSR Delivered'], ['store_snap_written', 'SNAP Written'], ['store_closing', 'NWDSR Net Written # OF CUST ÷ PERQ Location Ups + Be Backs'], ['person_written', 'SNAP Written by salesperson'], ['person_delivered', 'Data KPI Individual — Delivered'], ['person_opportunities', 'PERQ Salesperson Ups + Be Backs']] as const) {
     note('Registry', `${key} approved source`, 'CC_MetricDefinitions', 'Current', expected, String(byKey[key]?.source ?? 'missing'), byKey[key]?.source === expected ? 'Match' : 'MISMATCH');
   }
   note('Registry', 'store_written verified through', 'Registry vs CC_Daily', storeDates, through, String(byKey.store_written?.verifiedThrough ?? ''), byKey.store_written?.verifiedThrough === through ? 'Match' : 'MISMATCH');

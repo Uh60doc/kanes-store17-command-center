@@ -260,7 +260,7 @@ function briefCoaching_(home, people) {
       candidates.push({
         weight: Number(person.closing.goal) - Number(person.closingRatio),
         text: 'Coach ' + person.name + ' on closing: ' + percentText_(person.closingRatio) + ' versus ' + percentText_(person.closing.goal) +
-          (person.closingThrough ? ' through ' + person.closingThrough : '') + ' (Group 17 written orders ÷ individual PERQ).',
+          (person.closingThrough ? ' through ' + person.closingThrough : '') + ' (Data KPI Individual written orders ÷ individual PERQ).',
       });
     }
   });
@@ -754,7 +754,7 @@ function briefMtdInner_(pack) {
     briefSection_('Key performance indicators', '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:12px">' + briefHead_(['KPI', 'Written', 'Goal', 'Status', 'Delivered', 'Verified through']) + kpiRows + '</table>') +
     briefSection_('Coaching', coachHtml) +
     briefSection_('Sales team', '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:12px">' + briefHead_(['Associate', 'SNAP Written', 'Monthly goal', '% to goal', 'Closing', 'Coaching']) + teamRows + '</table>' +
-      '<p style="margin:6px 0 0;color:#3d5660;font-size:12px">Active sales associates only. Former employees stay in the store delivered total and are not ranked here. Closing is Group 17 written orders divided by that salesperson\'s PERQ opportunities.</p>') +
+      '<p style="margin:6px 0 0;color:#3d5660;font-size:12px">Active sales associates only. Former employees stay in the store delivered total and are not ranked here. Closing is Data KPI Individual written orders divided by that salesperson\'s PERQ opportunities.</p>') +
     briefSection_('Comparisons', comparisons) +
     briefFooter_(pack, 'Month-to-date performance');
 }

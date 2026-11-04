@@ -34,6 +34,12 @@ var QUALITY_AREAS_ = {
   'report-package': 'Required reports',
 };
 
+/** Store KPI sales on CC_MonthEnd. The previous metric name still counts until that sheet is rebuilt. */
+function storeKpiSalesRow_(row) {
+  var metric = String(row.metric);
+  return String(row.track) === 'Store' && (metric === 'Data KPI Store sales' || metric === 'Data Analysis Group 17 sales');
+}
+
 // The approved sources from Tasks 1 and 2. A code change that moves a metric to another report fails this check.
 var APPROVED_SOURCES_ = {
   store_written: 'NWDSR Net Written',
@@ -43,8 +49,8 @@ var APPROVED_SOURCES_ = {
   store_opportunities: 'PERQ Location Ups + Be Backs',
   store_closing: 'NWDSR Net Written # OF CUST ÷ PERQ Location Ups + Be Backs',
   person_written: 'SNAP Written by salesperson',
-  person_delivered: 'Group 17 Data Analysis Delivered',
-  person_closing: 'Group 17 Data Analysis Written orders ÷ PERQ Salesperson Ups + Be Backs',
+  person_delivered: 'Data KPI Individual — Delivered',
+  person_closing: 'Data KPI Individual Written orders ÷ PERQ Salesperson Ups + Be Backs',
 };
 
 // Which metrics each required daily report feeds, so a report problem marks those metrics for review.
@@ -431,7 +437,7 @@ function checkCumulativeDaily_(ctx, add) {
   }
   ['written', 'delivered'].forEach(function (side) {
     var snapshot = latestStoreLedger_('DA_SALES_STORE', side, ctx.store.start);
-    var row = ctx.monthEnd.filter(function (line) { return String(line.track) === 'Store' && String(line.metric) === 'Data Analysis Group 17 sales' && String(line.side) === side && isoDate_(line.period_start) === ctx.store.start; })[0];
+    var row = ctx.monthEnd.filter(function (line) { return storeKpiSalesRow_(line) && String(line.side) === side && isoDate_(line.period_start) === ctx.store.start; })[0];
     if (!row) return;
     var reported = fineNumber_(row.verified_mtd);
     var at = isoDate_(row.verified_through);
@@ -445,8 +451,8 @@ function checkCumulativeDaily_(ctx, add) {
       expected += line.sales || 0;
     });
     expected = Math.round(expected * 100) / 100;
-    checked.push('Group 17 ' + side + ' ' + moneyPlain_(reported));
-    if (!near_(expected, reported, 0.01)) { problems += 1; add('cumulative-daily', 'FLAG', 'Group 17 ' + side + ' through ' + at, 'CC_MonthEnd shows Group 17 ' + side + ' sales of ' + moneyPlain_(reported) + ' through ' + at + ', but the latest month-to-date file plus the later daily files is ' + moneyPlain_(expected) + '.', side === 'written' ? ['person_written_orders', 'kpi_bedding'] : ['person_delivered', 'kpi_bedding']); }
+    checked.push('Data KPI Store ' + side + ' ' + moneyPlain_(reported));
+    if (!near_(expected, reported, 0.01)) { problems += 1; add('cumulative-daily', 'FLAG', 'Data KPI Store ' + side + ' through ' + at, 'CC_MonthEnd shows Data KPI Store ' + side + ' sales of ' + moneyPlain_(reported) + ' through ' + at + ', but the latest month-to-date file plus the later daily files is ' + moneyPlain_(expected) + '.', side === 'written' ? ['person_written_orders', 'kpi_bedding'] : ['person_delivered', 'kpi_bedding']); }
   });
   if (!problems) add('cumulative-daily', 'PASS', 'Month-to-date figures', 'Single-day rows each cover one day; month-to-date figures use the latest cumulative report plus only the days after it' + (checked.length ? ' (' + checked.join('; ') + ')' : '') + '.');
 }
@@ -717,10 +723,10 @@ function checkStoreTotals_(ctx, add) {
   if (sums.snapWritten !== null && sums.nwdsrWritten !== null && sums.snapWritten !== sums.nwdsrWritten) {
     add('store-reconcile', 'NOTE', 'SNAP Written vs NWDSR Net Written', 'Store month to date SNAP Written ' + moneyPlain_(sums.snapWritten) + ' and NWDSR Net Written ' + moneyPlain_(sums.nwdsrWritten) + ' differ by ' + moneyPlain_(Math.round((sums.snapWritten - sums.nwdsrWritten) * 100) / 100) + '. This is a legitimate difference between the two reports; both are kept and NWDSR is the store standard.');
   }
-  var g17 = ctx.monthEnd.filter(function (row) { return String(row.track) === 'Store' && String(row.metric) === 'Data Analysis Group 17 sales' && String(row.side) === 'written' && isoDate_(row.period_start) === ctx.store.start; })[0];
+  var g17 = ctx.monthEnd.filter(function (row) { return storeKpiSalesRow_(row) && String(row.side) === 'written' && isoDate_(row.period_start) === ctx.store.start; })[0];
   var nwdsr = ctx.monthEnd.filter(function (row) { return String(row.track) === 'Store' && String(row.metric) === 'NWDSR Written' && isoDate_(row.period_start) === ctx.store.start; })[0];
   if (g17 && nwdsr && fineNumber_(g17.verified_mtd) !== null && fineNumber_(nwdsr.verified_mtd) !== null && fineNumber_(g17.verified_mtd) !== fineNumber_(nwdsr.verified_mtd)) {
-    add('store-reconcile', 'NOTE', 'Group 17 vs NWDSR written', 'Group 17 written ' + moneyPlain_(fineNumber_(g17.verified_mtd)) + ' (KPI denominator) and NWDSR Net Written ' + moneyPlain_(fineNumber_(nwdsr.verified_mtd)) + ' differ by ' + moneyPlain_(Math.round((fineNumber_(g17.verified_mtd) - fineNumber_(nwdsr.verified_mtd)) * 100) / 100) + '. Data Analysis rounds to cents and NWDSR to dollars; both are kept.');
+    add('store-reconcile', 'NOTE', 'Data KPI Store vs NWDSR written', 'Data KPI Store written ' + moneyPlain_(fineNumber_(g17.verified_mtd)) + ' (KPI denominator) and NWDSR Net Written ' + moneyPlain_(fineNumber_(nwdsr.verified_mtd)) + ' differ by ' + moneyPlain_(Math.round((fineNumber_(g17.verified_mtd) - fineNumber_(nwdsr.verified_mtd)) * 100) / 100) + '. The reports are not required to match. Both figures are kept.');
   }
   if (!problems) add('store-reconcile', 'PASS', 'Store month totals', 'CC_Rollup and CC_MonthEnd equal the matching-scope daily reports: NWDSR Written ' + moneyPlain_(sums.nwdsrWritten) + ', NWDSR Delivered ' + moneyPlain_(sums.nwdsrDelivered) + ', SNAP Written ' + moneyPlain_(sums.snapWritten) + ' for ' + rollupStore.start + ' to ' + rollupStore.end + '.');
 }
@@ -1122,6 +1128,44 @@ function queueNotice_(message) {
  * lists every outstanding problem and what was resolved since the last email. A problem that appears after the day's
  * email waits for the next day's; it is on System health and Home straight away.
  */
+function weeklyReportingSubject_(start, end) {
+  return 'STORE 17 | Weekly Reporting Review | ' + uploadDayText_(start) + ' through ' + uploadDayText_(end);
+}
+
+function monthEndReadinessSubject_(monthLabel) {
+  return 'STORE 17 | ' + monthLabel + ' | Month-End Readiness';
+}
+
+/** Shared wording for the Monday review and the month-end readiness note. This does not send mail. */
+function reportingReviewBody_(title, active) {
+  var lines = [title, '', 'Each report is never received, previously received but not retained, received and archived but not imported, imported but incomplete, or fully imported and verified. Data KPI Store, Data KPI Individual, NWDSR, and SNAP are separate sources. A difference between them is a reconciliation note, not a rejection. Verified figures stay in place. Nothing missing is counted as zero. October is not finalized from this note.', ''];
+  (active || []).forEach(function (row) {
+    lines.push('- ' + (row.business_date || row.date || '') + ': ' + (row.report || row.subject || '') + '. ' + (row.message || row.receipt || ''));
+  });
+  if (!active || !active.length) lines.push('No outstanding report gaps were passed to this note.');
+  lines.push('');
+  lines.push('Open Admin, Monthly History, and System health for the same statuses. This note does not finalize a month.');
+  return lines.join('\n');
+}
+
+/**
+ * Monday 7:00 AM America/New_York review. It sends only when called, only on a Monday, and only to admin_email.
+ * The daily problem digest is unchanged. Nothing here finalizes a month or rewrites a verified figure.
+ */
+function sendWeeklyReportingReview_(start, end) {
+  if (typeof UPLOAD_QUIET_ !== 'undefined' && UPLOAD_QUIET_) return { sent: false, reason: 'manual upload' };
+  var today = todayNy_();
+  var parts = today.split('-');
+  var weekday = new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))).getUTCDay();
+  if (weekday !== 1) return { sent: false, reason: 'not Monday' };
+  var email = String(config_().admin_email || '');
+  if (!email) return { sent: false, reason: 'no admin_email' };
+  var subject = weeklyReportingSubject_(start, end);
+  var body = reportingReviewBody_(subject, []);
+  MailApp.sendEmail(email, subject, body);
+  return { sent: true, subject: subject };
+}
+
 function sendAlertDigest_(rows) {
   if (typeof UPLOAD_QUIET_ !== 'undefined' && UPLOAD_QUIET_) return { sent: false, reason: 'manual upload' };
   var active = rows.filter(function (row) { return row.status === 'Active'; });

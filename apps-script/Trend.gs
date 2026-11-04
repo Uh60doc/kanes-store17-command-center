@@ -163,12 +163,12 @@ function trendSpecs_(goals) {
     { key: 'opportunities', label: 'PERQ opportunities', unit: 'count', goal: null, source: 'PERQ store opportunities. Not purchasing customers.' },
     { key: 'customers', label: 'Purchasing customers', unit: 'count', goal: null, source: 'NWDSR purchasing customers. Not PERQ opportunities.' },
     { key: 'closing', label: 'Store closing', unit: 'percent', goal: goals.closing, source: 'Purchasing customers ÷ PERQ opportunities for the same open days.' },
-    { key: 'ticket', label: 'Average ticket', unit: 'dollars', goal: goals.averageTicket, source: 'Group 17 written sales ÷ Group 17 written orders. Not NWDSR.' },
-    { key: 'bedding', label: 'Bedding', unit: 'percent', goal: goals.bedding, source: 'Group 17 written bedding dollars ÷ Group 17 written sales.' },
-    { key: 'fabric', label: 'Fabric maintenance', unit: 'percent', goal: goals.fabric, source: 'Group 17 written fabric protection sold ÷ qualified.' },
-    { key: 'leather', label: 'Leather maintenance', unit: 'percent', goal: goals.leather, source: 'Group 17 written leather protection sold ÷ qualified.' },
-    { key: 'power', label: 'Power upholstery', unit: 'percent', goal: goals.power, source: 'Group 17 written power protection sold ÷ qualified.' },
-    { key: 'pads', label: 'Mattress protectors', unit: 'percent', goal: goals.mattress, source: 'Group 17 written mattress protectors sold ÷ qualified.' },
+    { key: 'ticket', label: 'Average ticket', unit: 'dollars', goal: goals.averageTicket, source: 'Data KPI Store written sales ÷ Data KPI Store written orders. Not NWDSR.' },
+    { key: 'bedding', label: 'Bedding', unit: 'percent', goal: goals.bedding, source: 'Data KPI Store written bedding dollars ÷ Data KPI Store written sales.' },
+    { key: 'fabric', label: 'Fabric maintenance', unit: 'percent', goal: goals.fabric, source: 'Data KPI Store written fabric protection sold ÷ qualified.' },
+    { key: 'leather', label: 'Leather maintenance', unit: 'percent', goal: goals.leather, source: 'Data KPI Store written leather protection sold ÷ qualified.' },
+    { key: 'power', label: 'Power upholstery', unit: 'percent', goal: goals.power, source: 'Data KPI Store written power protection sold ÷ qualified.' },
+    { key: 'pads', label: 'Mattress protectors', unit: 'percent', goal: goals.mattress, source: 'Data KPI Store written mattress protectors sold ÷ qualified.' },
     { key: 'rugs', label: 'Rugs sold', unit: 'count', goal: null, monthGoal: goals.rugs, source: 'ASL written rugs. The rug goal is a store-month count, not a weekly goal.' },
     { key: 'pillows', label: 'Pillows', unit: 'percent', goal: goals.pillow, source: 'ASL written pillows attached ÷ qualified.' },
     { key: 'bases', label: 'Adjustable bases', unit: 'percent', goal: goals.adjustableBase, source: 'ASL written adjustable bases attached ÷ qualified.' },
@@ -263,8 +263,8 @@ function trendAlerts_(series, weeks, closed) {
   }
   var closing = byKey('closing');
   below('closing', closing.goal, 'This is one verified week, not a forecast.');
-  below('ticket', byKey('ticket').goal, 'Group 17 written orders. Not commission.');
-  below('bedding', byKey('bedding').goal, 'Group 17 written bedding.');
+  below('ticket', byKey('ticket').goal, 'Data KPI Store written orders. Not commission.');
+  below('bedding', byKey('bedding').goal, 'Data KPI Store written bedding.');
   ['fabric', 'leather', 'power', 'pads'].forEach(function (key) { below(key, byKey(key).goal, 'Written attachments.'); });
   var rugs = byKey('rugs');
   var latestWeek = weeks[weeks.length - 1];
@@ -388,7 +388,7 @@ function trend_(payload, today) {
     weeksRequested: 13,
     weeksShown: weeks.length,
     coverage: coverage,
-    calendarNote: 'Each week uses the business dates on the daily reports. Store Written is NWDSR Written and Store Delivered is NWDSR Delivered. Attachment rates use Group 17 or ASL written daily files. Salesperson calendar months are not combined with these store weeks.',
+    calendarNote: 'Each week uses the business dates on the daily reports. Store Written is NWDSR Written and Store Delivered is NWDSR Delivered. Attachment rates use Data KPI Store written daily files. Salesperson calendar months are not combined with these store weeks.',
     mail: false,
     series: series,
     partial: partial,
