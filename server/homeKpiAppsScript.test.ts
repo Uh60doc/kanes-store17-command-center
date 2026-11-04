@@ -52,6 +52,8 @@ test('Home MTD KPIs: Bedding, Closing Ratio, Average Ticket and Rugs lead, every
   );
   assert.equal(goalOf('Total Attachment'), 0.9);
   assert.deepEqual([byName['Closing Ratio']?.written, byName['Closing Ratio']?.delivered, byName['Closing Ratio']?.through], [0.486, null, through]);
+  assert.equal(byName['Closing Ratio']?.detail, '54 purchasing customers / 111 opportunities');
+  assert.equal(byName['Closing Ratio']?.note, '54 purchasing customers / 111 opportunities, 2026-10-15');
   assert.deepEqual([byName.Financing?.written, byName.Financing?.delivered], [0.234, 0.471]);
   assert.equal(byName['Wood / Furniture Protection']?.detail, '');
 });
