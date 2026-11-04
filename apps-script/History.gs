@@ -10,9 +10,10 @@
  *                    with the last-year period it is compared with. A store month's last-year period is Pending until
  *                    the GM confirms it in CC_Config; a confirmed mapping is kept.
  * CC_GoalHistory     Each month's goals, captured while the month is open and locked when it ends.
- * CC_MonthlyHistory  Each completed month's verified month to date beside its official final, goal and last year. A row
- *                    is locked (Final) once it matches a complete official final or the month has been over for
- *                    MONTH_LOCK_DAYS_; after that only a blank or Pending cell is filled, and a later difference is noted.
+ * CC_MonthlyHistory  Each completed month's verified month to date beside its official final, goal and last year.
+ *                    A row stays open until a GM finalizes that month. Matching an official final, or the month
+ *                    aging past MONTH_LOCK_DAYS_, does not finalize it. After it is final, only a blank or Pending
+ *                    cell is filled, and a later difference is noted.
  * CC_LastYear        Verified last-year figures entered from supplied reports. A missing figure is Pending, never estimated.
  */
 
@@ -279,14 +280,16 @@ function archiveNoteDates_(note) {
 function archiveEvidence_(sha, fileName, allowDuplicate) {
   var found = null;
   sheet_('CC_Uploads').forEach(function (row) {
-    if (found || String(row.sha256 || '') !== sha || !String(row.report || '') || !/^Imported$/i.test(String(row.status || ''))) return;
+    var uploadStatus = String(row.status || '');
+    if (found || String(row.sha256 || '') !== sha || !String(row.report || '') || /^Ignored$/i.test(uploadStatus)) return;
+    if (!/^(Imported|Needs Review|Failed|Already on file|Noted)$/i.test(uploadStatus)) return;
     var date = isoDate_(row.business_date);
-    found = { report: String(row.report), start: isoDate_(row.report_start) || date, end: isoDate_(row.report_end) || date, basis: 'CC_Uploads ' + String(row.status || '') };
+    found = { report: String(row.report), start: isoDate_(row.report_start) || date, end: isoDate_(row.report_end) || date, basis: 'CC_Uploads ' + uploadStatus };
   });
   if (found) return found;
   sheet_('CC_Imports').forEach(function (row) {
     var status = String(row.status || '');
-    if (found || String(row.sha256 || '') !== sha || /^(failed|needs-review|not used)$/i.test(status) || /^held/i.test(status) || (status === 'duplicate' && !allowDuplicate)) return;
+    if (found || String(row.sha256 || '') !== sha || /^not used$/i.test(status) || (status === 'duplicate' && !allowDuplicate)) return;
     var dates = archiveNoteDates_(row.note) || archiveNoteDates_(row.file_name) || { start: '', end: '' };
     found = { report: String(row.report_type || '') || canonicalReportType_(row.file_name), start: dates.start, end: dates.end, basis: 'CC_Imports ' + status };
   });
@@ -306,6 +309,27 @@ function archiveEvidence_(sha, fileName, allowDuplicate) {
     archiveEvidenceCache_ = { bySha: bySha, byFile: byFile };
   }
   return archiveEvidenceCache_.bySha[sha] || archiveEvidenceCache_.byFile[fileName] || null;
+}
+
+/**
+ * Keeps one original of a PDF or workbook that was uploaded, including when validation did not apply it.
+ * An ignored file (not one of the reports) is not kept. The same SHA-256 is never stored twice.
+ */
+function retainUploadOriginal_(blob, sha, fileName, result, businessDate) {
+  if (!result || /^(Ignored|Already on file)$/i.test(String(result.status || ''))) return null;
+  var index = archiveIndex_();
+  if (index[sha]) return { created: false, id: index[sha].id, path: index[sha].path };
+  var evidence = null;
+  try { evidence = archiveEvidence_(sha, fileName, true); } catch (error) { evidence = null; }
+  var named = result.key ? uploadReportLabel_(result.key) : '';
+  var report = named || (evidence && evidence.report) || (typeof canonicalReportType_ === 'function' ? canonicalReportType_(fileName) : '') || 'Uploaded report';
+  var start = result.start || (evidence && evidence.start) || businessDate || '';
+  var end = result.end || (evidence && evidence.end) || start;
+  var applied = /^(Imported|Already on file)$/i.test(String(result.status || ''));
+  var note = applied
+    ? ('Recorded: ' + (evidence && evidence.basis ? evidence.basis : result.status))
+    : ('Retained after ' + result.status + '. The original was not applied over verified figures. ' + String(result.message || '').slice(0, 420));
+  return archiveSource_(blob, sha, fileName, report, start, end, 'upload', note);
 }
 
 /** Archives a file only when a record on file came from it. Returns null when it was not used for any record. */
@@ -655,12 +679,9 @@ function monthlyHistoryLines_(ctx, entry, goals, lyRows) {
     var person = people[row.person] || null;
     var goal = goals[entry.key + '|' + row.metric] || { goal: '', basis: 'No goal for this metric' };
     var ly = lastYearFor_(entry, lyRows, { track: entry.track, metric: row.metric, side: row.side, employeeId: row.employee_id, person: row.person });
-    var complete = row.verified_through === entry.period.end;
-    var settled = typeof row.official_final === 'number' && complete;
-    var aged = historyDayGap_(entry.period.end, ctx.today) > MONTH_LOCK_DAYS_;
     return {
       key: [entry.key, row.metric, row.side, row.person].join('|'),
-      lock: settled || aged,
+      lock: false,
       cells: [[entry.key, row.metric, row.side, row.person].join('|'), entry.key, entry.track, entry.period.start, entry.period.end, row.metric, row.side, row.employee_id, row.person,
         person ? person.position : '', person ? person.status : '', row.unit, row.verified_mtd, row.verified_through,
         'Daily records: ' + row.daily_record_dates + '. Cumulative snapshot: ' + row.snapshot_coverage, row.qualified, row.sold, row.mtd_basis, row.daily_records_total, row.missing_or_unverified,
@@ -702,7 +723,7 @@ function refreshMonthlyHistory_(ctx, calendar, goals) {
     if (finalByPeriod[periodKey] && historyDayGap_(entry.period.end, ctx.today) > MONTH_RECHECK_DAYS_) return;
     counts.periods.push(periodKey);
     monthlyHistoryLines_(ctx, entry, goals, lyRows).forEach(function (line) {
-      var status = line.lock ? 'Final' : 'Open: month ended; awaiting a matching official final with complete daily coverage, or ' + MONTH_LOCK_DAYS_ + ' days after the month';
+      var status = 'Open: month ended. A GM finalizes this month from Admin. It is not finalized automatically.';
       var at = index[line.key];
       if (at === undefined) {
         appends.push(line.cells.concat([status, now, now, line.lock ? now : '', '']));
@@ -750,6 +771,76 @@ function refreshMonthlyHistory_(ctx, calendar, goals) {
   if (changed && values.length > 1) tab.getRange(2, 1, values.length - 1, width).setValues(values.slice(1));
   if (appends.length) tab.getRange(values.length + 1, 1, appends.length, width).setValues(appends);
   return counts;
+}
+
+function monthlyHistory_(payload) {
+  historyTab_(MONTHLY_HISTORY_TAB_, MONTHLY_HISTORY_HEADERS_);
+  var rows = [];
+  try { rows = sheet_('CC_MonthlyHistory'); } catch (error) { rows = []; }
+  var periods = {};
+  rows.forEach(function (row) {
+    var key = String(row.period_key || '');
+    if (!key) return;
+    if (!periods[key]) periods[key] = { key: key, track: String(row.track || ''), start: isoDate_(row.period_start), end: isoDate_(row.period_end), rows: 0, final: 0, open: 0, blockers: [] };
+    var bucket = periods[key];
+    bucket.rows += 1;
+    if (String(row.history_status) === 'Final') bucket.final += 1;
+    else bucket.open += 1;
+    var missing = String(row.missing_or_unverified || '');
+    if (String(row.history_status) !== 'Final' && /Missing|Unverified|genuinely missing|not on file/i.test(missing) && bucket.blockers.length < 8) {
+      bucket.blockers.push(String(row.metric || '') + (row.person ? ' · ' + row.person : '') + ': ' + missing);
+    }
+  });
+  return {
+    role: payload && payload.session ? payload.session.role : '',
+    periods: Object.keys(periods).sort().map(function (key) { return periods[key]; }),
+    note: 'A completed month stays open until a GM finalizes it here. Ending the month, or matching an official final, does not finalize it. October is not finalized automatically.',
+  };
+}
+
+/** GM action. Locks one completed month's history rows. It does not rewrite a sales figure and does not run on its own. */
+function finalizeMonth_(payload) {
+  if (!payload || !payload.session || payload.session.role !== 'admin') throw new Error('Only an admin can finalize a month.');
+  var key = String(payload.periodKey || '').trim();
+  if (!/^(STORE|PERSON)-\d{4}-\d{2}$/.test(key)) throw new Error('Choose a store or salesperson month, such as STORE-2026-10.');
+  if (payload.confirm !== true) throw new Error('Finalizing ' + key + ' keeps the figures now on file. Confirm to continue. Nothing was changed.');
+  var tab = historyTab_(MONTHLY_HISTORY_TAB_, MONTHLY_HISTORY_HEADERS_);
+  var width = MONTHLY_HISTORY_HEADERS_.length;
+  var values = historyRows_(tab, width);
+  var today = todayNy_();
+  var end = '';
+  var openRows = [];
+  var blockers = [];
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    if (String(values[r][1]) !== key) continue;
+    end = historyNorm_(values[r][4]) || end;
+    if (String(values[r][28]) === 'Final') continue;
+    openRows.push(r);
+    var missing = String(values[r][19] || '');
+    var through = historyNorm_(values[r][13]);
+    var periodEnd = historyNorm_(values[r][4]);
+    if (through !== periodEnd || /Missing|Unverified|genuinely missing|not on file/i.test(missing)) {
+      blockers.push(String(values[r][5]) + (values[r][8] ? ' · ' + values[r][8] : '') + ': ' + (missing || ('verified through ' + (through || 'Pending') + ', month ends ' + periodEnd)));
+    }
+  }
+  if (!end && !openRows.length) throw new Error(key + ' is not on Monthly History yet. Refresh history after the month has ended. Nothing was finalized.');
+  if (end && end >= today) throw new Error(key + ' runs through ' + end + ', which is not over. Nothing was finalized.');
+  if (!openRows.length) return { periodKey: key, finalized: 0, blockers: [], message: key + ' is already final. No figure was changed.' };
+  if (blockers.length && payload.acknowledgeGaps !== true) {
+    return { periodKey: key, finalized: 0, blockers: blockers.slice(0, 12), message: key + ' was not finalized. ' + blockers.length + ' row' + (blockers.length === 1 ? '' : 's') + ' still have a coverage gap. Review them, or confirm that the gaps stay on the record.' };
+  }
+  var now = historyNow_();
+  openRows.forEach(function (at) {
+    values[at][28] = 'Final';
+    values[at][30] = now;
+    if (!values[at][31]) values[at][31] = now;
+    var prior = String(values[at][32] || '');
+    var note = 'Finalized by the GM on ' + today + '. This was not an automatic lock. Figures already on the row were kept.';
+    values[at][32] = prior && prior !== note ? prior + ' ' + note : note;
+  });
+  tab.getRange(2, 1, values.length - 1, width).setValues(values.slice(1));
+  return { periodKey: key, finalized: openRows.length, blockers: blockers.slice(0, 12), message: key + ' is final. ' + openRows.length + ' rows locked. No sales figure was rewritten.' };
 }
 
 /* ---------- refresh ---------- */

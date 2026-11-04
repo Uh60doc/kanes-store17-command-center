@@ -168,9 +168,9 @@ function uploadReport_(payload) {
       result = { status: 'Failed', key: '', message: 'The import stopped: ' + String(error && error.message ? error.message : error) + ' Figures already on file were left in place.' };
       appendException_('Update Failed', fileName + ' (upload for ' + date + '): ' + result.message);
     }
-    // Only a file a record came from is archived (CC_Imports says so); archiving never changes the upload's result.
+    // A PDF or workbook is kept once, including when validation fails. An ignored file is not a report and is not kept.
     try {
-      archiveRecordedOriginal_(Utilities.newBlob(context.bytes, bytesStartWith_(context.bytes, [37, 80, 68, 70]) ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fileName), sha, fileName, 'upload');
+      retainUploadOriginal_(Utilities.newBlob(context.bytes, bytesStartWith_(context.bytes, [37, 80, 68, 70]) ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fileName), sha, fileName, result, context.date);
     } catch (error) {
       appendException_('Update Failed', fileName + ' (upload for ' + date + '): the original could not be archived. ' + String(error && error.message ? error.message : error));
     }
@@ -234,7 +234,7 @@ function uploadPdf_(context) {
   try {
     text = pdfText_(Utilities.newBlob(context.bytes, 'application/pdf', context.fileName));
   } catch (error) {
-    return finishImport_(context, { status: 'Failed', key: '', message: 'The PDF could not be read. Try saving it again from the reporting site. Nothing was changed.' }, 'failed');
+    return finishImport_(context, { status: 'Failed', key: '', message: 'The PDF ' + context.fileName + ' for ' + context.date + ' could not be read (' + String(error && error.message ? error.message : error) + '). No figure was changed. The original is kept in the source archive. This is a file-read failure.' }, 'failed');
   }
   if (/SNAP\s*-\s*DELIVERED/i.test(text)) {
     return { status: 'Ignored', key: '', message: 'This is SNAP Delivered, which is not one of the nine daily reports. Delivered sales come from NWDSR Delivered. Ignored. Nothing was changed.' };
@@ -242,7 +242,7 @@ function uploadPdf_(context) {
   var parsed = parseCloudReport_(text);
   if (!parsed) {
     if (/SNAP\s*-\s*WRITTEN|NET WRITTEN STORE SALES|DELIVERED STORE SALES/i.test(text)) {
-      return finishImport_(context, { status: 'Needs Review', key: '', message: 'The report type was found but the Store 17 total line was not. Check that the report was run for Store 17. Nothing was changed.' }, 'needs-review');
+      return finishImport_(context, { status: 'Needs Review', key: '', message: context.fileName + ' for ' + context.date + ' is a SNAP or NWDSR report, but the Store 17 total line was not found. No figure was changed. The original is kept in the source archive. Check that the report was run for Store 17.' }, 'needs-review');
     }
     return { status: 'Ignored', key: '', message: 'This PDF is not SNAP Written, NWDSR Written or NWDSR Delivered. Ignored. Nothing was changed.' };
   }
@@ -363,17 +363,14 @@ function uploadKpiWorkbook_(context, info) {
       records.push(kpiRecord_(true, date, date, 'FINANCE_STORE', '', '', info.side, null, null, null, null, 0, source));
       notes.push('The report has no sales lines and NWDSR ' + info.side + ' is $0, so the day is recorded as no sales.');
     } else {
-      return finishImport_(context, uploadOutcome_(base, 'Needs Review', 'Group 17 has no TOTAL line, so Store 17 sales could not be read. Nothing was changed.'), 'needs-review');
+      return finishImport_(context, uploadOutcome_(base, 'Needs Review', label + ' for ' + date + ' (' + context.fileName + ') has no TOTAL line, so Store 17 sales could not be read. The workbook was not applied. The original is kept in the source archive. This is a structural failure, separate from any difference versus NWDSR.'), 'needs-review');
     }
   }
   var totalRecord = records.filter(function (record) { return record[0] === 'DA_SALES_STORE'; })[0];
   var total = totalRecord && totalRecord[10] !== '' ? Number(totalRecord[10]) : null;
   if (info.family === 'group17' && total !== null && nwdsr !== null && nwdsr !== undefined && Math.abs(total - nwdsr) > 1) {
-    if (info.side === 'written') {
-      notes.push('Group 17 TOTAL sales ' + moneyPlain_(total) + ' and NWDSR Written ' + moneyPlain_(nwdsr) + ' differ. Tax, delivery, and other report differences are expected. NWDSR Written stays the written standard. This file is saved for the KPIs and is not a review.');
-    } else {
-      return finishImport_(context, uploadOutcome_(base, 'Needs Review', label + ' TOTAL sales ' + moneyPlain_(total) + ' do not match NWDSR Delivered ' + moneyPlain_(nwdsr) + ' for ' + date + ', so this file may be for another day. Nothing was changed.'), 'needs-review');
-    }
+    var standard = info.side === 'written' ? 'NWDSR Written' : 'NWDSR Delivered';
+    notes.push('Group 17 TOTAL ' + moneyPlain_(total) + ' and ' + standard + ' ' + moneyPlain_(nwdsr) + ' differ by ' + moneyPlain_(Math.round(Math.abs(total - nwdsr) * 100) / 100) + ' for ' + date + '. A return or reselection can land on another business date, so SNAP, NWDSR, and Group 17 do not have to match. Both figures are kept. ' + standard + ' stays the ' + (info.side === 'written' ? 'written' : 'delivered') + ' standard. This workbook is saved for the KPIs. The difference is a reconciliation note, not an error.');
   }
   if (info.family === 'group17' && (nwdsr === null || nwdsr === undefined)) {
     notes.push('NWDSR ' + (info.side === 'written' ? 'Written' : 'Delivered') + ' for ' + date + ' is not on file yet, so the store month KPIs wait for it before this day is added.');
@@ -637,9 +634,10 @@ function kpiRateOrNull_(top, bottom) {
  * A rebuilt total (its source joins the files with " + ") is not a new snapshot and is not added on top of the days.
  * A column the snapshot does not have, such as pet protection, is taken from a cumulative row that ends on the
  * same through-date. Its daily pieces are not added again.
- * A Group 17 day is added only when NWDSR for the same side and day is on file. Written dollars do not have to
- * match: tax, delivery, and other report differences are expected, and NWDSR Written stays the written standard.
- * Delivered still has to match. A verified $0 NWDSR day has no Group 17 file and is not a hole. A missing open day still stops the count.
+ * A Group 17 day is added when that day's workbook is on file and NWDSR for the same side is on file.
+ * The totals do not have to match. SNAP, NWDSR, and Group 17 keep their own figures. A difference is noted
+ * and does not stop the store-month KPIs. A missing workbook, or NWDSR not on file yet, still stops the count.
+ * A verified $0 NWDSR day has no Group 17 file and is not a hole.
  */
 function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
   var spec = STORE_KPI_FAMILIES_[family];
@@ -677,6 +675,7 @@ function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
   });
   var days = [];
   var zeroDays = [];
+  var differences = [];
   var issue = '';
   var limit = period.end < today ? period.end : today;
   var cursor = shiftDate_(snapshot || shiftDate_(period.start, -1), 1);
@@ -688,7 +687,7 @@ function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
         var nwdsr = fact ? (side === 'written' ? fact.nwdsrWritten : fact.nwdsrDelivered) : null;
         var sales = day.DA_SALES.sales === null ? 0 : day.DA_SALES.sales;
         if (nwdsr === null) { issue = 'NWDSR ' + side + ' for ' + cursor + ' is not on file yet.'; break; }
-        if (side !== 'written' && Math.abs(sales - nwdsr) > 1) { issue = 'Group 17 ' + side + ' TOTAL ' + moneyPlain_(sales) + ' does not match NWDSR ' + side + ' ' + moneyPlain_(nwdsr) + ' for ' + cursor + '.'; break; }
+        if (Math.abs(sales - nwdsr) > 1) differences.push(cursor + ': Group 17 ' + side + ' TOTAL ' + moneyPlain_(sales) + ' and NWDSR ' + side + ' ' + moneyPlain_(nwdsr) + ' differ. Both figures are kept.');
       }
       days.push(cursor);
     } else if (!closed[cursor]) {
@@ -722,7 +721,7 @@ function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
     Object.keys(dayRows[date]).forEach(function (prefix) { if (sources.indexOf(dayRows[date][prefix].source) === -1) sources.push(dayRows[date][prefix].source); });
   });
   var unsnapped = snapshot ? spec.views.filter(function (prefix) { return !snapRows[prefix]; }) : [];
-  return { family: family, side: side, snapshot: snapshot, snapRows: snapRows, dayRows: dayRows, days: days, zeroDays: zeroDays, through: through, issue: issue, sources: sources, unsnapped: unsnapped };
+  return { family: family, side: side, snapshot: snapshot, snapRows: snapRows, dayRows: dayRows, days: days, zeroDays: zeroDays, through: through, issue: issue, differences: differences, sources: sources, unsnapped: unsnapped };
 }
 
 // The ledger views each CC_Kpi store line is built from. A line whose snapshot view is missing is left as recorded.
@@ -924,14 +923,17 @@ function refreshStoreKpi_(date) {
   dailyFacts_().forEach(function (row) { facts[row.date] = row; });
   var closed = closedDates_();
   var importedAt = new Date().toISOString();
-  var result = { period: period, kpiUpdated: [], kpiAppended: [], ledger: { added: 0, same: 0, replaced: 0 }, issues: [], through: {} };
+  var result = { period: period, kpiUpdated: [], kpiAppended: [], ledger: { added: 0, same: 0, replaced: 0 }, issues: [], notes: [], through: {} };
   var tab = kpiSheet_();
   var kpi = tab.getDataRange().getValues();
   var derived = [];
   ['group17', 'asl'].forEach(function (family) {
     var written = storeKpiCoverage_(ledger, family, 'written', period, facts, closed, today);
     var delivered = storeKpiCoverage_(ledger, family, 'delivered', period, facts, closed, today);
-    [written, delivered].forEach(function (coverage) { if (coverage.issue) result.issues.push(coverage.issue); });
+    [written, delivered].forEach(function (coverage) {
+      if (coverage.issue) result.issues.push(coverage.issue);
+      (coverage.differences || []).forEach(function (note) { result.notes.push(note); });
+    });
     if (!written.through && !delivered.through) return;
     var w = storeKpiTotals_(written);
     var d = storeKpiTotals_(delivered);
@@ -1073,8 +1075,7 @@ function uploadChecklist_(evidence, date) {
         onFile = true;
         detail = 'TOTAL sales ' + moneyPlain_(row.sales);
         var nwdsr = side === 'written' ? fact.nwdsrWritten : fact.nwdsrDelivered;
-        if (side !== 'written' && nwdsr !== null && nwdsr !== undefined && Math.abs((row.sales || 0) - nwdsr) > 1) check = 'TOTAL ' + moneyPlain_(row.sales) + ' does not match NWDSR ' + side + ' ' + moneyPlain_(nwdsr) + '. The store month KPIs stop before this day until it is resolved.';
-        if (side === 'written' && nwdsr !== null && nwdsr !== undefined && Math.abs((row.sales || 0) - nwdsr) > 1) detail += '. NWDSR Written ' + moneyPlain_(nwdsr) + ' stays the written standard.';
+        if (nwdsr !== null && nwdsr !== undefined && Math.abs((row.sales || 0) - nwdsr) > 1) detail += '. TOTAL ' + moneyPlain_(row.sales) + ' and NWDSR ' + (side === 'written' ? 'Written' : 'Delivered') + ' ' + moneyPlain_(nwdsr) + ' differ. Both figures are kept. NWDSR ' + (side === 'written' ? 'Written' : 'Delivered') + ' stays the ' + side + ' standard. The difference is a reconciliation note, not an error.';
       }
     }
     if (item.key === 'aslWritten' || item.key === 'aslDelivered') {
@@ -1097,7 +1098,7 @@ function uploadChecklist_(evidence, date) {
     var message = detail;
     var dayText = uploadDayText_(date);
     if (check) { status = 'Needs Review'; message = check; }
-    else if (!onFile && last && last.status === 'Needs Review' && !(item.key === 'g17Written' && /do not match NWDSR Written/i.test(last.message || ''))) { status = 'Needs Review'; message = last.message; }
+    else if (!onFile && last && last.status === 'Needs Review') { status = 'Needs Review'; message = last.message; }
     else if (!onFile && last && last.status === 'Failed' && /must be confirmed|Tick "These Excel files are for|not the business date|before the business date|prints .* which is after today/i.test(last.message)) status = 'Missing';
     else if (!onFile && last && last.status === 'Failed') { status = 'Failed'; message = last.message; }
     if ((item.key === 'g17Delivered' || item.key === 'aslDelivered') && fact.nwdsrDelivered === 0 && !onFile && !check) {
@@ -1110,8 +1111,8 @@ function uploadChecklist_(evidence, date) {
         status = 'Covered';
         message = 'Already provided. The month-to-date report is verified through ' + uploadDayText_(cover) + '.';
       } else message = 'Missing for ' + dayText + '.';
-      if (item.key === 'g17Written' && last && /do not match NWDSR Written/i.test(last.message || '')) {
-        message = 'Missing for ' + dayText + '. Upload Group 17 Written again. A difference from NWDSR Written is not a review. NWDSR Written stays the written total.';
+      if (last && /differ|do not match NWDSR|was not saved|workbook was not saved/i.test(last.message || '')) {
+        message = 'Missing for ' + dayText + '. ' + (last.file || 'The earlier workbook') + ' was logged' + (last.at ? ' on ' + String(last.at).slice(0, 10) : '') + ' and was not saved. A difference from NWDSR is not a reason to reject it. Upload that original again. NWDSR stays the sales standard and is not overwritten. ' + last.message;
       }
     }
     return { key: item.key, label: item.label, format: item.format, use: item.use, status: status, message: message, date: date, dateText: dayText, lastFile: last ? last.file : '', lastAt: last ? last.at : '' };

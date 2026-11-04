@@ -38,10 +38,13 @@ var ROUTES_ = {
   evalWorkbook: ['manager', 'admin'],
   saveEvalMetric: ['manager', 'admin'],
   importEvalWorkbook: ['admin'],
+  importEvalSource: ['manager', 'admin'],
   resendEvalMail: ['manager', 'admin'],
   uploads: ['manager', 'admin'],
   uploadReport: ['manager', 'admin'],
   archiveOriginal: ['admin'],
+  monthlyHistory: ['admin'],
+  finalizeMonth: ['admin'],
   documents: ['sales', 'manager', 'admin'],
   docFile: ['sales', 'manager', 'admin'],
   uploadDocument: ['manager', 'admin'],
@@ -80,7 +83,7 @@ var ROUTES_ = {
 };
 
 // Routes that only read. Every other route can change figures, so the cached pages are dropped after it runs.
-var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, previewBriefEmail: true, emailControl: true, health: true, bedding: true, coverage: true, roster: true, evals: true, evalWorkbook: true, uploads: true, documents: true, docFile: true, devLog: true, dataPulse: true, coach: true, recovery: true, coaching: true, evalPrep: true, evalPrepWorkbook: true, leakage: true, delivery: true, previewRescue: true, accel: true, actions: true, reports: true, readiness: true, variance: true, orderQuality: true, closeout: true, training: true, consistency: true };
+var READ_ONLY_ROUTES_ = { home: true, daily: true, closing: true, people: true, summary: true, morning: true, brief: true, previewBriefEmail: true, emailControl: true, health: true, bedding: true, coverage: true, roster: true, evals: true, evalWorkbook: true, uploads: true, documents: true, docFile: true, devLog: true, dataPulse: true, monthlyHistory: true, coach: true, recovery: true, coaching: true, evalPrep: true, evalPrepWorkbook: true, leakage: true, delivery: true, previewRescue: true, accel: true, actions: true, reports: true, readiness: true, variance: true, orderQuality: true, closeout: true, training: true, consistency: true };
 // Backups and restore drills write only their own logs, which no cached page reads; a problem they record moves the version itself.
 var LOG_ONLY_ROUTES_ = { runBackup: true, runConsistency: true };
 // Pages whose reply is reused until the data changes. Each reads every tab once while it is built.
@@ -304,9 +307,12 @@ function route_(name, payload) {
   if (name === 'resendEvalMail') return resendEvalMail_(payload);
   if (name === 'saveEvalMetric') return saveEvalMetric_(payload);
   if (name === 'importEvalWorkbook') return importEvalWorkbook_(payload);
+  if (name === 'importEvalSource') return importEvalSourceWorkbook_(payload);
   if (name === 'uploads') return uploads_(payload);
   if (name === 'uploadReport') return uploadReport_(payload);
   if (name === 'archiveOriginal') return archiveOriginal_(payload);
+  if (name === 'monthlyHistory') return monthlyHistory_(payload);
+  if (name === 'finalizeMonth') return finalizeMonth_(payload);
   if (name === 'documents') return documents_(payload);
   if (name === 'docFile') return docFile_(payload);
   if (name === 'uploadDocument') return uploadDocument_(payload);

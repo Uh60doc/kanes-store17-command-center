@@ -205,6 +205,24 @@ function noFinalText_(period) {
   return 'No report printed for exactly ' + period.start + ' to ' + period.end + ' is on file';
 }
 
+function annotateMissingSource_(line, date, key, label) {
+  if (!line || !date || line.through === line.period.end) return;
+  var gap = !line.through || String(line.missing || '').indexOf(date) !== -1;
+  if (!gap) return;
+  var standing = { source: 'Source genuinely missing', admin: '' };
+  if (typeof sourceDisposition_ === 'function' && typeof alertRows_ === 'function' && typeof sheetValues_ === 'function' && typeof ALERTS_TAB_ !== 'undefined' && sheetValues_(ALERTS_TAB_)) {
+    try {
+      alertRows_().forEach(function (row) {
+        if (row.alert_key === 'report|' + date + '|' + key) standing = sourceDisposition_(row);
+      });
+    } catch (error) { standing = { source: 'Source genuinely missing', admin: '' }; }
+  }
+  if (standing.source === 'Source verified' || standing.source === 'Approved exception') return;
+  var phrase = standing.source + (standing.admin ? '. ' + standing.admin + '.' : '.') + ' ' + label + ' for ' + date + ' was not received. Closing an alert does not verify the source.';
+  if (String(line.basis || '').indexOf(standing.source) === -1) line.basis = phrase + ' ' + (line.basis || '');
+  if (String(line.missing || '').indexOf(standing.source) === -1) line.missing = (line.missing ? String(line.missing) + ' ' : '') + phrase;
+}
+
 function monthEndStatus_(line, variance, explanation, today) {
   var period = line.period;
   var verified = line.through ? 'verified through ' + line.through : 'no verified month to date yet';
@@ -316,6 +334,8 @@ function monthEndStoreLines_(ctx, period, last) {
     line.dailyTotal = dates.length ? sum(period.end) : null;
     line.dailyDates = datesText_(dates);
     line.missing = missingText_(walk.missing);
+    var reportKey = spec.field === 'snapWritten' ? 'snapWritten' : (spec.field === 'nwdsrDelivered' ? 'nwdsrDelivered' : 'nwdsrWritten');
+    annotateMissingSource_(line, period.start, reportKey, spec.metric);
     var final = finals.filter(function (row) { return row.view === spec.view && row.side === spec.side; })[0];
     if (final) { line.final = final.sales; line.finalBasis = finalBasisText_(final); }
     lines.push(line);
@@ -463,6 +483,7 @@ function monthEndPersonLines_(ctx, period, last) {
     snap.dailyTotal = lineDates.length ? monthEndRound_(lineDates.reduce(function (total, date) { return total + mine[date]; }, 0), 2) : null;
     snap.dailyDates = datesText_(lineDates);
     snap.missing = missingText_(snapWalk.missing);
+    annotateMissingSource_(snap, period.start, 'snapWritten', 'SNAP Written');
     var snapFinal = finals.filter(function (row) { return row.view === 'SNAP_PERSON' && rowMatchesPerson_(row, person.name); })[0];
     if (snapFinal) { snap.final = snapFinal.sales; snap.finalBasis = finalBasisText_(snapFinal); }
     else if (finals.some(function (row) { return row.view === 'SNAP_PERSON'; })) { snap.final = 0; snap.finalBasis = 'The official SNAP final has no line for this salesperson'; }

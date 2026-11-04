@@ -436,6 +436,11 @@ function briefMissingSources_(home, winners, people) {
   });
   var snapPending = people && people.snapPending ? people.snapPending : [];
   if (snapPending.length) missing.push('Salesperson SNAP for ' + snapPending.join(', '));
+  var gaps = home.freshness && home.freshness.sourceGaps ? home.freshness.sourceGaps : [];
+  gaps.forEach(function (gap) {
+    var line = (gap.source || 'Source genuinely missing') + (gap.admin ? ' (' + gap.admin + ')' : '') + ': ' + (gap.report || 'Report') + ' for ' + (gap.date || 'an earlier date');
+    if (missing.indexOf(line) === -1) missing.push(line);
+  });
   return missing;
 }
 

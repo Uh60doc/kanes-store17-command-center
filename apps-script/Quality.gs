@@ -502,6 +502,16 @@ function checkEmployeeMatching_(ctx, add) {
     var item = unmatched[key];
     add('employee-match', 'FLAG', item.name, item.name + ' appears on ' + Object.keys(item.where).join(', ') + (item.dates.length ? ' (' + item.dates.sort().join(', ') + ')' : '') + ' in the salesperson month but does not match one roster person (CC_People). The lines stay in store totals and on file under the printed name (month end shows "Not on the roster"); they are not credited to any roster salesperson. Add the name or alias to the roster, with a Transferred or Terminated status if they do not sell at Store 17.', ['person_written', 'person_kpis', 'person_delivered']);
   });
+  if (typeof formerSalesLocated_ === 'function') {
+    var located = {};
+    formerSalesLocated_(ctx.person.start, ctx.person.end).forEach(function (item) {
+      var bucket = located[item.name] || (located[item.name] = []);
+      bucket.push(item.side + ' ' + moneyPlain_(item.sales) + ' on ' + item.date + (item.reducedOn ? ', which reduces ' + item.reducedOn + ' by ' + moneyPlain_(Math.abs(item.sales)) + ' for that salesperson month' : ''));
+    });
+    Object.keys(located).sort().forEach(function (name) {
+      add('employee-match', 'NOTE', name, name + ' no longer works at Store 17. ' + located[name].join('; ') + '. The original line stays under ' + name + ' and in the store total. A written negative reduces Kelly Meyers for that salesperson month. A delivered negative reduces Liz Perez. A positive is not added to either manager or to any active salesperson.', ['person_written', 'person_kpis', 'person_delivered']);
+    });
+  }
   if (!ids.repeated.length && !Object.keys(unmatched).length) add('employee-match', 'PASS', 'Salesperson month', 'Every salesperson line from ' + ctx.person.start + ' that should match a roster person does' + (Object.keys(intentional).length ? '; intentionally unmatched names remain NOTES only' : '') + '.');
 }
 
@@ -1017,7 +1027,7 @@ function resolutionFor_(ctx, alert, checks) {
     if (item.status === 'Imported' || item.status === 'Covered') return { status: 'Resolved', text: item.label + ' for ' + date + ' arrived and passed validation' + (item.detail ? ' (' + item.detail.replace(/\.$/, '') + ')' : '') + '.' };
     if (item.status === 'Awaiting') return { status: 'Withdrawn', text: 'Raised before the report was due. ' + item.label + ' for ' + date + ' is due by ' + ctx.dueHour + ':00 on ' + shiftDate_(date, 1) + ' and is raised again then if it has not arrived.' };
     if (ctx.closed[date]) return { status: 'Resolved', text: date + ' is a closed day on CC_SellingDays, so no report is required.' };
-    if (date < ctx.windowStart) return { status: 'Closed', text: 'The reporting month ended without this report. The gap stays visible on Month-End.' };
+    if (date < ctx.windowStart) return { status: 'Closed', text: 'Administratively closed alert. Source genuinely missing: the reporting month ended without this report. Closing the alert does not mean the report was received or verified. The gap stays visible on Home, the Monday email, and Month-End.' };
     return { status: 'Resolved', text: 'No longer required for ' + date + '.' };
   }
   var id = alert.alert_key.split('|')[1];
@@ -1206,7 +1216,38 @@ function runQualityChecks_(trigger) {
   return summary;
 }
 
-/** Report Missing while a required report is outstanding, Needs Review while a check is flagged, otherwise Current. */
+/**
+ * Source standing is separate from the alert's administrative status.
+ * Source verified, Source genuinely missing, Source unavailable or inaccessible, Accuracy exception,
+ * Administratively closed alert, and Approved exception are not interchangeable.
+ */
+function sourceDisposition_(row) {
+  var status = String(row.status || '');
+  var severity = String(row.severity || '');
+  var text = String(row.resolution || '') + ' ' + String(row.message || '');
+  var source = '';
+  var admin = '';
+  if (/approved exception/i.test(text)) source = 'Approved exception';
+  else if (status === 'Resolved' && /arrived|passed validation|is \$0/i.test(text)) source = 'Source verified';
+  else if (/could not be read|inaccessible|unavailable|not supplied/i.test(text)) source = 'Source unavailable or inaccessible';
+  else if (severity === 'Missing' && (status === 'Active' || status === 'Closed')) source = 'Source genuinely missing';
+  else if (severity === 'Needs Review' || /needs review|differ|does not match/i.test(text)) source = 'Accuracy exception';
+  if (status === 'Closed') admin = 'Administratively closed alert';
+  return { source: source, admin: admin };
+}
+
+function sourceCoverageGaps_() {
+  if (typeof sheetValues_ !== 'function' || !sheetValues_(ALERTS_TAB_)) return [];
+  var gaps = [];
+  alertRows_().forEach(function (row) {
+    var standing = sourceDisposition_(row);
+    if (standing.source !== 'Source genuinely missing' && standing.source !== 'Source unavailable or inaccessible') return;
+    gaps.push({ date: row.business_date, report: row.report, source: standing.source, admin: standing.admin, message: row.message, alert: row.status });
+  });
+  return gaps;
+}
+
+/** Report Missing while a required report is outstanding, Needs Review while a check is flagged, Source gap while a closed alert still hides a missing source, otherwise Current. */
 /** Cross-page agreement, source integrity, and reporting completeness stay separate. Overall PASS requires all three. */
 function integrityOverall_(consistency, integrity, completeness) {
   var ranks = { FAIL: 2, WARNING: 1, PASS: 0 };
@@ -1234,6 +1275,10 @@ function alertStatus_(rows) {
   var active = rows.filter(function (row) { return row.status === 'Active'; });
   if (active.some(function (row) { return row.severity === 'Missing'; })) return 'Report Missing';
   if (active.some(function (row) { return row.severity === 'Needs Review'; })) return 'Needs Review';
+  if (rows.some(function (row) {
+    var standing = sourceDisposition_(row);
+    return standing.source === 'Source genuinely missing' || standing.source === 'Source unavailable or inaccessible';
+  })) return 'Source gap';
   return 'Current';
 }
 
@@ -1269,15 +1314,19 @@ function alertAttention_(rows, role) {
   var missing = {};
   var items = [];
   rows.forEach(function (row) {
-    if (row.category === 'Report' && row.severity === 'Missing') (missing[row.business_date] = missing[row.business_date] || []).push(row.report);
+    if (row.category !== 'Report' || row.severity !== 'Missing') return;
+    if (row.status !== 'Active' && row.status !== 'Closed') return;
+    var standing = sourceDisposition_(row);
+    var label = row.report + (standing.admin ? ' (' + standing.admin + ')' : '');
+    (missing[row.business_date] = missing[row.business_date] || []).push(label);
   });
   Object.keys(missing).sort().reverse().forEach(function (date) {
-    items.push('Not yet arrived for ' + date + ': ' + missing[date].join(', ') + '. Figures that depend on them stay at the last verified date; nothing is counted as zero.');
+    items.push('Source genuinely missing for ' + date + ': ' + missing[date].join(', ') + '. A closed alert is not a received report. Figures that depend on them stay at the last verified date; nothing is counted as zero.');
   });
   rows.forEach(function (row) {
-    if (row.severity !== 'Needs Review') return;
+    if (row.status !== 'Active' || row.severity !== 'Needs Review') return;
     if (role === 'sales' && row.category === 'Quality') return;
-    items.push(row.message);
+    items.push('Accuracy exception. ' + row.message);
   });
   return items;
 }
@@ -1304,7 +1353,13 @@ function activeAlerts_() {
 
 function qualityHealth_() {
   var alerts = sheetValues_(ALERTS_TAB_) ? alertRows_() : [];
-  var resolved = alerts.filter(function (row) { return row.status === 'Resolved' || row.status === 'Closed' || row.status === 'Withdrawn'; }).sort(function (a, b) { return a.resolved_at < b.resolved_at ? 1 : -1; });
+  var gaps = alerts.filter(function (row) {
+    var standing = sourceDisposition_(row);
+    return standing.source === 'Source genuinely missing' || standing.source === 'Source unavailable or inaccessible';
+  });
+  var gapKeys = {};
+  gaps.forEach(function (row) { gapKeys[row.alert_key] = true; });
+  var resolved = alerts.filter(function (row) { return !gapKeys[row.alert_key] && (row.status === 'Resolved' || row.status === 'Closed' || row.status === 'Withdrawn'); }).sort(function (a, b) { return a.resolved_at < b.resolved_at ? 1 : -1; });
   var runs = sheet_(QUALITY_RUNS_TAB_);
   var last = runs.length ? runs[runs.length - 1] : null;
   var text = qualityCell_;
@@ -1313,6 +1368,10 @@ function qualityHealth_() {
     checks: sheet_(QUALITY_TAB_).map(function (row) { return { id: text(row.check_id), area: text(row.area), status: text(row.status), subject: text(row.subject), explanation: text(row.explanation) }; }),
     status: sheet_(DATA_STATUS_TAB_).map(function (row) { return { kind: text(row.kind), key: text(row.key), name: text(row.name), source: text(row.approved_source), periodDates: text(row.period_dates), through: text(row.verified_through), expected: text(row.expected_through), status: text(row.status), explanation: text(row.explanation) }; }),
     active: alerts.filter(function (row) { return row.status === 'Active'; }).map(function (row) { return { category: row.category, severity: row.severity, date: row.business_date, report: row.report, message: row.message, since: row.first_seen, emailed: row.emailed_at }; }),
+    sourceGaps: gaps.map(function (row) {
+      var standing = sourceDisposition_(row);
+      return { date: row.business_date, report: row.report, source: standing.source, admin: standing.admin, alert: row.status, message: row.message, resolution: row.resolution };
+    }),
     resolved: resolved.slice(0, 15).map(function (row) { return { category: row.category, status: row.status, date: row.business_date, report: row.report, message: row.message, since: row.first_seen, resolvedAt: row.resolved_at, resolution: row.resolution }; }),
     resolvedCount: resolved.length,
     notices: alerts.filter(function (row) { return row.category === 'Notice'; }).slice(-8).reverse().map(function (row) { return { at: row.first_seen, message: row.message, emailed: row.emailed_at }; }),

@@ -249,6 +249,10 @@ function importEvalWorkbook_(payload) {
   if (already) throw new Error('This exact workbook was already archived on ' + stampDay_(already.archivedAt) + ' as ' + already.fileName + '. Nothing was changed.');
   var plan = planEvalImport_(cycle, read);
   if (!plan.parsed.length) throw new Error('No associate evaluation worksheets were found in this workbook.');
+  if (plan.parsed.some(function (entry) { return !entry.monthsOk; })) {
+    var detected = reviewCycleFromSheets_(read.sheets, todayNy_());
+    if (detected && detected !== cycle) plan.warnings.unshift('These months are the ' + evalCycleInfo_(detected).label + ' review. Use Data for the next review. This box keeps a completed review for the month selected above.');
+  }
   var saved = evalSavedRows_();
   plan.parsed.forEach(function (entry) {
     saved.forEach(function (row) { if (row.cycle === cycle && row.name === entry.display) throw new Error(entry.display + ' already has a ' + row.status + ' evaluation for ' + plan.info.label + '. Nothing was changed.'); });
@@ -313,4 +317,148 @@ function importEvalWorkbook_(payload) {
   result.saved = 'Archived ' + fileName + ' unchanged and recorded ' + plan.parsed.length + ' evaluation' + (plan.parsed.length === 1 ? '' : 's') + ' for ' + plan.info.label + '.';
   result.preview = preview;
   return result;
+}
+
+/** The review month is the month after the three months printed on the sheet. */
+function issueCycleFromHeaders_(headers, today) {
+  var idx = (headers || []).map(function (value) { return monthIndexFromText_(value); });
+  if (idx.length !== 3 || idx.indexOf(-1) !== -1) return '';
+  if (idx[1] !== (idx[0] + 1) % 12 || idx[2] !== (idx[0] + 2) % 12) return '';
+  var parts = isoParts_(today);
+  var thirdMonth = idx[2] + 1;
+  var thirdYear = parts.year;
+  var lastDay = new Date(Date.UTC(thirdYear, thirdMonth, 0)).getUTCDate();
+  var thirdEnd = thirdYear + '-' + pad2_(thirdMonth) + '-' + pad2_(lastDay);
+  if (thirdEnd > today) thirdYear -= 1;
+  var issueMonth = thirdMonth + 1;
+  var issueYear = thirdYear;
+  if (issueMonth > 12) { issueMonth = 1; issueYear += 1; }
+  return monthKey_(issueYear, issueMonth);
+}
+
+function reviewCycleFromSheets_(sheets, today) {
+  var found = '';
+  var i;
+  for (i = 0; i < sheets.length; i += 1) {
+    if (sheets[i].hidden) continue;
+    var parsed = parseEvalSheet_(sheets[i]);
+    if (!parsed || parsed.months.length !== 3) continue;
+    if (/template/i.test(parsed.sheet) && !parsed.metrics.some(function (metric) { return metric.values.some(function (cell) { return typeof cell.value === 'number'; }); })) continue;
+    var cycle = issueCycleFromHeaders_(parsed.months.map(function (month) { return month.text; }), today);
+    if (!cycle) continue;
+    if (found && found !== cycle) return 'mixed';
+    found = cycle;
+  }
+  return found;
+}
+
+/**
+ * Figures for the next review. The file is the same associate workbook, with the three months being reviewed.
+ * It is saved as a draft. It is not marked Approved, and last month's completed review is left as it was.
+ */
+function importEvalSourceWorkbook_(payload) {
+  var fileName = String(payload.fileName || 'evaluation.xlsx').replace(/[\\\/]/g, '_').slice(0, 120);
+  if (!/\.xlsx$/i.test(fileName)) throw new Error('Choose the .xlsx workbook with the three months for the next review.');
+  var read = readEvalWorkbook_(String(payload.base64 || ''), fileName);
+  var today = todayNy_();
+  var cycle = reviewCycleFromSheets_(read.sheets, today);
+  if (cycle === 'mixed') throw new Error('The worksheets do not all cover the same three months. Nothing was changed.');
+  if (!cycle) throw new Error('No associate sheets with three month columns were found. Last month\'s completed review stays in the history box. The next review needs each associate sheet to show the three months being reviewed, such as August, September, and October.');
+  var already = evalArchiveRows_().filter(function (entry) { return entry.sha256 === read.sha256 && entry.kind === 'review source'; })[0];
+  if (already) throw new Error('This file was already used for the ' + monthLabel_(String(already.cycle || '').slice(0, 7)) + ' review on ' + stampDay_(already.archivedAt) + '. Nothing was changed.');
+  var plan = planEvalImport_(cycle, read);
+  if (!plan.parsed.length) throw new Error('No associate sheets with figures were found. Nothing was changed.');
+  var saved = evalSavedRows_();
+  var locked = {};
+  saved.forEach(function (row) {
+    if (row.cycle === cycle && (row.status === 'Approved' || row.status === 'Given to Associate')) locked[row.name] = row.status;
+  });
+  var open = plan.parsed.filter(function (entry) { return !locked[entry.display]; });
+  if (!open.length) plan.warnings.unshift('Every associate in this file already has an approved ' + plan.info.label + ' review. That review stays as history. The next review needs the three months after these.');
+  var onFile = evalMetricRows_();
+  var added = 0;
+  var kept = 0;
+  open.forEach(function (entry) {
+    entry.metrics.forEach(function (metric) {
+      metric.values.forEach(function (cell, i) {
+        var month = plan.info.months[i].key;
+        var definition = EVAL_METRICS_.filter(function (item) { return item.key === metric.key; })[0];
+        var goalCount = typeof metric.goal === 'string' && /per\s*month/i.test(metric.goal);
+        var value = importedValue_(definition, cell, goalCount);
+        var prior = null;
+        onFile.forEach(function (row) {
+          if (!prior && row.month === month && row.name === entry.display && row.metric === metric.key) prior = row;
+        });
+        if (prior && prior.status === value.status && (value.status !== 'Verified' || Number(prior.value) === Number(value.value))) kept += 1;
+        else added += 1;
+      });
+    });
+  });
+  var blocking = open.filter(function (entry) { return !entry.onRoster || !entry.monthsOk; });
+  var preview = {
+    fileName: fileName, sha256: read.sha256, bytes: read.bytes.length, cycle: cycle, label: plan.info.label,
+    covers: plan.info.months.map(function (month) { return month.label + ' (' + month.start + ' to ' + month.end + ')'; }),
+    purpose: 'next review',
+    sheets: open.map(function (entry) {
+      var numbers = 0;
+      var blanks = 0;
+      entry.metrics.forEach(function (metric) { metric.values.forEach(function (cell) { if (importedValue_(EVAL_METRICS_.filter(function (item) { return item.key === metric.key; })[0], cell, false).status === 'Verified') numbers += 1; else blanks += 1; }); });
+      return { sheet: entry.sheet, name: entry.display, onRoster: entry.onRoster, months: entry.months.map(function (month) { return month.text; }), metrics: entry.metrics.length, values: numbers, missing: blanks, focus: entry.focus.map(function (focus) { return focus.metric; }) };
+    }),
+    added: added, kept: kept,
+    warnings: plan.warnings,
+    canImport: blocking.length === 0 && open.length > 0,
+  };
+  if (payload.confirm !== true) return { confirmed: false, preview: preview };
+  if (!preview.canImport) throw new Error(open.length ? 'Fix the warnings first: ' + plan.warnings.join(' ') : plan.warnings[0]);
+
+  archiveFile_(String(payload.base64), fileName, 'review source', cycle, '', '', null, 'Source data for the ' + plan.info.label + ' review. Not an approved evaluation. Sheets: ' + open.map(function (entry) { return entry.sheet; }).join(', ') + '.');
+  var stamp = new Date().toISOString();
+  var metricsTab = evalTab_('CC_EvalMetrics', EVAL_METRIC_HEADERS_);
+  open.forEach(function (entry) {
+    entry.metrics.forEach(function (metric) {
+      var definition = EVAL_METRICS_.filter(function (item) { return item.key === metric.key; })[0];
+      var goalCount = typeof metric.goal === 'string' && /per\s*month/i.test(metric.goal);
+      metric.values.forEach(function (cell, i) {
+        var month = plan.info.months[i].key;
+        var value = importedValue_(definition, cell, goalCount);
+        var prior = null;
+        onFile.forEach(function (row) {
+          if (!prior && row.month === month && row.name === entry.display && row.metric === metric.key) prior = row;
+        });
+        if (prior && prior.status === value.status && (value.status !== 'Verified' || Number(prior.value) === Number(value.value))) return;
+        var source = (metric.key === 'volume' ? 'SPR TOTAL line 8' : 'WDSRR') + ' as recorded in ' + fileName;
+        metricsTab.appendRow([month, entry.display, entry.employeeId, metric.key, value.value, value.unit, value.status, source, value.note, stamp, payload.session.role, 'sha256 ' + read.sha256 + ' · ' + entry.sheet + '!' + cell.ref]);
+        onFile.push({ month: month, name: entry.display, metric: metric.key, value: value.value, status: value.status });
+      });
+    });
+  });
+  ensureEvalDrafts_(cycle, 'review data ' + fileName);
+  var result = evals_({ session: payload.session, cycle: cycle });
+  result.confirmed = true;
+  result.saved = 'Saved the ' + plan.info.label + ' figures from ' + fileName + ' and opened the draft. It is not approved.';
+  result.preview = preview;
+  return result;
+}
+
+function ensureEvalDrafts_(cycle, source) {
+  var today = todayNy_();
+  var context = evalContext_(cycle, today);
+  var tab = evalTab_('CC_Evaluations', EVAL_HEADERS_);
+  var stamp = new Date().toISOString();
+  var made = 0;
+  context.evaluations.forEach(function (evaluation) {
+    if (evaluation.status !== 'Not prepared') return;
+    var line = {
+      cycle: cycle, name: evaluation.name, employee_id: evaluation.employeeId, status: 'Draft', revision: 1, template: evaluation.template,
+      volume_goal: '',
+      focus1_metric: evaluation.focus[0].metric, focus1_prior: evaluation.focus[0].prior, focus1_goal: evaluation.focus[0].goal, focus1_plan: evaluation.focus[0].plan,
+      focus2_metric: evaluation.focus[1].metric, focus2_prior: evaluation.focus[1].prior, focus2_goal: evaluation.focus[1].goal, focus2_plan: evaluation.focus[1].plan,
+      recognition: evaluation.recognition, comments: evaluation.comments, prepared_at: stamp, updated_at: stamp, source: source,
+      note: evaluation.verification === 'Verified' ? 'All three months verified from the uploaded review data.' : 'Pending Verification: ' + evaluation.pendingMonths.join(', ') + '.',
+    };
+    tab.appendRow(EVAL_HEADERS_.map(function (key) { return line[key] === undefined ? '' : line[key]; }));
+    made += 1;
+  });
+  return made;
 }

@@ -70,7 +70,7 @@ test('a missing-report alert resolves itself when the report arrives, and the re
   const { gs, tabs } = harness();
   gs.runQualityChecks_('first run');
   assert.ok(active(tabs).includes('report|2026-10-16|nwdsrDelivered'));
-  assert.ok(plain(gs.home_({ session })).attention.some((item: string) => /Not yet arrived for 2026-10-16: .*NWDSR Delivered/.test(item)));
+  assert.ok(plain(gs.home_({ session })).attention.some((item: string) => /Source genuinely missing for 2026-10-16: .*NWDSR Delivered/.test(item)));
   gs.writeDailyAmount_({ reportType: 'NWDSR Delivered', start: '2026-10-16', storeTotal: 8800 });
   const second = plain(gs.runQualityChecks_('report arrived'));
   assert.ok(second.resolved >= 1);
@@ -99,7 +99,7 @@ test('dates stored by Sheets read back as the business date on Home, System heal
   gs.runQualityChecks_('first run');
   asSheetsStores(tabs);
   const attention = plain(gs.home_({ session })).attention as string[];
-  assert.ok(attention.some((item) => /^Not yet arrived for 2026-10-16: SNAP Written/.test(item)), attention.join('\n'));
+  assert.ok(attention.some((item) => /^Source genuinely missing for 2026-10-16: SNAP Written/.test(item)), attention.join('\n'));
   assert.ok(!attention.some((item) => /T04:00/.test(item)));
   const health = plain(gs.health_({ session }));
   assert.ok(health.quality.active.some((row: { date: string }) => row.date === '2026-10-16'));
@@ -124,7 +124,7 @@ test('alert dates saved as timestamps by an earlier version read back as the bus
   const column = head.indexOf('business_date');
   for (const row of tabs.CC_Alerts!.slice(1)) if (row[column]) row[column] = `${row[column]}T04:00:00.000Z`;
   const attention = plain(gs.home_({ session })).attention as string[];
-  assert.ok(attention.some((item) => /^Not yet arrived for 2026-10-16: SNAP Written/.test(item)), attention.join('\n'));
+  assert.ok(attention.some((item) => /^Source genuinely missing for 2026-10-16: SNAP Written/.test(item)), attention.join('\n'));
   gs.runQualityChecks_('next run');
   assert.ok(alerts(tabs).every((row) => !/T04/.test(row.business_date)));
   assert.equal(alerts(tabs).find((row) => row.alert_key === 'report|2026-10-16|snapWritten')!.business_date, '2026-10-16');

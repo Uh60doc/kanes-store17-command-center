@@ -1282,6 +1282,12 @@
           return '<li>' + names + '.</li>';
         }).join('') + '</ul></article>';
       }
+      function sourceGapList(items) {
+        if (!items || !items.length) return '';
+        return '<article class="card"><h2>Source coverage (' + items.length + ')</h2><p class="sub">A closed alert is not a received report. These sources are still missing or unavailable.</p><ul class="list">' + items.map(function (gap) {
+          return '<li>' + esc(gap.source || 'Source genuinely missing') + (gap.admin ? ' · ' + esc(gap.admin) : '') + ' · ' + esc(gap.date || '') + ' ' + esc(gap.report || '') + '</li>';
+        }).join('') + '</ul></article>';
+      }
       document.getElementById('header-note').textContent = updatedOn(freshWritten.through || freshDelivered.through || data.latest);
       function kpiTile(row) {
         var hasWritten = !(row.written === null || row.written === undefined || row.written === '');
@@ -1441,6 +1447,7 @@
         '<h2 class="section-title">Year over year</h2><div class="home-compare">' + compare +
         '<article class="card glow-card trend-card"><div class="trend-head"><h2>NWDSR this year and SNAP last year</h2><div class="trend-legend"><span><i class="swatch nw"></i>NWDSR this year</span><span class="' + (homeTrendHasLy(data.chart) ? '' : 'is-pending') + '"><i class="swatch ly"></i>SNAP last year' + (homeTrendHasLy(data.chart) ? '' : ' · Pending') + '</span></div></div>' + homeTrend(data.chart, data.today) + '</article></div>' +
         pendingList(fresh.pending) +
+        sourceGapList(fresh.sourceGaps) +
         '<h2 class="section-title">Sales team performance</h2>' + quick +
         '<div class="team-grid">' + (teamCards || '<article class="card"><p class="pending">Pending. No active salesperson is on the home record.</p></article>') + '</div>' +
         (otherKpis ? '<h2 class="section-title">Store KPIs</h2><div class="kpi-primary">' + otherKpis + '</div>' : '') +
@@ -1752,6 +1759,8 @@
     var peopleSnapPending = [];
     var peopleAnalysisThrough = {};
     var peopleDeliveredVariance = null;
+    var peopleFormerSales = [];
+    var peopleManagerReductions = [];
     var recoveryDirty = false;
     var coachDirty = false;
     var rescuePreview = null;
@@ -2242,6 +2251,8 @@
       peopleSnapPending = data.snapPending || [];
       peopleAnalysisThrough = data.analysisThrough || {};
       peopleDeliveredVariance = data.deliveredVariance || null;
+      peopleFormerSales = data.formerSales || [];
+      peopleManagerReductions = data.managerReductions || [];
       peopleEvaluation = data.evaluation || null;
       peopleToday = data.today || '';
       peoplePeriod = data.period || '';
@@ -2269,6 +2280,20 @@
       return toneFor(value, row.goal);
     }
     var PERSON_COMPARE = ['Bedding', 'Mattress Pads', 'Adjustable Bases', 'Pillows', 'Furniture Protection', 'Pet Protections', 'Rugs', 'Fabric', 'Leather', 'Power', 'Financing', 'Average Ticket', 'Orders'];
+    function formerSalesHtml() {
+      if (!peopleFormerSales.length && !peopleManagerReductions.length) return '';
+      var lines = peopleFormerSales.map(function (item) {
+        var cut = item.reducedOn ? ' · reduces ' + esc(item.reducedOn) + ' ' + money(Math.abs(item.sales)) + ' for the month' : '';
+        return esc(item.name) + ' · ' + esc(item.side) + ' ' + money(item.sales) + ' · ' + esc(item.date) + cut;
+      }).join('<br>');
+      var months = peopleManagerReductions.map(function (row) {
+        var parts = [];
+        if (row.written) parts.push(money(Math.abs(row.written)) + ' written');
+        if (row.delivered) parts.push(money(Math.abs(row.delivered)) + ' delivered');
+        return esc(row.name) + ' reduced by ' + parts.join(' and ') + ' for this salesperson month';
+      }).join('<br>');
+      return '<p class="sub">Someone who no longer works here. ' + lines + (months ? '<br>' + months + '.' : '') + ' The store total is unchanged.</p>';
+    }
     function drawPeopleTable() {
       displayHold = false;
       document.body.classList.remove('print-summary');
@@ -2289,6 +2314,7 @@
         teamNav('board') +
         '<article class="card kpi-wrap"><table class="kpi"><tr><th>Sales Team</th><th>SNAP written</th><th>Monthly goal</th><th>% to goal</th><th>Delivered</th><th>Written orders</th><th>Opportunities</th><th>Closing ratio</th></tr>' + rows + '</table><p class="sub">Last updated. SNAP written ' + esc(dateLabel(peopleSnapThrough) || 'Pending') + '. Delivered ' + esc(dateLabel(peopleAnalysisThrough.delivered) || 'Pending') + '.' + (snapWaiting(peopleSnapPending) ? ' ' + esc(snapWaiting(peopleSnapPending)) : '') + '</p>' +
         (peopleDeliveredVariance ? '<p class="sub">Store delivered ' + money(peopleDeliveredVariance.storeDelivered) + '. ' + updatedOn(peopleDeliveredVariance.storeDeliveredThrough) + ' Sales team delivered ' + (peopleDeliveredVariance.activeAssociateDelivered === null || peopleDeliveredVariance.activeAssociateDelivered === undefined ? 'Pending' : money(peopleDeliveredVariance.activeAssociateDelivered)) + '.</p>' : '') +
+        formerSalesHtml() +
         '</article>' +
         '<h2 class="section-title">KPI comparison</h2>' +
         '<article class="card kpi-wrap"><table class="kpi"><tr><th>KPI</th>' + heads + '</tr>' + compare + '</table><p class="sub">' + updatedOn(peopleAnalysisThrough.written) + '</p></article>' +
@@ -3333,14 +3359,50 @@
         api('setEvalStatus', send).then(function (result) { renderEvals(result, result.saved); }).catch(function (error) { evalFailed(error); });
       });
     }
+    function evalSourceCard() {
+      if (evalCache.role !== 'admin' && evalCache.role !== 'manager') return '';
+      return '<article class="card roster-card noprint" style="margin-top:12px"><h2>Data for the next review</h2>' +
+        '<p class="sub">Upload the Excel for the review you are about to give. Each associate sheet needs the three months of that review. For November that is August, September, and October. The figures are saved and a draft is opened. It is not marked approved. Daily sales are not changed. Last month\'s completed review does not go here.</p>' +
+        '<input id="ev-source-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />' +
+        '<p id="eval-source-error" class="error"></p><div id="eval-source-preview"></div></article>';
+    }
     function evalImportCard() {
       if (evalCache.role !== 'admin') return '';
-      return '<article class="card roster-card noprint" style="margin-top:12px"><h2>Historical evaluation workbook</h2>' +
-        '<p class="sub">Upload an approved monthly workbook (for example the October evaluations) to keep it as the reference record. The file is archived byte for byte and never rewritten; its associate worksheets are read into the history for ' + esc(evalCache.info.label) + ' (' + esc(evalRange(evalCache.info.months)) + '). Choose the matching cycle above first.</p>' +
+      return '<article class="card roster-card noprint" style="margin-top:12px"><h2>Last month\'s completed review</h2>' +
+        '<p class="sub">This box keeps a review that was already given, such as the October evaluations. It does not build the next review. The file is archived unchanged and read into the history for ' + esc(evalCache.info.label) + ' (' + esc(evalRange(evalCache.info.months)) + '). Choose that month above first.</p>' +
         '<input id="ev-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />' +
         '<p id="eval-import-error" class="error"></p><div id="eval-import-preview"></div></article>';
     }
+    function bindEvalSource() {
+      var input = document.getElementById('ev-source-file');
+      if (!input) return;
+      input.addEventListener('change', function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+          var request = { fileName: file.name, base64: String(reader.result).split(',')[1] || '' };
+          document.getElementById('eval-source-error').textContent = 'Reading ' + file.name + '…';
+          api('importEvalSource', request).then(function (result) {
+            var preview = result.preview;
+            document.getElementById('eval-source-error').textContent = '';
+            document.getElementById('eval-source-preview').innerHTML = '<div class="roster-preview"><p><strong>' + esc(preview.fileName) + ' → ' + esc(preview.label) + ' draft</strong> · ' + esc(preview.covers.join(', ')) + '</p>' +
+              '<table class="score"><tr><th>Worksheet</th><th>Associate</th><th>Months</th><th>Figures</th><th>Blank / not available</th></tr>' + preview.sheets.map(function (sheet) {
+                return '<tr><td>' + esc(sheet.sheet) + '</td><td class="' + (sheet.onRoster ? '' : 'bad') + '">' + esc(sheet.name) + (sheet.onRoster ? '' : ' (not on roster)') + '</td><td>' + esc(sheet.months.join(', ')) + '</td><td>' + sheet.values + '</td><td>' + sheet.missing + '</td></tr>';
+              }).join('') + '</table>' + (preview.warnings.length ? '<ul class="list warn">' + preview.warnings.map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('') + '</ul>' : '') +
+              (preview.canImport ? '<p class="summary-actions"><button type="button" id="ev-source-confirm">Save figures and open the draft</button></p>' : '<p class="warn">This file was not saved.</p>') + '</div>';
+            var go = document.getElementById('ev-source-confirm');
+            if (go) go.addEventListener('click', function () {
+              request.confirm = true;
+              api('importEvalSource', request).then(function (done) { renderEvals(done, done.saved); }).catch(function (error) { evalFailed(error, 'eval-source-error'); });
+            });
+          }).catch(function (error) { evalFailed(error, 'eval-source-error'); });
+        };
+        reader.readAsDataURL(file);
+      });
+    }
     function bindEvalImport() {
+      bindEvalSource();
       var input = document.getElementById('ev-file');
       if (!input) return;
       input.addEventListener('change', function () {
@@ -3402,7 +3464,7 @@
         '<article class="card kpi-wrap" style="margin-top:12px"><h2>' + esc(info.label) + ' status</h2>' + (list.length ? '<table class="kpi roster-table"><tr><th>Associate</th><th>Verification</th><th>Status</th><th>Given</th><th></th></tr>' + rows + '</table>' : '<p class="sub">No associate was on the Sales Team for this cycle.</p>') + '</article>' +
         (editing ? evalEditor(editing) : '') + (single ? evalDetail(single) : '') +
         '<article class="card kpi-wrap" style="margin-top:12px"><h2>Archive · ' + esc(info.label) + '</h2>' + (archive ? '<table class="kpi"><tr><th>Archived</th><th>Kind</th><th>For</th><th>File</th><th></th></tr>' + archive + '</table><p class="sub">Archived files are returned exactly as stored; the fingerprint is checked before download.</p>' : '<p class="sub">Nothing archived for this month yet. Each approved evaluation and the completed monthly workbook are archived automatically.</p>') + '</article>' +
-        evalImportCard() + '</div>' +
+        evalSourceCard() + evalImportCard() + '</div>' +
         '<div id="eval-print" class="eval-print"></div>';
       bindTeamNav();
       document.getElementById('ev-cycle').addEventListener('change', function (event) { evalCycle = event.target.value; evalPick = ''; evalEditing = ''; drawEvals(); });
@@ -3918,7 +3980,7 @@
 
     function dataStatusTone(status) {
       if (status === 'COMPLETE' || status === 'CURRENT' || status === 'PASS' || status === 'Verified' || status === 'Passed' || status === 'Resolved') return 'good';
-      if (status === 'PARTIAL' || status === 'NOTE' || status === 'Withdrawn' || status === 'Closed') return 'warn';
+      if (status === 'PARTIAL' || status === 'NOTE' || status === 'Withdrawn' || status === 'Closed' || status === 'Source gap') return 'warn';
       return 'bad';
     }
     function pill(status) {
@@ -3933,6 +3995,7 @@
       var metricRows = metrics.map(function (row) { return '<tr><td>' + esc(row.name) + '<div class="sub">' + esc(row.source) + '</div></td><td>' + pill(row.status) + '</td><td>' + esc(row.through || 'Pending') + '</td><td>' + esc(row.expected || '—') + '</td><td class="sub">' + esc(row.explanation) + '</td></tr>'; }).join('');
       var dayRows = days.map(function (row) { return '<tr><td>' + esc(row.key) + '</td><td>' + pill(row.status) + '</td><td>' + esc(row.through) + '</td><td class="sub">' + esc(row.explanation) + '</td></tr>'; }).join('');
       var active = quality.active.map(function (row) { return '<li>' + pill(row.severity) + (row.date ? esc(row.date) + ' · ' : '') + esc(row.message) + ' <span class="sub">since ' + esc(String(row.since).slice(0, 16).replace('T', ' ')) + '</span></li>'; }).join('');
+      var gaps = (quality.sourceGaps || []).map(function (row) { return '<li>' + esc(row.source) + (row.admin ? ' · ' + esc(row.admin) : '') + ' · ' + esc(row.date || '') + ' ' + esc(row.report || '') + '<div class="sub">' + esc(row.resolution || row.message || '') + '</div></li>'; }).join('');
       var resolved = quality.resolved.map(function (row) { return '<li>' + pill(row.status) + (row.date ? esc(row.date) + ' · ' : '') + esc(row.report) + ': ' + esc(row.resolution) + ' <span class="sub">' + esc(String(row.resolvedAt).slice(0, 16).replace('T', ' ')) + '</span></li>'; }).join('');
       var checks = quality.checks.map(function (row) { return '<tr><td>' + esc(row.area) + '</td><td>' + pill(row.status) + '</td><td>' + esc(row.subject) + '<div class="sub">' + esc(row.explanation) + '</div></td></tr>'; }).join('');
       var last = quality.lastRun;
@@ -3940,9 +4003,10 @@
         '<table><tr><th>Period</th><th>Status</th><th>Detail</th></tr>' + periodRows + '</table>' +
         '<h2>Metrics: latest verified business date</h2><table><tr><th>Metric</th><th>Status</th><th>Verified through</th><th>Expected through</th><th>Detail</th></tr>' + metricRows + '</table>' +
         '<h2>Daily report packages</h2><table><tr><th>Business day</th><th>Status</th><th>Reports</th><th>Detail</th></tr>' + dayRows + '</table></article>' +
-        '<article class="card"><h2>Active alerts (' + quality.active.length + ')</h2>' + (active ? '<ul class="list">' + active + '</ul>' : '<p class="sub good">No active alerts.</p>') +
+        '<article class="card"><h2>Active alerts (' + quality.active.length + ')</h2>' + (active ? '<ul class="list">' + active + '</ul>' : '<p class="sub">No active alerts. A zero here does not mean every source was received.</p>') +
+        '<h2>Source coverage (' + (quality.sourceGaps || []).length + ')</h2>' + (gaps ? '<ul class="list">' + gaps + '</ul>' : '<p class="sub good">No genuine source gap is on file.</p>') +
         '<h2>Resolved alerts (' + quality.resolvedCount + ')</h2>' + (resolved ? '<ul class="list">' + resolved + '</ul>' : '<p class="sub">None yet.</p>') +
-        '<p class="sub">A missing-report alert resolves itself when the report arrives and passes validation. Resolved alerts stay here as a record. One consolidated email a day goes to the admin when a new problem appears.</p></article>' +
+        '<p class="sub">Source verified means the report arrived and passed validation. Source genuinely missing stays listed after an alert is closed. An administratively closed alert is not a received report. An accuracy exception is a figure that still needs review. An approved exception is a gap the GM accepted. One consolidated email a day goes to the admin when a new problem appears.</p></article>' +
         '<article class="card"><h2>Automated quality checks</h2><p class="sub">' + (last ? 'Last run ' + esc(String(last.at).slice(0, 16).replace('T', ' ')) + ' UTC after ' + esc(last.trigger) + ': ' + esc(last.passed) + ' PASS, ' + esc(last.flagged) + ' FLAG, ' + esc(last.noted) + ' NOTE in ' + esc(last.seconds) + ' s.' : 'Not run yet.') + ' NOTE is a legitimate, explained difference (for example SNAP vs NWDSR). Checks never change a reported figure.</p>' +
         '<table><tr><th>Check</th><th>Result</th><th>Finding</th></tr>' + checks + '</table>' +
         (role === 'admin' ? '<p class="noprint"><button id="run-checks" type="button">Run checks now</button></p><p id="checks-error" class="error"></p>' : '') + '</article>';
@@ -4498,6 +4562,7 @@
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Development status</h2><div id="devlog-area"><p class="sub">Loading development status…</p></div>' +
         '<h2 class="section-title">Manage associates</h2><div id="roster-area"><p class="sub">Loading the roster…</p></div>' +
+        '<h2 class="section-title">Monthly history</h2><div id="month-history"><p class="sub">Loading completed months…</p></div>' +
         '<h2 class="section-title">Passwords and imports</h2>' +
         '<article class="card"><h2>Sign-in</h2><p class="sub">Liz, Cordell, and Kelly are the only usernames. The first time each person enters ADMIN, they create their own password and it is saved for that username.</p>' +
         '<p id="pw-error" class="error"></p><p class="noprint"><button id="reset-liz" type="button">Let Liz use ADMIN again</button> <button id="reset-cordell" type="button">Let Cordell use ADMIN again</button> <button id="reset-kelly" type="button">Let Kelly use ADMIN again</button> <button id="retry" type="button">Retry imports</button></p></article>';
@@ -4517,6 +4582,37 @@
       });
       loadDevLog();
       loadRoster();
+      loadMonthHistory();
+    }
+    function loadMonthHistory() {
+      var box = document.getElementById('month-history');
+      if (!box) return;
+      api('monthlyHistory').then(function (data) {
+        var rows = (data.periods || []).map(function (period) {
+          var state = period.open ? 'Open' : 'Final';
+          var blockers = (period.blockers || []).map(function (line) { return esc(line); }).join('<br>');
+          return '<tr><td>' + esc(period.key) + '</td><td>' + esc(period.start) + ' to ' + esc(period.end) + '</td><td>' + pill(state) + '</td><td>' + period.final + ' final · ' + period.open + ' open</td><td class="sub">' + (blockers || 'No coverage gap listed') + '</td><td>' + (period.open ? '<button type="button" data-finalize="' + esc(period.key) + '">Finalize month</button>' : 'Final') + '</td></tr>';
+        }).join('');
+        box.innerHTML = '<article class="card"><p class="sub">' + esc(data.note || '') + '</p><table><tr><th>Month</th><th>Dates</th><th>Status</th><th>Rows</th><th>Remaining gaps</th><th></th></tr>' + (rows || '<tr><td colspan="6">No completed month is on Monthly History yet.</td></tr>') + '</table><p id="month-history-note" class="error"></p></article>';
+        box.querySelectorAll('[data-finalize]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            var key = button.getAttribute('data-finalize');
+            if (!window.confirm('Finalize ' + key + '? The figures now on file stay. This does not run by itself.')) return;
+            api('finalizeMonth', { periodKey: key, confirm: true }).then(function (result) {
+              if (result.finalized) { loadMonthHistory(); return; }
+              var listed = (result.blockers || []).slice(0, 8).join('\n');
+              if (listed && window.confirm(result.message + '\n\n' + listed + '\n\nFinalize anyway and keep these gaps on the record?')) {
+                return api('finalizeMonth', { periodKey: key, confirm: true, acknowledgeGaps: true }).then(function () { loadMonthHistory(); });
+              }
+              document.getElementById('month-history-note').textContent = result.message || '';
+            }).catch(function (error) {
+              document.getElementById('month-history-note').textContent = error.message;
+            });
+          });
+        });
+      }).catch(function (error) {
+        box.innerHTML = '<article class="card"><p class="error">' + esc(error.message) + '</p></article>';
+      });
     }
     function na(value) {
       return value === null || value === undefined || value === '' ? 'Not Available' : value;

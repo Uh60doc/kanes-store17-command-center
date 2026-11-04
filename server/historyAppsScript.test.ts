@@ -140,16 +140,26 @@ test('each completed month is kept permanently: open, then final, and never rewr
   tabs.CC_Ledger!.push(ledgerRow('NWDSR_WRITTEN_STORE', 'cumulative', '2026-10-02', '2026-11-01', '2026-11-01', 'written', { sales: tracked - 120 }, 'NWDSR_WRITTEN_final.pdf'));
   tabs.CC_LastYear = [['ly_start', 'ly_end', 'track', 'metric', 'side', 'employee_id', 'person', 'value', 'unit', 'source_report', 'source_sha256', 'verified_by', 'entered_at', 'note'],
     ['2025-10-01', '2025-10-31', 'Store', 'NWDSR Written', 'written', '', '', 380000, 'dollars', 'SNAP Written October 2025', '', 'GM', '2026-11-05', '']];
-  refresh(tabs, '2026-11-05');
+  const ready = refresh(tabs, '2026-11-05');
   written = monthly(tabs, 'STORE-2026-10', 'NWDSR Written', 'written');
-  assert.deepEqual([written.history_status, written.official_final, written.variance, written.last_year], ['Final', tracked - 120, -120, 'Pending']);
+  assert.match(String(written.history_status), /^Open/, 'a matching official final does not finalize the month');
+  assert.deepEqual([written.official_final, written.variance, written.last_year], [tracked - 120, -120, 'Pending']);
   assert.match(written.last_year_basis, /a figure from a different report was not used/);
   assert.ok(tabs.CC_History!.some((row) => row[1] === 'CC_MonthlyHistory' && row[2] === 'STORE-2026-10|NWDSR Written|written|'), 'the open figures it replaced are archived');
+  const held = plain(ready.gs.finalizeMonth_({ periodKey: 'STORE-2026-10', confirm: true, session: { role: 'admin' } }));
+  assert.equal(held.finalized, 0, 'October stays open while a coverage gap remains');
+  assert.ok(held.blockers.length);
+  assert.equal(plain(ready.gs.finalizeMonth_({ periodKey: 'STORE-2026-10', confirm: true, acknowledgeGaps: true, session: { role: 'admin' } })).finalized > 0, true);
+  assert.equal(plain(ready.gs.finalizeMonth_({ periodKey: 'PERSON-2026-10', confirm: true, acknowledgeGaps: true, session: { role: 'admin' } })).finalized > 0, true);
+  written = monthly(tabs, 'STORE-2026-10', 'NWDSR Written', 'written');
+  assert.equal(written.history_status, 'Final');
 
   tabs.CC_LastYear!.push(['2025-10-01', '2025-10-31', 'Store', 'NWDSR Written', 'written', '', '', 390000, 'dollars', 'NWDSR Written October 2025', '', 'GM', '2026-11-06', '']);
   const lockedAt = written.locked_at;
   let september = monthly(tabs, 'STORE-2026-09', 'NWDSR Written', 'written');
-  assert.deepEqual([september.history_status, september.verified_total], ['Final', 'Pending'], 'September locked with nothing verified');
+  assert.match(String(september.history_status), /^Open/, 'an older month is not finalized by age');
+  assert.equal(september.verified_total, 'Pending');
+  assert.equal(plain(ready.gs.finalizeMonth_({ periodKey: 'STORE-2026-09', confirm: true, acknowledgeGaps: true, session: { role: 'admin' } })).finalized > 0, true);
   tabs.CC_Daily!.push(['2026-09-02', '', 5000, '']);
   refresh(tabs, '2026-11-06');
   written = monthly(tabs, 'STORE-2026-10', 'NWDSR Written', 'written');
@@ -170,7 +180,7 @@ test('each completed month is kept permanently: open, then final, and never rewr
   const after = table(tabs, 'CC_MonthlyHistory');
   const octoberAfter = after.filter((row) => row.period_key === 'STORE-2026-10' || row.period_key === 'PERSON-2026-10');
   assert.equal(octoberAfter.length, before.length, 'no October row was removed');
-  assert.ok(octoberAfter.every((row) => row.history_status === 'Final'), 'every October row is final ten days after the month');
+  assert.ok(octoberAfter.every((row) => row.history_status === 'Final'), 'October stays final after the GM finalized it');
   written = monthly(tabs, 'STORE-2026-10', 'NWDSR Written', 'written');
   assert.equal(written.verified_total, tracked, 'the locked October total is not recalculated');
   assert.equal(written.after_lock_note, `Recalculated 2026-12-03: verified_total ${tracked - nwdsrWritten('2026-10-10') + 1}. The locked figures are kept`);
