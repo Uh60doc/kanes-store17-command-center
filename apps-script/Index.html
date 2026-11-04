@@ -2016,8 +2016,8 @@
           '<p class="coach-note">' + esc(card.period) + '. ' + esc(data.calendar || '') + '</p>' + hire +
           '<table class="coach-facts">' +
           fact('SNAP written', moneyOr(card.snapWritten) + ' of ' + moneyOr(card.monthlyGoal)) +
-          fact('Average ticket', moneyOr(ticket.average) + ' versus ' + moneyOr(ticket.goal) + (card.writtenThrough ? ' · Group 17 through ' + esc(card.writtenThrough) : '')) +
-          fact('Written orders', card.orders === null || card.orders === undefined ? 'Pending' : esc(String(card.orders)) + ' Group 17 written orders') +
+          fact('Average ticket', moneyOr(ticket.average) + ' versus ' + moneyOr(ticket.goal) + (card.writtenThrough ? ' · Data KPI Individual through ' + esc(card.writtenThrough) : '')) +
+          fact('Written orders', card.orders === null || card.orders === undefined ? 'Pending' : esc(String(card.orders)) + ' Data KPI Individual written orders') +
           fact('Closing ratio', pctOr(card.closingRatio) + ' versus ' + pctOr(card.closingGoal) + (card.closingThrough ? ' through ' + esc(card.closingThrough) : '')) +
           fact('Bedding', pctOr(card.bedding) + ' versus ' + pctOr(card.beddingGoal)) +
           fact('Fabric maintenance', pctOr(card.fabric) + ' versus ' + pctOr(card.fabricGoal)) +
@@ -2230,13 +2230,13 @@
           var ticket = leakTicket(person.orders, person.groupSales, goal);
           var ranked = leakRank([
             { key: 'closing', label: 'Closing ratio', kind: 'incremental', dollars: closing, note: 'Extra orders at the current average ticket. The ticket goal is not included.' },
-            { key: 'ticket', label: 'Average ticket', kind: 'incremental', dollars: ticket, note: 'The same Group 17 orders at the ticket goal. This is not added to closing.' },
+            { key: 'ticket', label: 'Average ticket', kind: 'incremental', dollars: ticket, note: 'The same Data KPI Individual orders at the ticket goal. This is not added to closing.' },
             { key: 'bedding', label: 'Bedding mix', kind: 'mix', dollars: person.bedding, note: 'Short of the bedding mix on sales already written. Not new written sales.' },
           ]);
           document.getElementById('leak-person-hero').innerHTML = '<h3>Biggest opportunity today · ' + esc(person.name) + (person.newHire ? ' · NEW HIRE' : '') + '</h3>' + biggestText(leakBiggest(ranked)) + '<p class="sub">SNAP written ' + moneyOr(person.snapWritten) + ' of ' + moneyOr(person.monthlyGoal) + '. That remaining goal is not ranked, because the month is still open.</p>';
           document.getElementById('leak-person-close-now').textContent = pctOr(person.closingRatio) + ' versus ' + percent(ratio) + ' · ' + (leakBlank(person.closingOrders) ? 'Pending' : person.closingOrders) + ' orders and ' + (leakBlank(person.opportunities) ? 'Pending' : person.opportunities) + ' PERQ opportunities' + (person.closingThrough ? ' through ' + person.closingThrough : '') + '.';
           document.getElementById('leak-person-close-dollars').textContent = moneyOr(closing);
-          document.getElementById('leak-person-ticket-now').textContent = moneyOr(person.average) + ' versus ' + money(goal) + ' on ' + (leakBlank(person.orders) ? 'Pending' : person.orders) + ' Group 17 orders' + (person.writtenThrough ? ' through ' + person.writtenThrough : '') + '.';
+          document.getElementById('leak-person-ticket-now').textContent = moneyOr(person.average) + ' versus ' + money(goal) + ' on ' + (leakBlank(person.orders) ? 'Pending' : person.orders) + ' Data KPI Individual orders' + (person.writtenThrough ? ' through ' + person.writtenThrough : '') + '.';
           document.getElementById('leak-person-ticket-dollars').textContent = moneyOr(ticket);
           var rows = '<p>Bedding ' + pctOr(person.beddingRate) + ' versus ' + pctOr(person.beddingGoal) + '. Mix illustration ' + moneyOr(person.bedding) + '.</p>';
           rows += (person.attachments || []).map(function (line) {
@@ -3113,8 +3113,8 @@
     }
     function totalAttachmentText(side) {
       var total = (side.lines || []).filter(function (line) { return line.key === 'total'; })[0];
-      if (!total || total.status === 'pending') return 'Group 17 Total Attachments: Pending.';
-      return 'Group 17 Total Attachments: ' + qty(total.sold) + ' sold of ' + qty(total.qualified) + ' qualified (' + attachActual(total) + '), ' + qty(total.missed) + ' missed, attachment sales ' + cents(total.dollars) + '.';
+      if (!total || total.status === 'pending') return 'Data KPI Store total attachments: Pending.';
+      return 'Data KPI Store total attachments: ' + qty(total.sold) + ' sold of ' + qty(total.qualified) + ' qualified (' + attachActual(total) + '), ' + qty(total.missed) + ' missed, attachment sales ' + cents(total.dollars) + '.';
     }
     function drawScorecard() {
       var host = document.getElementById('kpi-scorecard');
@@ -3156,8 +3156,8 @@
         '<p class="sub">Available now: the one-page associate summary.</p><p class="noprint"><button type="button" data-team="summary">Open the associate summary</button></p></article>' +
         '<article class="card kpi-wrap" style="margin-top:12px"><h2>Verified data on file for the salesperson month</h2><table class="kpi"><tr><th>Source</th><th>Used for</th><th>Verified through</th></tr>' +
         '<tr><td>SNAP Written by salesperson</td><td>Individual written sales and the monthly goal</td><td>' + esc(peopleSnapThrough || 'Pending') + '</td></tr>' +
-        '<tr><td>Data Analysis Group 17 Written</td><td>Written orders, attachment KPIs, bedding %, average ticket</td><td>' + esc(peopleAnalysisThrough.written || 'Pending') + '</td></tr>' +
-        '<tr><td>Data Analysis Group 17 Delivered</td><td>Delivered sales and delivered KPIs</td><td>' + esc(peopleAnalysisThrough.delivered || 'Pending') + '</td></tr>' +
+        '<tr><td>Data KPI Individual — Written</td><td>Salesperson written orders and individual KPIs</td><td>' + esc(peopleAnalysisThrough.written || 'Pending') + '</td></tr>' +
+        '<tr><td>Data KPI Individual — Delivered</td><td>Salesperson delivered KPIs</td><td>' + esc(peopleAnalysisThrough.delivered || 'Pending') + '</td></tr>' +
         '<tr><td>PERQ Ups + Be Backs</td><td>Opportunities and closing ratio</td><td>' + esc(closingThrough || 'Pending') + ' (latest salesperson)</td></tr>' +
         '</table></article>';
       bindTeamNav();
@@ -5212,7 +5212,7 @@
         (results ? '<h3>This import</h3><ul class="upload-list">' + results + '</ul>' : '') +
         '</article>' +
         '<article class="card upload-card"><h2>Reports to run and upload</h2>' +
-        (missing.length ? '<p class="upload-count warn">' + missing.length + ' still needed for ' + esc(data.dateText) + '</p><ul class="upload-list">' + missing.map(function (item) { return '<li>' + uploadPill(item.status) + '<strong>' + esc(data.dateText) + '</strong> ' + esc(item.label) + ' <span class="pending">' + esc(item.format) + '</span><p class="sub">' + esc(item.message) + '</p></li>'; }).join('') + '</ul>' : '<p class="upload-count good">Nothing is missing for ' + esc(data.dateText) + '.</p>' + (gapDays.some(function (day) { return day.date !== data.date; }) ? '<p class="sub">' + gapDays.filter(function (day) { return day.date !== data.date; }).map(function (day) { return esc((day.dateText || day.date) + ' still needs ' + day.missing.join(' and ') + '.'); }).join(' ') + '</p>' : '')) +
+        (missing.length ? '<p class="upload-count warn">' + missing.length + ' still needed for ' + esc(data.dateText) + '</p><ul class="upload-list">' + missing.map(function (item) { return '<li>' + uploadPill(item.status) + '<strong>' + esc(item.display || (data.dateText + ' — ' + item.label + ' — ' + item.format)) + '</strong><p class="sub">' + esc(item.message) + '</p></li>'; }).join('') + '</ul>' : '<p class="upload-count good">Nothing is missing for ' + esc(data.dateText) + '.</p>' + (gapDays.some(function (day) { return day.date !== data.date; }) ? '<p class="sub">' + gapDays.filter(function (day) { return day.date !== data.date; }).map(function (day) { return esc((day.dateText || day.date) + ' still needs ' + day.missing.join(' and ') + '.'); }).join(' ') + '</p>' : '')) +
         data.checklist.filter(function (item) { return item.status === 'Not expected'; }).map(function (item) { return '<p class="sub">' + esc(item.message) + '</p>'; }).join('') +
         (gaps ? '<h3>By date</h3><ul class="upload-list">' + gaps + '</ul>' : '<p class="sub">None of the last 10 days is missing a report.</p>') +
         (completeDays.length ? '<p class="sub">On file: ' + esc(completeDays.map(function (day) { return day.dateText || day.date; }).join(', ')) + '.</p>' : '') +

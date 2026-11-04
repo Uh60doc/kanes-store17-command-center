@@ -569,8 +569,8 @@ function personAnalysisSide_(ledger, name, coverage) {
   var round2 = function (value) { return Math.round(value * 100) / 100; };
   return {
     through: coverage.through,
-    basis: (coverage.snapshot ? 'Group 17 salesperson report ' + coverage.period.start + ' through ' + coverage.snapshot : '') +
-      (coverage.days.length ? (coverage.snapshot ? ' plus the ' : 'Group 17 ') + 'day files ' + coverage.days.join(', ') : ''),
+    basis: (coverage.snapshot ? 'Data KPI Individual report ' + coverage.period.start + ' through ' + coverage.snapshot : '') +
+      (coverage.days.length ? (coverage.snapshot ? ' plus the ' : 'Data KPI Individual ') + 'day files ' + coverage.days.join(', ') : ''),
     sales: round2(sales),
     orders: orders,
     beddingDollars: round2(bedding),
@@ -680,16 +680,16 @@ function reportedKpi_(name, unit, goal, analysis, field, prefix, note) {
 }
 
 function notInReportKpi_(name, unit, goal) {
-  var row = kpiRow_(name, null, null, goal, unit, 'The Group 17 report has no salesperson column for this. ASL reports it for the store only.');
+  var row = kpiRow_(name, null, null, goal, unit, 'The Data KPI Individual report has no salesperson column for this. Data KPI Store reports it for the store only.');
   row.writtenText = 'Not in report';
   row.deliveredText = 'Not in report';
   return row;
 }
 
 function personRecord_(name, snapWritten, role, days, goals, closing, analysis) {
-  closing = closing || { orders: null, opportunities: null, through: '', ratio: null, ratioStatus: 'Pending: PERQ opportunities and Group 17 Written orders', reconcile: false, versusGoal: null, points: null, note: '', goal: goals.closing };
+  closing = closing || { orders: null, opportunities: null, through: '', ratio: null, ratioStatus: 'Pending: PERQ opportunities and Data KPI Individual Written orders', reconcile: false, versusGoal: null, points: null, note: '', goal: goals.closing };
   analysis = analysis || { written: null, delivered: null };
-  var orders = kpiRow_('Orders', analysis.written ? analysis.written.orders : null, analysis.delivered ? analysis.delivered.orders : null, null, 'count', 'Group 17 sales ÷ average ticket.');
+  var orders = kpiRow_('Orders', analysis.written ? analysis.written.orders : null, analysis.delivered ? analysis.delivered.orders : null, null, 'count', 'Data KPI Individual sales ÷ average ticket.');
   return {
     name: name,
     role: role,
@@ -717,18 +717,18 @@ function personRecord_(name, snapWritten, role, days, goals, closing, analysis) 
     leave: name === 'Renzo Del Solar' ? 'On vacation October 1 through October 12, 2026. Back October 13. Sales during vacation stay on the report and those days are not counted as worked.' : '',
     days: days.sort(function (left, right) { return left.date < right.date ? -1 : 1; }),
     kpis: [
-      analysisKpi_('Bedding', 'percent', goals.bedding, analysis, 'bedding', 'Bedding dollars ÷ Group 17 sales.'),
+      analysisKpi_('Bedding', 'percent', goals.bedding, analysis, 'bedding', 'Bedding dollars ÷ Data KPI Individual sales.'),
       analysisKpi_('Mattress Pads', 'percent', goals.mattress, analysis, 'pads', 'Pads sold ÷ qualifying mattresses.'),
       reportedKpi_('Adjustable Bases', 'percent', goals.adjustableBase, analysis, 'bases', 'BASES', 'Adjustable bases sold ÷ qualified.'),
       reportedKpi_('Pillows', 'percent', goals.pillow, analysis, 'pillows', 'PILLOWS', 'Pillows sold ÷ qualified.'),
       reportedKpi_('Furniture Protection', 'percent', goals.wood, analysis, 'protection', 'FP', 'Furniture protection sold ÷ qualified.'),
       reportedKpi_('Pet Protections', 'percent', null, analysis, 'pet', 'PET', 'Pet protection sold ÷ qualified.'),
-      reportedKpi_('Rugs', 'count', goals.rugs, analysis, 'rugs', 'RUGS', 'Rugs sold on the Group 17 report.'),
+      reportedKpi_('Rugs', 'count', goals.rugs, analysis, 'rugs', 'RUGS', 'Rugs sold on the Data KPI Individual report.'),
       analysisKpi_('Fabric', 'percent', goals.fabric, analysis, 'fabric', 'Protection sold ÷ qualifying fabric pieces.'),
       analysisKpi_('Leather', 'percent', goals.leather, analysis, 'leather', 'Protection sold ÷ qualifying leather pieces.'),
       analysisKpi_('Power', 'percent', goals.power, analysis, 'power', 'Warranties sold ÷ qualifying power pieces.'),
-      analysisKpi_('Financing', 'percent', goals.finance, analysis, 'finance', 'Financed dollars ÷ Group 17 sales.'),
-      analysisKpi_('Average Ticket', 'dollars', goals.averageTicket, analysis, 'average', 'Group 17 sales ÷ orders.'),
+      analysisKpi_('Financing', 'percent', goals.finance, analysis, 'finance', 'Financed dollars ÷ Data KPI Individual sales.'),
+      analysisKpi_('Average Ticket', 'dollars', goals.averageTicket, analysis, 'average', 'Data KPI Individual sales ÷ orders.'),
       orders,
       closingKpi_(closing, goals.closing),
     ],
@@ -1174,7 +1174,7 @@ function personClosing_(facts, name, start, end, goal, ledger) {
   if (!through) {
     var missing = [];
     if (!latestOpportunities) missing.push('PERQ opportunities');
-    if (!latestOrders) missing.push('Group 17 Written orders');
+    if (!latestOrders) missing.push('Data KPI Individual Written orders');
     status = missing.length
       ? 'Pending: ' + missing.join(' and ')
       : (latestOpportunities < latestOrders ? 'Pending: PERQ verified only through ' + latestOpportunities : 'Pending: Group 17 Written verified only through ' + latestOrders);
@@ -1182,7 +1182,7 @@ function personClosing_(facts, name, start, end, goal, ledger) {
       ? missing.join(' and ') + ' for this salesperson ' + (missing.length > 1 ? 'are' : 'is') + ' not on file for ' + start + ' through ' + end + '.'
       : 'PERQ is through ' + latestOpportunities + ' and Group 17 Written through ' + latestOrders + ', with no common verified date.';
   } else {
-    note = 'Through ' + through + ': Group 17 Written orders ' + orders.source + '; PERQ Ups + Be Backs ' + opportunities.source + '.';
+    note = 'Through ' + through + ': Data KPI Individual Written orders ' + orders.source + '; PERQ Ups + Be Backs ' + opportunities.source + '.';
     if (latestOpportunities > through) note += ' PERQ through ' + latestOpportunities + ' waits for the Group 17 Written report for the same dates.';
     if (latestOrders > through) note += ' Group 17 Written through ' + latestOrders + ' waits for PERQ for the same dates.';
     if (opportunities.total === 0) status = 'No opportunities';

@@ -52,10 +52,10 @@ var REPORT_METRICS_ = {
   snapWritten: ['store_snap_written', 'person_written'],
   nwdsrWritten: ['store_written', 'store_written_daily_goal', 'store_purchasing_customers', 'store_closing', 'kpi_warranty'],
   nwdsrDelivered: ['store_delivered', 'store_delivered_daily_goal'],
-  g17Written: ['kpi_bedding', 'store_bedding_dollars', 'kpi_average_ticket', 'kpi_fabric', 'kpi_leather', 'kpi_power', 'kpi_protectors', 'kpi_total_attachment', 'kpi_finance', 'person_written_orders', 'person_kpis', 'person_closing'],
-  g17Delivered: ['kpi_bedding', 'store_bedding_dollars', 'kpi_average_ticket', 'kpi_fabric', 'kpi_leather', 'kpi_power', 'kpi_protectors', 'kpi_total_attachment', 'kpi_finance', 'person_delivered', 'person_kpis'],
-  aslWritten: ['kpi_rugs', 'kpi_adjustable_base', 'kpi_pillows', 'kpi_wood', 'kpi_power_base'],
-  aslDelivered: ['kpi_rugs', 'kpi_adjustable_base', 'kpi_pillows', 'kpi_wood', 'kpi_power_base'],
+  g17Written: ['person_written_orders', 'person_kpis', 'person_closing'],
+  g17Delivered: ['person_delivered', 'person_kpis'],
+  aslWritten: ['kpi_bedding', 'store_bedding_dollars', 'kpi_average_ticket', 'kpi_fabric', 'kpi_leather', 'kpi_power', 'kpi_protectors', 'kpi_total_attachment', 'kpi_finance', 'kpi_rugs', 'kpi_adjustable_base', 'kpi_pillows', 'kpi_wood', 'kpi_power_base'],
+  aslDelivered: ['kpi_bedding', 'store_bedding_dollars', 'kpi_average_ticket', 'kpi_fabric', 'kpi_leather', 'kpi_power', 'kpi_protectors', 'kpi_total_attachment', 'kpi_finance', 'kpi_rugs', 'kpi_adjustable_base', 'kpi_pillows', 'kpi_wood', 'kpi_power_base'],
   perqLocation: ['store_opportunities', 'store_closing'],
   perqSalesperson: ['person_opportunities', 'person_closing'],
 };
@@ -202,8 +202,8 @@ function packageItem_(ctx, date, key) {
   var result = { key: key, label: item.label, status: item.status, detail: item.message };
   if (item.status !== 'Missing') return result;
   var cover = '';
-  if (key === 'g17Written' || key === 'g17Delivered') cover = cumulativeCover_(ctx, ['DA_SALES_STORE'], key === 'g17Written' ? 'written' : 'delivered', 'STORE', date);
-  if (key === 'aslWritten' || key === 'aslDelivered') cover = cumulativeCover_(ctx, ['RUGS_STORE', 'PILLOWS_STORE', 'BASES_STORE', 'FP_STORE'], key === 'aslWritten' ? 'written' : 'delivered', 'STORE', date);
+  if (key === 'g17Written' || key === 'g17Delivered') cover = cumulativeCover_(ctx, ['DA_SALES_PERSON'], key === 'g17Written' ? 'written' : 'delivered', 'PERSON', date);
+  if (key === 'aslWritten' || key === 'aslDelivered') cover = cumulativeCover_(ctx, ['DA_SALES_STORE', 'RUGS_STORE', 'PILLOWS_STORE', 'BASES_STORE', 'FP_STORE'], key === 'aslWritten' ? 'written' : 'delivered', 'STORE', date);
   if (key === 'perqLocation') cover = perqSnapshotCover_(ctx, 'store', date) || cumulativeCover_(ctx, ['PERQ_STORE'], '', 'STORE', date);
   if (key === 'perqSalesperson') cover = perqSnapshotCover_(ctx, 'person', date) || cumulativeCover_(ctx, ['PERQ_PERSON'], '', 'PERSON', date);
   if (cover) return { key: key, label: item.label, status: 'Covered', detail: 'Covered by the month-to-date report verified through ' + cover + '.' };

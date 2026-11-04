@@ -180,7 +180,7 @@ test('after the PERQ history import the month is a verified 54 ÷ 111 and Octobe
   const facts = gs.loadClosing_();
   const person = (name: string) => gs.personClosing_(facts, name, '2026-10-01', '2026-10-31', 0.5);
   assert.equal(person('Ricky Nassif').ratio, null, 'no Group 17 Written report is on file, so nothing is divided');
-  assert.equal(person('Ricky Nassif').ratioStatus, 'Pending: Group 17 Written orders');
+  assert.equal(person('Ricky Nassif').ratioStatus, 'Pending: Data KPI Individual Written orders');
   assert.equal(person('Ricky Nassif').orders, null);
 });
 
@@ -291,7 +291,7 @@ test('zero opportunities is not divided, a missing report is Pending, and a blan
   assert.deepEqual(individual(gs, 'Caroline Amaro'), { orders: null, opportunities: null, through: '', ratio: null, points: null, versus: null, status: 'Pending: PERQ verified only through 2026-10-01' },
     'PERQ for Caroline is only verified through October 1 and the Group 17 snapshot starts at October 13');
   assert.equal(individual(load(withOrders(october()), '2026-10-16'), 'Caroline Amaro').status, 'Pending: PERQ opportunities');
-  assert.equal(individual(load(october(), '2026-10-16'), 'Caroline Amaro').status, 'Pending: PERQ opportunities and Group 17 Written orders');
+  assert.equal(individual(load(october(), '2026-10-16'), 'Caroline Amaro').status, 'Pending: PERQ opportunities and Data KPI Individual Written orders');
 });
 
 test('an order count that could not be read is Pending, never guessed', () => {

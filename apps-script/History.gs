@@ -110,8 +110,8 @@ function canonicalReportType_(text) {
   var value = String(text || '');
   var side = /WRITTEN/i.test(value) ? 'Written' : /DELIVERED/i.test(value) ? 'Delivered' : '';
   if (/PERQ|Performance[ _]Stats/i.test(value)) return /Salesperson/i.test(value) ? 'PERQ Performance Stats by Salesperson' : /Location/i.test(value) ? 'PERQ Performance Stats by Location' : '';
-  if (/KPI[ _]ASL|GROUP ASL|^ASL\b/i.test(value)) return side ? 'ASL ' + side : '';
-  if (/KPI[ _]17|Group 17/i.test(value)) return side ? 'Group 17 ' + side : '';
+  if (/KPI[ _]ASL|GROUP ASL|^ASL\b/i.test(value)) return side ? 'Data KPI Store — ' + side : '';
+  if (/KPI[ _]17|Group 17|STORE 17/i.test(value)) return side ? 'Data KPI Individual — ' + side : '';
   if (/NWDSR/i.test(value)) return side ? 'NWDSR ' + side : '';
   if (/SNAP[ _]*W|Snapw/i.test(value)) return 'SNAP Written';
   return '';
@@ -405,7 +405,7 @@ function historyViewType_(view, side, source) {
   if (view === 'PERQ_PERSON') return 'PERQ Performance Stats by Salesperson';
   var named = canonicalReportType_(source);
   if (named) return named;
-  var family = /^(BASES|PILLOWS|FP|RUGS)_/.test(view) ? 'ASL ' : 'Group 17 ';
+  var family = /_PERSON$/.test(view) ? 'Data KPI Individual — ' : 'Data KPI Store — ';
   return side ? family + (side === 'delivered' ? 'Delivered' : 'Written') : '';
 }
 

@@ -16,10 +16,10 @@ var UPLOAD_REPORTS_ = [
   { key: 'snapWritten', label: 'SNAP Written', format: 'PDF', use: 'Salesperson written sales and store reconciliation' },
   { key: 'nwdsrWritten', label: 'NWDSR Written', format: 'PDF', use: 'Primary store written sales and purchasing customers' },
   { key: 'nwdsrDelivered', label: 'NWDSR Delivered', format: 'PDF', use: 'Primary store delivered sales' },
-  { key: 'g17Written', label: 'Group 17 Written', format: 'Excel', use: 'Store and salesperson written KPIs and order counts' },
-  { key: 'g17Delivered', label: 'Group 17 Delivered', format: 'Excel', use: 'Salesperson delivered sales, store and salesperson delivered KPIs' },
-  { key: 'aslWritten', label: 'ASL Written', format: 'Excel', use: 'Store pillows, adjustable bases, furniture protection and rugs (written)' },
-  { key: 'aslDelivered', label: 'ASL Delivered', format: 'Excel', use: 'Store pillows, adjustable bases, furniture protection and rugs (delivered)' },
+  { key: 'g17Written', label: 'Data KPI Individual — Written', format: 'Excel (.xlsx)', use: 'Individual salesperson written KPIs and order counts for Store 17. Not official Store Written dollars.' },
+  { key: 'g17Delivered', label: 'Data KPI Individual — Delivered', format: 'Excel (.xlsx)', use: 'Individual salesperson delivered KPIs for Store 17. Not official Store Delivered dollars.' },
+  { key: 'aslWritten', label: 'Data KPI Store — Written', format: 'Excel (.xlsx)', use: 'Store 17 written KPIs from the All Stores Listed row. Not official Store Written dollars.' },
+  { key: 'aslDelivered', label: 'Data KPI Store — Delivered', format: 'Excel (.xlsx)', use: 'Store 17 delivered KPIs from the All Stores Listed row. Not official Store Delivered dollars.' },
   { key: 'perqLocation', label: 'PERQ Performance Stats by Location', format: 'Excel', use: 'Store opportunities (Ups + Be Backs)' },
   { key: 'perqSalesperson', label: 'PERQ Performance Stats by Salesperson', format: 'Excel', use: 'Salesperson opportunities (Ups + Be Backs)' },
 ];
@@ -130,8 +130,8 @@ function classifyWorkbook_(bytes, fileName) {
   var second = uploadText_(grid[0] && grid[0][1]);
   if (/^Performance Stats by Location$/i.test(first)) return { key: 'perqLocation', grid: grid };
   if (/^Performance Stats by Salesperson$/i.test(first)) return { key: 'perqSalesperson', grid: grid };
-  // Sales-team workbooks are Store 17's own people (sheet SLSP KPI). Older files are headed GROUP 17;
-  // the current files are headed STORE 17. ASL is every location and is a different family: only row 17 is kept.
+  // The 17 workbook (sheet SLSP KPI, headed STORE 17 or older GROUP 17) is one row per salesperson.
+  // The ASL workbook (sheet KPI, headed GROUP ASL) is All Stores Listed: one row per store. Only row 17 is kept.
   var family = /^(?:GROUP 17|STORE 17)$/i.test(first) ? 'group17' : /^GROUP ASL$/i.test(first) ? 'asl' : '';
   var side = /^WRITTEN ORDERS$/i.test(second) ? 'written' : /^DELIVERED ORDERS$/i.test(second) ? 'delivered' : '';
   if (family && side) {
@@ -178,8 +178,9 @@ function uploadReport_(payload) {
     UPLOAD_QUIET_ = false;
     lock.releaseLock();
   }
+  var validation = recordUploadValidation_(context, result);
   uploadTab_().appendRow([new Date().toISOString(), context.date, context.role, fileName, sha, result.key ? uploadReportLabel_(result.key) : '', result.start || '', result.end || '', result.status, result.message]);
-  return { file: fileName, sha256: sha, status: result.status, report: result.key ? uploadReportLabel_(result.key) : '', reportKey: result.key || '', start: result.start || '', end: result.end || '', message: result.message };
+  return { file: fileName, sha256: sha, status: result.status, statusLabel: validation.statusLabel, report: result.key ? uploadReportLabel_(result.key) : '', reportKey: result.key || '', start: result.start || '', end: result.end || '', message: result.message, validation: validation };
 }
 
 /** File this upload on the date printed in the report. A date after today is refused. */
@@ -294,7 +295,8 @@ function uploadDestination_(key) {
   if (key === 'snapWritten') return 'CC_Daily snap_written and CC_AssociateDays. Individual written only. Official Store Written is not changed.';
   if (key === 'nwdsrWritten') return 'CC_Daily nwdsr_written. Official Store Written.';
   if (key === 'nwdsrDelivered') return 'CC_Daily nwdsr_delivered. Official Store Delivered.';
-  if (key === 'g17Written' || key === 'g17Delivered' || key === 'aslWritten' || key === 'aslDelivered') return 'CC_Ledger and CC_Kpi. KPI source only. CC_Daily store totals are not changed.';
+  if (key === 'g17Written' || key === 'g17Delivered') return 'CC_Ledger salesperson KPI rows. Individual KPI only. CC_Daily store totals are not changed.';
+  if (key === 'aslWritten' || key === 'aslDelivered') return 'CC_Ledger and CC_Kpi store KPI rows, Store 17 only. Store KPI only. CC_Daily store totals are not changed.';
   if (key === 'perqLocation' || key === 'perqSalesperson') return 'CC_Closing opportunities. Store sales are not changed.';
   return 'None. This file is not one of the nine daily reports.';
 }
@@ -310,9 +312,9 @@ function kpiDailyAmount_(view, side, date, field) {
 
 function group17GapSentence_(date, side) {
   var viewSide = side === 'delivered' ? 'delivered' : 'written';
-  if (kpiDailyAmount_('DA_SALES_STORE', viewSide, date, 'sales') !== null) return 'Group 17 ' + (viewSide === 'written' ? 'Written' : 'Delivered') + ' for ' + date + ' is already stored on its own. It is not compared with this file.';
-  var name = canonicalKpiName_('group17', viewSide, date);
-  return 'This file does not fill Group 17 ' + (viewSide === 'written' ? 'Written' : 'Delivered') + '. The workbook that fills it is ' + name + '.';
+  var individual = canonicalKpiName_('group17', viewSide, date);
+  var store = canonicalKpiName_('asl', viewSide, date);
+  return 'This file does not fill Data KPI Individual — ' + (viewSide === 'written' ? 'Written' : 'Delivered') + ' or Data KPI Store — ' + (viewSide === 'written' ? 'Written' : 'Delivered') + '. The individual workbook is ' + individual + '. The store workbook is ' + store + '.';
 }
 
 function uploadConflictAction_(key, date, fileName) {
@@ -479,7 +481,7 @@ function previewKpi_(chosen, fileName, info) {
     var namedFamily = named[1].toUpperCase() === 'ASL' ? 'asl' : 'group17';
     var namedSide = named[2].toLowerCase();
     if (namedFamily !== info.family || namedSide !== info.side) {
-      return Object.assign(card, { disposition: 'hold', reason: 'The file name says ' + (namedFamily === 'asl' ? 'ASL' : 'Group 17') + ' ' + namedSide + ', but the contents are ' + label + '.', action: 'Nothing will be changed. Upload the file whose contents match its name.' });
+      return Object.assign(card, { disposition: 'hold', reason: 'The file name says ' + (namedFamily === 'asl' ? 'Data KPI Store' : 'Data KPI Individual') + ' ' + namedSide + ', but the contents are ' + label + '.', action: 'Nothing will be changed. Upload the file whose contents match its name.' });
     }
   }
   if (start > todayNy_()) return Object.assign(card, { disposition: 'hold', reason: label + ' prints ' + start + ', which is after today.', action: 'The file will not be filed.' });
@@ -496,39 +498,48 @@ function previewKpi_(chosen, fileName, info) {
   }
   var source = canonicalKpiName_(info.family, info.side, start);
   var records = kpiRecords_(info.grid, info.family, info.side, start, start, source);
-  var storeView = info.family === 'asl' ? 'RUGS_STORE' : 'DA_SALES_STORE';
-  var totalRecord = records.filter(function (record) { return record[0] === storeView; })[0];
-  var total = totalRecord && totalRecord[10] !== '' ? Number(totalRecord[10]) : null;
   var facts = dailyFacts_().filter(function (row) { return row.date === start; })[0] || {};
   var nwdsr = info.side === 'written' ? facts.nwdsrWritten : facts.nwdsrDelivered;
-  if (!records.some(function (record) { return record[0] === storeView; })) {
-    if (!(info.family === 'asl' || (nwdsr === 0 && records.length === 0))) {
-      return Object.assign(card, { disposition: 'hold', reason: label + ' for ' + start + ' has no TOTAL line, so Store 17 sales could not be read.', action: 'Nothing will be changed. This is a structural failure, separate from any difference versus NWDSR.' });
-    }
-    total = 0;
+  var people = records.filter(function (record) { return record[0] === 'DA_SALES_PERSON'; });
+  var storeSales = records.filter(function (record) { return record[0] === 'DA_SALES_STORE'; })[0];
+  var total = storeSales && storeSales[10] !== '' ? Number(storeSales[10]) : null;
+  if (info.family === 'group17' && !people.length && nwdsr !== 0) {
+    return Object.assign(card, { disposition: 'hold', reason: label + ' for ' + start + ' has no salesperson lines.', action: 'Nothing will be changed. This is a structural failure. It is not compared with NWDSR or the store KPI workbook.' });
   }
-  var current = info.family === 'asl' ? kpiDailyAmount_('RUGS_STORE', info.side, start, 'units') : kpiDailyAmount_('DA_SALES_STORE', info.side, start, 'sales');
-  var compared = info.family === 'asl' ? (totalRecord && totalRecord[11] !== '' ? Number(totalRecord[11]) : 0) : total;
+  if (info.family === 'asl' && !storeSales && !records.some(function (record) { return record[0] === 'RUGS_STORE'; })) {
+    return Object.assign(card, { disposition: 'hold', reason: label + ' for ' + start + ' has no Store 17 row.', action: 'Nothing will be changed. Another store\'s row is not used for Store 17.' });
+  }
   var nwdsrNote = '';
-  if (info.family === 'group17' && total !== null && nwdsr !== null && nwdsr !== undefined && Math.abs(total - nwdsr) > 1) {
-    nwdsrNote = ' Group 17 TOTAL ' + moneyPlain_(total) + ' and NWDSR ' + (info.side === 'written' ? 'Written' : 'Delivered') + ' ' + moneyPlain_(nwdsr) + ' differ. That is a reconciliation note. Both figures are kept, and the difference does not block this import.';
+  if (info.family === 'asl' && total !== null && nwdsr !== null && nwdsr !== undefined && Math.abs(total - nwdsr) > 1) {
+    nwdsrNote = ' Data KPI Store sales ' + moneyPlain_(total) + ' and NWDSR ' + (info.side === 'written' ? 'Written' : 'Delivered') + ' ' + moneyPlain_(nwdsr) + ' differ. That is a reconciliation note. Both figures are kept, and the difference does not block this import.';
   }
+  if (info.family === 'group17') {
+    return Object.assign(card, {
+      existing: 'Individual KPI rows are saved on their own. They are not compared with NWDSR or Data KPI Store.',
+      disposition: 'import',
+      reason: people.length + ' salesperson line' + (people.length === 1 ? '' : 's') + ' for ' + start + '. A different total from NWDSR or the store KPI workbook does not block this file.',
+      action: 'Salesperson KPI rows will be saved. A line that already matches is not added again. A different figure for the same salesperson and date is held and the recorded figure stays. Official Store Written and Delivered will not change.',
+    });
+  }
+  var current = kpiDailyAmount_('DA_SALES_STORE', info.side, start, 'sales');
+  if (current === null) current = kpiDailyAmount_('RUGS_STORE', info.side, start, 'units');
+  var compared = total !== null ? total : (storeSales ? null : (records.filter(function (record) { return record[0] === 'RUGS_STORE'; })[0] || [])[11]);
   if (current === null) {
     return Object.assign(card, {
       existing: 'No ' + label + ' row is on file for ' + start + '.',
       disposition: 'import',
-      reason: (total !== null ? 'Store 17 sales ' + moneyPlain_(total) + '.' : label + ' for ' + start + '.') + nwdsrNote,
-      action: 'The workbook will be imported to CC_Ledger and CC_Kpi. ' + (nwdsr !== null && nwdsr !== undefined ? 'NWDSR ' + (info.side === 'written' ? 'Written' : 'Delivered') + ' stays ' + moneyPlain_(nwdsr) + '.' : 'No NWDSR figure for this day will be created from this workbook.'),
+      reason: (total !== null ? 'Store 17 KPI sales ' + moneyPlain_(total) + '.' : label + ' for ' + start + '.') + nwdsrNote,
+      action: 'The Store 17 row will be imported to CC_Ledger and CC_Kpi. Other stores on the sheet are ignored. ' + (nwdsr !== null && nwdsr !== undefined ? 'NWDSR ' + (info.side === 'written' ? 'Written' : 'Delivered') + ' stays ' + moneyPlain_(nwdsr) + '.' : 'No NWDSR figure for this day will be created from this workbook.'),
     });
   }
-  if (current === compared) {
-    return Object.assign(card, { existing: label + ' for ' + start + ' is already on file' + (info.family === 'group17' && total !== null ? ' at ' + moneyPlain_(total) : '') + '.', disposition: 'skip', reason: 'The workbook matches the stored KPI figure.' + nwdsrNote, action: 'Nothing will be added. Store totals will not be changed.' });
+  if (compared === null || current === compared || (typeof compared === 'number' && typeof current === 'number' && Math.abs(current - compared) < 0.001)) {
+    return Object.assign(card, { existing: label + ' for ' + start + ' is already on file' + (total !== null ? ' at ' + moneyPlain_(total) : '') + '.', disposition: 'skip', reason: 'The workbook matches the stored store KPI figure.' + nwdsrNote, action: 'Nothing will be added. Store NWDSR totals will not be changed.' });
   }
   return Object.assign(card, {
     existing: label + ' for ' + start + ' is already on file at ' + current + '.',
     disposition: 'hold',
-    reason: 'This workbook prints ' + compared + '. Same KPI source, same business date, different figure.' + nwdsrNote,
-    action: 'The recorded KPI figure stays. Store NWDSR totals will not be changed.',
+    reason: 'This workbook prints ' + compared + '. Same store KPI source, same business date, different figure.' + nwdsrNote,
+    action: 'The recorded store KPI figure stays. Store NWDSR totals will not be changed. A difference from the individual workbook or from SNAP is not this hold.',
   });
 }
 
@@ -556,7 +567,7 @@ function uploadKpiWorkbook_(context, info) {
     var namedFamily = named[1].toUpperCase() === 'ASL' ? 'asl' : 'group17';
     var namedSide = named[2].toLowerCase();
     if (namedFamily !== info.family || namedSide !== info.side) {
-      return finishImport_(context, uploadOutcome_(base, 'Needs Review', 'The file name says ' + (namedFamily === 'asl' ? 'ASL' : 'Group 17') + ' ' + namedSide + ', but the contents are ' + label + '. Check the file and upload it again. Nothing was changed.'), 'needs-review');
+      return finishImport_(context, uploadOutcome_(base, 'Needs Review', 'The file name says ' + (namedFamily === 'asl' ? 'Data KPI Store' : 'Data KPI Individual') + ' ' + namedSide + ', but the contents are ' + label + '. Check the file and upload it again. Nothing was changed.'), 'needs-review');
     }
   }
   if (period) {
@@ -591,35 +602,34 @@ function uploadKpiWorkbook_(context, info) {
   var filing = uploadFilingNote_(chosen, date, '');
   var source = canonicalKpiName_(info.family, info.side, date);
   var records = kpiRecords_(info.grid, info.family, info.side, date, date, source);
-  var storeView = info.family === 'asl' ? 'RUGS_STORE' : 'DA_SALES_STORE';
-  var storeRecords = records.filter(function (record) { return /_STORE$/.test(record[0]); });
   var facts = dailyFacts_().filter(function (row) { return row.date === date; })[0] || {};
   var nwdsr = info.side === 'written' ? facts.nwdsrWritten : facts.nwdsrDelivered;
   var notes = [];
-  if (!storeRecords.some(function (record) { return record[0] === storeView; })) {
-    if (info.family === 'asl') {
-      if (info.grid.length < 3) return finishImport_(context, uploadOutcome_(base, 'Needs Review', 'The ASL workbook has no store rows. Check that the report finished running. Nothing was changed.'), 'needs-review');
-      ['PILLOWS_STORE', 'BASES_STORE', 'FP_STORE', 'PET_STORE'].forEach(function (view) { records.push(kpiRecord_(true, date, date, view, '', '', info.side, 0, 0, 0, 0, 0, source)); });
-      records.push(kpiRecord_(true, date, date, 'RUGS_STORE', '', '', info.side, 0, 0, null, 0, null, source));
-      records.push(kpiRecord_(true, date, date, 'PWRBASE_STORE', '', '', info.side, null, null, null, null, 0, source));
-      notes.push('Store 17 is not listed, so it had no pillow, adjustable base, furniture protection, rug or pet activity on this report; recorded as 0.');
-    } else if (nwdsr === 0 && records.length === 0) {
+  var personRecords = records.filter(function (record) { return /_PERSON$/.test(record[0]); });
+  var hasStoreSales = records.some(function (record) { return record[0] === 'DA_SALES_STORE'; });
+  var hasStoreLine = records.some(function (record) { return /_STORE$/.test(record[0]); });
+  if (info.family === 'group17' && !personRecords.length) {
+    if (nwdsr === 0) notes.push('The individual workbook has no salesperson lines and NWDSR ' + info.side + ' is $0. No store KPI rows were added from this file.');
+    else return finishImport_(context, uploadOutcome_(base, 'Needs Review', label + ' for ' + date + ' (' + context.fileName + ') has no salesperson lines. The workbook was not applied. The original is kept in the source archive. This is a structural failure. It is not compared with NWDSR or Data KPI Store.'), 'needs-review');
+  }
+  if (info.family === 'asl' && !hasStoreLine) {
+    if (info.grid.length < 3) return finishImport_(context, uploadOutcome_(base, 'Needs Review', 'The Data KPI Store workbook has no store rows. Check that the report finished running. Nothing was changed.'), 'needs-review');
+    ['PILLOWS_STORE', 'BASES_STORE', 'FP_STORE', 'PET_STORE'].forEach(function (view) { records.push(kpiRecord_(true, date, date, view, '', '', info.side, 0, 0, 0, 0, 0, source)); });
+    records.push(kpiRecord_(true, date, date, 'RUGS_STORE', '', '', info.side, 0, 0, null, 0, null, source));
+    records.push(kpiRecord_(true, date, date, 'PWRBASE_STORE', '', '', info.side, null, null, null, null, 0, source));
+    if (nwdsr === 0) {
       records.push(kpiRecord_(true, date, date, 'DA_SALES_STORE', '', '', info.side, 0, 0, null, null, null, source));
-      records.push(kpiRecord_(true, date, date, 'BEDDING_STORE', '', '', info.side, 0, null, null, null, 0, source));
-      ['FABW_STORE', 'PWAR_STORE', 'LTHW_STORE', 'MPPA_STORE', 'ATTACH_STORE'].forEach(function (view) { records.push(kpiRecord_(true, date, date, view, '', '', info.side, 0, 0, 0, 0, 0, source)); });
-      records.push(kpiRecord_(true, date, date, 'FINANCE_STORE', '', '', info.side, null, null, null, null, 0, source));
-      notes.push('The report has no sales lines and NWDSR ' + info.side + ' is $0, so the day is recorded as no sales.');
-    } else {
-      return finishImport_(context, uploadOutcome_(base, 'Needs Review', label + ' for ' + date + ' (' + context.fileName + ') has no TOTAL line, so Store 17 sales could not be read. The workbook was not applied. The original is kept in the source archive. This is a structural failure, separate from any difference versus NWDSR.'), 'needs-review');
+      notes.push('Store 17 is not listed and NWDSR ' + info.side + ' is $0, so store KPI sales are recorded as $0.');
     }
+    notes.push('Store 17 is not listed, so pillow, adjustable base, furniture protection, rug and pet activity are recorded as 0. Other stores on the sheet are not used.');
   }
   var totalRecord = records.filter(function (record) { return record[0] === 'DA_SALES_STORE'; })[0];
   var total = totalRecord && totalRecord[10] !== '' ? Number(totalRecord[10]) : null;
-  if (info.family === 'group17' && total !== null && nwdsr !== null && nwdsr !== undefined && Math.abs(total - nwdsr) > 1) {
+  if (info.family === 'asl' && total !== null && nwdsr !== null && nwdsr !== undefined && Math.abs(total - nwdsr) > 1) {
     var standard = info.side === 'written' ? 'NWDSR Written' : 'NWDSR Delivered';
-    notes.push('Group 17 TOTAL ' + moneyPlain_(total) + ' and ' + standard + ' ' + moneyPlain_(nwdsr) + ' differ by ' + moneyPlain_(Math.round(Math.abs(total - nwdsr) * 100) / 100) + ' for ' + date + '. A return or reselection can land on another business date, so SNAP, NWDSR, and Group 17 do not have to match. Both figures are kept. ' + standard + ' stays the ' + (info.side === 'written' ? 'written' : 'delivered') + ' standard. This workbook is saved for the KPIs. The difference is a reconciliation note, not an error.');
+    notes.push('Data KPI Store sales ' + moneyPlain_(total) + ' and ' + standard + ' ' + moneyPlain_(nwdsr) + ' differ by ' + moneyPlain_(Math.round(Math.abs(total - nwdsr) * 100) / 100) + ' for ' + date + '. SNAP, NWDSR, Data KPI Store, and Data KPI Individual do not have to match. Both figures are kept. ' + standard + ' stays the ' + (info.side === 'written' ? 'written' : 'delivered') + ' standard. This workbook is saved for the store KPIs. The difference is a reconciliation note, not an error.');
   }
-  if (info.family === 'group17' && (nwdsr === null || nwdsr === undefined)) {
+  if (info.family === 'asl' && hasStoreSales && (nwdsr === null || nwdsr === undefined)) {
     notes.push('NWDSR ' + (info.side === 'written' ? 'Written' : 'Delivered') + ' for ' + date + ' is not on file yet, so the store month KPIs wait for it before this day is added.');
   }
   var unmatched = [];
@@ -645,8 +655,8 @@ function uploadKpiWorkbook_(context, info) {
   var listed = Object.keys(people).length;
   var rugs = records.filter(function (record) { return record[0] === 'RUGS_STORE'; })[0];
   var summary = label + ' for ' + date + ': ' + (info.family === 'asl'
-    ? 'Store 17 line' + (rugs ? ', rugs sold ' + (rugs[11] === '' ? 0 : rugs[11]) : '') + '.'
-    : (total !== null ? 'Store 17 sales ' + moneyPlain_(total) + ', ' : '') + listed + ' salesperson line' + (listed === 1 ? '' : 's') + '.');
+    ? 'Store 17 line' + (total !== null ? ', KPI sales ' + moneyPlain_(total) : '') + (rugs ? ', rugs sold ' + (rugs[11] === '' ? 0 : rugs[11]) : '') + '.'
+    : listed + ' salesperson line' + (listed === 1 ? '' : 's') + '. Individual KPI only. Store KPI rows and official Store Written and Delivered were not changed.');
   if (outcome.heldBack.length) {
     return finishImport_(context, uploadOutcome_(base, 'Needs Review', summary + ' ' + outcome.heldBack.length + ' figure' + (outcome.heldBack.length === 1 ? '' : 's') + ' differ from the figures already recorded for ' + date + '. The recorded figures were kept and logged in CC_History for review. ' + notes.join(' ') + filing), 'needs-review');
   }
@@ -863,7 +873,9 @@ function uploadPerq_(context, info) {
 /* ---------- Store month KPIs (Home tiles) ---------- */
 
 var STORE_KPI_FAMILIES_ = {
-  group17: { anchor: 'DA_SALES', views: ['DA_SALES', 'BEDDING', 'FABW', 'PWAR', 'LTHW', 'MPPA', 'ATTACH', 'FINANCE'], source: /DATA_ANALYSIS_KPI_17_/i },
+  // Store KPI rows are written from the ASL Store 17 row. Rows already saved from a 17 workbook TOTAL
+  // keep their original source name and still count, so verified figures are not rewritten.
+  group17: { anchor: 'DA_SALES', views: ['DA_SALES', 'BEDDING', 'FABW', 'PWAR', 'LTHW', 'MPPA', 'ATTACH', 'FINANCE'], source: /DATA_ANALYSIS_KPI_(ASL|17)_/i },
   asl: { anchor: 'RUGS', views: ['PILLOWS', 'BASES', 'FP', 'RUGS', 'PET', 'PWRBASE'], source: /DATA_ANALYSIS_KPI_(ASL|17)_/i },
 };
 
@@ -881,10 +893,10 @@ function kpiRateOrNull_(top, bottom) {
  * A rebuilt total (its source joins the files with " + ") is not a new snapshot and is not added on top of the days.
  * A column the snapshot does not have, such as pet protection, is taken from a cumulative row that ends on the
  * same through-date. Its daily pieces are not added again.
- * A Group 17 day is added when that day's workbook is on file and NWDSR for the same side is on file.
- * The totals do not have to match. SNAP, NWDSR, and Group 17 keep their own figures. A difference is noted
- * and does not stop the store-month KPIs. A missing workbook, or NWDSR not on file yet, still stops the count.
- * A verified $0 NWDSR day has no Group 17 file and is not a hole.
+ * A store KPI day is added when that day's Data KPI Store row is on file and NWDSR for the same side is on file.
+ * The totals do not have to match. SNAP, NWDSR, Data KPI Store, and Data KPI Individual keep their own figures.
+ * A difference is noted and does not stop the store-month KPIs. A missing workbook, or NWDSR not on file yet, still stops the count.
+ * A verified $0 NWDSR day with no store KPI file is not a hole.
  */
 function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
   var spec = STORE_KPI_FAMILIES_[family];
@@ -934,7 +946,7 @@ function storeKpiCoverage_(ledger, family, side, period, facts, closed, today) {
         var nwdsr = fact ? (side === 'written' ? fact.nwdsrWritten : fact.nwdsrDelivered) : null;
         var sales = day.DA_SALES.sales === null ? 0 : day.DA_SALES.sales;
         if (nwdsr === null) { issue = 'NWDSR ' + side + ' for ' + cursor + ' is not on file yet.'; break; }
-        if (Math.abs(sales - nwdsr) > 1) differences.push(cursor + ': Group 17 ' + side + ' TOTAL ' + moneyPlain_(sales) + ' and NWDSR ' + side + ' ' + moneyPlain_(nwdsr) + ' differ. Both figures are kept.');
+        if (Math.abs(sales - nwdsr) > 1) differences.push(cursor + ': Data KPI Store ' + side + ' ' + moneyPlain_(sales) + ' and NWDSR ' + side + ' ' + moneyPlain_(nwdsr) + ' differ. Both figures are kept.');
       }
       days.push(cursor);
     } else if (!closed[cursor]) {
@@ -1142,16 +1154,16 @@ function storeKpiRows_(family, through, w, d) {
       ['Fabric Maintenance', side(w, function (v) { return pct(v.fabric.sold, v.fabric.qual); }), side(d, function (v) { return pct(v.fabric.sold, v.fabric.qual); }), countNote('Fabric, ' + through, w && w.fabric, d && d.fabric)],
       ['Leather Maintenance', side(w, function (v) { return pct(v.leather.sold, v.leather.qual); }), side(d, function (v) { return pct(v.leather.sold, v.leather.qual); }), countNote('Leather, ' + through, w && w.leather, d && d.leather)],
       ['Power Upholstery', side(w, function (v) { return pct(v.power.sold, v.power.qual); }), side(d, function (v) { return pct(v.power.sold, v.power.qual); }), countNote('Power furniture, ' + through, w && w.power, d && d.power)],
-      ['Total Attachment', side(w, function (v) { return pct(v.attach.sold, v.attach.qual); }), side(d, function (v) { return pct(v.attach.sold, v.attach.qual); }), countNote('Group 17 TOTAL ATTACHMENTS, ' + through, w && w.attach, d && d.attach)],
+      ['Total Attachment', side(w, function (v) { return pct(v.attach.sold, v.attach.qual); }), side(d, function (v) { return pct(v.attach.sold, v.attach.qual); }), countNote('Data KPI Store total attachments, ' + through, w && w.attach, d && d.attach)],
       ['Finance', side(w, function (v) { return v.financed === null ? null : pct(v.financed, v.sales); }), side(d, function (v) { return v.financed === null ? null : pct(v.financed, v.sales); }), 'Financed dollars ÷ sales, ' + through + ". Financed dollars are each report's FIN % × its sales."],
       ['Average Ticket', side(w, function (v) { return v.orders ? kpiRound_(v.sales / v.orders, 2) : null; }), side(d, function (v) { return v.orders ? kpiRound_(v.sales / v.orders, 2) : null; }), 'Sales ÷ orders, ' + through + '. Written ' + (w ? w.sales : 0) + ' ÷ ' + (w ? w.orders : 0) + ', delivered ' + (d ? d.sales : 0) + ' ÷ ' + (d ? d.orders : 0) + '.'],
     ];
   }
   return [
-    ['Adjustable Base Attachment', side(w, function (v) { return pct(v.bases.sold, v.bases.qual); }), side(d, function (v) { return pct(v.bases.sold, v.bases.qual); }), countNote('ASL Store 17 ADJ, ' + through, w && w.bases, d && d.bases)],
-    ['Pillows', side(w, function (v) { return pct(v.pillows.sold, v.pillows.qual); }), side(d, function (v) { return pct(v.pillows.sold, v.pillows.qual); }), countNote('ASL Store 17 Pillows, ' + through, w && w.pillows, d && d.pillows)],
-    ['Wood / Furniture Protection', side(w, function (v) { return pct(v.protection.sold, v.protection.qual); }), side(d, function (v) { return pct(v.protection.sold, v.protection.qual); }), countNote('ASL Store 17 FURNITURE PROTECTION, ' + through, w && w.protection, d && d.protection)],
-    ['Rugs', side(w, function (v) { return v.rugs; }), side(d, function (v) { return v.rugs; }), 'ASL Store 17 rugs sold, ' + through + '.'],
+    ['Adjustable Base Attachment', side(w, function (v) { return pct(v.bases.sold, v.bases.qual); }), side(d, function (v) { return pct(v.bases.sold, v.bases.qual); }), countNote('Data KPI Store adjustable bases, ' + through, w && w.bases, d && d.bases)],
+    ['Pillows', side(w, function (v) { return pct(v.pillows.sold, v.pillows.qual); }), side(d, function (v) { return pct(v.pillows.sold, v.pillows.qual); }), countNote('Data KPI Store pillows, ' + through, w && w.pillows, d && d.pillows)],
+    ['Wood / Furniture Protection', side(w, function (v) { return pct(v.protection.sold, v.protection.qual); }), side(d, function (v) { return pct(v.protection.sold, v.protection.qual); }), countNote('Data KPI Store furniture protection, ' + through, w && w.protection, d && d.protection)],
+    ['Rugs', side(w, function (v) { return v.rugs; }), side(d, function (v) { return v.rugs; }), 'Data KPI Store rugs sold, ' + through + '.'],
     ['Pet Protections', side(w, petFigure_), side(d, petFigure_), petNote_(through, w, d)],
     ['Power Adjustable Base', side(w, function (v) { return v.powerBase; }), side(d, function (v) { return v.powerBase; }), 'ADJ PWR %, ' + through + '.'],
   ];
@@ -1253,6 +1265,241 @@ function refreshStoreKpiQuietly_(date) {
   }
 }
 
+/* ---------- Validation record ---------- */
+
+var UPLOAD_VALIDATION_HEADERS_ = ['validation_id', 'uploaded_at', 'sha256', 'file_name', 'business_date', 'report_type', 'scope', 'status_label', 'internal_status', 'rule', 'expected', 'actual', 'difference', 'affected', 'imported', 'figures_changed', 'automatic', 'action', 'actor', 'emailed_at', 'resolution'];
+
+function uploadValidationTab_() {
+  var spreadsheet = book_();
+  var tab = spreadsheet.getSheetByName('CC_UploadValidation');
+  if (tab) return tab;
+  tab = spreadsheet.insertSheet('CC_UploadValidation');
+  tab.getRange(1, 1, 1, UPLOAD_VALIDATION_HEADERS_.length).setValues([UPLOAD_VALIDATION_HEADERS_]);
+  return tab;
+}
+
+function uploadValidationRows_() {
+  return sheet_('CC_UploadValidation').map(function (row) {
+    return {
+      validationId: String(row.validation_id || ''),
+      at: String(row.uploaded_at || ''),
+      sha256: String(row.sha256 || ''),
+      fileName: String(row.file_name || ''),
+      businessDate: isoDate_(row.business_date),
+      reportType: String(row.report_type || ''),
+      scope: String(row.scope || ''),
+      statusLabel: String(row.status_label || ''),
+      internalStatus: String(row.internal_status || ''),
+      rule: String(row.rule || ''),
+      expected: String(row.expected || ''),
+      actual: String(row.actual || ''),
+      difference: String(row.difference || ''),
+      affected: String(row.affected || ''),
+      imported: String(row.imported || ''),
+      figuresChanged: String(row.figures_changed || ''),
+      automatic: String(row.automatic || ''),
+      action: String(row.action || ''),
+      actor: String(row.actor || ''),
+      emailedAt: String(row.emailed_at || ''),
+      resolution: String(row.resolution || ''),
+    };
+  }).filter(function (row) { return row.validationId; });
+}
+
+/** The words shown on screen. Internal statuses stay stable for the checklist. */
+function uploadPublicStatus_(status, message) {
+  var text = String(message || '');
+  if (status === 'Imported') return /Not on the roster|differ from the figures already recorded/i.test(text) ? 'IMPORTED — REVIEW REQUIRED' : 'IMPORTED & VERIFIED';
+  if (status === 'Already on file') return 'DUPLICATE — ALREADY IMPORTED';
+  if (status === 'Ignored' || status === 'Unsupported') return 'REJECTED — INVALID FILE';
+  if (status === 'Failed') return /could not be read|import stopped|could not be opened|not an Excel|empty/i.test(text) ? 'PROCESSING ERROR' : 'HELD — ACTION REQUIRED';
+  if (status === 'Needs Review') return /Saved\.|figures saved|salesperson line/i.test(text) && /Not on the roster|differ from the figures already recorded/i.test(text) ? 'IMPORTED — REVIEW REQUIRED' : 'HELD — ACTION REQUIRED';
+  if (status === 'Missing') return 'MISSING';
+  if (status === 'Covered' || status === 'Not expected') return status;
+  return status ? 'HELD — ACTION REQUIRED' : '';
+}
+
+function uploadScope_(key) {
+  if (key === 'aslWritten' || key === 'aslDelivered') return 'Data KPI Store, Store 17 row only';
+  if (key === 'g17Written' || key === 'g17Delivered') return 'Data KPI Individual, Store 17 salespeople';
+  if (key === 'snapWritten') return 'Individual written sales';
+  if (!key) return 'Not identified';
+  return 'Store 17';
+}
+
+function uploadValidationParts_(status, message) {
+  var text = String(message || '');
+  var money = text.match(/shows (\$[0-9,]+(?:\.\d+)?), but (\$[0-9,]+(?:\.\d+)?) is already on file/);
+  if (money) {
+    return {
+      rule: 'Same report type and business date already has a different verified total.',
+      expected: 'The total already on file, ' + money[2] + ', unless a reviewed correction replaces it.',
+      actual: 'This file prints ' + money[1] + '.',
+      difference: money[1] + ' versus ' + money[2] + '.',
+      affected: 'The daily total for this report type. Other report types were not compared as a failure.',
+    };
+  }
+  if (/no salesperson lines/i.test(text)) {
+    return { rule: 'Data KPI Individual must contain salesperson rows.', expected: 'One row per salesperson on the first visible worksheet.', actual: 'No salesperson line was found.', difference: 'Not applicable.', affected: 'Individual KPI rows for this workbook. Store KPI rows were not changed.' };
+  }
+  if (/no Store 17 row|no store rows/i.test(text)) {
+    return { rule: 'Data KPI Store must list Store 17.', expected: 'A row named 17 on the All Stores Listed worksheet.', actual: 'Store 17 was not found.', difference: 'Not applicable.', affected: 'Store KPI rows for this workbook.' };
+  }
+  if (/file name says/i.test(text)) {
+    return { rule: 'When the file name names a report family, the worksheet contents must be that family.', expected: 'Contents that match the report named in the file.', actual: text, difference: 'Name and contents disagree.', affected: 'The whole workbook. Nothing was saved.' };
+  }
+  if (/not one of the nine|not a PDF or an Excel|not SNAP Written, NWDSR/i.test(text)) {
+    return { rule: 'The file must be one of the nine daily reports, identified from its contents.', expected: 'SNAP Written, NWDSR Written, NWDSR Delivered, Data KPI Individual Written or Delivered, Data KPI Store Written or Delivered, or PERQ.', actual: 'The contents do not match one of those reports.', difference: 'Not applicable.', affected: 'No dataset.' };
+  }
+  if (/reconciliation note, not an error/i.test(text)) {
+    return { rule: 'Data KPI Store and NWDSR are different report definitions and are not required to match.', expected: 'Each source kept under its own definition.', actual: text, difference: 'Informational. Not a validation failure.', affected: 'Store KPI rows only. Official Store Written and Delivered were not changed.' };
+  }
+  if (status === 'Imported') {
+    return { rule: 'Report type, date, scope, and required figures were read from the contents.', expected: 'A supported report for a finished business date.', actual: 'The required figures were read.', difference: 'None.', affected: 'The destination for this report type.' };
+  }
+  if (status === 'Already on file') {
+    return { rule: 'The same source data is already on file.', expected: 'No second copy.', actual: 'This file matches data already verified.', difference: 'None.', affected: 'No dataset. Nothing was added.' };
+  }
+  return { rule: 'The file could not be imported as a complete verified report.', expected: 'A supported report whose figures can be saved without replacing a verified total.', actual: text || 'No further detail was returned.', difference: 'Not applicable.', affected: 'See the message. Verified figures were left in place.' };
+}
+
+function uploadValidationActor_(label) {
+  if (label === 'IMPORTED & VERIFIED' || label === 'DUPLICATE — ALREADY IMPORTED') return 'System';
+  if (label === 'REJECTED — INVALID FILE' || label === 'PROCESSING ERROR') return 'Source report provider';
+  return 'GM';
+}
+
+function uploadDiagnosticSubject_(validation) {
+  var kind = validation.statusLabel === 'IMPORTED — REVIEW REQUIRED' ? 'Upload Review Required' : (validation.statusLabel === 'PROCESSING ERROR' ? 'Upload Processing Error' : (validation.statusLabel === 'REJECTED — INVALID FILE' ? 'Upload Rejected' : 'Upload Held'));
+  var when = validation.businessDate ? uploadDayText_(validation.businessDate) : 'Undated';
+  return 'STORE 17 | ' + kind + ' | ' + when + ' ' + (validation.reportType || 'report');
+}
+
+function uploadDiagnosticBody_(validation) {
+  return [
+    'REPORT: ' + validation.fileName,
+    'BUSINESS DATE: ' + (validation.businessDate || 'Not identified'),
+    'REPORT TYPE: ' + (validation.reportType || 'Not identified'),
+    'STATUS: ' + validation.statusLabel,
+    '',
+    'WHAT FAILED:',
+    validation.rule,
+    '',
+    'EXPECTED:',
+    validation.expected,
+    '',
+    'ACTUAL:',
+    validation.actual,
+    '',
+    'DIFFERENCE:',
+    validation.difference,
+    '',
+    'WHAT THE SYSTEM DID:',
+    validation.automatic,
+    '',
+    'WHAT WAS NOT IMPORTED:',
+    validation.affected,
+    '',
+    'WHAT NEEDS TO HAPPEN:',
+    validation.action,
+    '',
+    'WHO NEEDS TO ACT:',
+    validation.actor,
+    '',
+    'VALIDATION REFERENCE:',
+    validation.validationId,
+  ].join('\n');
+}
+
+function sendUploadDiagnostic_(validation) {
+  var label = validation.statusLabel;
+  var notify = label === 'HELD — ACTION REQUIRED' || label === 'REJECTED — INVALID FILE' || label === 'PROCESSING ERROR' || label === 'IMPORTED — REVIEW REQUIRED';
+  if (!notify) return '';
+  if (validation.emailedAt) return validation.emailedAt;
+  var email = '';
+  try { email = String(config_().admin_email || '').trim(); } catch (error) { email = ''; }
+  if (!email || typeof MailApp === 'undefined' || !MailApp.sendEmail) return '';
+  MailApp.sendEmail(email, uploadDiagnosticSubject_(validation), uploadDiagnosticBody_(validation));
+  return new Date().toISOString();
+}
+
+/** Saves one validation record and emails the GM only when the action is new. */
+function recordUploadValidation_(context, result) {
+  var message = String(result.message || '');
+  var label = uploadPublicStatus_(result.status, message);
+  var parts = uploadValidationParts_(result.status, message);
+  var imported = result.status === 'Imported' || label === 'IMPORTED — REVIEW REQUIRED';
+  var reportType = result.key ? uploadReportLabel_(result.key) : '';
+  var businessDate = result.start && result.start === result.end ? result.start : (result.start || context.date || '');
+  var action = message || 'No further action.';
+  var validationId = 'UV-' + String(context.sha || '').slice(0, 12) + '-' + sha256Hex_(label + '|' + action).slice(0, 8);
+  var automatic = 'Identified the report from its contents, checked the business date, and compared it with the figure already on file for that same source. ';
+  automatic += label === 'IMPORTED & VERIFIED' ? 'The report was imported.' : (label === 'DUPLICATE — ALREADY IMPORTED' ? 'The duplicate was skipped.' : (imported ? 'The verified portion was imported and the unresolved portion was marked.' : 'The file was not applied.'));
+  var row = {
+    validationId: validationId,
+    at: new Date().toISOString(),
+    sha256: context.sha,
+    fileName: context.fileName,
+    businessDate: businessDate,
+    reportType: reportType,
+    scope: uploadScope_(result.key),
+    statusLabel: label,
+    internalStatus: result.status,
+    rule: parts.rule,
+    expected: parts.expected,
+    actual: parts.actual,
+    difference: parts.difference,
+    affected: parts.affected,
+    imported: imported ? 'Yes' : 'No',
+    figuresChanged: result.status === 'Imported' ? 'New or matching figures were saved. A different verified total was not overwritten.' : 'No. Existing verified figures were not changed.',
+    automatic: automatic,
+    action: action,
+    actor: uploadValidationActor_(label),
+    emailedAt: '',
+    resolution: label === 'IMPORTED & VERIFIED' || label === 'DUPLICATE — ALREADY IMPORTED' ? 'Resolved' : 'Open',
+  };
+  var tab = uploadValidationTab_();
+  var values = tab.getDataRange().getValues();
+  var existing = 0;
+  var r;
+  for (r = 1; r < values.length; r += 1) {
+    if (String(values[r][0]) === validationId) existing = r + 1;
+  }
+  if (existing) {
+    row.emailedAt = String(tab.getRange(existing, 20).getValue() || '');
+    row.at = String(tab.getRange(existing, 2).getValue() || row.at);
+  } else {
+    row.emailedAt = sendUploadDiagnostic_(row);
+  }
+  var line = [row.validationId, row.at, row.sha256, row.fileName, row.businessDate, row.reportType, row.scope, row.statusLabel, row.internalStatus, row.rule, row.expected, row.actual, row.difference, row.affected, row.imported, row.figuresChanged, row.automatic, row.action, row.actor, row.emailedAt, row.resolution];
+  if (existing) tab.getRange(existing, 1, 1, line.length).setValues([line]);
+  else tab.appendRow(line);
+  if (typeof forgetRead_ === 'function') forgetRead_('CC_UploadValidation');
+  return row;
+}
+
+function uploadHistory_(payload) {
+  return { role: payload.session.role, rows: uploadValidationRows_().slice(-40).reverse() };
+}
+
+/** Checks a stored validation again. It does not write a second copy of any total. */
+function retryUploadValidation_(payload) {
+  var id = String(payload.validationId || '');
+  var found = null;
+  uploadValidationRows_().forEach(function (row) { if (row.validationId === id) found = row; });
+  if (!found) throw new Error('That validation record is not on file.');
+  return {
+    validationId: id,
+    statusLabel: found.statusLabel,
+    resolution: found.resolution,
+    duplicated: false,
+    figuresChanged: 'No. Retry did not write another copy.',
+    message: found.resolution === 'Resolved'
+      ? 'Retry checked ' + id + '. The source is already verified, so nothing was added.'
+      : 'Retry checked ' + id + '. The issue is unchanged, so no second email was sent and no total was written again. ' + found.action,
+  };
+}
+
 /* ---------- Status ---------- */
 
 function uploadEvidence_() {
@@ -1262,7 +1509,8 @@ function uploadEvidence_() {
   var cumulative = [];
   ledgerRows_().forEach(function (row) {
     if (row.grain === 'cumulative' && row.fitsTrack) cumulative.push(row);
-    if (row.grain !== 'daily' || !row.reportDate || row.code && row.view !== 'PERQ_PERSON') return;
+    if (row.grain !== 'daily' || !row.reportDate) return;
+    if (row.code && row.view !== 'PERQ_PERSON' && row.view !== 'DA_SALES_PERSON') return;
     var key = row.view + '|' + row.side + '|' + row.reportDate;
     if (row.view === 'PERQ_PERSON') {
       var item = ledger[key] || (ledger[key] = { count: 0, opportunities: 0 });
@@ -1286,8 +1534,8 @@ function uploadCover_(evidence, date, key) {
   var views = [];
   var side = '';
   var track = 'STORE';
-  if (key === 'g17Written' || key === 'g17Delivered') { views = ['DA_SALES_STORE']; side = key === 'g17Written' ? 'written' : 'delivered'; }
-  else if (key === 'aslWritten' || key === 'aslDelivered') { views = ['RUGS_STORE', 'PILLOWS_STORE', 'BASES_STORE', 'FP_STORE']; side = key === 'aslWritten' ? 'written' : 'delivered'; }
+  if (key === 'g17Written' || key === 'g17Delivered') { views = ['DA_SALES_PERSON']; side = key === 'g17Written' ? 'written' : 'delivered'; track = 'PERSON'; }
+  else if (key === 'aslWritten' || key === 'aslDelivered') { views = ['DA_SALES_STORE', 'RUGS_STORE', 'PILLOWS_STORE', 'BASES_STORE', 'FP_STORE']; side = key === 'aslWritten' ? 'written' : 'delivered'; }
   else if (key === 'perqLocation') views = ['PERQ_STORE'];
   else if (key === 'perqSalesperson') { views = ['PERQ_PERSON']; track = 'PERSON'; }
   else return '';
@@ -1317,20 +1565,23 @@ function uploadChecklist_(evidence, date) {
     if (item.key === 'nwdsrDelivered' && fact.nwdsrDelivered !== null && fact.nwdsrDelivered !== undefined) { onFile = true; detail = 'Store 17 total ' + moneyPlain_(fact.nwdsrDelivered); }
     if (item.key === 'g17Written' || item.key === 'g17Delivered') {
       var side = item.key === 'g17Written' ? 'written' : 'delivered';
-      var row = ledger('DA_SALES_STORE', side);
-      if (row) {
+      var person = ledger('DA_SALES_PERSON', side);
+      if (person && /DATA_ANALYSIS_KPI_17_/i.test(person.source || '')) {
         onFile = true;
-        detail = 'TOTAL sales ' + moneyPlain_(row.sales);
-        var nwdsr = side === 'written' ? fact.nwdsrWritten : fact.nwdsrDelivered;
-        if (nwdsr !== null && nwdsr !== undefined && Math.abs((row.sales || 0) - nwdsr) > 1) detail += '. TOTAL ' + moneyPlain_(row.sales) + ' and NWDSR ' + (side === 'written' ? 'Written' : 'Delivered') + ' ' + moneyPlain_(nwdsr) + ' differ. Both figures are kept. NWDSR ' + (side === 'written' ? 'Written' : 'Delivered') + ' stays the ' + side + ' standard. The difference is a reconciliation note, not an error.';
+        detail = 'Salesperson KPI lines are on file. They are not the official store total.';
       }
     }
     if (item.key === 'aslWritten' || item.key === 'aslDelivered') {
-      var aslRow = asl(item.key === 'aslWritten' ? 'written' : 'delivered');
-      if (aslRow) {
+      var aslSide = item.key === 'aslWritten' ? 'written' : 'delivered';
+      var aslSales = ledger('DA_SALES_STORE', aslSide);
+      var aslRow = asl(aslSide);
+      var storeSource = (aslSales && aslSales.source) || (aslRow && aslRow.source) || '';
+      if ((aslSales || aslRow) && /DATA_ANALYSIS_KPI_(ASL|17)_/i.test(storeSource)) {
         onFile = true;
-        var rugs = ledger('RUGS_STORE', item.key === 'aslWritten' ? 'written' : 'delivered');
-        detail = 'Store 17 line' + (rugs && rugs.units !== null ? ', rugs ' + rugs.units : '');
+        var rugs = ledger('RUGS_STORE', aslSide);
+        detail = 'Store 17 KPI line' + (aslSales && aslSales.sales !== null ? ', KPI sales ' + moneyPlain_(aslSales.sales) : '') + (rugs && rugs.units !== null ? ', rugs ' + rugs.units : '');
+        var nwdsr = aslSide === 'written' ? fact.nwdsrWritten : fact.nwdsrDelivered;
+        if (aslSales && nwdsr !== null && nwdsr !== undefined && Math.abs((aslSales.sales || 0) - nwdsr) > 1) detail += '. Data KPI Store ' + moneyPlain_(aslSales.sales) + ' and NWDSR ' + (aslSide === 'written' ? 'Written' : 'Delivered') + ' ' + moneyPlain_(nwdsr) + ' differ. Both figures are kept. NWDSR stays the ' + aslSide + ' standard. The difference is a reconciliation note, not an error.';
       }
     }
     if (item.key === 'perqLocation' && perqStore) { onFile = true; detail = 'Store 17 opportunities ' + perqStore.eligible; }
@@ -1361,18 +1612,18 @@ function uploadChecklist_(evidence, date) {
       if (last && /differ|do not match NWDSR|was not saved|workbook was not saved/i.test(last.message || '')) {
         var family = item.key.indexOf('asl') === 0 ? 'asl' : 'group17';
         var side = /Delivered/.test(item.key) ? 'delivered' : 'written';
-        message = 'Missing for ' + dayText + '. The required file is ' + canonicalKpiName_(family, side, date) + '. ' + (last.file || 'An earlier workbook') + ' was read and was not saved. A difference from NWDSR is not a reason to reject that workbook. A SNAP or NWDSR PDF does not fill this row. NWDSR store totals are left as they are. ' + last.message;
+        message = 'Missing for ' + dayText + '. The required file is ' + canonicalKpiName_(family, side, date) + '. ' + (last.file || 'An earlier workbook') + ' was read and was not saved. A difference from NWDSR is not a reason to reject that workbook. A SNAP PDF, an NWDSR PDF, and the other Data KPI workbook do not fill this row. NWDSR store totals are left as they are. ' + last.message;
       }
     }
-    return { key: item.key, label: item.label, format: item.format, use: item.use, status: status, message: message, date: date, dateText: dayText, lastFile: last ? last.file : '', lastAt: last ? last.at : '' };
+    return { key: item.key, label: item.label, format: item.format, use: item.use, display: dayText + ' — ' + item.label + ' — ' + item.format, status: status, statusLabel: uploadPublicStatus_(status, message), message: message, date: date, dateText: dayText, lastFile: last ? last.file : '', lastAt: last ? last.at : '' };
   });
 }
 
 var MAILBOX_REPORT_LABELS_ = {
-  'Data Analysis KPI 17 Written': 'Group 17 Written',
-  'Data Analysis KPI 17 Delivered': 'Group 17 Delivered',
-  'Data Analysis KPI ASL Written': 'ASL Written',
-  'Data Analysis KPI ASL Delivered': 'ASL Delivered',
+  'Data Analysis KPI 17 Written': 'Data KPI Individual — Written',
+  'Data Analysis KPI 17 Delivered': 'Data KPI Individual — Delivered',
+  'Data Analysis KPI ASL Written': 'Data KPI Store — Written',
+  'Data Analysis KPI ASL Delivered': 'Data KPI Store — Delivered',
 };
 
 /** The newest of the nine reports the mailbox import brought in. Files uploaded here are already in CC_Uploads. */
@@ -1455,5 +1706,6 @@ function uploads_(payload) {
     dashboardRefreshed: payload.refresh === true && !!refreshed,
     consistency: audit ? { status: String(audit.status || ''), checked: audit.checked || 0, matched: audit.matched || 0, discrepancies: audit.discrepancies || 0 } : null,
     history: evidence.uploads.slice(-40).reverse(),
+    validationHistory: uploadValidationRows_().slice(-30).reverse(),
   };
 }
