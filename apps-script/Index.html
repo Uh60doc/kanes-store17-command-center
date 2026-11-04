@@ -601,6 +601,11 @@
       .summary-verified { text-align: left; }
     }
     @media print {
+      body.print-month { background: white !important; color: black !important; }
+      body.print-month header.brand, body.print-month .nav, body.print-month .noprint, body.print-month .data-refresh { display: none !important; }
+      body.print-month .wrap { max-width: none; padding: 0; }
+      body.print-month #screen, body.print-month #screen .card, body.print-month #screen h2, body.print-month #screen h3, body.print-month #screen p, body.print-month #screen td, body.print-month #screen th { color: black !important; background: white !important; box-shadow: none !important; }
+      body.print-month .month-sheet { break-inside: avoid; }
       @page { size: letter; margin: 0.45in; }
       @page { size: letter portrait; margin: 0.35in; }
       @page monthly-page { size: letter landscape; margin: 0.4in; }
@@ -814,6 +819,9 @@
     var role = '';
     var ownReport = false;
     var screen = 'home';
+    var monthHistoryQuery = null;
+    var monthHistoryCache = null;
+    var monthHistoryPerson = '';
     var reportQuery = { kind: 'daily', date: '', start: '', end: '', span: 'completed', name: '' };
     var DISPLAY_REFRESH_MS = 30 * 60 * 1000;
     var displayVersion = '';
@@ -930,7 +938,7 @@
     }
     function routeAllowed(name) {
       if (role === 'admin') return true;
-      if (role === 'manager') return name !== 'admin' && name !== 'coverage';
+      if (role === 'manager') return name !== 'admin' && name !== 'coverage' && name !== 'monthlyDashboard';
       if (name === 'reports') return !!ownReport;
       return name === 'home' || name === 'people' || name === 'morning' || name === 'written' || name === 'delivered' || name === 'closing' || name === 'accel' || name === 'daily' || name === 'documents' || name === 'coach';
     }
@@ -960,7 +968,7 @@
           ['coaching', 'Coaching Tools'], ['evalPrep', 'Evaluation Preparation']
         ]},
         { label: 'Admin', alignEnd: true, items: [
-          ['admin', 'Main Administration'], ['health', 'System Health'], ['coverage', 'Data Coverage'],
+          ['admin', 'Main Administration'], ['monthlyDashboard', 'Monthly History'], ['health', 'System Health'], ['coverage', 'Data Coverage'],
           ['consistency', 'Data Consistency'], ['email', 'Email Controls']
         ]}
       ];
@@ -4562,7 +4570,7 @@
       document.getElementById('screen').innerHTML =
         '<h2 class="section-title">Development status</h2><div id="devlog-area"><p class="sub">Loading development status…</p></div>' +
         '<h2 class="section-title">Manage associates</h2><div id="roster-area"><p class="sub">Loading the roster…</p></div>' +
-        '<h2 class="section-title">Monthly history</h2><div id="month-history"><p class="sub">Loading completed months…</p></div>' +
+        '<h2 class="section-title">Monthly history</h2><article class="card"><p class="sub">Open a completed month as a full performance dashboard. Finalizing a month stays on that screen and is never automatic.</p><p class="noprint"><button type="button" id="open-month-history">Open Monthly History</button></p></article>' +
         '<h2 class="section-title">Passwords and imports</h2>' +
         '<article class="card"><h2>Sign-in</h2><p class="sub">Liz, Cordell, and Kelly are the only usernames. The first time each person enters ADMIN, they create their own password and it is saved for that username.</p>' +
         '<p id="pw-error" class="error"></p><p class="noprint"><button id="reset-liz" type="button">Let Liz use ADMIN again</button> <button id="reset-cordell" type="button">Let Cordell use ADMIN again</button> <button id="reset-kelly" type="button">Let Kelly use ADMIN again</button> <button id="retry" type="button">Retry imports</button></p></article>';
@@ -4582,37 +4590,196 @@
       });
       loadDevLog();
       loadRoster();
-      loadMonthHistory();
+      var openHistory = document.getElementById('open-month-history');
+      if (openHistory) openHistory.addEventListener('click', function () { openScreen('monthlyDashboard'); });
     }
-    function loadMonthHistory() {
-      var box = document.getElementById('month-history');
-      if (!box) return;
-      api('monthlyHistory').then(function (data) {
-        var rows = (data.periods || []).map(function (period) {
-          var state = period.open ? 'Open' : 'Final';
-          var blockers = (period.blockers || []).map(function (line) { return esc(line); }).join('<br>');
-          return '<tr><td>' + esc(period.key) + '</td><td>' + esc(period.start) + ' to ' + esc(period.end) + '</td><td>' + pill(state) + '</td><td>' + period.final + ' final · ' + period.open + ' open</td><td class="sub">' + (blockers || 'No coverage gap listed') + '</td><td>' + (period.open ? '<button type="button" data-finalize="' + esc(period.key) + '">Finalize month</button>' : 'Final') + '</td></tr>';
-        }).join('');
-        box.innerHTML = '<article class="card"><p class="sub">' + esc(data.note || '') + '</p><table><tr><th>Month</th><th>Dates</th><th>Status</th><th>Rows</th><th>Remaining gaps</th><th></th></tr>' + (rows || '<tr><td colspan="6">No completed month is on Monthly History yet.</td></tr>') + '</table><p id="month-history-note" class="error"></p></article>';
-        box.querySelectorAll('[data-finalize]').forEach(function (button) {
-          button.addEventListener('click', function () {
-            var key = button.getAttribute('data-finalize');
-            if (!window.confirm('Finalize ' + key + '? The figures now on file stay. This does not run by itself.')) return;
-            api('finalizeMonth', { periodKey: key, confirm: true }).then(function (result) {
-              if (result.finalized) { loadMonthHistory(); return; }
-              var listed = (result.blockers || []).slice(0, 8).join('\n');
-              if (listed && window.confirm(result.message + '\n\n' + listed + '\n\nFinalize anyway and keep these gaps on the record?')) {
-                return api('finalizeMonth', { periodKey: key, confirm: true, acknowledgeGaps: true }).then(function () { loadMonthHistory(); });
-              }
-              document.getElementById('month-history-note').textContent = result.message || '';
-            }).catch(function (error) {
-              document.getElementById('month-history-note').textContent = error.message;
-            });
-          });
-        });
+    function loadMonthlyDashboard(query) {
+      monthHistoryPerson = '';
+      document.getElementById('header-note').textContent = 'Monthly History';
+      document.getElementById('screen').innerHTML = '<p class="sub">Loading the monthly dashboard…</p>';
+      api('monthlyDashboard', query || {}).then(function (data) {
+        if (screen !== 'monthlyDashboard') return;
+        monthHistoryCache = data;
+        monthHistoryQuery = { year: data.year, month: data.month };
+        renderMonthlyDashboard(data);
       }).catch(function (error) {
-        box.innerHTML = '<article class="card"><p class="error">' + esc(error.message) + '</p></article>';
+        if (/sign in/i.test(error.message)) showLogin(error.message);
+        else if (screen === 'monthlyDashboard') document.getElementById('screen').innerHTML = '<p class="error">' + esc(error.message) + '</p>';
       });
+    }
+    function monthMoney(value) {
+      if (value === null || value === undefined || value === '') return 'Not Available';
+      return money(value);
+    }
+    function monthRate(value, unit) {
+      if (value === null || value === undefined || value === '') return 'Not Available';
+      if (unit === 'dollars') return money(value);
+      if (unit === 'count') return String(Math.round(Number(value)));
+      return percent(value);
+    }
+    function monthGoalText(tile) {
+      if (!tile || !tile.goalAvailable) return 'GOAL NOT AVAILABLE';
+      return tile.unit && tile.unit !== 'dollars' ? monthRate(tile.goal, tile.unit) : money(tile.goal);
+    }
+    function monthShare(tile) {
+      if (!tile || tile.actual === null || tile.actual === undefined) return 'Not Available';
+      if (!tile.goalAvailable) return 'GOAL NOT AVAILABLE';
+      if (tile.unit && tile.unit !== 'dollars') return (Number(tile.actual) >= Number(tile.goal) ? 'At or above goal' : 'Below goal');
+      return percent(tile.achieved) + ' of goal';
+    }
+    function renderMonthlyDashboard(data) {
+      if (monthHistoryPerson) { renderHistoricalPerson(data, monthHistoryPerson); return; }
+      document.body.classList.add('print-month');
+      var tone = data.status === 'FINALIZED' || data.status === 'REVISED' ? 'good' : (data.status === 'READY FOR REVIEW' ? 'warn' : (data.status === 'PARTIAL' ? 'bad' : 'pending'));
+      var months = ((data.choices && data.choices.months) || []).map(function (item) {
+        return '<option value="' + item.month + '"' + (item.month === data.month ? ' selected' : '') + '>' + esc(item.name) + '</option>';
+      }).join('');
+      var years = ((data.choices && data.choices.years) || []).map(function (year) {
+        return '<option value="' + year + '"' + (year === data.year ? ' selected' : '') + '>' + year + '</option>';
+      }).join('');
+      function hero(title, tile) {
+        var figure = !data.hasData ? 'NO DATA AVAILABLE' : (tile.unit ? monthRate(tile.actual, tile.unit) : monthMoney(tile.actual));
+        var variance = tile.variance === null || tile.variance === undefined ? '' : '<p class="sub">Variance ' + (tile.unit && tile.unit !== 'dollars' ? ((tile.variance > 0 ? '+' : '') + (tile.variance * 100).toFixed(1) + ' pts') : monthMoney(tile.variance)) + '</p>';
+        return '<article class="card glow-card kpi-hero month-sheet"><p class="kicker">' + esc(title) + '</p><p class="figure">' + figure + '</p><p class="goal-line">' + esc(monthShare(tile)) + ' · ' + esc(monthGoalText(tile)) + '</p>' + variance + (tile.note ? '<p class="sub">' + esc(tile.note) + '</p>' : '') + (tile.partial ? '<p class="sub">Partial total for the days on file.</p>' : '') + '</article>';
+      }
+      var tiles = data.tiles || {};
+      var five = data.hasData ? hero('NWDSR Written', tiles.written || {}) + hero('NWDSR Delivered', tiles.delivered || {}) + hero('Bedding', tiles.bedding || {}) + hero('Closing Ratio', tiles.closing || {}) + hero('Store Attachment', tiles.attachment || {}) : '<article class="card"><h2>NO DATA AVAILABLE</h2><p>No records are on file for this month. Missing reports are not shown as zero.</p></article>';
+      var goals = data.goals || {};
+      function goalRow(label, goal, achievement, variance) {
+        return '<tr><td>' + label + '</td><td>' + (goal === null || goal === undefined ? 'GOAL NOT AVAILABLE' : money(goal)) + '</td><td>' + (achievement === null || achievement === undefined ? 'Not Available' : percent(achievement)) + '</td><td>' + (variance === null || variance === undefined ? 'Not Available' : monthMoney(variance)) + '</td></tr>';
+      }
+      var yoy = data.yearOverYear || {};
+      var checks = (data.checks || []).map(function (check) {
+        var mark = check.result === 'PASS' ? 'good' : (check.result === 'FAIL' ? 'bad' : (check.result === 'NOT APPLICABLE' ? 'pending' : 'warn'));
+        return '<tr><td>' + esc(check.name) + '</td><td class="' + mark + '">' + esc(check.result) + '</td><td class="sub">' + esc(check.evidence || '') + '</td></tr>';
+      }).join('');
+      var team = (data.people || []).map(function (person, index) {
+        var beddingText = person.bedding && person.bedding.written !== null && person.bedding.written !== undefined ? monthRate(person.bedding.written, person.bedding.unit) : 'Not Available';
+        var closingText = person.closingRatio === null || person.closingRatio === undefined ? 'Not Available' : percent(person.closingRatio);
+        var attachText = person.attachment && person.attachment.actual !== null && person.attachment.actual !== undefined ? percent(person.attachment.actual) : 'Not Available';
+        var progress = person.monthlyGoal && person.snapWritten !== null && person.snapWritten !== undefined ? percent(person.snapWritten / person.monthlyGoal) : (person.monthlyGoal ? 'Not Available' : 'GOAL NOT AVAILABLE');
+        return '<button type="button" class="card glow-card person-card" data-month-person="' + esc(person.name) + '"><div class="person-top"><p class="rank">' + (index + 1) + '</p><h3>' + esc(person.name) + '</h3></div>' +
+          (person.former ? '<p class="sub">Former associate. Included for this month.</p>' : '') +
+          '<p class="sales-line"><span class="figure">' + (person.snapWritten === null || person.snapWritten === undefined ? 'Not Available' : money(person.snapWritten)) + '</span><span class="sub">' + progress + '</span></p>' +
+          '<p class="sub">Bedding ' + beddingText + ' · Closing ' + closingText + ' · Attachment ' + attachText + '</p></button>';
+      }).join('');
+      var versions = (data.versions || []).map(function (item) {
+        return '<li>Version ' + esc(item.version) + ' · ' + esc(item.status) + ' · ' + esc(item.by) + ' · ' + esc(item.at) + (item.reason ? ' · ' + esc(item.reason) : '') + '</li>';
+      }).join('');
+      var finalize = '';
+      if (data.status === 'READY FOR REVIEW') {
+        finalize = '<article class="card noprint" id="month-confirm"><h2>FINALIZE ' + esc(String(data.monthName || '').toUpperCase()) + ' ' + esc(data.year) + '</h2><p>The review checks passed. The month stays open until you confirm.</p><p class="noprint"><button type="button" id="month-finalize-open">FINALIZE ' + esc(String(data.monthName || '').toUpperCase()) + ' ' + esc(data.year) + '</button></p><div id="month-finalize-box"></div><p id="month-action-note" class="error"></p></article>';
+      } else if (data.status === 'FINALIZED' || data.status === 'REVISED') {
+        finalize = '<article class="card noprint"><h2>Revision</h2><p class="sub">A finalized month is not overwritten. A revision keeps the prior snapshot and needs a written reason plus a second approval.</p>' +
+          (data.revision ? '<p>Revision requested by ' + esc(data.revision.by) + '. ' + esc(data.revision.reason) + '</p><p class="noprint"><button type="button" id="month-revise-open">APPROVE REVISION</button></p><div id="month-finalize-box"></div>' : '<label>Reason for revision<textarea id="month-reason" rows="3"></textarea></label><p class="noprint"><button type="button" id="month-revise-start">Start revision</button></p>') +
+          '<p id="month-action-note" class="error"></p></article>';
+      } else {
+        finalize = '<article class="card"><h2>FINALIZE ' + esc(String(data.monthName || '').toUpperCase()) + ' ' + esc(data.year) + '</h2><p>The button stays off until every review check has passed and the reporting month has ended.</p><p class="noprint"><button type="button" disabled>FINALIZE ' + esc(String(data.monthName || '').toUpperCase()) + ' ' + esc(data.year) + '</button></p></article>';
+      }
+      document.getElementById('screen').innerHTML =
+        '<article class="card month-sheet"><p class="kicker">Monthly History</p><p class="figure ' + tone + '">' + esc(data.label || data.status) + '</p>' +
+        (data.snapshotWarning ? '<p class="error">' + esc(data.snapshotWarning) + '</p>' : '') +
+        '<div class="score-controls noprint"><label>Month <select id="month-pick">' + months + '</select></label><label>Year <select id="year-pick">' + years + '</select></label><button type="button" id="month-load">LOAD MONTHLY DASHBOARD</button></div></article>' +
+        '<h2 class="section-title">' + esc(data.heading || '') + '</h2><p class="sub">' + esc(data.periods && data.periods.store) + '</p><p class="sub">' + esc(data.periods && data.periods.salesperson) + '</p>' +
+        '<p class="noprint"><button type="button" id="month-print">PRINT MONTHLY REPORT</button> <button type="button" id="month-pdf">SAVE AS PDF</button></p>' +
+        '<div class="home-kpis">' + five + '</div>' +
+        '<h2 class="section-title">Monthly goals</h2><article class="card month-sheet"><p class="sub">' + esc(goals.basis || '') + '</p><table><tr><th>Measure</th><th>Goal</th><th>Achievement</th><th>Variance</th></tr>' + goalRow('Written', goals.written, goals.writtenAchievement, goals.writtenVariance) + goalRow('Delivered', goals.delivered, goals.deliveredAchievement, goals.deliveredVariance) + '</table></article>' +
+        '<h2 class="section-title">Year over year</h2><div class="home-quad"><article class="card"><h2>NWDSR Written</h2><p class="figure">' + esc(yoy.nwdsr || 'Pending') + '</p><p class="sub">' + esc(yoy.currentDates || '') + '</p></article>' +
+        '<article class="card"><h2>SNAP Written</h2><p class="figure">' + esc(yoy.snap || 'Pending') + '</p><p class="sub">' + esc(yoy.currentDates || '') + '</p></article>' +
+        '<article class="card"><h2>NWDSR Written last year</h2><p class="figure">' + esc(yoy.nwdsrLy || 'Pending') + '</p><p class="sub">' + esc(yoy.lyDates || '') + '</p></article>' +
+        '<article class="card"><h2>SNAP Written last year</h2><p class="figure">' + esc(yoy.snapLy || 'Pending') + '</p><p class="sub">' + esc(yoy.lyDates || '') + '</p></article></div><p class="sub">' + esc(yoy.note || '') + '</p>' +
+        '<h2 class="section-title">Store KPIs</h2><div class="kpi-primary">' + ((data.storeKpis || []).map(function (row) {
+          return '<article class="kpi-card"><div class="kpi-head"><h3>' + esc(row.name) + '</h3><p class="kpi-goal">Goal ' + (row.goal === null || row.goal === undefined || row.goal === '' ? 'GOAL NOT AVAILABLE' : monthRate(row.goal, row.unit)) + '</p></div><p class="sub">Written ' + monthRate(row.written, row.unit) + ' · Delivered ' + monthRate(row.delivered, row.unit) + '</p></article>';
+        }).join('') || '<article class="card"><p>Not Available</p></article>') + '</div>' +
+        '<h2 class="section-title">Sales team performance</h2><div class="team-grid">' + (team || '<article class="card"><p>No salesperson activity is on file for this month.</p></article>') + '</div>' +
+        '<h2 class="section-title">Month-end review</h2><article class="card month-sheet"><table><tr><th>Check</th><th>Result</th><th>Evidence</th></tr>' + checks + '</table></article>' +
+        finalize +
+        (versions ? '<h2 class="section-title">Snapshot versions</h2><article class="card"><ul class="list">' + versions + '</ul></article>' : '') +
+        (data.message ? '<p class="good">' + esc(data.message) + '</p>' : '');
+      document.getElementById('month-load').addEventListener('click', function () {
+        loadMonthlyDashboard({ year: Number(document.getElementById('year-pick').value), month: Number(document.getElementById('month-pick').value) });
+      });
+      document.getElementById('month-print').addEventListener('click', function () { window.print(); });
+      document.getElementById('month-pdf').addEventListener('click', function () {
+        var note = document.getElementById('month-action-note');
+        if (note) note.textContent = 'Choose Save as PDF in the print dialog.';
+        window.print();
+      });
+      document.querySelectorAll('[data-month-person]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          monthHistoryPerson = button.getAttribute('data-month-person');
+          renderHistoricalPerson(data, monthHistoryPerson);
+        });
+      });
+      var openFinalize = document.getElementById('month-finalize-open');
+      if (openFinalize) openFinalize.addEventListener('click', function () { showMonthConfirm(data, 'finalize'); });
+      var startRevise = document.getElementById('month-revise-start');
+      if (startRevise) startRevise.addEventListener('click', function () {
+        var reason = document.getElementById('month-reason').value;
+        document.getElementById('month-action-note').textContent = '';
+        api('startMonthRevision', { year: data.year, month: data.month, reason: reason }).then(function (next) {
+          monthHistoryCache = next;
+          renderMonthlyDashboard(next);
+        }).catch(function (error) { document.getElementById('month-action-note').textContent = error.message; });
+      });
+      var openRevise = document.getElementById('month-revise-open');
+      if (openRevise) openRevise.addEventListener('click', function () { showMonthConfirm(data, 'revise'); });
+    }
+    function showMonthConfirm(data, kind) {
+      var box = document.getElementById('month-finalize-box');
+      if (!box) return;
+      var tiles = data.tiles || {};
+      var people = (data.checks || []).filter(function (check) { return check.name.indexOf('Individual salesperson') === 0; })[0] || {};
+      var kpi = (data.checks || []).filter(function (check) { return check.name.indexOf('KPI calculations') === 0; })[0] || {};
+      box.innerHTML = '<div class="card"><p><strong>' + esc(data.monthName) + ' ' + esc(data.year) + '</strong></p><p>' + esc(data.periods.store) + '</p><p>' + esc(data.periods.salesperson) + '</p><p>Final Written total ' + monthMoney(tiles.written && tiles.written.actual) + '</p><p>Final Delivered total ' + monthMoney(tiles.delivered && tiles.delivered.actual) + '</p><p>Salesperson reconciliation ' + esc(people.result || '') + '. ' + esc(people.evidence || '') + '</p><p>KPI validation ' + esc(kpi.result || '') + '. ' + esc(kpi.evidence || '') + '</p><p>Approving administrator: the signed-in GM.</p><p class="noprint"><button type="button" id="month-confirm-yes">' + (kind === 'revise' ? 'Approve revision' : 'Confirm finalization') + '</button></p></div>';
+      document.getElementById('month-confirm-yes').addEventListener('click', function () {
+        var route = kind === 'revise' ? 'approveMonthRevision' : 'finalizeHistoricalMonth';
+        var body = { year: data.year, month: data.month, confirm: kind === 'revise' ? 'REVISE' : 'FINALIZE' };
+        api(route, body).then(function (next) {
+          monthHistoryCache = next;
+          renderMonthlyDashboard(next);
+        }).catch(function (error) {
+          var note = document.getElementById('month-action-note');
+          if (note) note.textContent = error.message;
+        });
+      });
+    }
+    function renderHistoricalPerson(data, name) {
+      document.body.classList.add('print-month');
+      displayHold = true;
+      var person = (data.people || []).filter(function (item) { return item.name === name; })[0];
+      if (!person) {
+        monthHistoryPerson = '';
+        displayHold = false;
+        renderMonthlyDashboard(data);
+        return;
+      }
+      var rows = (person.kpis || []).map(function (row) {
+        return '<tr><td>' + esc(row.name) + '</td><td>' + monthRate(row.written, row.unit) + '</td><td>' + monthRate(row.delivered, row.unit) + '</td><td>' + (row.goal === null || row.goal === undefined || row.goal === '' ? 'GOAL NOT AVAILABLE' : monthRate(row.goal, row.unit)) + '</td></tr>';
+      }).join('');
+      var days = (person.days || []).map(function (day) { return '<li>' + esc(day.date) + ' · SNAP ' + money(day.snapWritten) + (day.note ? ' · ' + esc(day.note) : '') + '</li>'; }).join('');
+      document.getElementById('screen').innerHTML =
+        '<p class="noprint"><button type="button" class="linkish" id="month-back">' + esc(data.backLabel || 'BACK TO MONTHLY HISTORY') + '</button></p>' +
+        '<h2 class="section-title">' + esc(person.name) + ' · ' + esc(data.monthName) + ' ' + esc(data.year) + '</h2>' +
+        '<p class="sub">' + esc(data.periods.salesperson) + (data.snapshot ? ' · Snapshot version ' + esc(data.snapshot.version) : ' · Historical month, not the current month') + '</p>' +
+        (person.former ? '<p class="sub">This associate is no longer on the active roster. The month keeps the activity on file.</p>' : '') +
+        (person.leave ? '<p class="sub">' + esc(person.leave) + '</p>' : '') +
+        '<div class="grid">' +
+        '<article class="card"><h2>SNAP written</h2><p class="figure">' + monthMoney(person.snapWritten) + '</p></article>' +
+        '<article class="card"><h2>Monthly goal</h2><p class="figure">' + (person.monthlyGoal === null || person.monthlyGoal === undefined ? 'GOAL NOT AVAILABLE' : money(person.monthlyGoal)) + '</p></article>' +
+        '<article class="card"><h2>Delivered</h2><p class="figure">' + monthMoney(person.deliveredSales) + '</p></article>' +
+        '<article class="card"><h2>Closing ratio</h2><p class="figure">' + (person.closingRatio === null || person.closingRatio === undefined ? 'Not Available' : percent(person.closingRatio)) + '</p></article>' +
+        '<article class="card"><h2>Data Analysis written</h2><p class="figure">' + monthMoney(person.analysisWritten) + '</p></article>' +
+        '</div>' +
+        '<article class="card" style="margin-top:12px"><h2>Individual KPIs</h2><table class="kpi"><tr><th>KPI</th><th>Written</th><th>Delivered</th><th>Goal</th></tr>' + rows + '</table></article>' +
+        '<article class="card" style="margin-top:12px"><h2>SNAP written days</h2>' + (days ? '<ul class="list">' + days + '</ul>' : '<p class="sub">No verified SNAP day is on file for this salesperson month.</p>') + '<p class="noprint"><button type="button" id="month-person-print">Print scorecard</button> <button type="button" id="month-person-pdf">SAVE AS PDF</button></p></article>';
+      document.getElementById('month-back').addEventListener('click', function () {
+        monthHistoryPerson = '';
+        displayHold = false;
+        renderMonthlyDashboard(monthHistoryCache || data);
+      });
+      document.getElementById('month-person-print').addEventListener('click', function () { window.print(); });
+      document.getElementById('month-person-pdf').addEventListener('click', function () { window.print(); });
     }
     function na(value) {
       return value === null || value === undefined || value === '' ? 'Not Available' : value;
@@ -6136,7 +6303,7 @@
     function reloadCurrentScreen() {
       var name = screen;
       var request = name === 'written' || name === 'delivered' ? 'home' : (name === 'email' ? 'emailControl' : name);
-      if (name === 'admin' || name === 'documents' || name === 'upload') return Promise.resolve({ applied: false, busy: true });
+      if (name === 'admin' || name === 'documents' || name === 'upload' || name === 'monthlyDashboard') return Promise.resolve({ applied: false, busy: true });
       return api(request, name === 'reports' ? reportRequest() : undefined).then(function (data) {
         if (screen !== name || displayHold || displayBusy()) return { applied: false, busy: true };
         if (figuresWeakened(displayPayload, data)) return { applied: false, weakened: true };
@@ -6191,11 +6358,12 @@
       var serial = navSerial;
       screen = name;
       displayHold = false;
-      document.body.classList.remove('print-summary', 'print-eval', 'print-doc', 'print-brief', 'print-coach', 'print-evalprep', 'print-actions', 'print-report');
+      document.body.classList.remove('print-summary', 'print-eval', 'print-doc', 'print-brief', 'print-coach', 'print-evalprep', 'print-actions', 'print-report', 'print-month');
       closeDocViewer();
       drawNav();
       var request = name === 'written' || name === 'delivered' ? 'home' : (name === 'email' ? 'emailControl' : name);
       if (name === 'admin') { renderAdmin(); return; }
+      if (name === 'monthlyDashboard') { loadMonthlyDashboard(monthHistoryQuery || {}); return; }
       if (name === 'documents') {
         docNotice = null;
         document.getElementById('screen').innerHTML = '<p class="sub">Loading documents…</p>';
