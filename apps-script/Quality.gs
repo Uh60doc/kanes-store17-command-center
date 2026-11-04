@@ -199,15 +199,15 @@ function packageItem_(ctx, date, key) {
     ctx.packageMemo[date] = memo;
   }
   var item = memo[key];
-  var result = { key: key, label: item.label, status: item.status, detail: item.message };
+  var result = { key: key, label: item.label, status: item.status, detail: item.message, receipt: item.receipt || '' };
   if (item.status !== 'Missing') return result;
   var cover = '';
   if (key === 'g17Written' || key === 'g17Delivered') cover = cumulativeCover_(ctx, ['DA_SALES_PERSON'], key === 'g17Written' ? 'written' : 'delivered', 'PERSON', date);
   if (key === 'aslWritten' || key === 'aslDelivered') cover = cumulativeCover_(ctx, ['DA_SALES_STORE', 'RUGS_STORE', 'PILLOWS_STORE', 'BASES_STORE', 'FP_STORE'], key === 'aslWritten' ? 'written' : 'delivered', 'STORE', date);
   if (key === 'perqLocation') cover = perqSnapshotCover_(ctx, 'store', date) || cumulativeCover_(ctx, ['PERQ_STORE'], '', 'STORE', date);
   if (key === 'perqSalesperson') cover = perqSnapshotCover_(ctx, 'person', date) || cumulativeCover_(ctx, ['PERQ_PERSON'], '', 'PERSON', date);
-  if (cover) return { key: key, label: item.label, status: 'Covered', detail: 'Covered by the month-to-date report verified through ' + cover + '.' };
-  if (!reportDue_(ctx, date)) return { key: key, label: item.label, status: 'Awaiting', detail: 'Due by ' + ctx.dueHour + ':00 on ' + shiftDate_(date, 1) + '.' };
+  if (cover) return { key: key, label: item.label, status: 'Covered', detail: 'Covered by the month-to-date report verified through ' + cover + '.', receipt: 'Fully imported and verified' };
+  if (!reportDue_(ctx, date)) return { key: key, label: item.label, status: 'Awaiting', detail: 'Due by ' + ctx.dueHour + ':00 on ' + shiftDate_(date, 1) + '.', receipt: item.receipt || 'Never received' };
   return result;
 }
 
@@ -233,12 +233,12 @@ function dayPackages_(ctx) {
     var items = keys.map(function (key) { return packageItem_(ctx, date, key); });
     var onFile = items.filter(function (item) { return item.status === 'Imported' || item.status === 'Covered' || item.status === 'Not expected'; });
     var review = items.filter(function (item) { return item.status === 'Needs Review' || item.status === 'Failed'; });
-    var missing = items.filter(function (item) { return item.status === 'Missing'; });
+    var missing = items.filter(function (item) { return item.status === 'Missing' || item.status === 'Not retained' || item.status === 'Archived' || item.status === 'Incomplete' || item.status === 'Storage Failure'; });
     var awaiting = items.filter(function (item) { return item.status === 'Awaiting'; });
     var status = review.length ? 'NEEDS REVIEW' : onFile.length === items.length ? 'COMPLETE' : onFile.length || awaiting.length ? 'PARTIAL' : 'MISSING';
     var text = onFile.length + ' of ' + items.length + ' required reports on file and verified';
     if (review.length) text += '; needs review: ' + review.map(function (item) { return item.label + ' (' + item.detail + ')'; }).join('; ');
-    if (missing.length) text += '; missing: ' + missing.map(function (item) { return item.label; }).join(', ');
+    if (missing.length) text += '; ' + missing.map(function (item) { return (item.receipt || 'Never received') + ': ' + item.label; }).join(', ');
     if (awaiting.length) text += '; not due yet: ' + awaiting.map(function (item) { return item.label; }).join(', ') + ' (due by ' + ctx.dueHour + ':00 on ' + shiftDate_(date, 1) + ')';
     days.push({ date: date, status: status, items: items, onFile: onFile.length, total: items.length, text: text + '.' });
   });
@@ -814,10 +814,22 @@ function checkReportPackages_(ctx, packages, add) {
   });
   var complete = packages.filter(function (day) { return day.status === 'COMPLETE'; }).length;
   var missing = [];
+  var notRetained = [];
+  var archivedOnly = [];
+  var incomplete = [];
   packages.forEach(function (day) {
-    day.items.forEach(function (item) { if (item.status === 'Missing') missing.push(item.label + ' ' + day.date); });
+    day.items.forEach(function (item) {
+      var name = item.label + ' ' + day.date;
+      if (item.status === 'Missing') missing.push(name);
+      if (item.status === 'Not retained') notRetained.push(name);
+      if (item.status === 'Archived' || item.status === 'Storage Failure') archivedOnly.push(name);
+      if (item.status === 'Incomplete') incomplete.push(name);
+    });
   });
-  if (missing.length) add('report-package', 'NOTE', 'Missing reports', missing.length + ' required report(s) have not arrived: ' + missing.slice(0, 12).join(', ') + (missing.length > 12 ? ', …' : '') + '. Each is an active alert until it arrives and passes validation.');
+  if (missing.length) add('report-package', 'NOTE', 'Never received', missing.length + ' required report(s) were never received: ' + missing.slice(0, 12).join(', ') + (missing.length > 12 ? ', …' : '') + '. Each stays open until the report arrives and passes validation.');
+  if (notRetained.length) add('report-package', 'NOTE', 'Previously received but not retained', notRetained.length + ' required report(s) were previously received and the original was not retained: ' + notRetained.slice(0, 12).join(', ') + '. Do not reconstruct KPI values from a logged total.');
+  if (archivedOnly.length) add('report-package', 'NOTE', 'Received and archived but not imported', archivedOnly.length + ' required report(s) are archived and were not imported: ' + archivedOnly.slice(0, 12).join(', ') + '.');
+  if (incomplete.length) add('report-package', 'NOTE', 'Imported but incomplete', incomplete.length + ' required report(s) were imported and are not fully verified: ' + incomplete.slice(0, 12).join(', ') + '.');
   if (!problems) add('report-package', 'PASS', 'Reports on file', complete + ' of ' + packages.length + ' business days from ' + ctx.windowStart + ' have every required report on file and verified; no report on file needs review.');
 }
 
@@ -999,15 +1011,31 @@ function currentAlerts_(ctx, packages, checks) {
   var alerts = [];
   packages.forEach(function (day) {
     day.items.forEach(function (item) {
-      if (item.status !== 'Missing' && item.status !== 'Needs Review' && item.status !== 'Failed') return;
-      var missing = item.status === 'Missing';
+      var receipt = item.receipt || (item.status === 'Missing' ? 'Never received' : '');
+      var open = item.status === 'Missing' || item.status === 'Not retained' || item.status === 'Archived' || item.status === 'Incomplete' || item.status === 'Storage Failure' || item.status === 'Needs Review' || item.status === 'Failed';
+      if (!open) return;
+      var severity = 'Needs Review';
+      var message = item.label + ' for ' + day.date + ' needs review: ' + item.detail;
+      if (item.status === 'Missing' || receipt === 'Never received') {
+        severity = 'Missing';
+        message = item.label + ' for ' + day.date + ' was never received. Figures that depend on it stay at the last verified date; nothing is counted as zero.';
+      } else if (item.status === 'Not retained' || receipt === 'Previously received but not retained') {
+        severity = 'Not retained';
+        message = 'PREVIOUSLY RECEIVED — ORIGINAL NOT RETAINED. ' + item.label + ' for ' + day.date + ' was received and the original was not retained. The upload log proves it was read. KPI values are not reconstructed from a logged total.';
+      } else if (item.status === 'Archived' || item.status === 'Storage Failure' || receipt === 'Received and archived but not imported') {
+        severity = item.status === 'Storage Failure' ? 'Storage Failure' : 'Held';
+        message = (item.status === 'Storage Failure' ? 'SOURCE UNAVAILABLE. ' : 'RECEIVED AND ARCHIVED — NOT IMPORTED. ') + item.label + ' for ' + day.date + ' was not imported. ' + (item.detail || '');
+      } else if (item.status === 'Incomplete' || receipt === 'Imported but incomplete') {
+        severity = 'Incomplete';
+        message = 'IMPORTED BUT INCOMPLETE. ' + item.label + ' for ' + day.date + ' was imported and is not fully verified. ' + (item.detail || '');
+      }
       alerts.push({
         alert_key: 'report|' + day.date + '|' + item.key,
         category: 'Report',
-        severity: missing ? 'Missing' : 'Needs Review',
+        severity: severity,
         business_date: day.date,
         report: item.label,
-        message: missing ? item.label + ' for ' + day.date + ' has not arrived. Figures that depend on it stay at the last verified date; nothing is counted as zero.' : item.label + ' for ' + day.date + ' needs review: ' + item.detail,
+        message: message,
       });
     });
   });
@@ -1116,16 +1144,28 @@ function sendAlertDigest_(rows) {
 }
 
 function alertDigestText_(active, notices, resolved) {
-  var lines = ['Store 17 Command Center found ' + active.length + ' outstanding report problem' + (active.length === 1 ? '' : 's') + '. Figures already verified were left in place; nothing missing is counted as zero.', ''];
+  var lines = ['Store 17 Command Center found ' + active.length + ' outstanding report problem' + (active.length === 1 ? '' : 's') + '. A report is never received, previously received but not retained, received and archived but not imported, imported but incomplete, or fully imported and verified. Figures already verified were left in place; nothing missing is counted as zero.', ''];
   var missing = {};
   active.filter(function (row) { return row.category === 'Report' && row.severity === 'Missing'; }).forEach(function (row) {
     (missing[row.business_date] = missing[row.business_date] || []).push(row.report);
   });
   if (Object.keys(missing).length) {
-    lines.push('Missing reports');
+    lines.push('Never received');
     Object.keys(missing).sort().forEach(function (date) { lines.push('- ' + date + ': ' + missing[date].join(', ')); });
     lines.push('');
   }
+  [
+    ['Previously received but not retained', 'Not retained'],
+    ['Received and archived but not imported', 'Held'],
+    ['Imported but incomplete', 'Incomplete'],
+    ['Source unavailable', 'Storage Failure'],
+  ].forEach(function (group) {
+    var rows = active.filter(function (row) { return row.category === 'Report' && row.severity === group[1]; });
+    if (!rows.length) return;
+    lines.push(group[0]);
+    rows.forEach(function (row) { lines.push('- ' + row.business_date + ': ' + row.report + '. ' + row.message); });
+    lines.push('');
+  });
   var review = active.filter(function (row) { return row.severity === 'Needs Review'; });
   if (review.length) {
     lines.push('Needs review');
@@ -1228,7 +1268,11 @@ function sourceDisposition_(row) {
   var source = '';
   var admin = '';
   if (/approved exception/i.test(text)) source = 'Approved exception';
+  else if (/PREVIOUSLY RECEIVED — ORIGINAL NOT RETAINED|Previously received but not retained/i.test(text) || severity === 'Not retained') source = 'Previously received — original not retained';
+  else if (/RECEIVED AND ARCHIVED — NOT IMPORTED|Received and archived but not imported/i.test(text) || severity === 'Held') source = 'Received and archived but not imported';
+  else if (/IMPORTED BUT INCOMPLETE|Imported but incomplete/i.test(text) || severity === 'Incomplete') source = 'Imported but incomplete';
   else if (status === 'Resolved' && /arrived|passed validation|is \$0/i.test(text)) source = 'Source verified';
+  else if (severity === 'Storage Failure' || /SOURCE UNAVAILABLE|storage failure/i.test(text)) source = 'Source unavailable or inaccessible';
   else if (/could not be read|inaccessible|unavailable|not supplied/i.test(text)) source = 'Source unavailable or inaccessible';
   else if (severity === 'Missing' && (status === 'Active' || status === 'Closed')) source = 'Source genuinely missing';
   else if (severity === 'Needs Review' || /needs review|differ|does not match/i.test(text)) source = 'Accuracy exception';
@@ -1241,7 +1285,7 @@ function sourceCoverageGaps_() {
   var gaps = [];
   alertRows_().forEach(function (row) {
     var standing = sourceDisposition_(row);
-    if (standing.source !== 'Source genuinely missing' && standing.source !== 'Source unavailable or inaccessible') return;
+    if (!sourceGapStanding_(standing.source)) return;
     gaps.push({ date: row.business_date, report: row.report, source: standing.source, admin: standing.admin, message: row.message, alert: row.status });
   });
   return gaps;
@@ -1271,13 +1315,17 @@ function integrityBoard_() {
   };
 }
 
+function sourceGapStanding_(source) {
+  return source === 'Source genuinely missing' || source === 'Source unavailable or inaccessible' || source === 'Previously received — original not retained' || source === 'Received and archived but not imported' || source === 'Imported but incomplete';
+}
+
 function alertStatus_(rows) {
   var active = rows.filter(function (row) { return row.status === 'Active'; });
   if (active.some(function (row) { return row.severity === 'Missing'; })) return 'Report Missing';
   if (active.some(function (row) { return row.severity === 'Needs Review'; })) return 'Needs Review';
   if (rows.some(function (row) {
     var standing = sourceDisposition_(row);
-    return standing.source === 'Source genuinely missing' || standing.source === 'Source unavailable or inaccessible';
+    return sourceGapStanding_(standing.source);
   })) return 'Source gap';
   return 'Current';
 }
@@ -1314,14 +1362,18 @@ function alertAttention_(rows, role) {
   var missing = {};
   var items = [];
   rows.forEach(function (row) {
-    if (row.category !== 'Report' || row.severity !== 'Missing') return;
+    if (row.category !== 'Report') return;
     if (row.status !== 'Active' && row.status !== 'Closed') return;
     var standing = sourceDisposition_(row);
     var label = row.report + (standing.admin ? ' (' + standing.admin + ')' : '');
-    (missing[row.business_date] = missing[row.business_date] || []).push(label);
+    if (row.severity === 'Missing') (missing[row.business_date] = missing[row.business_date] || []).push(label);
+    else if (standing.source === 'Previously received — original not retained') items.push('PREVIOUSLY RECEIVED — ORIGINAL NOT RETAINED for ' + row.business_date + ': ' + label + '. The original file is not in the archive. A closed alert does not mean the report was never received, and KPI values are not reconstructed from a logged total.');
+    else if (standing.source === 'Received and archived but not imported') items.push('RECEIVED AND ARCHIVED — NOT IMPORTED for ' + row.business_date + ': ' + label + '.');
+    else if (standing.source === 'Imported but incomplete') items.push('IMPORTED BUT INCOMPLETE for ' + row.business_date + ': ' + label + '.');
+    else if (standing.source === 'Source unavailable or inaccessible') items.push('SOURCE UNAVAILABLE for ' + row.business_date + ': ' + label + '.');
   });
   Object.keys(missing).sort().reverse().forEach(function (date) {
-    items.push('Source genuinely missing for ' + date + ': ' + missing[date].join(', ') + '. A closed alert is not a received report. Figures that depend on them stay at the last verified date; nothing is counted as zero.');
+    items.push('Source genuinely missing for ' + date + ': ' + missing[date].join(', ') + '. Never received. A closed alert is not a received report. Figures that depend on them stay at the last verified date; nothing is counted as zero.');
   });
   rows.forEach(function (row) {
     if (row.status !== 'Active' || row.severity !== 'Needs Review') return;
@@ -1355,7 +1407,7 @@ function qualityHealth_() {
   var alerts = sheetValues_(ALERTS_TAB_) ? alertRows_() : [];
   var gaps = alerts.filter(function (row) {
     var standing = sourceDisposition_(row);
-    return standing.source === 'Source genuinely missing' || standing.source === 'Source unavailable or inaccessible';
+    return sourceGapStanding_(standing.source);
   });
   var gapKeys = {};
   gaps.forEach(function (row) { gapKeys[row.alert_key] = true; });

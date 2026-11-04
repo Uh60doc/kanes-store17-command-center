@@ -282,9 +282,12 @@ test('the same file twice, or the same report with different bytes, adds nothing
   assert.deepEqual(resaved.map((r: any) => r.status), ['Already on file', 'Already on file', 'Already on file']);
   const after = JSON.parse(snapshotOf(tabs));
   delete after.CC_Uploads;
+  delete after.CC_SourceArchive;
   const was = JSON.parse(before);
   delete was.CC_Uploads;
+  delete was.CC_SourceArchive;
   assert.deepEqual(after, was, 'no figure, ledger row or closing count changed');
+  assert.equal(tabs.CC_SourceArchive!.filter((row) => /resaved/.test(String(row[2]))).length, 3, 'a resaved original is kept even when the figures are already on file');
   assert.equal(tabs.CC_Uploads!.length, 1 + 7, 'every attempt is still logged');
 });
 
@@ -463,9 +466,9 @@ test('the checklist shows Imported, Missing, Failed and Needs Review for the cho
   assert.equal(view.imported, 3);
   assert.match(view.checklist.find((item: any) => item.label === 'Data KPI Store — Written').message, /stays the written standard/);
   assert.equal(view.total, 9);
-  assert.match(view.checklist.find((item: any) => item.label === 'NWDSR Delivered').message, /Missing for October 14, 2026/);
+  assert.match(view.checklist.find((item: any) => item.label === 'NWDSR Delivered').message, /Never received for October 14, 2026/);
   assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-15')![3], 10, 'the delivered PDF is stored on the date it prints');
-  assert.match(view.checklist.find((item: any) => item.label === 'PERQ Performance Stats by Location').message, /Missing for October 14, 2026/);
+  assert.match(view.checklist.find((item: any) => item.label === 'PERQ Performance Stats by Location').message, /Never received for October 14, 2026/);
   assert.ok(view.recent.some((day: any) => day.date === '2026-10-14' && day.missing.includes('PERQ Performance Stats by Location')));
   assert.equal(view.history.length, 5);
   assert.equal(view.lastSuccess.report, 'Data KPI Store — Written');
@@ -861,10 +864,14 @@ test('October 29 NWDSR and Group 17 stay separate, and a preview writes nothing'
   const missing = page.checklist.find((item: { key: string }) => item.key === 'g17Written');
   assert.equal(missing.status, 'Imported', 'the October 29 individual workbook in this test was imported above');
   const absent = plain(gs.uploads_({ date: '2026-10-28', session: manager })).checklist.find((item: { key: string }) => item.key === 'g17Written');
-  assert.equal(absent.status, 'Missing');
+  assert.equal(absent.status, 'Not retained');
+  assert.equal(absent.receipt, 'Previously received but not retained');
   assert.equal(absent.display, 'October 28, 2026 — Data KPI Individual — Written — Excel (.xlsx)');
+  assert.match(absent.message, /PREVIOUSLY RECEIVED — ORIGINAL NOT RETAINED/);
   assert.match(absent.message, /DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-28_2026-10-28\.xlsx/);
+  assert.match(absent.message, /not reconstructed/);
   assert.match(absent.message, /A SNAP PDF, an NWDSR PDF, and the other Data KPI workbook do not fill this row/);
+  assert.equal(ledger(tabs, 'DA_SALES_PERSON', '2026-10-28').length, 0, 'a logged total is not turned into salesperson KPI rows');
 });
 
 test('October 16 PERQ stays on file when a later attempt failed', () => {
@@ -881,4 +888,100 @@ test('October 16 PERQ stays on file when a later attempt failed', () => {
   assert.equal(location.status, 'Imported');
   assert.match(location.message, /Store 17 opportunities 9/);
   assert.equal(page.recent.find((day: { date: string }) => day.date === '2026-10-16').missing.includes('PERQ Performance Stats by Location'), false);
+});
+
+test('a cross-source difference is kept, and a discarded original is not called never received', () => {
+  const { gs, send, tabs } = boot(store(), '2026-11-03');
+  assert.equal(send('2026-10-29', 'output (70).pdf', nwdsrPdf('written', '2026-10-29', '2026-10-29', 29799, 7)).status, 'Imported');
+  const snapPeople = snapPdf('2026-10-29', 29799, [['MONTES, ERIC', 19507], ['GANDHI, PRAKASH', 8010], ['DELSOLAR, RENZO', 2282]]);
+  assert.equal(send('2026-10-29', 'output.pdf', snapPeople).status, 'Imported');
+  const snapLines = JSON.stringify(tabs.CC_AssociateDays);
+  const book = group17('WRITTEN', [['TARIK NASSIF', 29888.92]]);
+  const imported = send('2026-10-29', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-29_2026-10-29.xlsx', book, true);
+  assert.equal(imported.status, 'Imported', imported.message);
+  assert.match(imported.message, /Original archived/);
+  assert.doesNotMatch(imported.message, /not saved|rejected/i);
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![2], 29799, 'Data KPI Individual does not change NWDSR Written');
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![1], 29799, 'Data KPI Individual does not change SNAP Written');
+  assert.equal(JSON.stringify(tabs.CC_AssociateDays), snapLines, 'verified SNAP salesperson lines stay as they were');
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-29').length, 0);
+  assert.equal(ledger(tabs, 'DA_SALES_PERSON', '2026-10-29')[0]![10], 29888.92);
+  const archivedIndividual = tabs.CC_SourceArchive!.filter((row) => row[2] === 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-29_2026-10-29.xlsx');
+  assert.equal(archivedIndividual.length, 1);
+  assert.match(String(archivedIndividual[0]![9]), /ARCHIVED before business-rule comparison/);
+  assert.match(String(archivedIndividual[0]![9]), /METRIC COVERAGE VERIFIED/);
+
+  const negative = xlsx([
+    ['GROUP 17', 'WRITTEN ORDERS', '', '', 'MATTRESS PADS', '', '', ''],
+    ['Sales Person', 'Sales', 'Avg Sales', 'Fin %', 'Qual Qty', 'Sold Qty', 'Sold $', 'Attach %'],
+    ['ERIC MONTES', -250, -125, 0, 1, -1, -40, -100],
+    ['TOTAL', -250, -125, 0, 1, -1, -40, -100],
+  ], 'negative');
+  const neg = send('2026-10-27', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-27_2026-10-27.xlsx', negative, true);
+  assert.equal(neg.status, 'Imported', neg.message);
+  assert.equal(ledger(tabs, 'DA_SALES_PERSON', '2026-10-27')[0]![10], -250, 'a negative sale is kept');
+  assert.equal(ledger(tabs, 'MPPA_PERSON', '2026-10-27')[0]![11], -1, 'a mattress reselection stays negative');
+  assert.equal(tabs.CC_Daily!.some((row) => row[0] === '2026-10-27'), false, 'the individual workbook does not create a store written row');
+
+  const duplicate = send('2026-10-29', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-29_2026-10-29 copy.xlsx', book, true);
+  assert.equal(duplicate.status, 'Already on file');
+  assert.equal(tabs.CC_SourceArchive!.filter((row) => String(row[2]).includes('DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-29')).length, 1, 'the same bytes are archived once');
+  assert.equal(ledger(tabs, 'DA_SALES_PERSON', '2026-10-29').filter((row) => row[10] === 29888.92).length, 1);
+
+  const conflict = send('2026-10-29', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-29_2026-10-29.xlsx', group17('WRITTEN', [['TARIK NASSIF', 31000]], 'later'), true);
+  assert.equal(conflict.status, 'Needs Review', conflict.message);
+  assert.match(String(tabs.CC_SourceArchive!.find((row) => String(row[1]) === conflict.sha256)![9]), /Retained after Needs Review/);
+  assert.equal(ledger(tabs, 'DA_SALES_PERSON', '2026-10-29').some((row) => row[10] === 31000), false, 'a conflicting version does not replace the verified individual figure');
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![1], 29799);
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![2], 29799);
+
+  const structural = send('2026-10-26', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-26_2026-10-26.xlsx', group17('WRITTEN', []), true);
+  assert.equal(structural.status, 'Needs Review', structural.message);
+  assert.match(structural.message, /no salesperson lines/);
+  assert.equal(tabs.CC_SourceArchive!.some((row) => row[2] === 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-26_2026-10-26.xlsx'), true, 'a structural failure still keeps the original');
+  assert.equal(ledger(tabs, 'DA_SALES_PERSON', '2026-10-26').length, 0);
+  const heldItem = plain(gs.uploads_({ date: '2026-10-26', session: manager })).checklist.find((item: { key: string }) => item.key === 'g17Written');
+  assert.equal(heldItem.receipt, 'Received and archived but not imported');
+
+  const repaired = send('2026-10-26', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-26_2026-10-26.xlsx', group17('WRITTEN', [['TARIK NASSIF', 100]], 'repair'), true);
+  assert.equal(repaired.status, 'Imported', repaired.message);
+  assert.equal(ledger(tabs, 'DA_SALES_PERSON', '2026-10-26').map((row) => row[10]).join(','), '100');
+
+  tabs.CC_Uploads!.push(['2026-10-30T16:43:00.000Z', '2026-10-25', 'manager', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-25_2026-10-25.xlsx', '907c27c28372', 'Data KPI Individual — Written', '2026-10-25', '2026-10-25', 'Noted', 'Data KPI Individual — Written TOTAL $29,888.92 differs from NWDSR Written $29,799 for 2026-10-25. The workbook was not saved, so upload it again.']);
+  const discarded = plain(gs.uploads_({ date: '2026-10-25', session: manager })).checklist.find((item: { key: string }) => item.key === 'g17Written');
+  assert.equal(discarded.status, 'Not retained');
+  assert.equal(discarded.receipt, 'Previously received but not retained');
+  assert.match(discarded.message, /PREVIOUSLY RECEIVED — ORIGINAL NOT RETAINED/);
+  assert.match(discarded.message, /not reconstructed/);
+  assert.doesNotMatch(discarded.message, /Never received/);
+  assert.equal(ledger(tabs, 'DA_SALES_PERSON', '2026-10-25').length, 0, 'the logged $29,888.92 is not reconstructed into KPI rows');
+  const line = { period: { start: '2026-10-02', end: '2026-11-01' }, through: '2026-10-24', missing: '2026-10-25', basis: '' };
+  gs.annotateMissingSource_(line, '2026-10-25', 'g17Written', 'Data KPI Individual — Written');
+  assert.match(String(line.basis), /PREVIOUSLY RECEIVED — ORIGINAL NOT RETAINED/);
+  assert.doesNotMatch(String(line.basis), /was not received/);
+  const never = { period: { start: '2026-10-02', end: '2026-11-01' }, through: '2026-10-22', missing: '2026-10-23', basis: '' };
+  gs.annotateMissingSource_(never, '2026-10-23', 'g17Written', 'Data KPI Individual — Written');
+  assert.match(String(never.basis), /Source genuinely missing/);
+  assert.match(String(never.basis), /was not received/);
+
+  const originalArchive = gs.archiveReceivedOriginal_;
+  gs.archiveReceivedOriginal_ = () => { throw new Error('Drive unavailable'); };
+  const failed = send('2026-10-22', 'DATA_ANALYSIS_KPI_17_WRITTEN_2026-10-22_2026-10-22.xlsx', group17('WRITTEN', [['TARIK NASSIF', 10]], 'storage'), true);
+  assert.equal(failed.status, 'Storage Failure');
+  assert.match(failed.message, /Storage failure/);
+  assert.match(failed.message, /not safely on file/);
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![2], 29799);
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![1], 29799);
+  assert.equal(ledger(tabs, 'DA_SALES_PERSON', '2026-10-22').length, 0);
+  const storage = plain(gs.uploads_({ date: '2026-10-22', session: manager })).checklist.find((item: { key: string }) => item.key === 'g17Written');
+  assert.equal(storage.receipt, 'Previously received but not retained');
+  gs.archiveReceivedOriginal_ = originalArchive;
+
+  const storeImported = send('2026-10-29', 'DATA_ANALYSIS_KPI_ASL_WRITTEN_2026-10-29_2026-10-29.xlsx', storeKpi('WRITTEN', 29000, 'cross'), true);
+  assert.equal(storeImported.status, 'Imported', storeImported.message);
+  assert.match(storeImported.message, /reconciliation note, not an error/);
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![2], 29799, 'Data KPI Store does not replace NWDSR');
+  assert.equal(tabs.CC_Daily!.find((row) => row[0] === '2026-10-29')![1], 29799, 'Data KPI Store does not replace SNAP');
+  assert.equal(ledger(tabs, 'DA_SALES_STORE', '2026-10-29')[0]![10], 29000);
+  assert.equal(ledger(tabs, 'DA_SALES_PERSON', '2026-10-29').some((row) => row[10] === 29888.92), true, 'the verified individual figure is still the first workbook');
 });
